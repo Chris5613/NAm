@@ -9,7 +9,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical, Pencil, Trash2 } from "lucide-react";
+import { MoreVertical, Pencil, Trash2, TrendingUp, Coins, Landmark, Rocket, CreditCard } from "lucide-react";
 import EditAssetDialog from "@/components/EditAssetDialog";
 
 const CATEGORY_LABELS = {
@@ -18,6 +18,22 @@ const CATEGORY_LABELS = {
   cash: "Cash",
   crypto_projects: "Projects",
   debts: "Debts",
+};
+
+const CATEGORY_ICONS = {
+  stocks: TrendingUp,
+  crypto: Coins,
+  cash: Landmark,
+  crypto_projects: Rocket,
+  debts: CreditCard,
+};
+
+const CATEGORY_COLORS = {
+  stocks: "bg-emerald-500/10 text-emerald-400",
+  crypto: "bg-amber-500/10 text-amber-400",
+  cash: "bg-blue-500/10 text-blue-400",
+  crypto_projects: "bg-purple-500/10 text-purple-400",
+  debts: "bg-rose-500/10 text-rose-400",
 };
 
 function formatCurrency(value) {
@@ -78,6 +94,7 @@ export default function AssetList({ assets, onUpdate, onDelete }) {
             >
               <CardContent className="p-4 flex items-center justify-between">
                 <div className="flex items-center gap-4 flex-1 min-w-0">
+                  <AssetIcon asset={asset} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-foreground truncate">
@@ -163,5 +180,31 @@ export default function AssetList({ assets, onUpdate, onDelete }) {
         />
       )}
     </>
+  );
+}
+
+function AssetIcon({ asset }) {
+  // If the asset has a custom icon URL (crypto logos from CoinGecko), show it
+  if (asset.icon_url) {
+    return (
+      <div className="w-9 h-9 rounded-md overflow-hidden flex-shrink-0 bg-secondary flex items-center justify-center">
+        <img
+          src={asset.icon_url}
+          alt={asset.name}
+          className="w-6 h-6 object-contain"
+          onError={(e) => { e.target.style.display = 'none'; }}
+        />
+      </div>
+    );
+  }
+
+  // Fallback: category icon
+  const IconComponent = CATEGORY_ICONS[asset.category] || Coins;
+  const colorClass = CATEGORY_COLORS[asset.category] || "bg-secondary text-muted-foreground";
+
+  return (
+    <div className={`w-9 h-9 rounded-md flex-shrink-0 flex items-center justify-center ${colorClass}`}>
+      <IconComponent className="w-4 h-4" strokeWidth={1.5} />
+    </div>
   );
 }

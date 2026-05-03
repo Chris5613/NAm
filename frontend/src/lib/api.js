@@ -23,6 +23,7 @@ export const netWorthApi = {
 
 export const pricesApi = {
   getCryptoPrice: (coinId) => api.get(`/prices/crypto/${coinId}`),
+  getCryptoInfo: (coinId) => api.get(`/prices/crypto/info/${coinId}`),
   searchCrypto: (query) => api.get(`/prices/crypto/search/${query}`),
   getStockPrice: (symbol) => api.get(`/prices/stock/${symbol}`),
   searchStock: (query) => api.get(`/prices/stock/search/${query}`),

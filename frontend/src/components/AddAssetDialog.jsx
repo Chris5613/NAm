@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { assetsApi } from "@/lib/api";
+import { useState, useCallback } from "react";
+import { assetsApi, pricesApi } from "@/lib/api";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -38,7 +38,28 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated }) {
     cost_basis: "",
     notes: "",
   });
+  const [iconUrl, setIconUrl] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+
+  const handleCryptoSearch = useCallback(async (query) => {
+    if (!query || query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const res = await pricesApi.searchCrypto(query);
+      setSearchResults(res.data || []);
+    } catch {
+      setSearchResults([]);
+    }
+  }, []);
+
+  const handleSelectCoin = (coin) => {
+    setForm(prev => ({ ...prev, symbol: coin.id, name: coin.name || prev.name }));
+    setIconUrl(coin.icon_url || "");
+    setSearchResults([]);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -53,6 +74,7 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated }) {
         name: form.name,
         category: form.category,
         symbol: form.symbol || null,
+        icon_url: iconUrl || null,
         quantity: parseFloat(form.quantity) || 0,
         current_price: parseFloat(form.current_price) || 0,
         manual_value: form.manual_value ? parseFloat(form.manual_value) : null,
@@ -71,6 +93,8 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated }) {
         cost_basis: "",
         notes: "",
       });
+      setIconUrl("");
+      setSearchResults([]);
       onCreated();
     } catch (err) {
       toast.error("Failed to add asset");
@@ -122,18 +146,47 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated }) {
           </div>
 
           {(showQuantityFields || form.category === "crypto_projects") && (
-            <div className="space-y-2">
+            <div className="space-y-2 relative">
               <Label htmlFor="symbol">
                 {form.category === "stocks" ? "Ticker Symbol" : "Coin ID (CoinGecko)"}
               </Label>
-              <Input
-                id="symbol"
-                placeholder={form.category === "stocks" ? "AAPL" : "bitcoin"}
-                value={form.symbol}
-                onChange={(e) => setForm({ ...form, symbol: e.target.value })}
-                data-testid="input-symbol"
-                className="bg-background border-border"
-              />
+              <div className="flex items-center gap-2">
+                {iconUrl && (
+                  <img src={iconUrl} alt="" className="w-6 h-6 rounded-sm flex-shrink-0" />
+                )}
+                <Input
+                  id="symbol"
+                  placeholder={form.category === "stocks" ? "AAPL" : "Search coin... (e.g. bitcoin, solana)"}
+                  value={form.symbol}
+                  onChange={(e) => {
+                    setForm({ ...form, symbol: e.target.value });
+                    if (form.category === "crypto" || form.category === "crypto_projects") {
+                      handleCryptoSearch(e.target.value);
+                    }
+                  }}
+                  data-testid="input-symbol"
+                  className="bg-background border-border"
+                />
+              </div>
+              {searchResults.length > 0 && (
+                <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-card border border-border rounded-md shadow-lg max-h-48 overflow-y-auto" data-testid="crypto-search-results">
+                  {searchResults.map((coin) => (
+                    <button
+                      key={coin.id}
+                      type="button"
+                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-secondary text-left text-sm transition-colors"
+                      onClick={() => handleSelectCoin(coin)}
+                      data-testid={`search-result-${coin.id}`}
+                    >
+                      {coin.icon_url && (
+                        <img src={coin.icon_url} alt="" className="w-5 h-5 rounded-sm flex-shrink-0" />
+                      )}
+                      <span className="text-foreground">{coin.name}</span>
+                      <span className="font-mono text-xs text-muted-foreground uppercase">{coin.symbol}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

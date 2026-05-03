@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { assetsApi, netWorthApi, pricesApi } from "@/lib/api";
 import { toast } from "sonner";
 import NetWorthHero from "@/components/NetWorthHero";
@@ -8,7 +8,9 @@ import AssetList from "@/components/AssetList";
 import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Plus, Camera } from "lucide-react";
+import { RefreshCw, Plus, Camera, Radio } from "lucide-react";
+
+const REFRESH_INTERVAL = 30000; // 30 seconds
 
 export default function Dashboard() {
   const [assets, setAssets] = useState([]);
@@ -18,6 +20,9 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+  const [lastUpdated, setLastUpdated] = useState(null);
+  const [liveEnabled, setLiveEnabled] = useState(true);
+  const intervalRef = useRef(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -29,6 +34,7 @@ export default function Dashboard() {
       setAssets(assetsRes.data);
       setNetWorth(netWorthRes.data);
       setHistory(historyRes.data);
+      setLastUpdated(new Date());
     } catch (err) {
       toast.error("Failed to load data");
     } finally {
@@ -36,9 +42,35 @@ export default function Dashboard() {
     }
   }, []);
 
+  // Auto-refresh prices at interval
+  const refreshPricesQuiet = useCallback(async () => {
+    try {
+      await pricesApi.refreshAll();
+      const [assetsRes, netWorthRes] = await Promise.all([
+        assetsApi.getAll(),
+        netWorthApi.getCurrent(),
+      ]);
+      setAssets(assetsRes.data);
+      setNetWorth(netWorthRes.data);
+      setLastUpdated(new Date());
+    } catch {
+      // Silent fail for auto-refresh
+    }
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Set up live polling
+  useEffect(() => {
+    if (liveEnabled) {
+      intervalRef.current = setInterval(refreshPricesQuiet, REFRESH_INTERVAL);
+    }
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [liveEnabled, refreshPricesQuiet]);
 
   const handleRefreshPrices = async () => {
     setRefreshing(true);
@@ -77,9 +109,15 @@ export default function Dashboard() {
     fetchData();
   };
 
-  const filteredAssets = activeTab === "all" 
+  const getAssetValue = (a) => {
+    if (a.manual_value !== null && a.manual_value !== undefined) return a.manual_value;
+    return (a.quantity || 0) * (a.current_price || 0);
+  };
+
+  const filteredAssets = (activeTab === "all" 
     ? assets 
-    : assets.filter(a => a.category === activeTab);
+    : assets.filter(a => a.category === activeTab)
+  ).sort((a, b) => getAssetValue(b) - getAssetValue(a));
 
   if (loading) {
     return (
@@ -93,9 +131,28 @@ export default function Dashboard() {
     <div className="max-w-[1400px] mx-auto px-4 py-8 space-y-6" data-testid="dashboard">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-4xl font-medium tracking-tight" data-testid="page-title">
-          Net Worth
-        </h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-4xl font-medium tracking-tight" data-testid="page-title">
+            Net Worth
+          </h1>
+          <button
+            onClick={() => setLiveEnabled(!liveEnabled)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+              liveEnabled 
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                : "bg-secondary text-muted-foreground border border-border/40"
+            }`}
+            data-testid="live-toggle-btn"
+          >
+            <Radio className={`w-3 h-3 ${liveEnabled ? "animate-pulse" : ""}`} strokeWidth={2} />
+            {liveEnabled ? "LIVE" : "PAUSED"}
+          </button>
+          {lastUpdated && (
+            <span className="text-xs text-muted-foreground font-mono" data-testid="last-updated">
+              {lastUpdated.toLocaleTimeString()}
+            </span>
+          )}
+        </div>
         <div className="flex items-center gap-3">
           <Button
             variant="outline"

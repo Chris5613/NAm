@@ -38,6 +38,7 @@ class Asset(BaseModel):
     name: str
     category: str  # stocks, crypto, cash, crypto_projects, debts
     symbol: Optional[str] = None
+    icon_url: Optional[str] = None
     quantity: float = 0
     current_price: float = 0
     manual_value: Optional[float] = None
@@ -50,6 +51,7 @@ class AssetCreate(BaseModel):
     name: str
     category: str
     symbol: Optional[str] = None
+    icon_url: Optional[str] = None
     quantity: float = 0
     current_price: float = 0
     manual_value: Optional[float] = None
@@ -60,6 +62,7 @@ class AssetUpdate(BaseModel):
     name: Optional[str] = None
     category: Optional[str] = None
     symbol: Optional[str] = None
+    icon_url: Optional[str] = None
     quantity: Optional[float] = None
     current_price: Optional[float] = None
     manual_value: Optional[float] = None
@@ -229,10 +232,31 @@ async def search_crypto(query: str):
             if response.status_code == 200:
                 data = response.json()
                 coins = data.get("coins", [])[:10]
-                return [{"id": c["id"], "name": c["name"], "symbol": c["symbol"]} for c in coins]
+                return [{"id": c["id"], "name": c["name"], "symbol": c["symbol"], "icon_url": c.get("large") or c.get("thumb", "")} for c in coins]
             return []
     except Exception:
         return []
+
+@api_router.get("/prices/crypto/info/{coin_id}")
+async def get_crypto_info(coin_id: str):
+    """Get coin info including icon URL from CoinGecko"""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client_http:
+            response = await client_http.get(
+                f"{COINGECKO_BASE}/coins/{coin_id}",
+                params={"localization": "false", "tickers": "false", "market_data": "false", "community_data": "false", "developer_data": "false"}
+            )
+            if response.status_code == 200:
+                data = response.json()
+                return {
+                    "id": data.get("id"),
+                    "name": data.get("name"),
+                    "symbol": data.get("symbol", "").upper(),
+                    "icon_url": data.get("image", {}).get("small", "")
+                }
+            return None
+    except Exception:
+        return None
 
 @api_router.get("/prices/stock/{symbol}")
 async def get_stock_price(symbol: str):
