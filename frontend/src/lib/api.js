@@ -1,0 +1,32 @@
+import axios from "axios";
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
+
+const api = axios.create({
+  baseURL: API,
+  timeout: 15000,
+});
+
+export const assetsApi = {
+  getAll: () => api.get("/assets"),
+  create: (data) => api.post("/assets", data),
+  update: (id, data) => api.put(`/assets/${id}`, data),
+  delete: (id) => api.delete(`/assets/${id}`),
+};
+
+export const netWorthApi = {
+  getCurrent: () => api.get("/net-worth"),
+  getHistory: () => api.get("/net-worth/history"),
+  saveSnapshot: () => api.post("/net-worth/snapshot"),
+};
+
+export const pricesApi = {
+  getCryptoPrice: (coinId) => api.get(`/prices/crypto/${coinId}`),
+  searchCrypto: (query) => api.get(`/prices/crypto/search/${query}`),
+  getStockPrice: (symbol) => api.get(`/prices/stock/${symbol}`),
+  searchStock: (query) => api.get(`/prices/stock/search/${query}`),
+  refreshAll: () => api.post("/prices/refresh"),
+};
+
+export default api;
