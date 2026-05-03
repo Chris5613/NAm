@@ -10,6 +10,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 import httpx
+from pymongo import UpdateOne
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -341,19 +342,23 @@ async def refresh_all_prices():
                 )
                 if response.status_code == 200:
                     prices = response.json()
+                    operations = []
                     for asset in crypto_assets:
                         coin_id = asset["symbol"].lower()
                         if coin_id in prices:
                             new_price = prices[coin_id].get("usd", 0)
-                            await db.assets.update_one(
+                            operations.append(UpdateOne(
                                 {"id": asset["id"]},
                                 {"$set": {"current_price": new_price, "updated_at": datetime.now(timezone.utc).isoformat()}}
-                            )
-                            updated_count += 1
+                            ))
+                    if operations:
+                        await db.assets.bulk_write(operations)
+                        updated_count += len(operations)
         except Exception as e:
             logger.warning(f"Failed to refresh crypto prices: {e}")
     
-    # Stock prices one by one (Alpha Vantage rate limit)
+    # Stock prices - batch updates after fetching
+    stock_operations = []
     for asset in stock_assets[:3]:  # Limit to 3 to stay within free tier
         try:
             async with httpx.AsyncClient(timeout=10) as client_http:
@@ -375,13 +380,16 @@ async def refresh_all_prices():
                     if quote:
                         new_price = float(quote.get("05. price", 0))
                         if new_price > 0:
-                            await db.assets.update_one(
+                            stock_operations.append(UpdateOne(
                                 {"id": asset["id"]},
                                 {"$set": {"current_price": new_price, "updated_at": datetime.now(timezone.utc).isoformat()}}
-                            )
-                            updated_count += 1
+                            ))
         except Exception as e:
             logger.warning(f"Failed to refresh stock price for {asset.get('symbol')}: {e}")
+    
+    if stock_operations:
+        await db.assets.bulk_write(stock_operations)
+        updated_count += len(stock_operations)
     
     return {"updated_count": updated_count, "total_assets": len(assets)}
 
