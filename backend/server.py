@@ -272,6 +272,11 @@ async def get_stock_price(symbol: str):
             )
             if response.status_code == 200:
                 data = response.json()
+                # Handle rate limit / info messages
+                if "Information" in data:
+                    raise HTTPException(status_code=429, detail="Alpha Vantage rate limit reached (25 requests/day on free tier). Try again later.")
+                if "Note" in data:
+                    raise HTTPException(status_code=429, detail="Alpha Vantage API call frequency limit. Wait 15 seconds.")
                 quote = data.get("Global Quote", {})
                 if quote:
                     return {
@@ -281,6 +286,8 @@ async def get_stock_price(symbol: str):
                         "change_percent": quote.get("10. change percent", "0%")
                     }
             raise HTTPException(status_code=404, detail="Stock not found")
+    except HTTPException:
+        raise
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="Alpha Vantage API timeout")
     except Exception as e:
@@ -340,7 +347,7 @@ async def refresh_all_prices():
             logger.warning(f"Failed to refresh crypto prices: {e}")
     
     # Stock prices one by one (Alpha Vantage rate limit)
-    for asset in stock_assets[:5]:  # Limit to 5 to avoid rate limits
+    for asset in stock_assets[:3]:  # Limit to 3 to stay within free tier
         try:
             async with httpx.AsyncClient(timeout=10) as client_http:
                 response = await client_http.get(
@@ -353,6 +360,10 @@ async def refresh_all_prices():
                 )
                 if response.status_code == 200:
                     data = response.json()
+                    # Skip if rate limited
+                    if "Information" in data or "Note" in data:
+                        logger.warning(f"Alpha Vantage rate limit hit for {asset.get('symbol')}")
+                        break
                     quote = data.get("Global Quote", {})
                     if quote:
                         new_price = float(quote.get("05. price", 0))
