@@ -132,7 +132,8 @@ async def get_net_worth():
     }
     
     for asset in assets:
-        value = asset.get("manual_value") or (asset.get("quantity", 0) * asset.get("current_price", 0))
+        manual = asset.get("manual_value")
+        value = manual if manual is not None else (asset.get("quantity", 0) * asset.get("current_price", 0))
         cat = asset.get("category", "cash")
         if cat in categories:
             categories[cat] += value
@@ -158,7 +159,8 @@ async def save_snapshot():
     }
     
     for asset in assets:
-        value = asset.get("manual_value") or (asset.get("quantity", 0) * asset.get("current_price", 0))
+        manual = asset.get("manual_value")
+        value = manual if manual is not None else (asset.get("quantity", 0) * asset.get("current_price", 0))
         cat = asset.get("category", "cash")
         if cat in categories:
             categories[cat] += value
@@ -209,6 +211,8 @@ async def get_crypto_price(coin_id: str):
                         "market_cap": data[coin_id].get("usd_market_cap", 0)
                     }
             raise HTTPException(status_code=404, detail="Coin not found")
+    except HTTPException:
+        raise
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="CoinGecko API timeout")
     except Exception as e:
@@ -308,8 +312,8 @@ async def refresh_all_prices():
                                 {"$set": {"current_price": new_price, "updated_at": datetime.now(timezone.utc).isoformat()}}
                             )
                             updated_count += 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to refresh crypto prices: {e}")
     
     # Stock prices one by one (Alpha Vantage rate limit)
     for asset in stock_assets[:5]:  # Limit to 5 to avoid rate limits
@@ -334,8 +338,8 @@ async def refresh_all_prices():
                                 {"$set": {"current_price": new_price, "updated_at": datetime.now(timezone.utc).isoformat()}}
                             )
                             updated_count += 1
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"Failed to refresh stock price for {asset.get('symbol')}: {e}")
     
     return {"updated_count": updated_count, "total_assets": len(assets)}
 
