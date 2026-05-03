@@ -16,6 +16,7 @@ export default function Dashboard() {
   const [assets, setAssets] = useState([]);
   const [netWorth, setNetWorth] = useState(null);
   const [history, setHistory] = useState([]);
+  const [liveHistory, setLiveHistory] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -35,6 +36,13 @@ export default function Dashboard() {
       setNetWorth(netWorthRes.data);
       setHistory(historyRes.data);
       setLastUpdated(new Date());
+      // Add initial point to live history
+      setLiveHistory(prev => {
+        if (prev.length === 0) {
+          return [{ timestamp: new Date().toISOString(), value: netWorthRes.data.total_net_worth }];
+        }
+        return prev;
+      });
     } catch (err) {
       toast.error("Failed to load data");
     } finally {
@@ -53,6 +61,11 @@ export default function Dashboard() {
       setAssets(assetsRes.data);
       setNetWorth(netWorthRes.data);
       setLastUpdated(new Date());
+      // Append to live history for real-time chart
+      setLiveHistory(prev => [
+        ...prev,
+        { timestamp: new Date().toISOString(), value: netWorthRes.data.total_net_worth }
+      ]);
     } catch {
       // Silent fail for auto-refresh
     }
@@ -198,7 +211,7 @@ export default function Dashboard() {
       </div>
 
       {/* History Chart */}
-      <NetWorthHistory history={history} />
+      <NetWorthHistory history={history} liveData={liveHistory} />
 
       {/* Asset List with Tabs */}
       <div className="space-y-4">

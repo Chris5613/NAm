@@ -96,26 +96,14 @@ export default function AssetList({ assets, onUpdate, onDelete }) {
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   <AssetIcon asset={asset} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-foreground truncate">
-                        {asset.name}
-                      </span>
-                      {asset.symbol && (
-                        <span className="font-mono text-xs text-muted-foreground uppercase">
-                          {asset.symbol}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1">
-                      <span className="text-xs text-muted-foreground">
-                        {CATEGORY_LABELS[asset.category] || asset.category}
-                      </span>
-                      {asset.quantity > 0 && (
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {asset.quantity} @ {formatCurrency(asset.current_price)}
-                        </span>
-                      )}
-                    </div>
+                    <p className="font-medium text-foreground truncate">
+                      {asset.name}
+                    </p>
+                    {(asset.category === "stocks" || asset.category === "crypto") && asset.quantity > 0 && (
+                      <p className="font-mono text-xs text-muted-foreground mt-1">
+                        {asset.quantity} {asset.symbol ? asset.symbol.toUpperCase() : ""}
+                      </p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
