@@ -523,22 +523,53 @@ function WalletManageModal({ open, onOpenChange, wallets, customTokens, onUpdate
         <div className="space-y-4">
           <div className="space-y-2">
             <Label>Chain</Label>
-            <Select value={chain} onValueChange={setChain}>
-              <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
-              <SelectContent className="bg-card border-border">
-                <SelectItem value="solana">Solana (SOL)</SelectItem>
-                <SelectItem value="bitcoin">Bitcoin (BTC)</SelectItem>
-                <SelectItem value="ethereum">Ethereum (ETH)</SelectItem>
-                <SelectItem value="bsc">BNB Chain (BSC)</SelectItem>
-                <SelectItem value="polygon">Polygon (MATIC)</SelectItem>
-                <SelectItem value="avalanche">Avalanche (AVAX)</SelectItem>
-                <SelectItem value="arbitrum">Arbitrum (ARB)</SelectItem>
-                <SelectItem value="optimism">Optimism (OP)</SelectItem>
-                <SelectItem value="base">Base</SelectItem>
-                <SelectItem value="tron">Tron (TRX)</SelectItem>
-                <SelectItem value="fantom">Fantom (FTM)</SelectItem>
-              </SelectContent>
-            </Select>
+            <div
+              className="grid grid-cols-6 gap-2"
+              role="radiogroup"
+              aria-label="Chain"
+              data-testid="chain-icon-picker"
+            >
+              {[
+                ["solana",    "SOL"],
+                ["bitcoin",   "BTC"],
+                ["ethereum",  "ETH"],
+                ["bsc",       "BSC"],
+                ["polygon",   "MATIC"],
+                ["avalanche", "AVAX"],
+                ["arbitrum",  "ARB"],
+                ["optimism",  "OP"],
+                ["base",      "BASE"],
+                ["tron",      "TRX"],
+                ["fantom",    "FTM"],
+              ].map(([id, sym]) => {
+                const m = CHAIN_META[id];
+                const active = chain === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setChain(id)}
+                    title={`${m.name} (${sym})`}
+                    data-testid={`chain-pick-${id}`}
+                    className={`group flex flex-col items-center justify-center gap-1.5 px-2 py-2.5 rounded-md border transition-all ${
+                      active
+                        ? `${m.activeBg} ${m.color} ring-1 ring-current/40 scale-[1.02]`
+                        : "border-border/40 text-muted-foreground hover:border-white/20 hover:bg-secondary/40"
+                    }`}
+                  >
+                    <img
+                      src={m.icon}
+                      alt=""
+                      className={`w-7 h-7 rounded-full transition-transform ${active ? "" : "opacity-70 group-hover:opacity-100"}`}
+                      onError={(e) => { e.target.style.display = "none"; }}
+                    />
+                    <span className="text-[10px] font-mono tracking-wider">{sym}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div className="space-y-2">
             <Label>Addresses (one per line or comma-separated)</Label>
