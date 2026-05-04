@@ -60,6 +60,7 @@ export const customTokensApi = {
   create: (data) => api.post("/custom-tokens", data),
   update: (id, data) => api.put(`/custom-tokens/${id}`, data),
   delete: (id) => api.delete(`/custom-tokens/${id}`),
+  getPrice: (symbol) => api.get(`/token-price/${symbol}`),
 };
 
 export const nosTrackingApi = {

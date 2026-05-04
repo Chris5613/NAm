@@ -534,6 +534,31 @@ function CustomTokensSection({ customTokens, onUpdate }) {
   const [form, setForm] = useState({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" });
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [fetchingPrice, setFetchingPrice] = useState(false);
+  const priceTimeout = useRef(null);
+
+  // Auto-fetch price when symbol changes
+  const fetchPrice = async (symbol) => {
+    if (!symbol || symbol.length < 2) return;
+    setFetchingPrice(true);
+    try {
+      const res = await customTokensApi.getPrice(symbol);
+      if (res.data?.price > 0) {
+        setForm(prev => ({
+          ...prev,
+          price: res.data.price.toString(),
+          name: prev.name || res.data.name || "",
+          icon_url: prev.icon_url || res.data.icon_url || "",
+        }));
+      }
+    } catch { /* silent */ } finally { setFetchingPrice(false); }
+  };
+
+  const handleSymbolChange = (value) => {
+    setForm(prev => ({ ...prev, symbol: value }));
+    if (priceTimeout.current) clearTimeout(priceTimeout.current);
+    priceTimeout.current = setTimeout(() => fetchPrice(value), 800);
+  };
 
   const handleAdd = async () => {
     if (!form.symbol || !form.amount) { toast.error("Symbol and amount required"); return; }
@@ -622,7 +647,10 @@ function CustomTokensSection({ customTokens, onUpdate }) {
 
       {/* Add/Edit form */}
       <div className="grid grid-cols-2 gap-2">
-        <Input placeholder="Symbol (e.g. PEPE)" value={form.symbol} onChange={e => setForm({...form, symbol: e.target.value})} className="bg-background border-border text-sm" data-testid="custom-token-symbol" />
+        <div className="relative">
+          <Input placeholder="Symbol (e.g. TRX, ETH)" value={form.symbol} onChange={e => handleSymbolChange(e.target.value)} className="bg-background border-border text-sm" data-testid="custom-token-symbol" />
+          {fetchingPrice && <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-muted-foreground animate-pulse">fetching...</span>}
+        </div>
         <Select value={form.chain} onValueChange={(v) => setForm({...form, chain: v})}>
           <SelectTrigger className="bg-background border-border text-sm"><SelectValue /></SelectTrigger>
           <SelectContent className="bg-card border-border">
@@ -638,10 +666,10 @@ function CustomTokensSection({ customTokens, onUpdate }) {
           </SelectContent>
         </Select>
       </div>
-      <Input placeholder="Name (optional)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-background border-border text-sm" />
+      <Input placeholder="Name (auto-filled)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-background border-border text-sm" />
       <div className="grid grid-cols-2 gap-2">
         <Input type="number" step="any" placeholder="Amount" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="bg-background border-border font-mono text-sm" data-testid="custom-token-amount" />
-        <Input type="number" step="any" placeholder="Price ($)" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="bg-background border-border font-mono text-sm" />
+        <Input type="number" step="any" placeholder="Price (auto-filled)" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="bg-background border-border font-mono text-sm" />
       </div>
       <Input placeholder="Icon URL (optional)" value={form.icon_url} onChange={e => setForm({...form, icon_url: e.target.value})} className="bg-background border-border text-sm" />
       {editingId ? (

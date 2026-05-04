@@ -861,6 +861,50 @@ async def delete_custom_token(token_id: str):
     await db.custom_tokens.delete_one({"id": token_id})
     return {"message": "Deleted"}
 
+@api_router.get("/token-price/{symbol}")
+async def get_token_price_by_symbol(symbol: str):
+    """Auto-fetch token price from CoinGecko by symbol"""
+    try:
+        async with httpx.AsyncClient(timeout=10) as client_http:
+            # Search for the coin
+            search_resp = await client_http.get(
+                f"{COINGECKO_BASE}/search",
+                params={"query": symbol}
+            )
+            if search_resp.status_code != 200:
+                return {"price": 0, "name": "", "icon_url": ""}
+            
+            coins = search_resp.json().get("coins", [])
+            # Find exact symbol match
+            match = None
+            for c in coins:
+                if c.get("symbol", "").lower() == symbol.lower():
+                    match = c
+                    break
+            if not match and coins:
+                match = coins[0]
+            
+            if not match:
+                return {"price": 0, "name": "", "icon_url": ""}
+            
+            # Get price
+            price_resp = await client_http.get(
+                f"{COINGECKO_BASE}/simple/price",
+                params={"ids": match["id"], "vs_currencies": "usd"}
+            )
+            price = 0
+            if price_resp.status_code == 200:
+                price = price_resp.json().get(match["id"], {}).get("usd", 0)
+            
+            return {
+                "price": price,
+                "name": match.get("name", ""),
+                "coin_id": match.get("id", ""),
+                "icon_url": match.get("large", match.get("thumb", "")),
+            }
+    except Exception:
+        return {"price": 0, "name": "", "icon_url": ""}
+
 @api_router.get("/wallets/coinstats/{address}")
 async def get_coinstats_balance(address: str, chain: str = "solana"):
     """Fetch wallet balance from CoinStats API"""
