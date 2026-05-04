@@ -234,16 +234,76 @@ export default function CryptoPage() {
 
   useEffect(() => { if (grandTotal > 0 && liveHistory.length === 0) setLiveHistory([{ time: "Now", value: grandTotal }]); }, [grandTotal]);
 
-  // Sync crypto total to backend cache so the main Net Worth page reflects it
+  // Sync crypto total + chain breakdown + tokens to backend cache so the main Net Worth page reflects it
   const lastSyncedRef = useRef(null);
   useEffect(() => {
     if (loading) return;
     // Only sync when we have fetched balances (wallets may still be loading)
     if (wallets.length > 0 && Object.keys(balances).length === 0) return;
-    if (lastSyncedRef.current === grandTotal) return;
-    lastSyncedRef.current = grandTotal;
-    cryptoCacheApi.set(grandTotal).catch(() => { /* silent */ });
-  }, [grandTotal, loading, wallets.length, balances]);
+    const syncKey = JSON.stringify({ t: grandTotal, c: sortedChains.length });
+    if (lastSyncedRef.current === syncKey) return;
+    lastSyncedRef.current = syncKey;
+
+    // Build chain-keyed tokens (wallet tokens + custom tokens, excluding hidden)
+    const tokensByChain = {};
+    wallets.forEach(w => {
+      (balances[w.id]?.tokens || []).forEach(t => {
+        if (hiddenSymbols.has(t.symbol)) return;
+        if ((t.usd_value || 0) < 0.01) return;
+        if (!tokensByChain[w.chain]) tokensByChain[w.chain] = [];
+        tokensByChain[w.chain].push({
+          symbol: t.symbol,
+          name: t.name || "",
+          amount: t.amount || 0,
+          price: t.price || 0,
+          usd_value: t.usd_value || 0,
+          icon_url: tokenPrefs[t.symbol]?.custom_icon_url || t.icon_url || "",
+          chain: w.chain,
+        });
+      });
+    });
+    customTokens.forEach(ct => {
+      if (hiddenSymbols.has(ct.symbol)) return;
+      const value = (ct.amount || 0) * (ct.price || 0);
+      if (value < 0.01) return;
+      const ch = ct.chain || "custom";
+      if (!tokensByChain[ch]) tokensByChain[ch] = [];
+      tokensByChain[ch].push({
+        symbol: ct.symbol,
+        name: ct.name || ct.symbol,
+        amount: ct.amount || 0,
+        price: ct.price || 0,
+        usd_value: value,
+        icon_url: tokenPrefs[ct.symbol]?.custom_icon_url || ct.icon_url || "",
+        chain: ch,
+      });
+    });
+    // Merge same-symbol tokens within a chain
+    Object.keys(tokensByChain).forEach(ch => {
+      const merged = {};
+      tokensByChain[ch].forEach(t => {
+        const k = t.symbol;
+        if (merged[k]) { merged[k].amount += t.amount; merged[k].usd_value += t.usd_value; }
+        else merged[k] = { ...t };
+      });
+      tokensByChain[ch] = Object.values(merged).sort((a, b) => b.usd_value - a.usd_value);
+    });
+
+    const chainsPayload = sortedChains.map(([chain, value]) => ({
+      chain,
+      value,
+      tokens: tokensByChain[chain] || [],
+    }));
+
+    const allTokensFlat = [];
+    Object.values(tokensByChain).forEach(arr => allTokensFlat.push(...arr));
+
+    cryptoCacheApi.set({
+      total: grandTotal,
+      chains: chainsPayload,
+      tokens: allTokensFlat,
+    }).catch(() => { /* silent */ });
+  }, [grandTotal, loading, wallets, balances, customTokens, tokenPrefs, sortedChains.length]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[300px]"><p className="text-muted-foreground font-mono animate-pulse">Loading...</p></div>;
 

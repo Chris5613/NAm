@@ -123,20 +123,23 @@ backend:
 frontend:
   - task: "Main Net Worth page shows single Crypto box reflecting Crypto tab total"
     implemented: true
-    working: "NA"
-    file: "frontend/src/components/NetWorthHero.jsx, frontend/src/pages/CryptoPage.jsx, frontend/src/lib/api.js"
+    working: true
+    file: "frontend/src/components/NetWorthHero.jsx, frontend/src/pages/CryptoPage.jsx, frontend/src/lib/api.js, frontend/src/components/CryptoBreakdown.jsx, frontend/src/pages/Dashboard.jsx"
     stuck_count: 0
     priority: "high"
-    needs_retesting: true
+    needs_retesting: false
     status_history:
         -working: "NA"
         -agent: "main"
         -comment: "Removed the separate 'Projects' (crypto_projects) metric item from NetWorthHero — only one 'Crypto' box remains. CryptoPage now POSTs its grandTotal to /api/crypto/cache whenever it changes so the main Net Worth page shows the same crypto number as the Crypto tab. Added cryptoCacheApi in api.js."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive UI testing completed successfully. All review request scenarios verified: (1) Main Net Worth page shows exactly 4 metric boxes (Stocks, Crypto, Cash, Debts) with NO Projects or Investments box - PASS. (2) Crypto value synchronization working perfectly: initial value $158.01, after visiting Crypto page (/crypto) which shows Net Worth $157.99, main page Crypto metric updates to match $157.99 - PASS. (3) Clicking Crypto tab on Dashboard displays crypto-breakdown component with chain cards (Solana: 100%, 2 tokens, $157.99) instead of 'No assets in this category' - PASS. (4) Chain card expand/collapse functionality working correctly: chevron rotates from ChevronRight (collapsed) to ChevronDown (expanded), token rows (SOL, NOS) display when expanded, collapses properly when clicked again - PASS. (5) Clicking 'All' tab hides crypto-breakdown and restores regular asset list - PASS. (6) No console errors detected during any interactions - PASS. Screenshots captured: hero card with 4 metrics, Crypto page net worth, crypto breakdown with expanded chain showing token details. The crypto cache mechanism is functioning perfectly with frontend actively syncing grandTotal to backend."
 
 metadata:
   created_by: "main_agent"
   version: "1.0"
-  test_sequence: 2
+  test_sequence: 3
   run_ui: true
 
 test_plan:
@@ -151,3 +154,5 @@ agent_communication:
     -message: "Implemented unified Crypto box on the main Net Worth page. Backend caches the crypto total in db.crypto_cache (singleton). Crypto page pushes its grandTotal to the cache on changes. NetWorthHero no longer shows the Projects metric. Please verify that the Crypto box on the main Net Worth tab matches the Net Worth figure shown on the Crypto tab after visiting/refreshing the Crypto tab."
     -agent: "testing"
     -message: "Backend testing complete - all crypto cache endpoints working perfectly. Tested all scenarios from review request: cache GET/POST, net-worth override, snapshot persistence, invalid input handling. All tests passed (6/6 focused tests, 4/4 scenario tests). The crypto cache mechanism is functioning as designed: frontend CryptoPage actively updates cache with grandTotal, backend correctly uses cached value in net-worth calculations and snapshots. No issues found. Ready for main agent to summarize and finish."
+    -agent: "testing"
+    -message: "Frontend UI testing complete - ALL requirements verified successfully. Hero card shows exactly 4 metrics (Stocks, Crypto, Cash, Debts) with no Projects/Investments box. Crypto value synchronization working perfectly: values match between main page ($157.99) and Crypto page ($157.99) after navigation. Crypto tab breakdown component displays chain cards (Solana with 2 tokens) with full expand/collapse functionality (chevron rotation, token details display). All tab navigation working correctly. No console errors. All 6 test scenarios PASSED. Feature is fully functional and ready for production."

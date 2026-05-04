@@ -5,6 +5,7 @@ import NetWorthHero from "@/components/NetWorthHero";
 import PortfolioChart from "@/components/PortfolioChart";
 import NetWorthHistory from "@/components/NetWorthHistory";
 import AssetList from "@/components/AssetList";
+import CryptoBreakdown from "@/components/CryptoBreakdown";
 import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -225,11 +226,15 @@ export default function Dashboard() {
             <TabsTrigger value="debts" data-testid="tab-debts">Debts</TabsTrigger>
           </TabsList>
           <TabsContent value={activeTab}>
-            <AssetList
-              assets={filteredAssets}
-              onUpdate={handleAssetUpdated}
-              onDelete={handleAssetDeleted}
-            />
+            {activeTab === "crypto" ? (
+              <CryptoBreakdown key={activeTab} />
+            ) : (
+              <AssetList
+                assets={filteredAssets}
+                onUpdate={handleAssetUpdated}
+                onDelete={handleAssetDeleted}
+              />
+            )}
           </TabsContent>
         </Tabs>
       </div>

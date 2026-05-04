@@ -145,8 +145,13 @@ async def _get_cached_crypto_total():
 async def get_crypto_cache():
     doc = await db.crypto_cache.find_one({"_id": "singleton"})
     if not doc:
-        return {"total": 0, "updated_at": None}
-    return {"total": doc.get("total", 0), "updated_at": doc.get("updated_at")}
+        return {"total": 0, "chains": [], "tokens": [], "updated_at": None}
+    return {
+        "total": doc.get("total", 0),
+        "chains": doc.get("chains", []),
+        "tokens": doc.get("tokens", []),
+        "updated_at": doc.get("updated_at"),
+    }
 
 
 @api_router.post("/crypto/cache")
@@ -155,13 +160,22 @@ async def set_crypto_cache(data: dict):
         total = float(data.get("total", 0))
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid total value")
+    chains = data.get("chains") or []
+    tokens = data.get("tokens") or []
+    if not isinstance(chains, list) or not isinstance(tokens, list):
+        raise HTTPException(status_code=400, detail="chains and tokens must be arrays")
     updated_at = datetime.now(timezone.utc).isoformat()
     await db.crypto_cache.update_one(
         {"_id": "singleton"},
-        {"$set": {"total": total, "updated_at": updated_at}},
+        {"$set": {
+            "total": total,
+            "chains": chains,
+            "tokens": tokens,
+            "updated_at": updated_at,
+        }},
         upsert=True
     )
-    return {"total": total, "updated_at": updated_at}
+    return {"total": total, "chains": chains, "tokens": tokens, "updated_at": updated_at}
 
 
 @api_router.get("/net-worth")

@@ -23,7 +23,11 @@ export const netWorthApi = {
 
 export const cryptoCacheApi = {
   get: () => api.get("/crypto/cache"),
-  set: (total) => api.post("/crypto/cache", { total }),
+  set: (payload) => {
+    // Accept either a bare number (legacy) or a full payload { total, chains, tokens }
+    const body = typeof payload === "number" ? { total: payload } : payload;
+    return api.post("/crypto/cache", body);
+  },
 };
 
 export const pricesApi = {
