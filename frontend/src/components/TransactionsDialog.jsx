@@ -199,14 +199,16 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <span className="font-mono text-xs text-muted-foreground">{txn.date}</span>
+                    {txn.notes && <span className="text-xs text-muted-foreground truncate max-w-[100px]">{txn.notes}</span>}
                     <button
                       onClick={() => handleDelete(txn.id)}
-                      className="text-rose-400 hover:text-rose-300"
+                      className="flex items-center gap-1 text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded hover:bg-rose-500/10 transition-colors"
                       data-testid={`delete-txn-${txn.id}`}
                     >
                       <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      <span>Delete</span>
                     </button>
                   </div>
                 </div>

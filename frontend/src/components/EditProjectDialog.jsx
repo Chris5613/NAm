@@ -12,6 +12,7 @@ import { Plus, X } from "lucide-react";
 export default function EditProjectDialog({ project, open, onOpenChange, onUpdated }) {
   const [form, setForm] = useState({
     name: project.name || "",
+    icon_url: project.icon_url || "",
     invested: project.invested?.toString() || "",
     earned: project.earned?.toString() || "",
     per_day: project.per_day?.toString() || "",
@@ -39,6 +40,7 @@ export default function EditProjectDialog({ project, open, onOpenChange, onUpdat
     try {
       await projectsApi.update(project.id, {
         name: form.name,
+        icon_url: form.icon_url || null,
         invested: parseFloat(form.invested) || 0,
         earned: parseFloat(form.earned) || 0,
         per_day: parseFloat(form.per_day) || 0,
@@ -64,13 +66,29 @@ export default function EditProjectDialog({ project, open, onOpenChange, onUpdat
           <DialogDescription>Update project details and categories</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex items-end gap-3">
+            {form.icon_url && (
+              <img src={form.icon_url} alt="" className="w-10 h-10 rounded-md object-contain border border-border/40" />
+            )}
+            <div className="flex-1 space-y-2">
+              <Label>Project Name</Label>
+              <Input
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                data-testid="edit-project-input-name"
+                className="bg-background border-border"
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <Label>Project Name</Label>
+            <Label>Logo URL (optional)</Label>
             <Input
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              data-testid="edit-project-input-name"
-              className="bg-background border-border"
+              placeholder="https://example.com/logo.png"
+              value={form.icon_url}
+              onChange={(e) => setForm({ ...form, icon_url: e.target.value })}
+              data-testid="edit-project-input-icon"
+              className="bg-background border-border text-sm"
             />
           </div>
 

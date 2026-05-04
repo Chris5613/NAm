@@ -171,6 +171,13 @@ export default function InvestmentOverview() {
                         ) : (
                           <ChevronRight className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
                         )}
+                        {project.icon_url ? (
+                          <img src={project.icon_url} alt="" className="w-7 h-7 rounded-md object-contain" />
+                        ) : (
+                          <div className="w-7 h-7 rounded-md bg-secondary flex items-center justify-center">
+                            <span className="text-xs font-bold text-muted-foreground">{(project.name || "?")[0]}</span>
+                          </div>
+                        )}
                         <span className="font-medium text-foreground text-lg">{project.name}</span>
                         {/* ROI Countdown */}
                         {roiDays !== null && (

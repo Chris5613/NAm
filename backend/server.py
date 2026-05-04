@@ -416,6 +416,7 @@ class Project(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
+    icon_url: Optional[str] = None
     invested: float = 0
     earned: float = 0
     per_day: float = 0
@@ -428,6 +429,7 @@ class Project(BaseModel):
 
 class ProjectCreate(BaseModel):
     name: str
+    icon_url: Optional[str] = None
     invested: float = 0
     earned: float = 0
     per_day: float = 0
@@ -438,6 +440,7 @@ class ProjectCreate(BaseModel):
 
 class ProjectUpdate(BaseModel):
     name: Optional[str] = None
+    icon_url: Optional[str] = None
     invested: Optional[float] = None
     earned: Optional[float] = None
     per_day: Optional[float] = None

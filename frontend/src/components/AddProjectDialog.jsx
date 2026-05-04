@@ -12,6 +12,7 @@ import { Plus, X } from "lucide-react";
 export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
   const [form, setForm] = useState({
     name: "",
+    icon_url: "",
     invested: "",
     earned: "",
     per_day: "",
@@ -40,6 +41,7 @@ export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
     try {
       await projectsApi.create({
         name: form.name,
+        icon_url: form.icon_url || null,
         invested: parseFloat(form.invested) || 0,
         earned: parseFloat(form.earned) || 0,
         per_day: parseFloat(form.per_day) || 0,
@@ -49,7 +51,7 @@ export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
         categories,
       });
       toast.success(`${form.name} added`);
-      setForm({ name: "", invested: "", earned: "", per_day: "", per_week: "", per_month: "", per_year: "" });
+      setForm({ name: "", icon_url: "", invested: "", earned: "", per_day: "", per_week: "", per_month: "", per_year: "" });
       setCategories([]);
       onCreated();
     } catch {
@@ -67,14 +69,30 @@ export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
           <DialogDescription>Track a project you're earning from</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="flex items-end gap-3">
+            {form.icon_url && (
+              <img src={form.icon_url} alt="" className="w-10 h-10 rounded-md object-contain border border-border/40" />
+            )}
+            <div className="flex-1 space-y-2">
+              <Label>Project Name</Label>
+              <Input
+                placeholder="e.g. GoMining, Nosana, Unity"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                data-testid="project-input-name"
+                className="bg-background border-border"
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
-            <Label>Project Name</Label>
+            <Label>Logo URL (optional)</Label>
             <Input
-              placeholder="e.g. GoMining, Nosana, Unity"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              data-testid="project-input-name"
-              className="bg-background border-border"
+              placeholder="https://example.com/logo.png"
+              value={form.icon_url}
+              onChange={(e) => setForm({ ...form, icon_url: e.target.value })}
+              data-testid="project-input-icon"
+              className="bg-background border-border text-sm"
             />
           </div>
 
