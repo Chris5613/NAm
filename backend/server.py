@@ -643,29 +643,67 @@ async def get_solana_defi_positions(address: str):
             if resp.status_code == 200:
                 data = resp.json()
                 elements = data.get("elements", [])
+                token_info = data.get("tokenInfo", {}).get("solana", {})
                 positions = []
+                
                 for el in elements:
                     label = el.get("label", "")
                     platform = el.get("platformId", "")
                     name = el.get("name", platform)
+                    el_type = el.get("type", "")
+                    el_value = el.get("value", 0) or 0
+                    net_apy = el.get("netApy", 0) or 0
                     el_data = el.get("data", {})
-                    assets = el_data.get("assets", [])
                     
                     pos_tokens = []
                     pos_total = 0
-                    for asset in assets:
-                        asset_data = asset.get("data", {})
-                        value = asset.get("value", 0) or 0
-                        pos_tokens.append({
-                            "address": asset_data.get("address", ""),
-                            "amount": asset_data.get("amount", 0) or 0,
-                            "price": asset_data.get("price", 0) or 0,
-                            "value": value,
-                            "symbol": asset_data.get("symbol", ""),
-                            "name": asset_data.get("name", ""),
-                            "image_uri": asset_data.get("imageUri", ""),
-                        })
-                        pos_total += value
+                    
+                    # Handle "multiple" type (wallet, native-stake)
+                    if el_type == "multiple":
+                        assets = el_data.get("assets", [])
+                        for asset in assets:
+                            asset_data = asset.get("data", {})
+                            value = asset.get("value", 0) or 0
+                            addr = asset_data.get("address", "")
+                            ti = token_info.get(addr, {})
+                            pos_tokens.append({
+                                "address": addr,
+                                "amount": asset_data.get("amount", 0) or 0,
+                                "price": asset_data.get("price", 0) or 0,
+                                "value": value,
+                                "symbol": ti.get("symbol", asset_data.get("symbol", "")),
+                                "name": ti.get("name", asset_data.get("name", "")),
+                                "image_uri": ti.get("logoURI", ""),
+                            })
+                            pos_total += value
+                    
+                    # Handle "liquidity" type (vaults, lending, LP)
+                    elif el_type == "liquidity":
+                        liquidities = el_data.get("liquidities", [])
+                        for liq in liquidities:
+                            assets = liq.get("assets", [])
+                            yields = liq.get("yields", [])
+                            liq_apy = yields[0].get("apy", 0) if yields else 0
+                            for asset in assets:
+                                asset_data = asset.get("data", {})
+                                value = asset.get("value", 0) or 0
+                                addr = asset_data.get("address", "")
+                                ti = token_info.get(addr, {})
+                                pos_tokens.append({
+                                    "address": addr,
+                                    "amount": asset_data.get("amount", 0) or 0,
+                                    "price": asset_data.get("price", 0) or 0,
+                                    "value": value,
+                                    "symbol": ti.get("symbol", asset_data.get("symbol", "")),
+                                    "name": ti.get("name", asset_data.get("name", "")),
+                                    "image_uri": ti.get("logoURI", ""),
+                                    "apy": net_apy or liq_apy,
+                                })
+                                pos_total += value
+                    
+                    # Fallback: use element-level value
+                    if pos_total == 0 and el_value > 0:
+                        pos_total = el_value
                     
                     if pos_total > 0.01:
                         positions.append({
@@ -674,6 +712,7 @@ async def get_solana_defi_positions(address: str):
                             "platform_id": platform,
                             "total_value": pos_total,
                             "tokens": pos_tokens,
+                            "apy": net_apy,
                         })
                 
                 # Sort by value

@@ -215,20 +215,24 @@ export default function CryptoPage() {
               <CardHeader className="pb-0 pt-4 px-5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2"><Layers className="w-4 h-4 text-emerald-400" strokeWidth={1.5} /><CardTitle className="text-sm font-medium">{pos.platform}</CardTitle><span className="text-xs text-muted-foreground">{pos.label}</span></div>
-                  <span className="font-mono text-sm text-foreground">{formatCurrency(pos.total_value)}</span>
+                  <div className="flex items-center gap-3">
+                    {pos.apy > 0 && <span className="text-xs font-mono text-emerald-400">Earn</span>}
+                    <span className="font-mono text-sm text-foreground">{formatCurrency(pos.total_value)}</span>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="px-2 pb-2 pt-2">
-                <div className="px-3 py-1.5 grid grid-cols-4 text-xs text-muted-foreground border-b border-border/20">
-                  <span>Asset</span><span className="text-right">Balance</span><span className="text-right">Price</span><span className="text-right">Value</span>
+                <div className="px-3 py-1.5 grid grid-cols-5 text-xs text-muted-foreground border-b border-border/20">
+                  <span>Asset</span><span className="text-right">Balance</span><span className="text-right">Yield</span><span className="text-right">Price</span><span className="text-right">Value</span>
                 </div>
                 {pos.tokens.filter(t => t.value > 0.01).map((t, i) => (
-                  <div key={i} className="px-3 py-2.5 grid grid-cols-4 items-center hover:bg-secondary/30 transition-colors">
+                  <div key={i} className="px-3 py-2.5 grid grid-cols-5 items-center hover:bg-secondary/30 transition-colors">
                     <div className="flex items-center gap-2">
                       {t.image_uri ? <img src={t.image_uri} alt="" className="w-5 h-5 rounded-full" /> : <div className="w-5 h-5 rounded-full bg-secondary" />}
                       <span className="text-sm font-medium text-foreground">{t.symbol || t.name || shortenAddr(t.address)}</span>
                     </div>
-                    <span className="font-mono text-xs text-foreground text-right">{t.amount?.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                    <span className="font-mono text-xs text-foreground text-right">{t.amount?.toLocaleString(undefined, { maximumFractionDigits: 2 })} {t.symbol}</span>
+                    <span className="font-mono text-xs text-emerald-400 text-right">{t.apy ? `${(t.apy * 100).toFixed(2)}% APY` : "-"}</span>
                     <span className="font-mono text-xs text-muted-foreground text-right">{t.price > 0 ? formatCurrency(t.price) : "-"}</span>
                     <span className="font-mono text-sm text-foreground text-right font-medium">{formatCurrency(t.value)}</span>
                   </div>
