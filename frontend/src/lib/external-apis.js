@@ -73,33 +73,106 @@ const JUPITER_PORTFOLIO_BASE = "https://api.jup.ag/portfolio/v1";
 
 // Translate a Jupiter Portfolio "element" → the position shape our UI expects:
 // { platform_id, platform, label, total_value, apy, tokens: [...] }
+// Jupiter Portfolio returns 5 element shapes (multiple / liquidity / borrowlend /
+// leverage / trade), each with assets in different paths. We extract them all.
+function buildToken(asset, tokenInfo, networkId, kind = "supplied") {
+  if (!asset) return null;
+  const data = asset.data || asset;
+  const addr = data.address || data.mint || asset.address || "";
+  const amount = Number(data.amount ?? asset.amount ?? 0);
+  const price = Number(data.price ?? asset.price ?? 0);
+  const value = Number(asset.value ?? data.value ?? amount * price);
+  const tokInfo = tokenInfo?.[networkId]?.[addr] || {};
+  const apy = Number(asset?.attributes?.apy ?? data?.apy ?? 0);
+  return {
+    address: addr,
+    symbol: tokInfo.symbol || data.symbol || asset.symbol || "",
+    name: tokInfo.name || data.name || asset.name || "",
+    image_uri: tokInfo.logoURI || tokInfo.image || data.image_uri || "",
+    amount,
+    price,
+    value: kind === "borrowed" ? -Math.abs(value) : value,
+    apy,
+    kind,
+  };
+}
+
 function mapJupiterElement(el, tokenInfo = {}) {
-  const assets = el?.data?.assets || [];
-  const yields = el?.data?.assetsYields || [];
-  const tokens = assets.map((a, idx) => {
-    const networkId = a.networkId || el.networkId || "solana";
-    const addr = a?.data?.address || a?.data?.mint || "";
-    const amount = Number(a?.data?.amount ?? 0);
-    const price = Number(a?.data?.price ?? 0);
-    const value = Number(a?.value ?? amount * price);
-    const tokInfo = tokenInfo?.[networkId]?.[addr] || {};
-    const apy = Number(yields?.[idx]?.apy ?? a?.attributes?.apy ?? 0);
-    return {
-      address: addr,
-      symbol: tokInfo.symbol || a?.data?.symbol || "",
-      name: tokInfo.name || a?.data?.name || "",
-      image_uri: tokInfo.logoURI || tokInfo.image || "",
-      amount,
-      price,
-      value,
-      apy,
-    };
-  });
+  const networkId = el?.networkId || "solana";
+  const data = el?.data || {};
+  const tokens = [];
+
+  const pushAll = (arr, kind = "supplied") => {
+    if (!Array.isArray(arr)) return;
+    arr.forEach((a) => {
+      const t = buildToken(a, tokenInfo, networkId, kind);
+      if (t) tokens.push(t);
+    });
+  };
+
+  switch (el?.type) {
+    case "multiple":
+      pushAll(data.assets, "supplied");
+      pushAll(data.rewardAssets, "reward");
+      break;
+    case "borrowlend":
+      pushAll(data.suppliedAssets, "supplied");
+      pushAll(data.borrowedAssets, "borrowed");
+      pushAll(data.rewardAssets, "reward");
+      break;
+    case "liquidity":
+      if (Array.isArray(data.liquidities)) {
+        data.liquidities.forEach((l) => {
+          pushAll(l?.assets, "supplied");
+          pushAll(l?.rewardAssets, "reward");
+        });
+      } else {
+        pushAll(data.assets, "supplied");
+      }
+      break;
+    case "leverage":
+    case "trade": {
+      // Single asset described directly on `data` itself.
+      const t = buildToken({ data, value: el.value, attributes: el.attributes }, tokenInfo, networkId, "supplied");
+      if (t) tokens.push(t);
+      pushAll(data.rewardAssets, "reward");
+      break;
+    }
+    default:
+      // Best-effort: scan common asset arrays anywhere.
+      pushAll(data.assets, "supplied");
+      pushAll(data.suppliedAssets, "supplied");
+      pushAll(data.borrowedAssets, "borrowed");
+      pushAll(data.rewardAssets, "reward");
+      break;
+  }
+
+  const totalValue = Number(
+    el?.value ??
+      tokens.reduce((s, t) => s + (Number.isFinite(t.value) ? t.value : 0), 0),
+  );
+
+  // Fallback row so the user can still see a position card with non-zero value
+  // even when Jupiter omitted the token breakdown (it happens for some fetchers).
+  if (tokens.length === 0 && Math.abs(totalValue) > 0.01) {
+    tokens.push({
+      address: "",
+      symbol: el?.label || el?.name || "Position",
+      name: `${el?.name || "Unknown"} - ${el?.label || ""}`.trim(),
+      image_uri: "",
+      amount: 0,
+      price: 0,
+      value: totalValue,
+      apy: Number(el?.netApy ?? 0),
+      kind: "supplied",
+    });
+  }
+
   return {
     platform_id: el?.platformId || el?.fetcherId || el?.name || "unknown",
     platform: el?.name || el?.platformId || "Unknown",
     label: el?.label || "",
-    total_value: Number(el?.value ?? tokens.reduce((s, t) => s + (t.value || 0), 0)),
+    total_value: totalValue,
     apy: Number(el?.netApy ?? 0),
     tokens,
   };
