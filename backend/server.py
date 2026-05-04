@@ -915,16 +915,37 @@ async def _fetch_solana_balances(address: str):
                     "7Q2afV64in6N6SeZsAAB81TJzwpeLmhBBNhwEr6XxJA": {"category": "staking", "protocol": "Sanctum (INF)", "type": "Staking"},
                 }
                 ids_to_fetch = []
+                symbols_needing_lookup = []
                 for sym in symbols_to_fetch:
                     if sym in coin_ids_map:
                         ids_to_fetch.append(coin_ids_map[sym])
+                    else:
+                        symbols_needing_lookup.append(sym)
+
+                # Dynamic lookup: try CoinGecko search for unknown tokens
+                for sym in symbols_needing_lookup:
+                    try:
+                        search_resp = await client_http.get(
+                            f"{COINGECKO_BASE}/search",
+                            params={"query": sym}
+                        )
+                        if search_resp.status_code == 200:
+                            coins = search_resp.json().get("coins", [])
+                            # Find best match - prefer exact symbol match
+                            for coin in coins:
+                                if coin.get("symbol", "").lower() == sym:
+                                    coin_ids_map[sym] = coin["id"]
+                                    ids_to_fetch.append(coin["id"])
+                                    break
+                    except Exception:
+                        pass
 
                 prices = {}
                 if ids_to_fetch:
                     try:
                         pr = await client_http.get(
                             f"{COINGECKO_BASE}/simple/price",
-                            params={"ids": ",".join(ids_to_fetch), "vs_currencies": "usd"}
+                            params={"ids": ",".join(set(ids_to_fetch)), "vs_currencies": "usd"}
                         )
                         if pr.status_code == 200:
                             prices = pr.json()
@@ -968,8 +989,36 @@ async def _fetch_solana_balances(address: str):
                     })
                     total_usd += usd_val
 
-            # Skip unknown tokens - only show recognized ones
-            # Unknown tokens can be added back if user wants to see all
+            # Try to identify unknown tokens via CoinGecko contract lookup
+            for t in unknown_tokens:
+                mint = t["mint"]
+                try:
+                    # CoinGecko supports Solana contract address lookup
+                    cg_resp = await client_http.get(
+                        f"{COINGECKO_BASE}/coins/solana/contract/{mint}"
+                    )
+                    if cg_resp.status_code == 200:
+                        cg_data = cg_resp.json()
+                        symbol = cg_data.get("symbol", "").upper()
+                        name = cg_data.get("name", "Unknown")
+                        price = cg_data.get("market_data", {}).get("current_price", {}).get("usd", 0)
+                        icon = cg_data.get("image", {}).get("small", "")
+                        usd_val = t["amount"] * price
+                        if symbol:
+                            tokens.append({
+                                "symbol": symbol,
+                                "name": name,
+                                "amount": t["amount"],
+                                "price": price,
+                                "usd_value": usd_val,
+                                "icon_url": icon,
+                                "category": "wallet",
+                                "protocol": None,
+                                "defi_type": None
+                            })
+                            total_usd += usd_val
+                except Exception:
+                    pass
 
         # Sort by USD value descending
         tokens.sort(key=lambda x: x["usd_value"], reverse=True)
