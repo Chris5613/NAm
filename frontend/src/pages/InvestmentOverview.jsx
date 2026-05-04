@@ -3,9 +3,10 @@ import { projectsApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Timer } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Timer, Receipt } from "lucide-react";
 import AddProjectDialog from "@/components/AddProjectDialog";
 import EditProjectDialog from "@/components/EditProjectDialog";
+import TransactionsDialog from "@/components/TransactionsDialog";
 
 function formatCurrency(value) {
   if (!value && value !== 0) return "$0.00";
@@ -22,6 +23,7 @@ export default function InvestmentOverview() {
   const [expandedId, setExpandedId] = useState(null);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
+  const [txnProject, setTxnProject] = useState(null);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -200,6 +202,16 @@ export default function InvestmentOverview() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7"
+                            onClick={(e) => { e.stopPropagation(); setTxnProject(project); }}
+                            data-testid={`txn-project-${project.id}`}
+                            title="Add Transaction"
+                          >
+                            <Receipt className="w-3.5 h-3.5" strokeWidth={1.5} />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
                             onClick={(e) => { e.stopPropagation(); setEditingProject(project); }}
                             data-testid={`edit-project-${project.id}`}
                           >
@@ -269,6 +281,15 @@ export default function InvestmentOverview() {
           open={!!editingProject}
           onOpenChange={(open) => !open && setEditingProject(null)}
           onUpdated={() => { setEditingProject(null); fetchProjects(); }}
+        />
+      )}
+
+      {txnProject && (
+        <TransactionsDialog
+          project={txnProject}
+          open={!!txnProject}
+          onOpenChange={(open) => !open && setTxnProject(null)}
+          onUpdated={fetchProjects}
         />
       )}
     </div>

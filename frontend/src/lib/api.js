@@ -35,6 +35,9 @@ export const projectsApi = {
   create: (data) => api.post("/projects", data),
   update: (id, data) => api.put(`/projects/${id}`, data),
   delete: (id) => api.delete(`/projects/${id}`),
+  getTransactions: (id) => api.get(`/projects/${id}/transactions`),
+  addTransaction: (id, data) => api.post(`/projects/${id}/transactions`, data),
+  deleteTransaction: (txnId) => api.delete(`/transactions/${txnId}`),
 };
 
 export default api;

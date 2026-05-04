@@ -133,13 +133,15 @@ async def delete_asset(asset_id: str):
 @api_router.get("/net-worth")
 async def get_net_worth():
     assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
+    projects = await db.projects.find({}, {"_id": 0}).to_list(100)
     
     categories = {
         "stocks": 0,
         "crypto": 0,
         "cash": 0,
         "crypto_projects": 0,
-        "debts": 0
+        "debts": 0,
+        "investments": 0
     }
     
     for asset in assets:
@@ -149,24 +151,31 @@ async def get_net_worth():
         if cat in categories:
             categories[cat] += value
     
-    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] - categories["debts"]
+    # Include investment projects net value (earned so far = current value of those investments)
+    for project in projects:
+        categories["investments"] += (project.get("earned", 0))
+    
+    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
     
     return {
         "total_net_worth": total,
         "breakdown": categories,
-        "asset_count": len(assets)
+        "asset_count": len(assets),
+        "project_count": len(projects)
     }
 
 @api_router.post("/net-worth/snapshot")
 async def save_snapshot():
     assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
+    projects = await db.projects.find({}, {"_id": 0}).to_list(100)
     
     categories = {
         "stocks": 0,
         "crypto": 0,
         "cash": 0,
         "crypto_projects": 0,
-        "debts": 0
+        "debts": 0,
+        "investments": 0
     }
     
     for asset in assets:
@@ -176,14 +185,17 @@ async def save_snapshot():
         if cat in categories:
             categories[cat] += value
     
-    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] - categories["debts"]
+    for project in projects:
+        categories["investments"] += (project.get("earned", 0))
+    
+    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
     
     snapshot = NetWorthSnapshot(
         total_net_worth=total,
         stocks_value=categories["stocks"],
         crypto_value=categories["crypto"],
         cash_value=categories["cash"],
-        crypto_projects_value=categories["crypto_projects"],
+        crypto_projects_value=categories["crypto_projects"] + categories["investments"],
         debts_value=categories["debts"]
     )
     
@@ -464,7 +476,106 @@ async def delete_project(project_id: str):
     result = await db.projects.delete_one({"id": project_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Project not found")
+    # Also delete associated transactions
+    await db.transactions.delete_many({"project_id": project_id})
     return {"message": "Project deleted"}
+
+
+# --- Transactions ---
+
+class Transaction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    project_id: str
+    type: str  # "earning" or "investment"
+    amount: float
+    category: Optional[str] = None  # which sub-category this belongs to
+    notes: Optional[str] = None
+    date: str = Field(default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class TransactionCreate(BaseModel):
+    type: str  # "earning" or "investment"
+    amount: float
+    category: Optional[str] = None
+    notes: Optional[str] = None
+    date: Optional[str] = None
+
+@api_router.get("/projects/{project_id}/transactions")
+async def get_project_transactions(project_id: str):
+    txns = await db.transactions.find({"project_id": project_id}, {"_id": 0}).sort("date", -1).to_list(500)
+    return txns
+
+@api_router.post("/projects/{project_id}/transactions", response_model=Transaction)
+async def add_transaction(project_id: str, input_data: TransactionCreate):
+    # Verify project exists
+    project = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    txn = Transaction(
+        project_id=project_id,
+        type=input_data.type,
+        amount=input_data.amount,
+        category=input_data.category,
+        notes=input_data.notes,
+        date=input_data.date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+    )
+    await db.transactions.insert_one(txn.model_dump())
+
+    # Update project totals
+    if input_data.type == "earning":
+        await db.projects.update_one(
+            {"id": project_id},
+            {"$inc": {"earned": input_data.amount}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        # Also update category if specified
+        if input_data.category:
+            # Check if category exists, update or add
+            cat_exists = await db.projects.find_one({"id": project_id, "categories.name": input_data.category})
+            if cat_exists:
+                await db.projects.update_one(
+                    {"id": project_id, "categories.name": input_data.category},
+                    {"$inc": {"categories.$.earned": input_data.amount}}
+                )
+            else:
+                await db.projects.update_one(
+                    {"id": project_id},
+                    {"$push": {"categories": {"name": input_data.category, "earned": input_data.amount}}}
+                )
+    elif input_data.type == "investment":
+        await db.projects.update_one(
+            {"id": project_id},
+            {"$inc": {"invested": input_data.amount}, "$set": {"updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+
+    return txn
+
+@api_router.delete("/transactions/{txn_id}")
+async def delete_transaction(txn_id: str):
+    txn = await db.transactions.find_one({"id": txn_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+
+    # Reverse the transaction from project totals
+    if txn["type"] == "earning":
+        await db.projects.update_one(
+            {"id": txn["project_id"]},
+            {"$inc": {"earned": -txn["amount"]}}
+        )
+        if txn.get("category"):
+            await db.projects.update_one(
+                {"id": txn["project_id"], "categories.name": txn["category"]},
+                {"$inc": {"categories.$.earned": -txn["amount"]}}
+            )
+    elif txn["type"] == "investment":
+        await db.projects.update_one(
+            {"id": txn["project_id"]},
+            {"$inc": {"invested": -txn["amount"]}}
+        )
+
+    await db.transactions.delete_one({"id": txn_id})
+    return {"message": "Transaction deleted and project updated"}
 
 
 # Include the router

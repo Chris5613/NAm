@@ -40,9 +40,9 @@ export default function NetWorthHero({ netWorth }) {
           <MetricItem label="Stocks" value={breakdown?.stocks || 0} />
           <MetricItem label="Crypto" value={breakdown?.crypto || 0} />
           <MetricItem label="Cash" value={breakdown?.cash || 0} />
+          <MetricItem label="Investments" value={breakdown?.investments || 0} />
           <MetricItem label="Projects" value={breakdown?.crypto_projects || 0} />
           <MetricItem label="Debts" value={breakdown?.debts || 0} negative />
-          <MetricItem label="Assets" value={asset_count} isCount />
         </div>
       </CardContent>
     </Card>

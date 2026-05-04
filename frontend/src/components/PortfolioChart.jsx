@@ -7,6 +7,7 @@ const CATEGORY_LABELS = {
   stocks: "Stocks",
   crypto: "Crypto",
   cash: "Cash",
+  investments: "Investments",
   crypto_projects: "Projects",
   debts: "Debts",
 };
