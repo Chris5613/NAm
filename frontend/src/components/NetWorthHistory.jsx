@@ -21,19 +21,80 @@ function formatTime(isoString) {
   return d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
+function formatDate(isoString) {
+  const d = new Date(isoString);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+// Recharts dot renderer — only draws a marker for *snapshot* points so the
+// live polling line stays clean. Auto vs manual are visually distinct.
+function SnapshotDot(props) {
+  const { cx, cy, payload, index } = props;
+  if (!payload || payload.kind !== "snapshot") return null;
+  if (typeof cx !== "number" || typeof cy !== "number") return null;
+  const isAuto = payload.source === "auto";
+  const fill = isAuto ? "#34D399" : "#FACC15"; // emerald-400 / yellow-400
+  const stroke = isAuto ? "#064E3B" : "#713F12";
+  if (isAuto) {
+    return (
+      <circle
+        key={`snap-${index}`}
+        cx={cx}
+        cy={cy}
+        r={4}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={1.5}
+      />
+    );
+  }
+  // Manual snapshots → diamond so they're instantly distinguishable.
+  const s = 5;
+  const points = `${cx},${cy - s} ${cx + s},${cy} ${cx},${cy + s} ${cx - s},${cy}`;
+  return (
+    <polygon
+      key={`snap-${index}`}
+      points={points}
+      fill={fill}
+      stroke={stroke}
+      strokeWidth={1.5}
+    />
+  );
+}
+
 export default function NetWorthHistory({ history, liveData }) {
   // Merge saved history with live session data.
+  // Each point keeps a `kind` ('snapshot' | 'live') and `source` ('auto' | 'manual')
+  // so the chart can render distinguishing markers without affecting the line shape.
   const chartData = useMemo(() => {
     const savedPoints = (history || []).map((item) => ({
       time: formatTime(item.timestamp),
       value: Number(item.total_net_worth) || 0,
+      kind: "snapshot",
+      source: item.source === "auto" ? "auto" : "manual",
+      timestamp: item.timestamp,
     }));
     const livePoints = (liveData || []).map((item) => ({
       time: formatTime(item.timestamp),
       value: Number(item.value) || 0,
+      kind: "live",
+      source: null,
+      timestamp: item.timestamp,
     }));
     return [...savedPoints, ...livePoints];
   }, [history, liveData]);
+
+  // Snapshot counts for the inline legend
+  const snapshotCounts = useMemo(() => {
+    let auto = 0;
+    let manual = 0;
+    for (const p of chartData) {
+      if (p.kind !== "snapshot") continue;
+      if (p.source === "auto") auto += 1;
+      else manual += 1;
+    }
+    return { auto, manual };
+  }, [chartData]);
 
   // Session delta: change since the FIRST live point this session.
   const sessionDelta = useMemo(() => {
@@ -97,6 +158,29 @@ export default function NetWorthHistory({ history, liveData }) {
             </div>
           )}
         </div>
+        {(snapshotCounts.auto > 0 || snapshotCounts.manual > 0) && (
+          <div
+            className="flex items-center gap-3 mt-1 text-[10px] font-mono text-muted-foreground/80"
+            data-testid="snapshot-legend"
+          >
+            {snapshotCounts.auto > 0 && (
+              <span className="flex items-center gap-1.5" data-testid="legend-auto">
+                <svg width="10" height="10" viewBox="0 0 10 10">
+                  <circle cx="5" cy="5" r="4" fill="#34D399" stroke="#064E3B" strokeWidth="1" />
+                </svg>
+                <span>Auto · {snapshotCounts.auto}</span>
+              </span>
+            )}
+            {snapshotCounts.manual > 0 && (
+              <span className="flex items-center gap-1.5" data-testid="legend-manual">
+                <svg width="10" height="10" viewBox="0 0 10 10">
+                  <polygon points="5,0 10,5 5,10 0,5" fill="#FACC15" stroke="#713F12" strokeWidth="1" />
+                </svg>
+                <span>Manual · {snapshotCounts.manual}</span>
+              </span>
+            )}
+          </div>
+        )}
       </CardHeader>
       <CardContent className="p-4">
         <ResponsiveContainer width="100%" height={220}>
@@ -134,7 +218,15 @@ export default function NetWorthHistory({ history, liveData }) {
                 fontSize: "12px",
               }}
               labelStyle={{ color: "#A1A1AA" }}
-              formatter={(value) => [formatCurrency(value), "Net Worth"]}
+              formatter={(value, _name, ctx) => {
+                const p = ctx?.payload;
+                if (p?.kind === "snapshot") {
+                  const tag = p.source === "auto" ? "Auto snapshot" : "Manual snapshot";
+                  const date = p.timestamp ? formatDate(p.timestamp) : "";
+                  return [formatCurrency(value), `${tag}${date ? ` · ${date}` : ""}`];
+                }
+                return [formatCurrency(value), "Net Worth"];
+              }}
             />
             <Area
               type="monotone"
@@ -142,7 +234,7 @@ export default function NetWorthHistory({ history, liveData }) {
               stroke="#FAFAFA"
               strokeWidth={2}
               fill="url(#netWorthGradient)"
-              dot={false}
+              dot={<SnapshotDot />}
               activeDot={{ r: 4, fill: "#FAFAFA" }}
               isAnimationActive={true}
               animationDuration={400}

@@ -28,7 +28,7 @@ function App() {
         const last = history[history.length - 1];
         const lastDay = last?.timestamp ? last.timestamp.split("T")[0] : null;
         if (lastDay === today) return; // already snapshotted today
-        await netWorthApi.saveSnapshot();
+        await netWorthApi.saveSnapshot('auto');
       } catch {
         /* silent — snapshot is best-effort */
       }

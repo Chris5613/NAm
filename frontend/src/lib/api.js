@@ -443,7 +443,7 @@ export const netWorthApi = {
     return toResponse({ total_net_worth: totalNetWorth, breakdown, last_updated: new Date().toISOString() });
   },
   getHistory: async () => toResponse(storage.getHistory()),
-  saveSnapshot: async () => {
+  saveSnapshot: async (source = 'manual') => {
     const current = await netWorthApi.getCurrent();
     const snapshot = {
       total_net_worth: current.data.total_net_worth,
@@ -454,6 +454,7 @@ export const netWorthApi = {
       crypto_projects_value: 0,
       debts_value: current.data.breakdown.debts,
       timestamp: new Date().toISOString(),
+      source, // 'auto' | 'manual' — used by the history chart to render markers
     };
     const history = storage.getHistory();
     const nextHistory = [...history, snapshot];

@@ -30,6 +30,7 @@ Track personal net worth and all investments (stocks, crypto wallets, DeFi, cryp
 - **GoMining → Investment Overview sync (Feb 2026 latest)** — `Save & Sync` button compares current rewards to last-synced snapshot; popup lists each row's `prev → new (+delta)` plus total; on confirm auto-creates "GoMining" project (if missing), appends one earning transaction per increased row, bumps `project.earned` by total delta. Idempotent (badge disappears after sync).
 - **Editable & undo-able auto-synced transactions (Feb 2026 latest)** — auto-synced transactions are tagged `source: 'gomining'` + `source_row_id` and visibly badged in the Transactions dialog. Editing or deleting them via the Investment Overview reverses/adjusts both the GoMining synced snapshot and `project.earned`, so the GoMining tab's pending badge re-arms when appropriate. GoMining page listens to focus/storage events to stay live.
 - **Daily auto-snapshot (Feb 2026 latest)** — `App.js` mounts a one-shot effect that appends a net-worth snapshot to `networth_history` if the latest snapshot's calendar day is not today. StrictMode-safe via module-level guard.
+- **Snapshot source markers (Feb 2026 latest)** — every snapshot is tagged with `source: 'auto' | 'manual'`; the Net Worth chart renders emerald circles for auto-snapshots and yellow diamonds for manual ones, with an inline legend showing counts and a Tooltip distinguishing the two on hover.
 
 ## Storage Keys (localStorage)
 - `networth_assets`, `networth_phones`, `networth_wallets`, `networth_projects`
@@ -46,6 +47,7 @@ Track personal net worth and all investments (stocks, crypto wallets, DeFi, cryp
 - [x] GoMining → Investment Overview sync with confirmation popup
 - [x] Editable / deletable auto-synced GoMining transactions (with snapshot reversal)
 - [x] Daily auto-snapshot of net-worth history
+- [x] Visual markers on the history chart distinguishing auto vs manual snapshots
 
 ### P1 — Pending
 - [ ] JSON Export/Import for full localStorage backup & restore
