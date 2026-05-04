@@ -706,6 +706,30 @@ async def _fetch_solana_balances(address: str):
                         mint = parsed.get("mint", "")
                         spl_tokens.append({"mint": mint, "amount": ui_amount})
 
+            # Also scan Token-2022 program (for JLP, etc.)
+            token2022_resp = await client_http.post(
+                "https://api.mainnet-beta.solana.com",
+                json={
+                    "jsonrpc": "2.0", "id": 3,
+                    "method": "getTokenAccountsByOwner",
+                    "params": [
+                        address,
+                        {"programId": "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"},
+                        {"encoding": "jsonParsed"}
+                    ]
+                }
+            )
+            if token2022_resp.status_code == 200:
+                t2022_data = token2022_resp.json()
+                t2022_accounts = t2022_data.get("result", {}).get("value", [])
+                for acc in t2022_accounts:
+                    parsed = acc.get("account", {}).get("data", {}).get("parsed", {}).get("info", {})
+                    token_amount = parsed.get("tokenAmount", {})
+                    ui_amount = token_amount.get("uiAmount", 0)
+                    if ui_amount and ui_amount > 0:
+                        mint = parsed.get("mint", "")
+                        spl_tokens.append({"mint": mint, "amount": ui_amount})
+
             # Fetch token metadata from Jupiter
             token_list = {}
             try:
@@ -768,6 +792,19 @@ async def _fetch_solana_balances(address: str):
                     "tnsr": "tensor", "render": "render-token", "orca": "orca",
                     "msol": "marinade-staked-sol", "bsol": "blazestake-staked-sol",
                     "jitosol": "jito-staked-sol", "hnt": "helium", "rndr": "render-token",
+                    "jupsol": "jupiter-staked-sol", "jlp": "jupiter-perpetuals-liquidity-provider-token",
+                    "nos": "nosana", "kmno": "kamino", "drift": "drift-protocol",
+                    "me": "magic-eden", "tensor": "tensor", "popcat": "popcat",
+                    "wen": "wen-4", "trump": "official-trump",
+                }
+                # DeFi categorization by mint address
+                defi_mints = {
+                    "jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v": {"category": "defi", "protocol": "Jupiter", "type": "Staking"},
+                    "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4": {"category": "defi", "protocol": "Jupiter", "type": "Vault"},
+                    "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So": {"category": "staking", "protocol": "Marinade", "type": "Staking"},
+                    "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1": {"category": "staking", "protocol": "BlazeStake", "type": "Staking"},
+                    "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn": {"category": "staking", "protocol": "Jito", "type": "Staking"},
+                    "7Q2afV64in6N6SeZsAAB81TJzwpeLmhBBNhwEr6XxJA": {"category": "staking", "protocol": "Sanctum (INF)", "type": "Staking"},
                 }
                 ids_to_fetch = []
                 for sym in symbols_to_fetch:
@@ -791,15 +828,25 @@ async def _fetch_solana_balances(address: str):
                     coin_id = coin_ids_map.get(sym_lower)
                     price = prices.get(coin_id, {}).get("usd", 0) if coin_id else 0
                     usd_val = t["amount"] * price
-                    # Categorize token
-                    category = "wallet"
-                    protocol = None
-                    if sym_lower in ("msol", "jitosol", "bsol", "stsol", "scnsol"):
+                    # Categorize by mint address first, then by symbol
+                    mint_info = defi_mints.get(t["mint"])
+                    if mint_info:
+                        category = mint_info["category"]
+                        protocol = mint_info["protocol"]
+                        defi_type = mint_info.get("type", "")
+                    elif sym_lower in ("msol", "jitosol", "bsol", "stsol", "scnsol", "jupsol"):
                         category = "staking"
-                        protocol_map = {"msol": "Marinade", "jitosol": "Jito", "bsol": "BlazeStake", "stsol": "Lido", "scnsol": "Socean"}
+                        protocol_map = {"msol": "Marinade", "jitosol": "Jito", "bsol": "BlazeStake", "stsol": "Lido", "scnsol": "Socean", "jupsol": "Jupiter"}
                         protocol = protocol_map.get(sym_lower, "Staking")
-                    elif sym_lower in ("usdc", "usdt") and usd_val > 0:
+                        defi_type = "Staking"
+                    elif sym_lower == "jlp":
+                        category = "defi"
+                        protocol = "Jupiter"
+                        defi_type = "Vault"
+                    else:
                         category = "wallet"
+                        protocol = None
+                        defi_type = None
                     tokens.append({
                         "symbol": t["symbol"],
                         "name": t["name"],
@@ -808,7 +855,8 @@ async def _fetch_solana_balances(address: str):
                         "usd_value": usd_val,
                         "icon_url": t.get("icon_url", ""),
                         "category": category,
-                        "protocol": protocol
+                        "protocol": protocol,
+                        "defi_type": defi_type
                     })
                     total_usd += usd_val
 

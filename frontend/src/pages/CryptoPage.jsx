@@ -12,7 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
-import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins, Layers } from "lucide-react";
 
 function formatCurrency(value) {
   if (!value && value !== 0) return "$0.00";
@@ -28,8 +28,8 @@ function shortenAddress(addr) {
 }
 
 const CHAIN_META = {
-  bitcoin: { name: "Bitcoin", color: "bg-amber-500/10 border-amber-500/20 text-amber-400", icon: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png" },
-  solana: { name: "Solana", color: "bg-purple-500/10 border-purple-500/20 text-purple-400", icon: "https://assets.coingecko.com/coins/images/4128/small/solana.png" },
+  bitcoin: { name: "Bitcoin", color: "border-amber-500/30 text-amber-400", activeBg: "bg-amber-500/15", icon: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png" },
+  solana: { name: "Solana", color: "border-purple-500/30 text-purple-400", activeBg: "bg-purple-500/15", icon: "https://assets.coingecko.com/coins/images/4128/small/solana.png" },
 };
 
 export default function CryptoPage() {
@@ -39,6 +39,7 @@ export default function CryptoPage() {
   const [refreshingId, setRefreshingId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [liveHistory, setLiveHistory] = useState([]);
+  const [activeChain, setActiveChain] = useState(null); // null = all
 
   const fetchWallets = useCallback(async () => {
     try {
@@ -64,19 +65,14 @@ export default function CryptoPage() {
     try {
       const res = await walletsApi.getBalances(walletId);
       setBalances((prev) => ({ ...prev, [walletId]: res.data }));
-    } catch {
-      // silent
-    } finally {
+    } catch { /* silent */ } finally {
       setRefreshingId(null);
     }
   };
 
   const refreshAll = async () => {
-    for (const w of wallets) {
-      await fetchBalance(w.id);
-    }
-    // Track live history
-    const total = Object.values(balances).reduce((s, b) => s + (b?.total_usd || 0), 0);
+    for (const w of wallets) { await fetchBalance(w.id); }
+    const total = computeTotal();
     if (total > 0) {
       setLiveHistory(prev => [...prev, { time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), value: total }]);
     }
@@ -90,9 +86,9 @@ export default function CryptoPage() {
     toast.success("Wallet removed");
   };
 
-  // Aggregate data
-  const totalValue = Object.values(balances).reduce((s, b) => s + (b?.total_usd || 0), 0);
-  const allTokens = Object.values(balances).flatMap(b => b?.tokens || []);
+  // Compute totals
+  const computeTotal = () => Object.values(balances).reduce((s, b) => s + (b?.total_usd || 0), 0);
+  const totalValue = computeTotal();
 
   // Per-chain breakdown
   const chainBreakdown = {};
@@ -102,14 +98,49 @@ export default function CryptoPage() {
       chainBreakdown[w.chain] = (chainBreakdown[w.chain] || 0) + (bal.total_usd || 0);
     }
   });
+  const sortedChains = Object.entries(chainBreakdown).sort((a, b) => b[1] - a[1]);
+
+  // Combine all tokens from all wallets, filtering by active chain
+  const allTokens = [];
+  wallets.forEach(w => {
+    if (activeChain && w.chain !== activeChain) return;
+    const bal = balances[w.id];
+    if (bal?.tokens) {
+      bal.tokens.forEach(t => allTokens.push({ ...t, chain: w.chain }));
+    }
+  });
+
+  // Combine duplicates by symbol
+  const combined = {};
+  allTokens.forEach(t => {
+    const key = `${t.symbol}_${t.category}_${t.protocol || ""}`;
+    if (combined[key]) {
+      combined[key].amount += t.amount;
+      combined[key].usd_value += t.usd_value;
+    } else {
+      combined[key] = { ...t };
+    }
+  });
+  const combinedTokens = Object.values(combined).sort((a, b) => b.usd_value - a.usd_value);
 
   // Group by category
-  const walletTokens = allTokens.filter(t => t.category === "wallet" && t.usd_value > 0.01);
-  const stakingTokens = allTokens.filter(t => t.category === "staking" && t.usd_value > 0.01);
+  const walletTokens = combinedTokens.filter(t => t.category === "wallet" && t.usd_value > 0.01);
+  const stakingTokens = combinedTokens.filter(t => t.category === "staking" && t.usd_value > 0.01);
+  const defiTokens = combinedTokens.filter(t => t.category === "defi" && t.usd_value > 0.01);
   const walletTotal = walletTokens.reduce((s, t) => s + t.usd_value, 0);
   const stakingTotal = stakingTokens.reduce((s, t) => s + t.usd_value, 0);
+  const defiTotal = defiTokens.reduce((s, t) => s + t.usd_value, 0);
 
-  // Add current total to live history on first load
+  // Group DeFi by protocol
+  const defiByProtocol = {};
+  defiTokens.forEach(t => {
+    const p = t.protocol || "Other";
+    if (!defiByProtocol[p]) defiByProtocol[p] = { tokens: [], total: 0 };
+    defiByProtocol[p].tokens.push(t);
+    defiByProtocol[p].total += t.usd_value;
+  });
+
+  // Live history init
   useEffect(() => {
     if (totalValue > 0 && liveHistory.length === 0) {
       setLiveHistory([{ time: "Now", value: totalValue }]);
@@ -153,21 +184,18 @@ export default function CryptoPage() {
         </Card>
       ) : (
         <>
-          {/* Net Worth + Chart Row */}
+          {/* Net Worth + Chart */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="border-border/40 bg-card" data-testid="crypto-net-worth">
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-1">Net Worth</p>
                 <p className="font-mono text-4xl font-bold text-foreground">{formatCurrency(totalValue)}</p>
-                <p className="font-mono text-xs text-emerald-400 mt-1">
-                  {totalValue > 0 ? `${(totalValue / 85).toFixed(2)} SOL` : ""}
-                </p>
               </CardContent>
             </Card>
             <Card className="border-border/40 bg-card" data-testid="crypto-chart">
               <CardContent className="p-4">
                 {liveHistory.length > 1 ? (
-                  <ResponsiveContainer width="100%" height={130}>
+                  <ResponsiveContainer width="100%" height={110}>
                     <AreaChart data={liveHistory} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
                       <defs>
                         <linearGradient id="cryptoGrad" x1="0" y1="0" x2="0" y2="1">
@@ -180,7 +208,7 @@ export default function CryptoPage() {
                     </AreaChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-[130px] flex items-center justify-center">
+                  <div className="h-[110px] flex items-center justify-center">
                     <p className="text-xs text-muted-foreground">Chart builds as you refresh</p>
                   </div>
                 )}
@@ -188,24 +216,41 @@ export default function CryptoPage() {
             </Card>
           </div>
 
-          {/* Network Chips */}
+          {/* Network Chips - Clickable + sorted by value */}
           <div className="flex items-center gap-3 flex-wrap" data-testid="network-chips">
-            {Object.entries(chainBreakdown).map(([chain, value]) => {
-              const meta = CHAIN_META[chain] || { name: chain, color: "bg-secondary border-border text-foreground", icon: "" };
+            <button
+              onClick={() => setActiveChain(null)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-md border transition-colors ${!activeChain ? "border-white/30 bg-white/10 text-foreground" : "border-border/40 text-muted-foreground hover:border-white/20"}`}
+              data-testid="network-chip-all"
+            >
+              <Layers className="w-4 h-4" strokeWidth={1.5} />
+              <div>
+                <p className="text-xs font-medium text-left">All Networks</p>
+                <p className="font-mono text-xs">{formatCurrency(totalValue)}</p>
+              </div>
+            </button>
+            {sortedChains.map(([chain, value]) => {
+              const meta = CHAIN_META[chain] || { name: chain, color: "border-border text-foreground", activeBg: "bg-secondary", icon: "" };
               const pct = totalValue > 0 ? ((value / totalValue) * 100).toFixed(0) : 0;
+              const isActive = activeChain === chain;
               return (
-                <div key={chain} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-md border ${meta.color}`} data-testid={`network-chip-${chain}`}>
+                <button
+                  key={chain}
+                  onClick={() => setActiveChain(isActive ? null : chain)}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-md border transition-colors ${isActive ? `${meta.activeBg} ${meta.color}` : `border-border/40 text-muted-foreground hover:${meta.color} hover:border-current`}`}
+                  data-testid={`network-chip-${chain}`}
+                >
                   {meta.icon && <img src={meta.icon} alt="" className="w-5 h-5 rounded-full" />}
                   <div>
-                    <p className="text-xs font-medium">{meta.name}</p>
-                    <p className="font-mono text-xs">{formatCurrency(value)} <span className="text-muted-foreground">{pct}%</span></p>
+                    <p className="text-xs font-medium text-left">{meta.name}</p>
+                    <p className="font-mono text-xs">{formatCurrency(value)} <span className="opacity-60">{pct}%</span></p>
                   </div>
-                </div>
+                </button>
               );
             })}
           </div>
 
-          {/* Wallet Holdings Section */}
+          {/* Holdings Section */}
           {walletTokens.length > 0 && (
             <Card className="border-border/40 bg-card" data-testid="holdings-section">
               <CardHeader className="pb-0 pt-4 px-5">
@@ -224,14 +269,50 @@ export default function CryptoPage() {
                   <span className="text-right">Price</span>
                   <span className="text-right">Value</span>
                 </div>
-                {walletTokens.sort((a, b) => b.usd_value - a.usd_value).map((token, idx) => (
+                {walletTokens.map((token, idx) => (
                   <TokenRow key={idx} token={token} />
                 ))}
               </CardContent>
             </Card>
           )}
 
-          {/* Staking/DeFi Section */}
+          {/* DeFi Protocols */}
+          {Object.entries(defiByProtocol).map(([protocol, data]) => (
+            <Card key={protocol} className="border-border/40 bg-card" data-testid={`defi-section-${protocol}`}>
+              <CardHeader className="pb-0 pt-4 px-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-emerald-400" strokeWidth={1.5} />
+                    <CardTitle className="text-sm font-medium">{protocol}</CardTitle>
+                  </div>
+                  <span className="font-mono text-sm text-foreground">{formatCurrency(data.total)}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="px-2 pb-2 pt-2">
+                <div className="px-3 py-1.5 grid grid-cols-5 text-xs text-muted-foreground border-b border-border/20">
+                  <span>Asset</span>
+                  <span>Type</span>
+                  <span className="text-right">Balance</span>
+                  <span className="text-right">Price</span>
+                  <span className="text-right">Value</span>
+                </div>
+                {data.tokens.map((token, idx) => (
+                  <div key={idx} className="px-3 py-2.5 grid grid-cols-5 items-center hover:bg-secondary/30 transition-colors">
+                    <div className="flex items-center gap-2">
+                      {token.icon_url ? <img src={token.icon_url} alt="" className="w-5 h-5 rounded-full" /> : <div className="w-5 h-5 rounded-full bg-secondary" />}
+                      <span className="text-sm font-medium text-foreground">{token.symbol}</span>
+                    </div>
+                    <span className="text-xs text-emerald-400">{token.defi_type || "Vault"}</span>
+                    <span className="font-mono text-xs text-foreground text-right">{token.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                    <span className="font-mono text-xs text-muted-foreground text-right">{token.price > 0 ? formatCurrency(token.price) : "-"}</span>
+                    <span className="font-mono text-sm text-foreground text-right font-medium">{formatCurrency(token.usd_value)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          ))}
+
+          {/* Staking Section */}
           {stakingTokens.length > 0 && (
             <Card className="border-border/40 bg-card" data-testid="staking-section">
               <CardHeader className="pb-0 pt-4 px-5">
@@ -251,7 +332,7 @@ export default function CryptoPage() {
                   <span className="text-right">Price</span>
                   <span className="text-right">Value</span>
                 </div>
-                {stakingTokens.sort((a, b) => b.usd_value - a.usd_value).map((token, idx) => (
+                {stakingTokens.map((token, idx) => (
                   <div key={idx} className="px-3 py-2.5 grid grid-cols-5 items-center hover:bg-secondary/30 transition-colors">
                     <div className="flex items-center gap-2">
                       {token.icon_url ? <img src={token.icon_url} alt="" className="w-5 h-5 rounded-full" /> : <div className="w-5 h-5 rounded-full bg-secondary" />}
@@ -267,7 +348,7 @@ export default function CryptoPage() {
             </Card>
           )}
 
-          {/* Wallet addresses management */}
+          {/* Connected Wallets */}
           <div className="space-y-2">
             <p className="text-xs text-muted-foreground font-medium">Connected Wallets</p>
             {wallets.map(w => (
@@ -341,9 +422,7 @@ function AddWalletDialog({ open, onOpenChange, onAdded }) {
           <div className="space-y-2">
             <Label>Chain</Label>
             <Select value={form.chain} onValueChange={(val) => setForm({ ...form, chain: val })}>
-              <SelectTrigger className="bg-background border-border" data-testid="wallet-chain-select">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="bg-background border-border" data-testid="wallet-chain-select"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
                 <SelectItem value="solana">Solana</SelectItem>
                 <SelectItem value="bitcoin">Bitcoin</SelectItem>
