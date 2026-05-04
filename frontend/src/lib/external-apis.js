@@ -105,6 +105,19 @@ export const solanaApi = {
   },
 };
 
+// Bitcoin Blockchain.info
+const BITCOIN_API = "https://blockchain.info";
+
+export const bitcoinApi = {
+  getBalance: async (address) => {
+    const response = await axios.get(`${BITCOIN_API}/balance`, {
+      params: { active: address },
+      timeout: 10000,
+    });
+    return response.data[address]?.final_balance || 0;
+  },
+};
+
 // RapidAPI eBay API (requires API key)
 const RAPIDAPI_KEY = process.env.REACT_APP_RAPIDAPI_KEY;
 const RAPIDAPI_EBAY_HOST = process.env.REACT_APP_RAPIDAPI_EBAY_HOST || "ebay-average-selling-price.p.rapidapi.com";
