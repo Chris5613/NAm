@@ -627,6 +627,66 @@ async def get_wallet_balances(wallet_id: str):
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported chain: {wallet['chain']}")
 
+@api_router.get("/wallets/solana/defi/{address}")
+async def get_solana_defi_positions(address: str):
+    """Fetch DeFi positions from Jupiter Portfolio API"""
+    try:
+        async with httpx.AsyncClient(timeout=30) as client_http:
+            resp = await client_http.get(f"https://api.jup.ag/portfolio/v1/positions/{address}")
+            if resp.status_code == 200:
+                data = resp.json()
+                elements = data.get("elements", [])
+                positions = []
+                for el in elements:
+                    label = el.get("label", "")
+                    platform = el.get("platformId", "")
+                    name = el.get("name", platform)
+                    el_data = el.get("data", {})
+                    assets = el_data.get("assets", [])
+                    
+                    pos_tokens = []
+                    pos_total = 0
+                    for asset in assets:
+                        asset_data = asset.get("data", {})
+                        value = asset.get("value", 0)
+                        pos_tokens.append({
+                            "address": asset_data.get("address", ""),
+                            "amount": asset_data.get("amount", 0),
+                            "price": asset_data.get("price", 0),
+                            "value": value,
+                            "symbol": asset_data.get("symbol", ""),
+                            "name": asset_data.get("name", ""),
+                            "image_uri": asset_data.get("imageUri", ""),
+                        })
+                        pos_total += value
+                    
+                    if pos_total > 0.01:
+                        positions.append({
+                            "label": label,
+                            "platform": name,
+                            "platform_id": platform,
+                            "total_value": pos_total,
+                            "tokens": pos_tokens,
+                        })
+                
+                # Sort by value
+                positions.sort(key=lambda x: x["total_value"], reverse=True)
+                return {"positions": positions, "total_usd": sum(p["total_value"] for p in positions)}
+            return {"positions": [], "total_usd": 0}
+    except Exception as e:
+        logger.warning(f"Jupiter portfolio fetch error: {e}")
+        return {"positions": [], "total_usd": 0, "error": str(e)}
+
+@api_router.post("/wallets/bulk")
+async def add_wallets_bulk(wallets_data: List[WalletCreate]):
+    """Add multiple wallets at once"""
+    created = []
+    for w in wallets_data:
+        wallet = Wallet(**w.model_dump())
+        await db.wallets.insert_one(wallet.model_dump())
+        created.append(wallet)
+    return created
+
 async def _fetch_btc_balance(address: str):
     try:
         async with httpx.AsyncClient(timeout=15) as client_http:

@@ -43,8 +43,10 @@ export const projectsApi = {
 export const walletsApi = {
   getAll: () => api.get("/wallets"),
   add: (data) => api.post("/wallets", data),
+  addBulk: (data) => api.post("/wallets/bulk", data),
   delete: (id) => api.delete(`/wallets/${id}`),
   getBalances: (id) => api.get(`/wallets/${id}/balances`),
+  getDefiPositions: (address) => api.get(`/wallets/solana/defi/${address}`),
 };
 
 export default api;
