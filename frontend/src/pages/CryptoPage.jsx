@@ -641,24 +641,30 @@ function LogoEditDialog({ symbol, open, onOpenChange, onSave }) {
 }
 
 function CustomTokensSection({ customTokens, onUpdate }) {
-  const [form, setForm] = useState({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" });
+  const [form, setForm] = useState({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana", coingecko_id: "" });
   const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [fetchingPrice, setFetchingPrice] = useState(false);
+  const [refreshingPrices, setRefreshingPrices] = useState(false);
   const priceTimeout = useRef(null);
 
-  // Auto-fetch price when symbol changes
+  // Auto-fetch price + enrich (name, icon) when symbol changes — uses the
+  // CoinGecko search endpoint to map "TRX" → "tron" so /simple/price returns
+  // a real number instead of 0.
   const fetchPrice = async (symbol) => {
     if (!symbol || symbol.length < 2) return;
     setFetchingPrice(true);
     try {
-      const price = await customTokensApi.getPrice(symbol);
-      if (price > 0) {
-        setForm(prev => ({
-          ...prev,
-          price: price.toString(),
-        }));
-      }
+      const { price, resolved } = await customTokensApi.resolveAndPrice(symbol);
+      setForm(prev => {
+        const next = { ...prev };
+        if (price > 0) next.price = price.toString();
+        // Only auto-fill name/icon if the user hasn't typed something custom.
+        if (resolved && !prev.name) next.name = resolved.name;
+        if (resolved && !prev.icon_url && resolved.thumb) next.icon_url = resolved.thumb;
+        if (resolved) next.coingecko_id = resolved.id;
+        return next;
+      });
     } catch { /* silent */ } finally { setFetchingPrice(false); }
   };
 
@@ -679,9 +685,10 @@ function CustomTokensSection({ customTokens, onUpdate }) {
         price: parseFloat(form.price) || 0,
         icon_url: form.icon_url || null,
         chain: form.chain,
+        coingecko_id: form.coingecko_id || null,
       });
       toast.success(`${form.symbol} added`);
-      setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" });
+      setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana", coingecko_id: "" });
       onUpdate();
     } catch { toast.error("Failed to add"); } finally { setSubmitting(false); }
   };
@@ -697,10 +704,11 @@ function CustomTokensSection({ customTokens, onUpdate }) {
         price: parseFloat(form.price) || 0,
         icon_url: form.icon_url || null,
         chain: form.chain,
+        coingecko_id: form.coingecko_id || null,
       });
       toast.success("Updated");
       setEditingId(null);
-      setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" });
+      setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana", coingecko_id: "" });
       onUpdate();
     } catch { toast.error("Failed to update"); } finally { setSubmitting(false); }
   };
@@ -722,12 +730,44 @@ function CustomTokensSection({ customTokens, onUpdate }) {
       price: token.price?.toString() || "",
       icon_url: token.icon_url || "",
       chain: token.chain || "solana",
+      coingecko_id: token.coingecko_id || "",
     });
+  };
+
+  const handleRefreshPrices = async () => {
+    setRefreshingPrices(true);
+    try {
+      const res = await customTokensApi.refreshAllPrices();
+      const { updated, total } = res.data || {};
+      if (updated > 0) toast.success(`Refreshed ${updated}/${total} custom token prices`);
+      else if (total > 0) toast.error(`Couldn't resolve any prices for ${total} token(s) — check the symbols`);
+      else toast.info("No custom tokens to refresh");
+      onUpdate();
+    } catch {
+      toast.error("Failed to refresh prices");
+    } finally { setRefreshingPrices(false); }
   };
 
   return (
     <div className="space-y-3 pt-4 border-t border-border/40">
-      <p className="text-xs text-muted-foreground font-medium">Custom Tokens</p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-muted-foreground font-medium">Custom Tokens</p>
+        {customTokens && customTokens.length > 0 && (
+          <Button
+            type="button"
+            onClick={handleRefreshPrices}
+            disabled={refreshingPrices}
+            size="sm"
+            variant="outline"
+            className="h-7 px-2 border-border/40 text-xs"
+            data-testid="refresh-custom-prices-btn"
+            title="Re-fetch live prices from CoinGecko"
+          >
+            <RefreshCw className={`w-3 h-3 mr-1 ${refreshingPrices ? "animate-spin" : ""}`} strokeWidth={1.5} />
+            {refreshingPrices ? "Refreshing..." : "Refresh prices"}
+          </Button>
+        )}
+      </div>
 
       {/* Existing custom tokens list */}
       {customTokens && customTokens.length > 0 && (
@@ -785,7 +825,7 @@ function CustomTokensSection({ customTokens, onUpdate }) {
           <Button onClick={handleEdit} disabled={submitting} size="sm" className="flex-1 bg-white text-black hover:bg-neutral-200" data-testid="save-custom-token-btn">
             {submitting ? "Saving..." : "Save Changes"}
           </Button>
-          <Button onClick={() => { setEditingId(null); setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" }); }} size="sm" variant="outline" className="border-border/40">
+          <Button onClick={() => { setEditingId(null); setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana", coingecko_id: "" }); }} size="sm" variant="outline" className="border-border/40">
             Cancel
           </Button>
         </div>

@@ -410,7 +410,57 @@ export const customTokensApi = {
     storage.setTokens(remaining);
     return toResponse({ id });
   },
-  getPrice: (symbol) => coinGeckoApi.getPrice(symbol),
+  // Resolve symbol → coin id, then fetch price + return enrichment metadata
+  // (name, icon) so the form can auto-fill everything in one step.
+  resolveAndPrice: async (symbol) => {
+    const resolved = await coinGeckoApi.resolveSymbol(symbol);
+    if (!resolved) return { price: 0, resolved: null };
+    const price = await coinGeckoApi.getPrice(resolved.id);
+    return { price: Number(price) || 0, resolved };
+  },
+  // Re-price every stored custom token. Persists each token's `coingecko_id`
+  // on first resolve so subsequent refreshes skip the search hop.
+  refreshAllPrices: async () => {
+    const all = normalizeItems(storage.getTokens());
+    if (all.length === 0) return toResponse({ updated: 0, total: 0 });
+    let updated = 0;
+    const next = [];
+    for (const t of all) {
+      try {
+        let coinId = t.coingecko_id;
+        let icon = t.icon_url;
+        let name = t.name;
+        if (!coinId) {
+          const r = await coinGeckoApi.resolveSymbol(t.symbol);
+          if (r?.id) {
+            coinId = r.id;
+            if (!icon) icon = r.thumb || icon;
+            if (!name) name = r.name || name;
+          }
+        }
+        if (!coinId) { next.push(t); continue; }
+        const price = await coinGeckoApi.getPrice(coinId);
+        if (price > 0) {
+          updated += 1;
+          next.push(normalizeId({ ...t, price, coingecko_id: coinId, icon_url: icon, name: name || t.name }));
+        } else {
+          next.push(normalizeId({ ...t, coingecko_id: coinId }));
+        }
+      } catch {
+        next.push(t);
+      }
+      // Stay polite with CoinGecko's free-tier rate limit.
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    storage.setTokens(next);
+    return toResponse({ updated, total: all.length });
+  },
+  // Kept for backwards compat (was used directly elsewhere) — now goes through
+  // the symbol resolver so a bare ticker like "TRX" actually returns a price.
+  getPrice: async (symbol) => {
+    const { price } = await customTokensApi.resolveAndPrice(symbol);
+    return price;
+  },
 };
 
 export const netWorthApi = {

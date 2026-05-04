@@ -26,6 +26,35 @@ export const coinGeckoApi = {
     }
   },
 
+  // Resolve a ticker symbol (e.g. "TRX") to CoinGecko's canonical coin id
+  // (e.g. "tron"). The simple/price endpoint only accepts ids, so without
+  // this step custom tokens added by symbol come back priced at $0.
+  // Returns: { id, name, symbol, thumb } or null.
+  resolveSymbol: async (symbol) => {
+    if (!symbol) return null;
+    try {
+      const coins = await coinGeckoApi.search(symbol);
+      const target = symbol.trim().toLowerCase();
+      // Prefer an exact symbol match; CoinGecko returns results sorted by
+      // market-cap rank, so the first exact hit is almost always correct.
+      const match =
+        coins.find((c) => (c.symbol || "").toLowerCase() === target) ||
+        coins.find((c) => (c.name || "").toLowerCase() === target) ||
+        coins[0] ||
+        null;
+      if (!match) return null;
+      return {
+        id: match.id,
+        name: match.name,
+        symbol: match.symbol,
+        thumb: match.thumb || match.large || match.small || "",
+      };
+    } catch (error) {
+      console.warn(`CoinGecko resolveSymbol failed for ${symbol}:`, error);
+      return null;
+    }
+  },
+
   getInfo: async (coinId) => {
     try {
       const response = await withCorsProxy(`${COINGECKO_BASE}/coins/${coinId}`);
