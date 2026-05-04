@@ -37,6 +37,7 @@ api_router = APIRouter(prefix="/api")
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 ALPHA_VANTAGE_BASE = "https://www.alphavantage.co/query"
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY", "demo")
+JUPITER_API_KEY = os.environ.get("JUPITER_API_KEY", "")
 
 # --- Models ---
 
@@ -631,8 +632,14 @@ async def get_wallet_balances(wallet_id: str):
 async def get_solana_defi_positions(address: str):
     """Fetch DeFi positions from Jupiter Portfolio API"""
     try:
-        async with httpx.AsyncClient(timeout=30) as client_http:
-            resp = await client_http.get(f"https://api.jup.ag/portfolio/v1/positions/{address}")
+        headers = {}
+        if JUPITER_API_KEY:
+            headers["x-api-key"] = JUPITER_API_KEY
+        async with httpx.AsyncClient(timeout=45) as client_http:
+            resp = await client_http.get(
+                f"https://api.jup.ag/portfolio/v1/positions/{address}",
+                headers=headers
+            )
             if resp.status_code == 200:
                 data = resp.json()
                 elements = data.get("elements", [])
@@ -648,11 +655,11 @@ async def get_solana_defi_positions(address: str):
                     pos_total = 0
                     for asset in assets:
                         asset_data = asset.get("data", {})
-                        value = asset.get("value", 0)
+                        value = asset.get("value", 0) or 0
                         pos_tokens.append({
                             "address": asset_data.get("address", ""),
-                            "amount": asset_data.get("amount", 0),
-                            "price": asset_data.get("price", 0),
+                            "amount": asset_data.get("amount", 0) or 0,
+                            "price": asset_data.get("price", 0) or 0,
                             "value": value,
                             "symbol": asset_data.get("symbol", ""),
                             "name": asset_data.get("name", ""),
@@ -672,6 +679,8 @@ async def get_solana_defi_positions(address: str):
                 # Sort by value
                 positions.sort(key=lambda x: x["total_value"], reverse=True)
                 return {"positions": positions, "total_usd": sum(p["total_value"] for p in positions)}
+            else:
+                logger.warning(f"Jupiter API returned {resp.status_code}: {resp.text[:200]}")
             return {"positions": [], "total_usd": 0}
     except Exception as e:
         logger.warning(f"Jupiter portfolio fetch error: {e}")
