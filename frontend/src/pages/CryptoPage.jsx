@@ -242,7 +242,7 @@ export default function CryptoPage() {
 
   useEffect(() => { if (grandTotal > 0 && liveHistory.length === 0) setLiveHistory([{ time: "Now", value: grandTotal }]); }, [grandTotal]);
 
-  // Sync crypto total + chain breakdown + tokens to backend cache so the main Net Worth page reflects it
+  // Sync crypto total + chain breakdown + tokens to client cache so the main Net Worth page reflects it
   const lastSyncedRef = useRef(null);
   useEffect(() => {
     if (loading) return;

@@ -1,4 +1,4 @@
-// External API calls moved from backend to frontend
+// External API calls are executed directly in the frontend
 import axios from "axios";
 
 // CoinGecko API (free, no auth required)
@@ -138,7 +138,7 @@ export const ebayApi = {
         },
         timeout: 15000,
       });
-      // Parse the response as per backend logic
+      // Parse the external API response structure
       const items = response.data.findCompletedItemsResponse?.[0]?.searchResult?.[0]?.item || [];
       if (!items.length) return 0;
       const prices = items

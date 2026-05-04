@@ -7,7 +7,7 @@ const STORAGE_KEYS = {
   TOKENS: 'networth_tokens',
   PREFS: 'networth_prefs',
   CRYPTO_CACHE: 'networth_crypto_cache',
-  LAST_SYNC: 'networth_last_sync',
+  HISTORY: 'networth_history',
 };
 
 export const localStorage = {
@@ -64,48 +64,7 @@ export const localStorage = {
   getCryptoCache: () => localStorage.get(STORAGE_KEYS.CRYPTO_CACHE) || { total: 0, chains: [], tokens: [] },
   setCryptoCache: (cache) => localStorage.set(STORAGE_KEYS.CRYPTO_CACHE, cache),
 
-  getLastSync: () => localStorage.get(STORAGE_KEYS.LAST_SYNC),
-  setLastSync: (timestamp) => localStorage.set(STORAGE_KEYS.LAST_SYNC, timestamp),
+  getHistory: () => localStorage.get(STORAGE_KEYS.HISTORY) || [],
+  setHistory: (history) => localStorage.set(STORAGE_KEYS.HISTORY, history),
 
-  // Sync methods
-  syncToBackend: async (api) => {
-    // Sync all local data to backend
-    const assets = localStorage.getAssets();
-    const phones = localStorage.getPhones();
-    const wallets = localStorage.getWallets();
-    const projects = localStorage.getProjects();
-    const tokens = localStorage.getTokens();
-    const prefs = localStorage.getPrefs();
-    const cryptoCache = localStorage.getCryptoCache();
-
-    // This would require backend endpoints to bulk sync
-    // For now, just mark as synced
-    localStorage.setLastSync(new Date().toISOString());
-  },
-
-  loadFromBackend: async (api) => {
-    // Load all data from backend and cache locally
-    try {
-      const [assets, phones, wallets, projects, tokens, prefs, cryptoCache] = await Promise.all([
-        api.assetsApi.getAll().then(r => r.data),
-        api.phonesApi.list().then(r => r.phones),
-        api.walletsApi.getAll().then(r => r.data),
-        api.projectsApi.getAll().then(r => r.data),
-        api.customTokensApi.getAll().then(r => r.data),
-        api.tokenPrefsApi.getAll().then(r => r.data),
-        api.cryptoCacheApi.get().then(r => r.data),
-      ]);
-
-      localStorage.setAssets(assets);
-      localStorage.setPhones(phones);
-      localStorage.setWallets(wallets);
-      localStorage.setProjects(projects);
-      localStorage.setTokens(tokens);
-      localStorage.setPrefs(prefs);
-      localStorage.setCryptoCache(cryptoCache);
-      localStorage.setLastSync(new Date().toISOString());
-    } catch (error) {
-      console.warn('Failed to load from backend:', error);
-    }
-  },
 };
