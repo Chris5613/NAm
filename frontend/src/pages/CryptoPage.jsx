@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
-import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins, Layers, Settings, EyeOff, Eye, Image } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins, Layers, Settings, EyeOff, Eye, Image, Pencil } from "lucide-react";
 
 function formatCurrency(v) {
   if (!v && v !== 0) return "$0.00";
@@ -178,6 +178,13 @@ export default function CryptoPage() {
     const tokens = balances[w.id]?.tokens || [];
     const visibleValue = tokens.filter(t => !hiddenSymbols.has(t.symbol)).reduce((s, t) => s + (t.usd_value || 0), 0);
     chainBreakdown[w.chain] = (chainBreakdown[w.chain] || 0) + visibleValue;
+  });
+  // Add custom tokens to chain breakdown
+  customTokens.forEach(ct => {
+    if (!hiddenSymbols.has(ct.symbol)) {
+      const ctChain = ct.chain || "custom";
+      chainBreakdown[ctChain] = (chainBreakdown[ctChain] || 0) + (ct.amount * ct.price);
+    }
   });
   if (defiTotalValue > 0) chainBreakdown["solana"] = (chainBreakdown["solana"] || 0) + defiTotalValue;
   const sortedChains = Object.entries(chainBreakdown).sort((a, b) => b[1] - a[1]);
@@ -383,7 +390,7 @@ export default function CryptoPage() {
         </>
       )}
 
-      <WalletManageModal open={walletModalOpen} onOpenChange={setWalletModalOpen} wallets={wallets} onUpdate={fetchWallets} />
+      <WalletManageModal open={walletModalOpen} onOpenChange={setWalletModalOpen} wallets={wallets} customTokens={customTokens} onUpdate={fetchWallets} />
       <LogoEditDialog symbol={logoEditToken} open={!!logoEditToken} onOpenChange={(o) => !o && setLogoEditToken(null)} onSave={setTokenLogo} />
     </div>
   );
@@ -403,7 +410,7 @@ function TokenRow({ token }) {
   );
 }
 
-function WalletManageModal({ open, onOpenChange, wallets, onUpdate }) {
+function WalletManageModal({ open, onOpenChange, wallets, customTokens, onUpdate }) {
   const [addresses, setAddresses] = useState("");
   const [chain, setChain] = useState("solana");
   const [submitting, setSubmitting] = useState(false);
@@ -489,7 +496,7 @@ function WalletManageModal({ open, onOpenChange, wallets, onUpdate }) {
         )}
 
         {/* Custom Tokens */}
-        <CustomTokensSection onUpdate={onUpdate} />
+        <CustomTokensSection customTokens={customTokens} onUpdate={onUpdate} />
       </DialogContent>
     </Dialog>
   );
@@ -524,8 +531,9 @@ function LogoEditDialog({ symbol, open, onOpenChange, onSave }) {
   );
 }
 
-function CustomTokensSection({ onUpdate }) {
-  const [form, setForm] = useState({ symbol: "", name: "", amount: "", price: "", icon_url: "" });
+function CustomTokensSection({ customTokens, onUpdate }) {
+  const [form, setForm] = useState({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" });
+  const [editingId, setEditingId] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const handleAdd = async () => {
@@ -538,29 +546,119 @@ function CustomTokensSection({ onUpdate }) {
         amount: parseFloat(form.amount) || 0,
         price: parseFloat(form.price) || 0,
         icon_url: form.icon_url || null,
-        chain: "custom",
+        chain: form.chain,
       });
       toast.success(`${form.symbol} added`);
-      setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "" });
+      setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" });
       onUpdate();
     } catch { toast.error("Failed to add"); } finally { setSubmitting(false); }
+  };
+
+  const handleEdit = async () => {
+    if (!editingId) return;
+    setSubmitting(true);
+    try {
+      await customTokensApi.update(editingId, {
+        symbol: form.symbol.toUpperCase(),
+        name: form.name || form.symbol,
+        amount: parseFloat(form.amount) || 0,
+        price: parseFloat(form.price) || 0,
+        icon_url: form.icon_url || null,
+        chain: form.chain,
+      });
+      toast.success("Updated");
+      setEditingId(null);
+      setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" });
+      onUpdate();
+    } catch { toast.error("Failed to update"); } finally { setSubmitting(false); }
+  };
+
+  const handleDelete = async (id, symbol) => {
+    try {
+      await customTokensApi.delete(id);
+      toast.success(`${symbol} removed`);
+      onUpdate();
+    } catch { toast.error("Failed to delete"); }
+  };
+
+  const startEdit = (token) => {
+    setEditingId(token.id);
+    setForm({
+      symbol: token.symbol || "",
+      name: token.name || "",
+      amount: token.amount?.toString() || "",
+      price: token.price?.toString() || "",
+      icon_url: token.icon_url || "",
+      chain: token.chain || "solana",
+    });
   };
 
   return (
     <div className="space-y-3 pt-4 border-t border-border/40">
       <p className="text-xs text-muted-foreground font-medium">Custom Tokens</p>
+
+      {/* Existing custom tokens list */}
+      {customTokens && customTokens.length > 0 && (
+        <div className="space-y-1 mb-3">
+          {customTokens.map(ct => (
+            <div key={ct.id} className="flex items-center justify-between px-3 py-2 rounded-md bg-secondary/30">
+              <div className="flex items-center gap-2">
+                {ct.icon_url ? <img src={ct.icon_url} alt="" className="w-4 h-4 rounded-full" /> : <div className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center"><span className="text-[8px] font-bold text-muted-foreground">{(ct.symbol || "?")[0]}</span></div>}
+                <span className="text-xs font-medium text-foreground">{ct.symbol}</span>
+                <span className="font-mono text-xs text-muted-foreground">{ct.amount} @ ${ct.price}</span>
+                <span className="text-[10px] text-muted-foreground">({CHAIN_META[ct.chain]?.name || ct.chain})</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <button onClick={() => startEdit(ct)} className="text-muted-foreground hover:text-foreground p-1" data-testid={`edit-custom-${ct.id}`}>
+                  <Pencil className="w-3 h-3" strokeWidth={1.5} />
+                </button>
+                <button onClick={() => handleDelete(ct.id, ct.symbol)} className="text-rose-400 hover:text-rose-300 p-1" data-testid={`del-custom-${ct.id}`}>
+                  <Trash2 className="w-3 h-3" strokeWidth={1.5} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add/Edit form */}
       <div className="grid grid-cols-2 gap-2">
         <Input placeholder="Symbol (e.g. PEPE)" value={form.symbol} onChange={e => setForm({...form, symbol: e.target.value})} className="bg-background border-border text-sm" data-testid="custom-token-symbol" />
-        <Input placeholder="Name (optional)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-background border-border text-sm" />
+        <Select value={form.chain} onValueChange={(v) => setForm({...form, chain: v})}>
+          <SelectTrigger className="bg-background border-border text-sm"><SelectValue /></SelectTrigger>
+          <SelectContent className="bg-card border-border">
+            <SelectItem value="solana">Solana</SelectItem>
+            <SelectItem value="bitcoin">Bitcoin</SelectItem>
+            <SelectItem value="ethereum">Ethereum</SelectItem>
+            <SelectItem value="bsc">BNB Chain</SelectItem>
+            <SelectItem value="polygon">Polygon</SelectItem>
+            <SelectItem value="arbitrum">Arbitrum</SelectItem>
+            <SelectItem value="base">Base</SelectItem>
+            <SelectItem value="tron">Tron</SelectItem>
+            <SelectItem value="custom">Other</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+      <Input placeholder="Name (optional)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-background border-border text-sm" />
       <div className="grid grid-cols-2 gap-2">
         <Input type="number" step="any" placeholder="Amount" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="bg-background border-border font-mono text-sm" data-testid="custom-token-amount" />
         <Input type="number" step="any" placeholder="Price ($)" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="bg-background border-border font-mono text-sm" />
       </div>
       <Input placeholder="Icon URL (optional)" value={form.icon_url} onChange={e => setForm({...form, icon_url: e.target.value})} className="bg-background border-border text-sm" />
-      <Button onClick={handleAdd} disabled={submitting} size="sm" className="w-full bg-secondary text-foreground hover:bg-secondary/80" data-testid="add-custom-token-btn">
-        {submitting ? "Adding..." : "Add Custom Token"}
-      </Button>
+      {editingId ? (
+        <div className="flex gap-2">
+          <Button onClick={handleEdit} disabled={submitting} size="sm" className="flex-1 bg-white text-black hover:bg-neutral-200" data-testid="save-custom-token-btn">
+            {submitting ? "Saving..." : "Save Changes"}
+          </Button>
+          <Button onClick={() => { setEditingId(null); setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "", chain: "solana" }); }} size="sm" variant="outline" className="border-border/40">
+            Cancel
+          </Button>
+        </div>
+      ) : (
+        <Button onClick={handleAdd} disabled={submitting} size="sm" className="w-full bg-secondary text-foreground hover:bg-secondary/80" data-testid="add-custom-token-btn">
+          {submitting ? "Adding..." : "Add Custom Token"}
+        </Button>
+      )}
     </div>
   );
 }
