@@ -141,7 +141,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="max-w-[1400px] mx-auto px-4 py-8 space-y-6" data-testid="dashboard">
+    <div className="space-y-6" data-testid="dashboard">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
