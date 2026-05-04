@@ -133,14 +133,7 @@ async def delete_asset(asset_id: str):
     return {"message": "Asset deleted"}
 
 
-# --- Net Worth ---
-
-async def _get_cached_crypto_total():
-    """Read the crypto total cached from the Crypto tab (wallets + DeFi + custom tokens)."""
-    doc = await db.crypto_cache.find_one({"_id": "singleton"})
-    if not doc:
-        return None
-    return doc.get("total")
+# --- Net Worth --- (calculation moved to frontend)
 
 
 @api_router.get("/crypto/cache")
@@ -180,91 +173,7 @@ async def set_crypto_cache(data: dict):
     return {"total": total, "chains": chains, "tokens": tokens, "updated_at": updated_at}
 
 
-@api_router.get("/net-worth")
-async def get_net_worth():
-    assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
-    projects = await db.projects.find({}, {"_id": 0}).to_list(100)
-    
-    categories = {
-        "stocks": 0,
-        "crypto": 0,
-        "cash": 0,
-        "crypto_projects": 0,
-        "debts": 0,
-        "investments": 0
-    }
-    
-    for asset in assets:
-        manual = asset.get("manual_value")
-        value = manual if manual is not None else (asset.get("quantity", 0) * asset.get("current_price", 0))
-        cat = asset.get("category", "cash")
-        if cat in categories:
-            categories[cat] += value
-    
-    # Track investment projects' earnings separately (NOT included in net worth total)
-    for project in projects:
-        categories["investments"] += (project.get("earned", 0))
-    
-    # Override crypto with the live Crypto tab total (wallets + DeFi + custom tokens)
-    cached_crypto = await _get_cached_crypto_total()
-    if cached_crypto is not None:
-        categories["crypto"] = cached_crypto
-    
-    # crypto_projects category is deprecated and no longer contributes to net worth
-    # Projects/investments are tracked separately and do NOT contribute to net worth
-    total = categories["stocks"] + categories["crypto"] + categories["cash"] - categories["debts"]
-    
-    return {
-        "total_net_worth": total,
-        "breakdown": categories,
-        "asset_count": len(assets),
-        "project_count": len(projects)
-    }
-
-@api_router.post("/net-worth/snapshot")
-async def save_snapshot():
-    assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
-    projects = await db.projects.find({}, {"_id": 0}).to_list(100)
-    
-    categories = {
-        "stocks": 0,
-        "crypto": 0,
-        "cash": 0,
-        "crypto_projects": 0,
-        "debts": 0,
-        "investments": 0
-    }
-    
-    for asset in assets:
-        manual = asset.get("manual_value")
-        value = manual if manual is not None else (asset.get("quantity", 0) * asset.get("current_price", 0))
-        cat = asset.get("category", "cash")
-        if cat in categories:
-            categories[cat] += value
-    
-    for project in projects:
-        categories["investments"] += (project.get("earned", 0))
-    
-    # Override crypto with the live Crypto tab total (wallets + DeFi + custom tokens)
-    cached_crypto = await _get_cached_crypto_total()
-    if cached_crypto is not None:
-        categories["crypto"] = cached_crypto
-    
-    # crypto_projects and investments do NOT contribute to net worth
-    total = categories["stocks"] + categories["crypto"] + categories["cash"] - categories["debts"]
-    
-    snapshot = NetWorthSnapshot(
-        total_net_worth=total,
-        stocks_value=categories["stocks"],
-        crypto_value=categories["crypto"],
-        cash_value=categories["cash"],
-        crypto_projects_value=categories["crypto_projects"],
-        debts_value=categories["debts"]
-    )
-    
-    doc = snapshot.model_dump()
-    await db.net_worth_history.insert_one(doc)
-    return snapshot
+# Net worth calculation moved to frontend
 
 @api_router.get("/net-worth/history")
 async def get_net_worth_history():
@@ -272,208 +181,9 @@ async def get_net_worth_history():
     return history
 
 
-# --- Price APIs ---
+# --- Price APIs --- (moved to frontend)
 
-@api_router.get("/prices/crypto/{coin_id}")
-async def get_crypto_price(coin_id: str):
-    try:
-        async with httpx.AsyncClient(timeout=10) as client_http:
-            response = await client_http.get(
-                f"{COINGECKO_BASE}/simple/price",
-                params={
-                    "ids": coin_id,
-                    "vs_currencies": "usd",
-                    "include_24hr_change": "true",
-                    "include_market_cap": "true"
-                }
-            )
-            if response.status_code == 200:
-                data = response.json()
-                if coin_id in data:
-                    return {
-                        "coin_id": coin_id,
-                        "price_usd": data[coin_id].get("usd", 0),
-                        "change_24h": data[coin_id].get("usd_24h_change", 0),
-                        "market_cap": data[coin_id].get("usd_market_cap", 0)
-                    }
-            raise HTTPException(status_code=404, detail="Coin not found")
-    except HTTPException:
-        raise
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="CoinGecko API timeout")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.get("/prices/crypto/search/{query}")
-async def search_crypto(query: str):
-    try:
-        async with httpx.AsyncClient(timeout=10) as client_http:
-            response = await client_http.get(
-                f"{COINGECKO_BASE}/search",
-                params={"query": query}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                coins = data.get("coins", [])[:10]
-                return [{"id": c["id"], "name": c["name"], "symbol": c["symbol"], "icon_url": c.get("large") or c.get("thumb", "")} for c in coins]
-            return []
-    except Exception:
-        return []
-
-@api_router.get("/prices/crypto/info/{coin_id}")
-async def get_crypto_info(coin_id: str):
-    """Get coin info including icon URL from CoinGecko"""
-    try:
-        async with httpx.AsyncClient(timeout=10) as client_http:
-            response = await client_http.get(
-                f"{COINGECKO_BASE}/coins/{coin_id}",
-                params={"localization": "false", "tickers": "false", "market_data": "false", "community_data": "false", "developer_data": "false"}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                return {
-                    "id": data.get("id"),
-                    "name": data.get("name"),
-                    "symbol": data.get("symbol", "").upper(),
-                    "icon_url": data.get("image", {}).get("small", "")
-                }
-            return None
-    except Exception:
-        return None
-
-@api_router.get("/prices/stock/{symbol}")
-async def get_stock_price(symbol: str):
-    """Get real-time stock quote from Finnhub."""
-    symbol = symbol.upper().strip()
-    try:
-        async with httpx.AsyncClient(timeout=10) as client_http:
-            response = await client_http.get(
-                f"{FINNHUB_BASE}/quote",
-                params={"symbol": symbol, "token": FINNHUB_KEY}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                price = float(data.get("c", 0) or 0)
-                prev_close = float(data.get("pc", 0) or 0)
-                if price <= 0:
-                    raise HTTPException(status_code=404, detail=f"No quote found for {symbol}")
-                change = price - prev_close
-                change_percent = ((change / prev_close) * 100) if prev_close > 0 else 0
-                return {
-                    "symbol": symbol,
-                    "price": price,
-                    "change": change,
-                    "change_percent": f"{change_percent:.2f}%",
-                    "high": float(data.get("h", 0) or 0),
-                    "low": float(data.get("l", 0) or 0),
-                    "open": float(data.get("o", 0) or 0),
-                    "prev_close": prev_close,
-                }
-            if response.status_code == 429:
-                raise HTTPException(status_code=429, detail="Finnhub rate limit reached (60/min). Try again shortly.")
-            raise HTTPException(status_code=response.status_code, detail=f"Finnhub error: {response.text[:200]}")
-    except HTTPException:
-        raise
-    except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Finnhub API timeout")
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@api_router.get("/prices/stock/search/{query}")
-async def search_stock(query: str):
-    """Search stock tickers via Finnhub."""
-    try:
-        async with httpx.AsyncClient(timeout=10) as client_http:
-            response = await client_http.get(
-                f"{FINNHUB_BASE}/search",
-                params={"q": query, "token": FINNHUB_KEY}
-            )
-            if response.status_code == 200:
-                data = response.json()
-                results = data.get("result", [])[:15]
-                # Prefer common stocks (no dots/colons meaning US tickers)
-                return [
-                    {
-                        "symbol": r.get("symbol", ""),
-                        "name": r.get("description", ""),
-                        "type": r.get("type", ""),
-                    }
-                    for r in results
-                    if r.get("symbol") and "." not in r.get("symbol", "")
-                ][:10]
-            return []
-    except Exception as e:
-        logger.warning(f"Stock search failed: {e}")
-        return []
-
-# --- Bulk price update ---
-
-@api_router.post("/prices/refresh")
-async def refresh_all_prices():
-    assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
-    updated_count = 0
-    
-    crypto_assets = [a for a in assets if a.get("category") == "crypto" and a.get("symbol")]
-    stock_assets = [a for a in assets if a.get("category") == "stocks" and a.get("symbol")]
-    
-    # Batch crypto prices
-    if crypto_assets:
-        coin_ids = ",".join([a["symbol"].lower() for a in crypto_assets])
-        try:
-            async with httpx.AsyncClient(timeout=15) as client_http:
-                response = await client_http.get(
-                    f"{COINGECKO_BASE}/simple/price",
-                    params={"ids": coin_ids, "vs_currencies": "usd"}
-                )
-                if response.status_code == 200:
-                    prices = response.json()
-                    operations = []
-                    for asset in crypto_assets:
-                        coin_id = asset["symbol"].lower()
-                        if coin_id in prices:
-                            new_price = prices[coin_id].get("usd", 0)
-                            operations.append(UpdateOne(
-                                {"id": asset["id"]},
-                                {"$set": {"current_price": new_price, "updated_at": datetime.now(timezone.utc).isoformat()}}
-                            ))
-                    if operations:
-                        await db.assets.bulk_write(operations)
-                        updated_count += len(operations)
-        except Exception as e:
-            logger.warning(f"Failed to refresh crypto prices: {e}")
-    
-    # Stock prices via Finnhub (60 req/min free tier — no practical limit for typical portfolios)
-    stock_operations = []
-    async with httpx.AsyncClient(timeout=10) as client_http:
-        async def fetch_one_stock(asset):
-            try:
-                resp = await client_http.get(
-                    f"{FINNHUB_BASE}/quote",
-                    params={"symbol": asset["symbol"].upper(), "token": FINNHUB_KEY}
-                )
-                if resp.status_code == 200:
-                    d = resp.json()
-                    price = float(d.get("c", 0) or 0)
-                    if price > 0:
-                        return UpdateOne(
-                            {"id": asset["id"]},
-                            {"$set": {"current_price": price, "updated_at": datetime.now(timezone.utc).isoformat()}}
-                        )
-            except Exception as e:
-                logger.warning(f"Failed to refresh stock price for {asset.get('symbol')}: {e}")
-            return None
-
-        # Fetch up to 30 stock prices concurrently (well within 60/min)
-        results = await asyncio.gather(*[fetch_one_stock(a) for a in stock_assets[:30]], return_exceptions=True)
-        for r in results:
-            if isinstance(r, UpdateOne):
-                stock_operations.append(r)
-    
-    if stock_operations:
-        await db.assets.bulk_write(stock_operations)
-        updated_count += len(stock_operations)
-    
-    return {"updated_count": updated_count, "total_assets": len(assets)}
+# Price refresh moved to frontend
 
 
 # --- Investment Projects ---
@@ -684,164 +394,11 @@ async def delete_wallet(wallet_id: str):
         raise HTTPException(status_code=404, detail="Wallet not found")
     return {"message": "Wallet deleted"}
 
-@api_router.get("/wallets/{wallet_id}/balances")
-async def get_wallet_balances(wallet_id: str):
-    wallet = await db.wallets.find_one({"id": wallet_id}, {"_id": 0})
-    if not wallet:
-        raise HTTPException(status_code=404, detail="Wallet not found")
-    
-    chain = wallet["chain"]
-    address = wallet["address"]
-    
-    # CoinStats connectionId mapping
-    coinstats_chain_map = {
-        "solana": "solana",
-        "bitcoin": "bitcoin",
-        "ethereum": "ethereum",
-        "bsc": "binance-smart-chain",
-        "polygon": "polygon",
-        "avalanche": "avalanche",
-        "arbitrum": "arbitrum",
-        "optimism": "optimism",
-        "base": "base",
-        "tron": "tron",
-        "fantom": "fantom",
-    }
-    
-    connection_id = coinstats_chain_map.get(chain, chain)
-    return await _fetch_coinstats_balance(address, connection_id)
+# Wallet balance fetching moved to frontend
 
-async def _fetch_coinstats_balance(address: str, chain: str = "solana"):
-    """Primary balance fetcher using CoinStats API"""
-    try:
-        async with httpx.AsyncClient(timeout=15) as client_http:
-            resp = await client_http.get(
-                "https://openapiv1.coinstats.app/wallet/balance",
-                params={"address": address, "connectionId": chain},
-                headers={"X-API-KEY": COINSTATS_API_KEY}
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                tokens = []
-                total = 0
-                for item in data:
-                    amount = item.get("amount", 0) or 0
-                    price = item.get("price", 0) or 0
-                    value = amount * price
-                    tokens.append({
-                        "symbol": item.get("symbol", "?").upper(),
-                        "name": item.get("name", ""),
-                        "amount": amount,
-                        "price": price,
-                        "usd_value": value,
-                        "icon_url": item.get("icon", ""),
-                        "category": "wallet",
-                        "protocol": None,
-                        "defi_type": None,
-                    })
-                    total += value
-                tokens.sort(key=lambda x: x["usd_value"], reverse=True)
-                return {"tokens": tokens, "total_usd": total}
-            else:
-                logger.warning(f"CoinStats returned {resp.status_code} for {address[:10]}")
-                return {"tokens": [], "total_usd": 0, "error": f"CoinStats returned {resp.status_code}"}
-    except Exception as e:
-        logger.warning(f"CoinStats balance error: {e}")
-        return {"tokens": [], "total_usd": 0, "error": str(e)}
+# Wallet balance fetching moved to frontend
 
-@api_router.get("/wallets/solana/defi/{address}")
-async def get_solana_defi_positions(address: str):
-    """Fetch DeFi positions from Jupiter Portfolio API"""
-    try:
-        headers = {}
-        if JUPITER_API_KEY:
-            headers["x-api-key"] = JUPITER_API_KEY
-        async with httpx.AsyncClient(timeout=45) as client_http:
-            resp = await client_http.get(
-                f"https://api.jup.ag/portfolio/v1/positions/{address}",
-                headers=headers
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                elements = data.get("elements", [])
-                token_info = data.get("tokenInfo", {}).get("solana", {})
-                positions = []
-                
-                for el in elements:
-                    label = el.get("label", "")
-                    platform = el.get("platformId", "")
-                    name = el.get("name", platform)
-                    el_type = el.get("type", "")
-                    el_value = el.get("value", 0) or 0
-                    net_apy = el.get("netApy", 0) or 0
-                    el_data = el.get("data", {})
-                    
-                    pos_tokens = []
-                    pos_total = 0
-                    
-                    # Handle "multiple" type (wallet, native-stake)
-                    if el_type == "multiple":
-                        assets = el_data.get("assets", [])
-                        for asset in assets:
-                            asset_data = asset.get("data", {})
-                            value = asset.get("value", 0) or 0
-                            addr = asset_data.get("address", "")
-                            ti = token_info.get(addr, {})
-                            pos_tokens.append({
-                                "address": addr,
-                                "amount": asset_data.get("amount", 0) or 0,
-                                "price": asset_data.get("price", 0) or 0,
-                                "value": value,
-                                "symbol": ti.get("symbol", asset_data.get("symbol", "")),
-                                "name": ti.get("name", asset_data.get("name", "")),
-                                "image_uri": ti.get("logoURI", ""),
-                            })
-                            pos_total += value
-                    
-                    # Handle "liquidity" type (vaults, lending, LP)
-                    elif el_type == "liquidity":
-                        liquidities = el_data.get("liquidities", [])
-                        for liq in liquidities:
-                            assets = liq.get("assets", [])
-                            yields = liq.get("yields", [])
-                            liq_apy = yields[0].get("apy", 0) if yields else 0
-                            for asset in assets:
-                                asset_data = asset.get("data", {})
-                                value = asset.get("value", 0) or 0
-                                addr = asset_data.get("address", "")
-                                ti = token_info.get(addr, {})
-                                pos_tokens.append({
-                                    "address": addr,
-                                    "amount": asset_data.get("amount", 0) or 0,
-                                    "price": asset_data.get("price", 0) or 0,
-                                    "value": value,
-                                    "symbol": ti.get("symbol", asset_data.get("symbol", "")),
-                                    "name": ti.get("name", asset_data.get("name", "")),
-                                    "image_uri": ti.get("logoURI", ""),
-                                    "apy": net_apy or liq_apy,
-                                })
-                                pos_total += value
-                    
-                    # Fallback: use element-level value
-                    if pos_total == 0 and el_value > 0:
-                        pos_total = el_value
-                    
-                    if pos_total > 0.01:
-                        positions.append({
-                            "label": label,
-                            "platform": name,
-                            "platform_id": platform,
-                            "total_value": pos_total,
-                            "tokens": pos_tokens,
-                            "apy": net_apy,
-                        })
-                
-                # Sort by value
-                positions.sort(key=lambda x: x["total_value"], reverse=True)
-                return {"positions": positions, "total_usd": sum(p["total_value"] for p in positions)}
-            else:
-                logger.warning(f"Jupiter API returned {resp.status_code}: {resp.text[:200]}")
-            return {"positions": [], "total_usd": 0}
+# Solana DeFi fetching moved to frontend
     except Exception as e:
         logger.warning(f"Jupiter portfolio fetch error: {e}")
         return {"positions": [], "total_usd": 0, "error": str(e)}
@@ -987,84 +544,9 @@ async def delete_custom_token(token_id: str):
     await db.custom_tokens.delete_one({"id": token_id})
     return {"message": "Deleted"}
 
-@api_router.get("/token-price/{symbol}")
-async def get_token_price_by_symbol(symbol: str):
-    """Auto-fetch token price from CoinGecko by symbol"""
-    try:
-        async with httpx.AsyncClient(timeout=10) as client_http:
-            # Search for the coin
-            search_resp = await client_http.get(
-                f"{COINGECKO_BASE}/search",
-                params={"query": symbol}
-            )
-            if search_resp.status_code != 200:
-                return {"price": 0, "name": "", "icon_url": ""}
-            
-            coins = search_resp.json().get("coins", [])
-            # Find exact symbol match
-            match = None
-            for c in coins:
-                if c.get("symbol", "").lower() == symbol.lower():
-                    match = c
-                    break
-            if not match and coins:
-                match = coins[0]
-            
-            if not match:
-                return {"price": 0, "name": "", "icon_url": ""}
-            
-            # Get price
-            price_resp = await client_http.get(
-                f"{COINGECKO_BASE}/simple/price",
-                params={"ids": match["id"], "vs_currencies": "usd"}
-            )
-            price = 0
-            if price_resp.status_code == 200:
-                price = price_resp.json().get(match["id"], {}).get("usd", 0)
-            
-            return {
-                "price": price,
-                "name": match.get("name", ""),
-                "coin_id": match.get("id", ""),
-                "icon_url": match.get("large", match.get("thumb", "")),
-            }
-    except Exception:
-        return {"price": 0, "name": "", "icon_url": ""}
+# Custom tokens endpoints (CoinGecko calls moved to frontend)
 
-@api_router.get("/wallets/coinstats/{address}")
-async def get_coinstats_balance(address: str, chain: str = "solana"):
-    """Fetch wallet balance from CoinStats API"""
-    try:
-        async with httpx.AsyncClient(timeout=15) as client_http:
-            resp = await client_http.get(
-                f"https://openapiv1.coinstats.app/wallet/balance",
-                params={"address": address, "connectionId": chain},
-                headers={"X-API-KEY": COINSTATS_API_KEY}
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                tokens = []
-                total = 0
-                for item in data:
-                    amount = item.get("amount", 0) or 0
-                    price = item.get("price", 0) or 0
-                    value = amount * price
-                    tokens.append({
-                        "symbol": item.get("symbol", "?"),
-                        "name": item.get("name", ""),
-                        "amount": amount,
-                        "price": price,
-                        "usd_value": value,
-                        "icon_url": item.get("icon", ""),
-                        "category": "wallet",
-                        "protocol": None,
-                    })
-                    total += value
-                tokens.sort(key=lambda x: x["usd_value"], reverse=True)
-                return {"tokens": tokens, "total_usd": total}
-            return {"tokens": [], "total_usd": 0, "error": f"CoinStats returned {resp.status_code}"}
-    except Exception as e:
-        return {"tokens": [], "total_usd": 0, "error": str(e)}
+# CoinStats balance fetching moved to frontend
 
 
 # --- NOS Deposit Auto-Tracking ---
@@ -1328,8 +810,6 @@ async def _fetch_solana_balances(address: str):
 # Phone List feature
 # ===========================================================================
 
-RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
-RAPIDAPI_EBAY_HOST = os.environ.get("RAPIDAPI_EBAY_HOST", "ebay-average-selling-price.p.rapidapi.com")
 PHONE_PRICE_CACHE_TTL_HOURS = 24
 
 
@@ -1341,6 +821,7 @@ class PhoneCreate(BaseModel):
     carrier: Optional[str] = ""
     tags: List[str] = Field(default_factory=list)
     market_value: Optional[float] = None
+    market_value_source: Optional[str] = "manual"
     notes: Optional[str] = ""
 
 
@@ -1372,71 +853,7 @@ class Phone(BaseModel):
     updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
-def _normalize_model(model: str) -> str:
-    return (model or "").strip().lower()
-
-
-async def _fetch_ebay_avg_price(model: str) -> Optional[dict]:
-    if not RAPIDAPI_KEY or not model:
-        return None
-    try:
-        async with httpx.AsyncClient(timeout=20) as client_http:
-            resp = await client_http.post(
-                f"https://{RAPIDAPI_EBAY_HOST}/findCompletedItems",
-                headers={
-                    "x-rapidapi-key": RAPIDAPI_KEY,
-                    "x-rapidapi-host": RAPIDAPI_EBAY_HOST,
-                    "content-type": "application/json",
-                },
-                json={
-                    "keywords": model,
-                    "max_search_results": "60",
-                    "remove_outliers": "true",
-                    "site_id": "0",
-                },
-            )
-            if resp.status_code != 200:
-                logger.warning(f"eBay price API non-200 for '{model}': {resp.status_code} {resp.text[:200]}")
-                return None
-            data = resp.json()
-            if not data.get("success"):
-                return None
-            return {
-                "average_price": float(data.get("average_price") or 0),
-                "median_price": float(data.get("median_price") or 0),
-                "min_price": float(data.get("min_price") or 0),
-                "max_price": float(data.get("max_price") or 0),
-                "results": int(data.get("results") or 0),
-                "total_results": int(data.get("total_results") or 0),
-            }
-    except Exception as e:
-        logger.warning(f"eBay price fetch failed for '{model}': {e}")
-        return None
-
-
-async def _get_cached_or_fetch_price(model: str, force_refresh: bool = False) -> Optional[dict]:
-    key = _normalize_model(model)
-    if not key:
-        return None
-    if not force_refresh:
-        cached = await db.phone_price_cache.find_one({"_id": key})
-        if cached:
-            try:
-                fetched_at = datetime.fromisoformat(cached.get("fetched_at"))
-                if fetched_at.tzinfo is None:
-                    fetched_at = fetched_at.replace(tzinfo=timezone.utc)
-                age_hours = (datetime.now(timezone.utc) - fetched_at).total_seconds() / 3600
-                if age_hours < PHONE_PRICE_CACHE_TTL_HOURS:
-                    return {k: v for k, v in cached.items() if k != "_id"}
-            except Exception:
-                pass
-    fresh = await _fetch_ebay_avg_price(model)
-    if fresh is None:
-        return None
-    fresh["fetched_at"] = datetime.now(timezone.utc).isoformat()
-    fresh["model"] = model
-    await db.phone_price_cache.update_one({"_id": key}, {"$set": fresh}, upsert=True)
-    return fresh
+# Phone models and endpoints
 
 
 @api_router.get("/phones/tags")
@@ -1470,18 +887,9 @@ async def create_phone(input_data: PhoneCreate):
         carrier=(input_data.carrier or "").strip(),
         tags=[t.strip() for t in (input_data.tags or []) if t and t.strip()],
         market_value=float(input_data.market_value or 0),
-        market_value_source="manual",
+        market_value_source=input_data.market_value_source or "manual",
         notes=(input_data.notes or "").strip(),
     )
-    if (input_data.market_value is None or input_data.market_value == 0) and phone.model:
-        try:
-            ebay = await _get_cached_or_fetch_price(phone.model)
-            if ebay and ebay.get("average_price", 0) > 0:
-                phone.market_value = ebay["average_price"]
-                phone.market_value_source = "ebay"
-                phone.market_value_updated_at = datetime.now(timezone.utc).isoformat()
-        except Exception as e:
-            logger.warning(f"Auto-price fetch failed: {e}")
     await db.phones.insert_one(phone.model_dump())
     return phone
 
@@ -1511,56 +919,7 @@ async def delete_phone(phone_id: str):
     return {"deleted": True}
 
 
-@api_router.post("/phones/{phone_id}/refresh-price")
-async def refresh_phone_price(phone_id: str):
-    phone = await db.phones.find_one({"id": phone_id}, {"_id": 0})
-    if not phone:
-        raise HTTPException(status_code=404, detail="Phone not found")
-    if not phone.get("model"):
-        raise HTTPException(status_code=400, detail="Phone has no model set")
-    ebay = await _get_cached_or_fetch_price(phone["model"], force_refresh=True)
-    if not ebay or ebay.get("average_price", 0) <= 0:
-        raise HTTPException(status_code=502, detail="Could not fetch price from eBay")
-    update = {
-        "market_value": ebay["average_price"],
-        "market_value_source": "ebay",
-        "market_value_updated_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-    }
-    await db.phones.update_one({"id": phone_id}, {"$set": update})
-    return {"phone_id": phone_id, "ebay": ebay, **update}
-
-
-@api_router.post("/phones/refresh-all-prices")
-async def refresh_all_phone_prices():
-    phones = await db.phones.find({}, {"_id": 0}).to_list(1000)
-    updated, failed, skipped = 0, 0, 0
-    for p in phones:
-        if p.get("market_value_source") == "manual" and p.get("market_value", 0) > 0:
-            skipped += 1
-            continue
-        if not p.get("model"):
-            skipped += 1
-            continue
-        try:
-            ebay = await _get_cached_or_fetch_price(p["model"])
-            if ebay and ebay.get("average_price", 0) > 0:
-                await db.phones.update_one(
-                    {"id": p["id"]},
-                    {"$set": {
-                        "market_value": ebay["average_price"],
-                        "market_value_source": "ebay",
-                        "market_value_updated_at": datetime.now(timezone.utc).isoformat(),
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }}
-                )
-                updated += 1
-            else:
-                failed += 1
-        except Exception as e:
-            logger.warning(f"Refresh price for {p.get('model')}: {e}")
-            failed += 1
-    return {"updated": updated, "failed": failed, "skipped": skipped, "total": len(phones)}
+# Phone endpoints (eBay calls moved to frontend)
 
 
 

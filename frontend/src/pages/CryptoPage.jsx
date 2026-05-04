@@ -621,13 +621,11 @@ function CustomTokensSection({ customTokens, onUpdate }) {
     if (!symbol || symbol.length < 2) return;
     setFetchingPrice(true);
     try {
-      const res = await customTokensApi.getPrice(symbol);
-      if (res.data?.price > 0) {
+      const price = await customTokensApi.getPrice(symbol);
+      if (price > 0) {
         setForm(prev => ({
           ...prev,
-          price: res.data.price.toString(),
-          name: prev.name || res.data.name || "",
-          icon_url: prev.icon_url || res.data.icon_url || "",
+          price: price.toString(),
         }));
       }
     } catch { /* silent */ } finally { setFetchingPrice(false); }

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { phonesApi } from "@/lib/api";
+import { ebayApi } from "@/lib/external-apis";
 import { toast } from "sonner";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -92,6 +93,11 @@ export default function AddEditPhoneDialog({ open, onOpenChange, phone, onSaved,
       if (useManualPrice && marketValue) {
         payload.market_value = parseFloat(marketValue) || 0;
         payload.market_value_source = "manual";
+      } else if (!isEdit) {
+        // For new phone, fetch price from eBay if not manual
+        const price = await ebayApi.getAveragePrice(model.trim());
+        payload.market_value = price;
+        payload.market_value_source = "ebay";
       }
       if (isEdit) {
         // For edit, include market_value even if 0 to allow clearing manual override (then re-fetch via refresh button)
@@ -102,7 +108,7 @@ export default function AddEditPhoneDialog({ open, onOpenChange, phone, onSaved,
         toast.success("Phone updated");
       } else {
         await phonesApi.create(payload);
-        toast.success(useManualPrice ? "Phone added" : "Phone added — fetching market price…");
+        toast.success("Phone added");
       }
       onSaved?.();
     } catch (err) {

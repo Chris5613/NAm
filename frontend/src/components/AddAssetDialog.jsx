@@ -64,8 +64,8 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
     if (!q || q.length < 1) { setTickerSearchResults([]); return; }
     setSearchingTicker(true);
     try {
-      const res = await pricesApi.searchStock(q);
-      setTickerSearchResults(res.data || []);
+      const data = await pricesApi.searchStock(q);
+      setTickerSearchResults(data || []);
     } catch {
       setTickerSearchResults([]);
     } finally {
@@ -80,9 +80,9 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
     // Auto-fetch current price
     setFetchingPrice(true);
     try {
-      const res = await pricesApi.getStock(item.symbol);
-      setStockPrice(String(res.data.price));
-      setPriceInfo(res.data);
+      const data = await pricesApi.getStock(item.symbol);
+      setStockPrice(String(data.c));
+      setPriceInfo(data);
     } catch (err) {
       toast.error("Failed to fetch price");
     } finally {
@@ -94,12 +94,12 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
     if (!ticker) return;
     setFetchingPrice(true);
     try {
-      const res = await pricesApi.getStock(ticker);
-      setStockPrice(String(res.data.price));
-      setPriceInfo(res.data);
-      toast.success(`Latest: $${res.data.price}`);
+      const data = await pricesApi.getStock(ticker);
+      setStockPrice(String(data.c));
+      setPriceInfo(data);
+      toast.success(`Latest: $${data.c}`);
     } catch (err) {
-      toast.error(err?.response?.data?.detail || "Failed to fetch price");
+      toast.error("Failed to refresh price");
     } finally {
       setFetchingPrice(false);
     }
@@ -109,8 +109,8 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
   const searchCoin = useCallback(async (q) => {
     if (!q || q.length < 2) { setCoinSearchResults([]); return; }
     try {
-      const res = await pricesApi.searchCrypto(q);
-      setCoinSearchResults(res.data || []);
+      const data = await pricesApi.searchCrypto(q);
+      setCoinSearchResults(data || []);
     } catch { setCoinSearchResults([]); }
   }, []);
 
