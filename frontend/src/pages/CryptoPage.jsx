@@ -11,7 +11,8 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
-import { Plus, RefreshCw, Trash2, Wallet, ExternalLink } from "lucide-react";
+import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
+import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins } from "lucide-react";
 
 function formatCurrency(value) {
   if (!value && value !== 0) return "$0.00";
@@ -26,12 +27,18 @@ function shortenAddress(addr) {
   return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 }
 
+const CHAIN_META = {
+  bitcoin: { name: "Bitcoin", color: "bg-amber-500/10 border-amber-500/20 text-amber-400", icon: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png" },
+  solana: { name: "Solana", color: "bg-purple-500/10 border-purple-500/20 text-purple-400", icon: "https://assets.coingecko.com/coins/images/4128/small/solana.png" },
+};
+
 export default function CryptoPage() {
   const [wallets, setWallets] = useState([]);
   const [balances, setBalances] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [liveHistory, setLiveHistory] = useState([]);
 
   const fetchWallets = useCallback(async () => {
     try {
@@ -44,18 +51,11 @@ export default function CryptoPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchWallets();
-  }, [fetchWallets]);
+  useEffect(() => { fetchWallets(); }, [fetchWallets]);
 
-  // Auto-fetch balances for all wallets on load
   useEffect(() => {
     if (wallets.length > 0) {
-      wallets.forEach((w) => {
-        if (!balances[w.id]) {
-          fetchBalance(w.id);
-        }
-      });
+      wallets.forEach((w) => { if (!balances[w.id]) fetchBalance(w.id); });
     }
   }, [wallets]);
 
@@ -65,30 +65,56 @@ export default function CryptoPage() {
       const res = await walletsApi.getBalances(walletId);
       setBalances((prev) => ({ ...prev, [walletId]: res.data }));
     } catch {
-      toast.error("Failed to fetch balances");
+      // silent
     } finally {
       setRefreshingId(null);
     }
   };
 
-  const handleDelete = async (wallet) => {
-    try {
-      await walletsApi.delete(wallet.id);
-      setWallets((prev) => prev.filter((w) => w.id !== wallet.id));
-      setBalances((prev) => { const n = { ...prev }; delete n[wallet.id]; return n; });
-      toast.success("Wallet removed");
-    } catch {
-      toast.error("Failed to delete wallet");
+  const refreshAll = async () => {
+    for (const w of wallets) {
+      await fetchBalance(w.id);
     }
+    // Track live history
+    const total = Object.values(balances).reduce((s, b) => s + (b?.total_usd || 0), 0);
+    if (total > 0) {
+      setLiveHistory(prev => [...prev, { time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), value: total }]);
+    }
+    toast.success("Refreshed");
   };
 
-  const handleWalletAdded = () => {
-    setAddOpen(false);
-    fetchWallets();
+  const handleDelete = async (wallet) => {
+    await walletsApi.delete(wallet.id);
+    setWallets((prev) => prev.filter((w) => w.id !== wallet.id));
+    setBalances((prev) => { const n = { ...prev }; delete n[wallet.id]; return n; });
+    toast.success("Wallet removed");
   };
 
-  // Calculate total across all wallets
-  const totalValue = Object.values(balances).reduce((sum, b) => sum + (b?.total_usd || 0), 0);
+  // Aggregate data
+  const totalValue = Object.values(balances).reduce((s, b) => s + (b?.total_usd || 0), 0);
+  const allTokens = Object.values(balances).flatMap(b => b?.tokens || []);
+
+  // Per-chain breakdown
+  const chainBreakdown = {};
+  wallets.forEach(w => {
+    const bal = balances[w.id];
+    if (bal) {
+      chainBreakdown[w.chain] = (chainBreakdown[w.chain] || 0) + (bal.total_usd || 0);
+    }
+  });
+
+  // Group by category
+  const walletTokens = allTokens.filter(t => t.category === "wallet" && t.usd_value > 0.01);
+  const stakingTokens = allTokens.filter(t => t.category === "staking" && t.usd_value > 0.01);
+  const walletTotal = walletTokens.reduce((s, t) => s + t.usd_value, 0);
+  const stakingTotal = stakingTokens.reduce((s, t) => s + t.usd_value, 0);
+
+  // Add current total to live history on first load
+  useEffect(() => {
+    if (totalValue > 0 && liveHistory.length === 0) {
+      setLiveHistory([{ time: "Now", value: totalValue }]);
+    }
+  }, [totalValue]);
 
   if (loading) {
     return (
@@ -100,22 +126,21 @@ export default function CryptoPage() {
 
   return (
     <div className="space-y-6" data-testid="crypto-page">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <h1 className="text-4xl font-medium tracking-tight">Crypto</h1>
-          {totalValue > 0 && (
-            <span className="font-mono text-2xl text-foreground">{formatCurrency(totalValue)}</span>
+        <h1 className="text-4xl font-medium tracking-tight">Crypto</h1>
+        <div className="flex items-center gap-2">
+          {wallets.length > 0 && (
+            <Button variant="outline" size="sm" onClick={refreshAll} className="border-border/40 hover:bg-secondary" data-testid="refresh-all-btn">
+              <RefreshCw className="w-4 h-4 mr-2" strokeWidth={1.5} />
+              Refresh
+            </Button>
           )}
+          <Button size="sm" onClick={() => setAddOpen(true)} className="bg-white text-black hover:bg-neutral-200" data-testid="add-wallet-btn">
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
+            Add Wallet
+          </Button>
         </div>
-        <Button
-          size="sm"
-          onClick={() => setAddOpen(true)}
-          className="bg-white text-black hover:bg-neutral-200"
-          data-testid="add-wallet-btn"
-        >
-          <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
-          Add Wallet
-        </Button>
       </div>
 
       {wallets.length === 0 ? (
@@ -127,132 +152,161 @@ export default function CryptoPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-6">
-          {wallets.map((wallet) => {
-            const bal = balances[wallet.id];
-            const isRefreshing = refreshingId === wallet.id;
-            return (
-              <WalletCard
-                key={wallet.id}
-                wallet={wallet}
-                balanceData={bal}
-                isRefreshing={isRefreshing}
-                onRefresh={() => fetchBalance(wallet.id)}
-                onDelete={() => handleDelete(wallet)}
-              />
-            );
-          })}
-        </div>
+        <>
+          {/* Net Worth + Chart Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="border-border/40 bg-card" data-testid="crypto-net-worth">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground mb-1">Net Worth</p>
+                <p className="font-mono text-4xl font-bold text-foreground">{formatCurrency(totalValue)}</p>
+                <p className="font-mono text-xs text-emerald-400 mt-1">
+                  {totalValue > 0 ? `${(totalValue / 85).toFixed(2)} SOL` : ""}
+                </p>
+              </CardContent>
+            </Card>
+            <Card className="border-border/40 bg-card" data-testid="crypto-chart">
+              <CardContent className="p-4">
+                {liveHistory.length > 1 ? (
+                  <ResponsiveContainer width="100%" height={130}>
+                    <AreaChart data={liveHistory} margin={{ top: 5, right: 5, left: 5, bottom: 5 }}>
+                      <defs>
+                        <linearGradient id="cryptoGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#10B981" stopOpacity={0.2} />
+                          <stop offset="100%" stopColor="#10B981" stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <Tooltip contentStyle={{ background: "#121214", border: "1px solid #27272A", borderRadius: "6px", fontFamily: "'Space Mono', monospace", fontSize: "11px" }} formatter={(v) => [formatCurrency(v), ""]} />
+                      <Area type="monotone" dataKey="value" stroke="#10B981" strokeWidth={2} fill="url(#cryptoGrad)" dot={false} />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[130px] flex items-center justify-center">
+                    <p className="text-xs text-muted-foreground">Chart builds as you refresh</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Network Chips */}
+          <div className="flex items-center gap-3 flex-wrap" data-testid="network-chips">
+            {Object.entries(chainBreakdown).map(([chain, value]) => {
+              const meta = CHAIN_META[chain] || { name: chain, color: "bg-secondary border-border text-foreground", icon: "" };
+              const pct = totalValue > 0 ? ((value / totalValue) * 100).toFixed(0) : 0;
+              return (
+                <div key={chain} className={`flex items-center gap-2.5 px-4 py-2.5 rounded-md border ${meta.color}`} data-testid={`network-chip-${chain}`}>
+                  {meta.icon && <img src={meta.icon} alt="" className="w-5 h-5 rounded-full" />}
+                  <div>
+                    <p className="text-xs font-medium">{meta.name}</p>
+                    <p className="font-mono text-xs">{formatCurrency(value)} <span className="text-muted-foreground">{pct}%</span></p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Wallet Holdings Section */}
+          {walletTokens.length > 0 && (
+            <Card className="border-border/40 bg-card" data-testid="holdings-section">
+              <CardHeader className="pb-0 pt-4 px-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                    <CardTitle className="text-sm font-medium">Holdings</CardTitle>
+                  </div>
+                  <span className="font-mono text-sm text-foreground">{formatCurrency(walletTotal)}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="px-2 pb-2 pt-2">
+                <div className="px-3 py-1.5 grid grid-cols-4 text-xs text-muted-foreground border-b border-border/20">
+                  <span>Asset</span>
+                  <span className="text-right">Balance</span>
+                  <span className="text-right">Price</span>
+                  <span className="text-right">Value</span>
+                </div>
+                {walletTokens.sort((a, b) => b.usd_value - a.usd_value).map((token, idx) => (
+                  <TokenRow key={idx} token={token} />
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Staking/DeFi Section */}
+          {stakingTokens.length > 0 && (
+            <Card className="border-border/40 bg-card" data-testid="staking-section">
+              <CardHeader className="pb-0 pt-4 px-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                    <CardTitle className="text-sm font-medium">Staking</CardTitle>
+                  </div>
+                  <span className="font-mono text-sm text-foreground">{formatCurrency(stakingTotal)}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="px-2 pb-2 pt-2">
+                <div className="px-3 py-1.5 grid grid-cols-5 text-xs text-muted-foreground border-b border-border/20">
+                  <span>Asset</span>
+                  <span>Protocol</span>
+                  <span className="text-right">Balance</span>
+                  <span className="text-right">Price</span>
+                  <span className="text-right">Value</span>
+                </div>
+                {stakingTokens.sort((a, b) => b.usd_value - a.usd_value).map((token, idx) => (
+                  <div key={idx} className="px-3 py-2.5 grid grid-cols-5 items-center hover:bg-secondary/30 transition-colors">
+                    <div className="flex items-center gap-2">
+                      {token.icon_url ? <img src={token.icon_url} alt="" className="w-5 h-5 rounded-full" /> : <div className="w-5 h-5 rounded-full bg-secondary" />}
+                      <span className="text-sm font-medium text-foreground">{token.symbol}</span>
+                    </div>
+                    <span className="text-xs text-emerald-400">{token.protocol || "-"}</span>
+                    <span className="font-mono text-xs text-foreground text-right">{token.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                    <span className="font-mono text-xs text-muted-foreground text-right">{token.price > 0 ? formatCurrency(token.price) : "-"}</span>
+                    <span className="font-mono text-sm text-foreground text-right font-medium">{formatCurrency(token.usd_value)}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Wallet addresses management */}
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground font-medium">Connected Wallets</p>
+            {wallets.map(w => (
+              <div key={w.id} className="flex items-center justify-between px-3 py-2 rounded-md bg-secondary/30">
+                <div className="flex items-center gap-2">
+                  <img src={CHAIN_META[w.chain]?.icon || ""} alt="" className="w-4 h-4 rounded-full" />
+                  <span className="text-xs text-foreground">{w.label || CHAIN_META[w.chain]?.name}</span>
+                  <span className="font-mono text-xs text-muted-foreground">{shortenAddress(w.address)}</span>
+                  <a href={w.chain === "bitcoin" ? `https://mempool.space/address/${w.address}` : `https://solscan.io/account/${w.address}`} target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="w-3 h-3 text-muted-foreground hover:text-foreground" />
+                  </a>
+                </div>
+                <Button variant="ghost" size="icon" className="h-6 w-6 text-rose-400 hover:text-rose-300" onClick={() => handleDelete(w)} data-testid={`delete-wallet-${w.id}`}>
+                  <Trash2 className="w-3 h-3" strokeWidth={1.5} />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </>
       )}
 
-      <AddWalletDialog open={addOpen} onOpenChange={setAddOpen} onAdded={handleWalletAdded} />
+      <AddWalletDialog open={addOpen} onOpenChange={setAddOpen} onAdded={() => { setAddOpen(false); fetchWallets(); }} />
     </div>
   );
 }
 
-function WalletCard({ wallet, balanceData, isRefreshing, onRefresh, onDelete }) {
-  const chainLabel = wallet.chain === "bitcoin" ? "Bitcoin" : "Solana";
-  const chainColor = wallet.chain === "bitcoin" ? "text-amber-400" : "text-purple-400";
-  const explorerUrl = wallet.chain === "bitcoin"
-    ? `https://mempool.space/address/${wallet.address}`
-    : `https://solscan.io/account/${wallet.address}`;
-
+function TokenRow({ token }) {
   return (
-    <Card className="border-border/40 bg-card" data-testid={`wallet-card-${wallet.id}`}>
-      <CardHeader className="pb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Wallet className={`w-5 h-5 ${chainColor}`} strokeWidth={1.5} />
-            <div>
-              <CardTitle className="text-base font-medium">
-                {wallet.label || chainLabel}
-              </CardTitle>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="font-mono text-xs text-muted-foreground">
-                  {shortenAddress(wallet.address)}
-                </span>
-                <a href={explorerUrl} target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground">
-                  <ExternalLink className="w-3 h-3" strokeWidth={1.5} />
-                </a>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            {balanceData && (
-              <span className="font-mono text-lg font-medium text-foreground">
-                {formatCurrency(balanceData.total_usd)}
-              </span>
-            )}
-            <Button
-              variant="ghost" size="icon" className="h-7 w-7"
-              onClick={onRefresh} disabled={isRefreshing}
-              data-testid={`refresh-wallet-${wallet.id}`}
-            >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} strokeWidth={1.5} />
-            </Button>
-            <Button
-              variant="ghost" size="icon" className="h-7 w-7 text-rose-400 hover:text-rose-300"
-              onClick={onDelete}
-              data-testid={`delete-wallet-${wallet.id}`}
-            >
-              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pt-0">
-        {!balanceData ? (
-          <div className="py-4 text-center">
-            <p className="text-xs text-muted-foreground animate-pulse font-mono">Fetching balances...</p>
-          </div>
-        ) : balanceData.error ? (
-          <div className="py-4 text-center">
-            <p className="text-xs text-rose-400">{balanceData.error}</p>
-          </div>
-        ) : balanceData.tokens.length === 0 ? (
-          <div className="py-4 text-center">
-            <p className="text-xs text-muted-foreground">No tokens found</p>
-          </div>
-        ) : (
-          <div className="overflow-hidden">
-            {/* Table Header */}
-            <div className="grid grid-cols-4 gap-4 px-3 py-2 text-xs text-muted-foreground border-b border-border/30">
-              <span>Token</span>
-              <span className="text-right">Price</span>
-              <span className="text-right">Amount</span>
-              <span className="text-right">USD Value</span>
-            </div>
-            {/* Token Rows */}
-            {balanceData.tokens.map((token, idx) => (
-              <div
-                key={idx}
-                className="grid grid-cols-4 gap-4 px-3 py-2.5 items-center hover:bg-secondary/30 transition-colors"
-              >
-                <div className="flex items-center gap-2">
-                  {token.icon_url ? (
-                    <img src={token.icon_url} alt="" className="w-5 h-5 rounded-full" onError={(e) => e.target.style.display='none'} />
-                  ) : (
-                    <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center">
-                      <span className="text-[9px] font-bold text-muted-foreground">{(token.symbol || "?")[0]}</span>
-                    </div>
-                  )}
-                  <span className="text-sm font-medium text-foreground">{token.symbol}</span>
-                </div>
-                <span className="font-mono text-xs text-muted-foreground text-right">
-                  {token.price > 0 ? formatCurrency(token.price) : "-"}
-                </span>
-                <span className="font-mono text-xs text-foreground text-right">
-                  {token.amount < 0.0001 ? token.amount.toExponential(2) : token.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                </span>
-                <span className="font-mono text-sm text-foreground text-right font-medium">
-                  {token.usd_value > 0.01 ? formatCurrency(token.usd_value) : token.usd_value > 0 ? "<$0.01" : "-"}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <div className="px-3 py-2.5 grid grid-cols-4 items-center hover:bg-secondary/30 transition-colors">
+      <div className="flex items-center gap-2">
+        {token.icon_url ? <img src={token.icon_url} alt="" className="w-5 h-5 rounded-full" onError={(e) => e.target.style.display='none'} /> : <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center"><span className="text-[9px] font-bold text-muted-foreground">{(token.symbol || "?")[0]}</span></div>}
+        <span className="text-sm font-medium text-foreground">{token.symbol}</span>
+      </div>
+      <span className="font-mono text-xs text-foreground text-right">
+        {token.amount < 0.0001 ? token.amount.toExponential(2) : token.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}
+      </span>
+      <span className="font-mono text-xs text-muted-foreground text-right">{token.price > 0 ? formatCurrency(token.price) : "-"}</span>
+      <span className="font-mono text-sm text-foreground text-right font-medium">{token.usd_value > 0.01 ? formatCurrency(token.usd_value) : "<$0.01"}</span>
+    </div>
   );
 }
 
@@ -298,29 +352,13 @@ function AddWalletDialog({ open, onOpenChange, onAdded }) {
           </div>
           <div className="space-y-2">
             <Label>Wallet Address</Label>
-            <Input
-              placeholder={form.chain === "bitcoin" ? "bc1q... or 1A1z..." : "Your Solana address"}
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
-              data-testid="wallet-address-input"
-              className="bg-background border-border font-mono text-sm"
-            />
+            <Input placeholder={form.chain === "bitcoin" ? "bc1q... or 1A1z..." : "Your Solana address"} value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} data-testid="wallet-address-input" className="bg-background border-border font-mono text-sm" />
           </div>
           <div className="space-y-2">
             <Label>Label (optional)</Label>
-            <Input
-              placeholder="e.g. Main Wallet, Cold Storage"
-              value={form.label}
-              onChange={(e) => setForm({ ...form, label: e.target.value })}
-              data-testid="wallet-label-input"
-              className="bg-background border-border"
-            />
+            <Input placeholder="e.g. Main Wallet, Cold Storage" value={form.label} onChange={(e) => setForm({ ...form, label: e.target.value })} data-testid="wallet-label-input" className="bg-background border-border" />
           </div>
-          <Button
-            type="submit" disabled={submitting}
-            className="w-full bg-white text-black hover:bg-neutral-200"
-            data-testid="submit-wallet-btn"
-          >
+          <Button type="submit" disabled={submitting} className="w-full bg-white text-black hover:bg-neutral-200" data-testid="submit-wallet-btn">
             {submitting ? "Adding..." : "Add Wallet"}
           </Button>
         </form>

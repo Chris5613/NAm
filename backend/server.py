@@ -656,7 +656,9 @@ async def _fetch_btc_balance(address: str):
                     "amount": balance_btc,
                     "price": btc_price,
                     "usd_value": usd_value,
-                    "icon_url": "https://assets.coingecko.com/coins/images/1/small/bitcoin.png"
+                    "icon_url": "https://assets.coingecko.com/coins/images/1/small/bitcoin.png",
+                    "category": "wallet",
+                    "protocol": None
                 })
             return {"tokens": tokens, "total_usd": usd_value}
     except Exception as e:
@@ -737,7 +739,9 @@ async def _fetch_solana_balances(address: str):
                     "amount": sol_balance,
                     "price": sol_price,
                     "usd_value": sol_usd,
-                    "icon_url": "https://assets.coingecko.com/coins/images/4128/small/solana.png"
+                    "icon_url": "https://assets.coingecko.com/coins/images/4128/small/solana.png",
+                    "category": "wallet",
+                    "protocol": None
                 })
                 total_usd += sol_usd
 
@@ -787,13 +791,24 @@ async def _fetch_solana_balances(address: str):
                     coin_id = coin_ids_map.get(sym_lower)
                     price = prices.get(coin_id, {}).get("usd", 0) if coin_id else 0
                     usd_val = t["amount"] * price
+                    # Categorize token
+                    category = "wallet"
+                    protocol = None
+                    if sym_lower in ("msol", "jitosol", "bsol", "stsol", "scnsol"):
+                        category = "staking"
+                        protocol_map = {"msol": "Marinade", "jitosol": "Jito", "bsol": "BlazeStake", "stsol": "Lido", "scnsol": "Socean"}
+                        protocol = protocol_map.get(sym_lower, "Staking")
+                    elif sym_lower in ("usdc", "usdt") and usd_val > 0:
+                        category = "wallet"
                     tokens.append({
                         "symbol": t["symbol"],
                         "name": t["name"],
                         "amount": t["amount"],
                         "price": price,
                         "usd_value": usd_val,
-                        "icon_url": t.get("icon_url", "")
+                        "icon_url": t.get("icon_url", ""),
+                        "category": category,
+                        "protocol": protocol
                     })
                     total_usd += usd_val
 
