@@ -10,6 +10,7 @@ const STORAGE_KEYS = {
   HISTORY: 'networth_history',
   LIVE_HISTORY: 'networth_live_history',
   GOMINING: 'networth_gomining',
+  GOMINING_SYNCED: 'networth_gomining_synced',
 };
 
 export const localStorage = {
@@ -74,5 +75,10 @@ export const localStorage = {
 
   getGoMining: () => localStorage.get(STORAGE_KEYS.GOMINING) || [],
   setGoMining: (rows) => localStorage.set(STORAGE_KEYS.GOMINING, rows),
+
+  // Map of { rowId: lastSyncedReward } — used to detect deltas to push into the
+  // GoMining investment project on save.
+  getGoMiningSynced: () => localStorage.get(STORAGE_KEYS.GOMINING_SYNCED) || {},
+  setGoMiningSynced: (snapshot) => localStorage.set(STORAGE_KEYS.GOMINING_SYNCED, snapshot),
 
 };

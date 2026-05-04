@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { localStorage as storage } from "@/lib/localStorage";
 import { coinGeckoApi } from "@/lib/external-apis";
+import { projectsApi } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Pickaxe, Plus, Trash2, Download } from "lucide-react";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Pickaxe, Plus, Trash2, Download, Save, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 const GMT_COINGECKO_ID = "gmt-token"; // GoMining Token (symbol GOMINING) on CoinGecko
 const GMT_PRICE_REFRESH_MS = 60_000;
+const GOMINING_PROJECT_NAME = "GoMining";
 
 const COLS = [
   { key: "date",            label: "Date",          type: "date",   width: 120 },
@@ -72,6 +77,13 @@ export default function GoMiningPage() {
   const [gmtPrice, setGmtPrice] = useState(0);
   const [priceLoading, setPriceLoading] = useState(true);
 
+  // Snapshot of rewards last synced to the Investment Overview's GoMining
+  // project. Map: { [rowId]: rewardAtLastSync }. Anything missing is treated
+  // as 0 so brand-new rows count as a full delta on first sync.
+  const [syncedMap, setSyncedMap] = useState(() => storage.getGoMiningSynced());
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncSubmitting, setSyncSubmitting] = useState(false);
+
   // Persist on every change.
   useEffect(() => { storage.setGoMining(rows); }, [rows]);
 
@@ -122,6 +134,94 @@ export default function GoMiningPage() {
 
   const deleteRow = (id) => {
     setRows((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  // Compute deltas vs. last synced snapshot. Only positive deltas are pushed
+  // into the GoMining investment project (matches TRX/NOS earnings pattern —
+  // earnings only ever go up).
+  const syncDiffs = useMemo(() => {
+    const out = [];
+    let total = 0;
+    for (const r of rows) {
+      const current = computeReward(r, gmtPrice);
+      const previous = Number(syncedMap[r.id]) || 0;
+      const delta = current - previous;
+      if (delta > 0.005) {
+        out.push({ id: r.id, date: r.date, previous, current, delta });
+        total += delta;
+      }
+    }
+    out.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+    return { rows: out, total };
+  }, [rows, gmtPrice, syncedMap]);
+
+  const openSyncDialog = () => {
+    if (syncDiffs.rows.length === 0) {
+      toast.info("Nothing new to sync — rewards haven't increased since last save");
+      return;
+    }
+    setSyncDialogOpen(true);
+  };
+
+  const confirmSync = async () => {
+    if (syncDiffs.rows.length === 0) { setSyncDialogOpen(false); return; }
+    setSyncSubmitting(true);
+    try {
+      // Find or create the "GoMining" project.
+      const projectsRes = await projectsApi.getAll();
+      let project = (projectsRes.data || []).find(
+        (p) => (p.name || "").trim().toLowerCase() === GOMINING_PROJECT_NAME.toLowerCase(),
+      );
+      if (!project) {
+        const created = await projectsApi.create({
+          name: GOMINING_PROJECT_NAME,
+          icon_url: null,
+          invested: 0,
+          earned: 0,
+          per_day: 0,
+          per_week: 0,
+          per_month: 0,
+          per_year: 0,
+          categories: [],
+        });
+        project = created.data;
+      }
+
+      // Add one earning transaction per row that increased — mirrors the daily
+      // reward log so each entry shows up in the recent transactions list.
+      for (const d of syncDiffs.rows) {
+        await projectsApi.addTransaction(project.id, {
+          type: "earning",
+          amount: Number(d.delta.toFixed(2)),
+          category: "Mining",
+          notes: `GoMining auto-sync (${d.date})`,
+          date: d.date || new Date().toISOString().split("T")[0],
+        });
+      }
+
+      // Bump project.earned by the total delta so the Investment Overview
+      // totals reflect the new earnings without manual editing.
+      const nextEarned = (Number(project.earned) || 0) + syncDiffs.total;
+      await projectsApi.update(project.id, { earned: nextEarned });
+
+      // Persist the new synced snapshot keyed by current row rewards.
+      const nextSynced = { ...syncedMap };
+      for (const r of rows) nextSynced[r.id] = computeReward(r, gmtPrice);
+      storage.setGoMiningSynced(nextSynced);
+      setSyncedMap(nextSynced);
+
+      toast.success(
+        `Synced $${formatMoney(syncDiffs.total)} across ${syncDiffs.rows.length} ${
+          syncDiffs.rows.length === 1 ? "entry" : "entries"
+        } to GoMining`,
+      );
+      setSyncDialogOpen(false);
+    } catch (err) {
+      console.warn("GoMining sync failed:", err);
+      toast.error("Failed to sync to Investment Overview");
+    } finally {
+      setSyncSubmitting(false);
+    }
   };
 
   const exportCsv = () => {
@@ -175,6 +275,27 @@ export default function GoMiningPage() {
           >
             <Download className="w-4 h-4 mr-2" strokeWidth={1.5} />
             Export CSV
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openSyncDialog}
+            className={`border-border/40 hover:bg-secondary relative ${
+              syncDiffs.rows.length > 0 ? "border-emerald-500/40 text-emerald-400 hover:text-emerald-300" : ""
+            }`}
+            data-testid="sync-investment-btn"
+            title="Push reward increases to Investment Overview"
+          >
+            <Save className="w-4 h-4 mr-2" strokeWidth={1.5} />
+            Save & Sync
+            {syncDiffs.rows.length > 0 && (
+              <span
+                className="ml-2 inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-medium"
+                data-testid="sync-pending-badge"
+              >
+                {syncDiffs.rows.length}
+              </span>
+            )}
           </Button>
           <Button
             size="sm"
@@ -249,6 +370,71 @@ export default function GoMiningPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Confirm sync to Investment Overview */}
+      <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
+        <DialogContent
+          className="bg-card border-border sm:max-w-lg max-h-[85vh] overflow-y-auto"
+          data-testid="gomining-sync-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pickaxe className="w-4 h-4 text-amber-400" strokeWidth={1.5} />
+              Sync to Investment Overview
+            </DialogTitle>
+            <DialogDescription>
+              Confirm these reward increases. They'll be added as earning transactions to the <span className="text-foreground font-medium">GoMining</span> project.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 max-h-[320px] overflow-y-auto py-2">
+            {syncDiffs.rows.map((d) => (
+              <div
+                key={d.id}
+                className="flex items-center justify-between px-3 py-2 rounded-md bg-secondary/50 text-sm"
+                data-testid={`sync-row-${d.id}`}
+              >
+                <span className="font-mono text-xs text-muted-foreground">{d.date || "—"}</span>
+                <div className="flex items-center gap-2 font-mono">
+                  <span className="text-muted-foreground">${formatMoney(d.previous)}</span>
+                  <ArrowRight className="w-3 h-3 text-muted-foreground" strokeWidth={1.5} />
+                  <span className="text-foreground">${formatMoney(d.current)}</span>
+                  <span className="ml-2 px-1.5 py-0.5 rounded text-xs bg-emerald-500/10 text-emerald-400">
+                    +${formatMoney(d.delta)}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-border/40 text-sm">
+            <span className="text-muted-foreground">Total earning to add</span>
+            <span className="font-mono font-medium text-emerald-400" data-testid="sync-total">
+              +${formatMoney(syncDiffs.total)}
+            </span>
+          </div>
+
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setSyncDialogOpen(false)}
+              disabled={syncSubmitting}
+              className="border-border/40"
+              data-testid="sync-cancel-btn"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={confirmSync}
+              disabled={syncSubmitting}
+              className="bg-emerald-500 text-black hover:bg-emerald-400"
+              data-testid="sync-confirm-btn"
+            >
+              {syncSubmitting ? "Syncing..." : "Confirm & Sync"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
