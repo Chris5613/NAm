@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState, useRef } from "react";
 import { localStorage as storage } from "@/lib/localStorage";
+import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Pickaxe, Plus, Trash2, Download } from "lucide-react";
 import { toast } from "sonner";
+
+const GMT_COINGECKO_ID = "gmt-token"; // GoMining Token (symbol GOMINING) on CoinGecko
+const GMT_PRICE_REFRESH_MS = 60_000;
 
 const COLS = [
   { key: "date",            label: "Date",          type: "date",   width: 120 },
@@ -54,19 +58,37 @@ function newRow() {
   };
 }
 
-// Per the user's formula: Reward = PR − Electricity + Service
-function computeReward(row) {
+// Per the user's formula: Reward = PR − Electricity + Service + (GMT_earned × GMT_price)
+function computeReward(row, gmtPrice = 0) {
   const pr = Number(row.pr) || 0;
   const elec = Number(row.electricity) || 0;
   const svc = Number(row.service) || 0;
-  return pr - elec + svc;
+  const gmt = Number(row.gmt_earned) || 0;
+  return pr - elec + svc + gmt * gmtPrice;
 }
 
 export default function GoMiningPage() {
   const [rows, setRows] = useState(() => storage.getGoMining());
+  const [gmtPrice, setGmtPrice] = useState(0);
+  const [priceLoading, setPriceLoading] = useState(true);
 
   // Persist on every change.
   useEffect(() => { storage.setGoMining(rows); }, [rows]);
+
+  // Live GoMining (GMT) token price.
+  useEffect(() => {
+    let cancelled = false;
+    const fetchPrice = async () => {
+      try {
+        const p = await coinGeckoApi.getPrice(GMT_COINGECKO_ID);
+        if (!cancelled && p > 0) setGmtPrice(p);
+      } catch { /* silent */ }
+      finally { if (!cancelled) setPriceLoading(false); }
+    };
+    fetchPrice();
+    const id = setInterval(fetchPrice, GMT_PRICE_REFRESH_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
 
   const sortedRows = useMemo(
     () => [...rows].sort((a, b) => (b.date || "").localeCompare(a.date || "")),
@@ -80,13 +102,15 @@ export default function GoMiningPage() {
         acc.electricity += Number(r.electricity) || 0;
         acc.service += Number(r.service) || 0;
         acc.total_discount += Number(r.total_discount) || 0;
-        acc.reward += computeReward(r);
         acc.gmt_earned += Number(r.gmt_earned) || 0;
+        acc.reward += computeReward(r, gmtPrice);
         return acc;
       },
       { pr: 0, electricity: 0, service: 0, total_discount: 0, reward: 0, gmt_earned: 0 },
     );
-  }, [rows]);
+  }, [rows, gmtPrice]);
+
+  const gmtUsd = totals.gmt_earned * gmtPrice;
 
   const updateRow = (id, key, value) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
@@ -114,7 +138,7 @@ export default function GoMiningPage() {
         Number(r.pr) || 0,
         Number(r.electricity) || 0,
         Number(r.service) || 0,
-        computeReward(r),
+        computeReward(r, gmtPrice),
         Number(r.total_discount) || 0,
         Number(r.gmt_earned) || 0,
       ].join(","));
@@ -164,14 +188,22 @@ export default function GoMiningPage() {
         </div>
       </div>
 
-      {/* Summary card */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <SummaryStat label="Total PR" value={`$${formatMoney(totals.pr)}`} />
+      {/* Summary cards — order: PR → Reward → Electricity → Service → GMT Earned */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <SummaryStat label="Total PR"    value={`$${formatMoney(totals.pr)}`} />
+        <SummaryStat label="Reward"      value={`$${formatMoney(totals.reward)}`} accent />
         <SummaryStat label="Electricity" value={`$${formatMoney(totals.electricity)}`} negative />
-        <SummaryStat label="Service" value={`$${formatMoney(totals.service)}`} />
-        <SummaryStat label="Reward" value={`$${formatMoney(totals.reward)}`} accent />
-        <SummaryStat label="Discount" value={`$${formatMoney(totals.total_discount)}`} />
-        <SummaryStat label="GMT Earned" value={formatNumber(totals.gmt_earned)} accent />
+        <SummaryStat label="Service"     value={`$${formatMoney(totals.service)}`} />
+        <SummaryStat
+          label="GMT Earned"
+          value={`$${formatMoney(gmtUsd)}`}
+          subtitle={
+            priceLoading
+              ? "loading price…"
+              : `${formatNumber(totals.gmt_earned)} GMT @ $${formatNumber(gmtPrice, 6)}`
+          }
+          accent
+        />
       </div>
 
       <Card className="border-border/40 bg-card overflow-hidden">
@@ -209,7 +241,7 @@ export default function GoMiningPage() {
                   </tr>
                 ) : (
                   sortedRows.map((row) => (
-                    <Row key={row.id} row={row} onChange={updateRow} onDelete={deleteRow} />
+                    <Row key={row.id} row={row} gmtPrice={gmtPrice} onChange={updateRow} onDelete={deleteRow} />
                   ))
                 )}
               </tbody>
@@ -221,7 +253,7 @@ export default function GoMiningPage() {
   );
 }
 
-function SummaryStat({ label, value, negative = false, accent = false }) {
+function SummaryStat({ label, value, subtitle, negative = false, accent = false }) {
   let valueClass = "text-foreground";
   if (negative) valueClass = "text-rose-400";
   else if (accent) valueClass = "text-emerald-400";
@@ -230,14 +262,20 @@ function SummaryStat({ label, value, negative = false, accent = false }) {
       <CardContent className="p-4">
         <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">{label}</p>
         <p className={`text-lg font-mono font-medium ${valueClass}`}>{value}</p>
+        {subtitle && (
+          <p className="text-[10px] text-muted-foreground/70 font-mono mt-1 truncate">
+            {subtitle}
+          </p>
+        )}
       </CardContent>
     </Card>
   );
 }
 
-function Row({ row, onChange, onDelete }) {
-  const reward = computeReward(row);
+function Row({ row, gmtPrice, onChange, onDelete }) {
+  const reward = computeReward(row, gmtPrice);
   const rewardPositive = reward >= 0;
+  const gmtUsdRow = (Number(row.gmt_earned) || 0) * gmtPrice;
   return (
     <tr className="border-b border-border/40 hover:bg-secondary/20 transition-colors" data-testid={`gomining-row-${row.id}`}>
       {COLS.map((c) => {
@@ -250,10 +288,29 @@ function Row({ row, onChange, onDelete }) {
                     ? "text-emerald-400 bg-emerald-500/10"
                     : "text-rose-400 bg-rose-500/10"
                 }`}
-                title={`PR (${formatMoney(row.pr)}) − Electricity (${formatMoney(row.electricity)}) + Service (${formatMoney(row.service)})`}
+                title={`PR (${formatMoney(row.pr)}) − Electricity (${formatMoney(row.electricity)}) + Service (${formatMoney(row.service)}) + GMT $${formatMoney(gmtUsdRow)}`}
               >
                 ${formatMoney(reward)}
               </span>
+            </td>
+          );
+        }
+        if (c.key === "gmt_earned") {
+          return (
+            <td key={c.key} className="px-3 py-2 align-middle">
+              <div className="flex flex-col">
+                <CellInput
+                  row={row}
+                  colKey={c.key}
+                  type={c.type}
+                  onChange={onChange}
+                />
+                {gmtPrice > 0 && Number(row.gmt_earned) > 0 && (
+                  <span className="text-[10px] text-muted-foreground/70 font-mono px-2 mt-0.5">
+                    ≈ ${formatMoney(gmtUsdRow)}
+                  </span>
+                )}
+              </div>
             </td>
           );
         }
