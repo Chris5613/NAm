@@ -4,8 +4,8 @@ import { toast } from "sonner";
 import NetWorthHero from "@/components/NetWorthHero";
 import PortfolioChart from "@/components/PortfolioChart";
 import NetWorthHistory from "@/components/NetWorthHistory";
-import AssetList from "@/components/AssetList";
 import CryptoBreakdown from "@/components/CryptoBreakdown";
+import AssetBreakdown from "@/components/AssetBreakdown";
 import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -123,16 +123,6 @@ export default function Dashboard() {
     fetchData();
   };
 
-  const getAssetValue = (a) => {
-    if (a.manual_value !== null && a.manual_value !== undefined) return a.manual_value;
-    return (a.quantity || 0) * (a.current_price || 0);
-  };
-
-  const filteredAssets = (activeTab === "all" 
-    ? assets 
-    : assets.filter(a => a.category === activeTab)
-  ).sort((a, b) => getAssetValue(b) - getAssetValue(a));
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen" data-testid="loading-spinner">
@@ -222,29 +212,28 @@ export default function Dashboard() {
             <TabsTrigger value="stocks" data-testid="tab-stocks">Stocks</TabsTrigger>
             <TabsTrigger value="crypto" data-testid="tab-crypto">Crypto</TabsTrigger>
             <TabsTrigger value="cash" data-testid="tab-cash">Cash</TabsTrigger>
-            <TabsTrigger value="crypto_projects" data-testid="tab-projects">Projects</TabsTrigger>
             <TabsTrigger value="debts" data-testid="tab-debts">Debts</TabsTrigger>
           </TabsList>
           <TabsContent value={activeTab}>
-            {activeTab === "crypto" ? (
+            {activeTab === "crypto" && (
               <CryptoBreakdown key="crypto" defaultOpen={true} />
-            ) : activeTab === "all" ? (
+            )}
+            {activeTab === "stocks" && (
+              <AssetBreakdown category="stocks" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
+            )}
+            {activeTab === "cash" && (
+              <AssetBreakdown category="cash" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
+            )}
+            {activeTab === "debts" && (
+              <AssetBreakdown category="debts" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
+            )}
+            {activeTab === "all" && (
               <div className="space-y-4">
+                <AssetBreakdown key="all-stocks" category="stocks" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={false} />
                 <CryptoBreakdown key="all-crypto" defaultOpen={false} />
-                {filteredAssets.length > 0 && (
-                  <AssetList
-                    assets={filteredAssets}
-                    onUpdate={handleAssetUpdated}
-                    onDelete={handleAssetDeleted}
-                  />
-                )}
+                <AssetBreakdown key="all-cash" category="cash" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={false} />
+                <AssetBreakdown key="all-debts" category="debts" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={false} />
               </div>
-            ) : (
-              <AssetList
-                assets={filteredAssets}
-                onUpdate={handleAssetUpdated}
-                onDelete={handleAssetDeleted}
-              />
             )}
           </TabsContent>
         </Tabs>
@@ -254,6 +243,7 @@ export default function Dashboard() {
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         onCreated={handleAssetCreated}
+        defaultCategory={["stocks", "cash", "debts", "crypto"].includes(activeTab) ? activeTab : "stocks"}
       />
     </div>
   );

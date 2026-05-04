@@ -102,7 +102,7 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Change the main net worth page so there is only one single box for Crypto, and the net worth number shown on the Crypto tab reflects on the main Net Worth page."
+user_problem_statement: "Major Net Worth dashboard redesign: Added expandable hierarchy pattern for Stocks, Cash, and Debts (like Crypto). Removed 'Projects' tab entirely. Replaced stock price API with Finnhub for real-time quotes. Redesigned Add Asset modal with per-category smart forms."
 
 backend:
   - task: "Crypto cache endpoints (GET/POST /api/crypto/cache) and net-worth crypto override"
@@ -119,6 +119,18 @@ backend:
         -working: true
         -agent: "testing"
         -comment: "Comprehensive backend testing completed. All crypto cache endpoints working correctly: GET /api/crypto/cache returns {total, updated_at} correctly (returns 0 when empty). POST /api/crypto/cache properly validates input (rejects non-numeric with 400, handles missing fields safely). GET /api/net-worth correctly uses cached crypto value in breakdown.crypto and includes it in total_net_worth calculation. POST /api/net-worth/snapshot correctly persists crypto_value from cache. All review request scenarios passed: cache set to 50000 reflects in net-worth, invalid inputs handled safely, snapshots persist correct crypto_value. Frontend actively manages cache (CryptoPage POSTs grandTotal), which is expected behavior. Test files: /app/backend_test_focused.py, /app/backend_test_scenarios.py"
+  
+  - task: "Finnhub stock price API integration (GET /api/prices/stock/{symbol} and /api/prices/stock/search/{query})"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "Finnhub stock API endpoints verified working correctly. GET /api/prices/stock/{symbol} returns real-time quote with price, change, change_percent, high, low, open, prev_close. GET /api/prices/stock/search/{query} returns filtered ticker search results (US stocks only, no dots). Tested with AAPL: search returned correct results, price fetch returned $275.49 with live data. API integration fully functional."
 
 frontend:
   - task: "Main Net Worth page shows single Crypto box reflecting Crypto tab total"
@@ -135,16 +147,94 @@ frontend:
         -working: true
         -agent: "testing"
         -comment: "Comprehensive UI testing completed successfully. All review request scenarios verified: (1) Main Net Worth page shows exactly 4 metric boxes (Stocks, Crypto, Cash, Debts) with NO Projects or Investments box - PASS. (2) Crypto value synchronization working perfectly: initial value $158.01, after visiting Crypto page (/crypto) which shows Net Worth $157.99, main page Crypto metric updates to match $157.99 - PASS. (3) Clicking Crypto tab on Dashboard displays crypto-breakdown component with chain cards (Solana: 100%, 2 tokens, $157.99) instead of 'No assets in this category' - PASS. (4) Chain card expand/collapse functionality working correctly: chevron rotates from ChevronRight (collapsed) to ChevronDown (expanded), token rows (SOL, NOS) display when expanded, collapses properly when clicked again - PASS. (5) Clicking 'All' tab hides crypto-breakdown and restores regular asset list - PASS. (6) No console errors detected during any interactions - PASS. Screenshots captured: hero card with 4 metrics, Crypto page net worth, crypto breakdown with expanded chain showing token details. The crypto cache mechanism is functioning perfectly with frontend actively syncing grandTotal to backend."
+        -working: true
+        -agent: "testing"
+        -comment: "BUG FIX VERIFICATION COMPLETE - All three reported bugs are FIXED and working correctly: (1) Bitcoin wallet balance is now being fetched correctly - shows $98,651.48 for 1.25 BTC (not $0 anymore). (2) Main Net Worth 'All' tab now shows crypto breakdown immediately without needing to visit Crypto tab first - crypto-breakdown component renders with full hierarchy. (3) Top-level label correctly says 'Crypto' with chains (Bitcoin, Solana) as sub-categories (not 'Solana' at top level). All three flows tested successfully: Flow A (Crypto page Bitcoin balance), Flow B (Main Net Worth 'All' tab breakdown), Flow C (Dashboard Crypto tab). Bitcoin value verified: 1.2501 BTC @ $78,910.01 = $98,651.48. No console errors. Minor network errors for /api/crypto/cache (CDN/RUM related) but functionality works perfectly. Screenshots captured for all flows. All bugs are resolved."
+  
+  - task: "Dashboard tabs redesign: Remove Projects tab, show All/Stocks/Crypto/Cash/Debts only"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/Dashboard.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "VERIFIED: Dashboard tabs correctly show exactly 5 tabs: All, Stocks, Crypto, Cash, Debts. NO Projects tab exists (data-testid='tab-projects' not found). All tab shows 4 top-level category cards (stocks-top-card, crypto-top-card, cash-top-card, debts-top-card). Tab navigation working correctly. Screenshots captured."
+  
+  - task: "Add Asset modal redesign with 4 category buttons and smart forms"
+    implemented: true
+    working: true
+    file: "frontend/src/components/AddAssetDialog.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "VERIFIED: Add Asset modal shows exactly 4 category buttons: Stocks, Cash/Bank, Debts/Liabilities, Crypto (manual). NO 'Crypto Projects' option. Each category has smart form: (1) Stocks form: ticker search with Finnhub integration, auto-fetch price on selection, quantity, price, cost basis fields. (2) Cash/Bank form: account name, balance fields. (3) Debts form: debt name, amount owed fields. (4) Crypto manual form: coin search, quantity, price fields. All forms working correctly. BUG FIXED: Changed pricesApi.getStockPrice to pricesApi.getStock in /app/frontend/src/lib/api.js to match AddAssetDialog usage."
+  
+  - task: "Stocks breakdown with expandable hierarchy pattern"
+    implemented: true
+    working: true
+    file: "frontend/src/components/AssetBreakdown.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "VERIFIED: Stocks breakdown (data-testid='stocks-breakdown') working with expandable hierarchy. Top-level card shows total value, expands by default on Stocks tab. Items list (data-testid='stocks-items-list') displays individual stocks. Each item expandable to show details: Quantity, Price, Cost Basis, P/L. Menu with Edit/Delete options working. Tested with AAPL stock (10 shares @ $275.49 = $2,754.90). All functionality working correctly."
+  
+  - task: "Cash and Debts breakdowns with expandable hierarchy pattern"
+    implemented: true
+    working: true
+    file: "frontend/src/components/AssetBreakdown.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "VERIFIED: Cash breakdown (data-testid='cash-breakdown') and Debts breakdown (data-testid='debts-breakdown') both working with expandable hierarchy pattern. Cash tab shows 'Chase Savings' with $5,000 (100.0%). Debts tab shows 'Credit Card' with -$1,500 (100.0%) in rose/red color. Both support expand/collapse, Edit/Delete menus. All tab shows all 4 category cards correctly. Screenshots captured."
+  
+  - task: "Hero card metrics update: Stocks, Crypto, Cash, Debts (4 metrics total)"
+    implemented: true
+    working: true
+    file: "frontend/src/components/NetWorthHero.jsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "VERIFIED: Hero card shows exactly 4 metrics: Stocks ($2,759.80), Crypto ($98,809.48), Cash ($5,000.00), Debts ($1,500.00 in rose/red). Total Net Worth calculation correct: $2,759.80 + $98,809.48 + $5,000.00 - $1,500.00 = $105,069.28. Portfolio breakdown pie chart shows all categories. All values updating correctly when assets added/removed."
+  
+  - task: "Stock ticker search and Finnhub price auto-fetch in Add Asset modal"
+    implemented: true
+    working: true
+    file: "frontend/src/components/AddAssetDialog.jsx, frontend/src/lib/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "VERIFIED: Ticker search working perfectly. Typing 'AAPL' triggers search, dropdown (data-testid='ticker-search-results') appears with results. Clicking result auto-fills name ('APPLE INC') and fetches current price ($275.49) from Finnhub. Price info box shows live price and change percent (-1.00%). Refresh button allows manual price update. Tested end-to-end: search AAPL → select → price auto-fetched → enter quantity 10 → submit → stock added successfully with correct total value $2,754.90."
 
 metadata:
   created_by: "main_agent"
-  version: "1.0"
-  test_sequence: 3
+  version: "1.1"
+  test_sequence: 4
   run_ui: true
 
 test_plan:
   current_focus:
-    - "Main Net Worth page shows single Crypto box reflecting Crypto tab total"
+    - "Dashboard tabs redesign"
+    - "Add Asset modal redesign"
+    - "Stocks/Cash/Debts breakdowns with expandable hierarchy"
+    - "Finnhub stock price integration"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -158,3 +248,5 @@ agent_communication:
     -message: "Frontend UI testing complete - ALL requirements verified successfully. Hero card shows exactly 4 metrics (Stocks, Crypto, Cash, Debts) with no Projects/Investments box. Crypto value synchronization working perfectly: values match between main page ($157.99) and Crypto page ($157.99) after navigation. Crypto tab breakdown component displays chain cards (Solana with 2 tokens) with full expand/collapse functionality (chevron rotation, token details display). All tab navigation working correctly. No console errors. All 6 test scenarios PASSED. Feature is fully functional and ready for production."
     -agent: "testing"
     -message: "BUG FIX VERIFICATION COMPLETE - All three reported bugs are FIXED and working correctly: (1) Bitcoin wallet balance is now being fetched correctly - shows $98,651.48 for 1.25 BTC (not $0 anymore). (2) Main Net Worth 'All' tab now shows crypto breakdown immediately without needing to visit Crypto tab first - crypto-breakdown component renders with full hierarchy. (3) Top-level label correctly says 'Crypto' with chains (Bitcoin, Solana) as sub-categories (not 'Solana' at top level). All three flows tested successfully: Flow A (Crypto page Bitcoin balance), Flow B (Main Net Worth 'All' tab breakdown), Flow C (Dashboard Crypto tab). Bitcoin value verified: 1.2501 BTC @ $78,910.01 = $98,651.48. No console errors. Minor network errors for /api/crypto/cache (CDN/RUM related) but functionality works perfectly. Screenshots captured for all flows. All bugs are resolved."
+    -agent: "testing"
+    -message: "MAJOR REDESIGN TESTING COMPLETE - All 8 test scenarios PASSED successfully. (1) Tabs: Verified exactly 5 tabs (All, Stocks, Crypto, Cash, Debts), NO Projects tab. All tab shows 4 category cards. (2) Add Stock with Finnhub: Ticker search working, AAPL price auto-fetched at $275.49, 10 shares added successfully. (3) Stocks breakdown: Expandable hierarchy working, item details showing Quantity/Price, Edit/Delete menu functional. (4) Add Cash: 'Chase Savings' $5,000 added successfully. (5) Add Debt: 'Credit Card' $1,500 added successfully. (6) Cash/Debts breakdowns: Both working with expandable hierarchy, correct values and colors (debts in rose/red). (7) Hero card: All 4 metrics correct (Stocks $2,759.80, Crypto $98,809.48, Cash $5,000, Debts $1,500), total calculation verified $105,069.28. (8) Cleanup: All test entries deleted successfully. BUG FIXED: pricesApi.getStockPrice → pricesApi.getStock in api.js. NO console errors. All features fully functional. Screenshots captured for all scenarios."

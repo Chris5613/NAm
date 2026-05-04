@@ -25,7 +25,7 @@ export default function PortfolioChart({ netWorth }) {
 
   const { breakdown } = netWorth;
   const data = Object.entries(breakdown)
-    .filter(([key, val]) => val > 0 && key !== "debts" && key !== "investments")
+    .filter(([key, val]) => val > 0 && key !== "debts" && key !== "investments" && key !== "crypto_projects")
     .map(([key, val]) => ({
       name: CATEGORY_LABELS[key] || key,
       value: val,

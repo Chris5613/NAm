@@ -23,7 +23,6 @@ const CATEGORIES = [
   { value: "stocks", label: "Stocks" },
   { value: "crypto", label: "Crypto" },
   { value: "cash", label: "Cash / Bank" },
-  { value: "crypto_projects", label: "Crypto Projects" },
   { value: "debts", label: "Debts / Liabilities" },
 ];
 

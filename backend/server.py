@@ -38,6 +38,8 @@ api_router = APIRouter(prefix="/api")
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 ALPHA_VANTAGE_BASE = "https://www.alphavantage.co/query"
 ALPHA_VANTAGE_KEY = os.environ.get("ALPHA_VANTAGE_KEY", "demo")
+FINNHUB_BASE = "https://finnhub.io/api/v1"
+FINNHUB_KEY = os.environ.get("FINNHUB_API_KEY", "")
 JUPITER_API_KEY = os.environ.get("JUPITER_API_KEY", "")
 COINSTATS_API_KEY = os.environ.get("COINSTATS_API_KEY", "")
 
@@ -208,8 +210,9 @@ async def get_net_worth():
     if cached_crypto is not None:
         categories["crypto"] = cached_crypto
     
+    # crypto_projects category is deprecated and no longer contributes to net worth
     # Projects/investments are tracked separately and do NOT contribute to net worth
-    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] - categories["debts"]
+    total = categories["stocks"] + categories["crypto"] + categories["cash"] - categories["debts"]
     
     return {
         "total_net_worth": total,
@@ -247,8 +250,8 @@ async def save_snapshot():
     if cached_crypto is not None:
         categories["crypto"] = cached_crypto
     
-    # Projects/investments are tracked separately and do NOT contribute to net worth
-    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] - categories["debts"]
+    # crypto_projects and investments do NOT contribute to net worth
+    total = categories["stocks"] + categories["crypto"] + categories["cash"] - categories["debts"]
     
     snapshot = NetWorthSnapshot(
         total_net_worth=total,
@@ -340,57 +343,67 @@ async def get_crypto_info(coin_id: str):
 
 @api_router.get("/prices/stock/{symbol}")
 async def get_stock_price(symbol: str):
+    """Get real-time stock quote from Finnhub."""
+    symbol = symbol.upper().strip()
     try:
         async with httpx.AsyncClient(timeout=10) as client_http:
             response = await client_http.get(
-                ALPHA_VANTAGE_BASE,
-                params={
-                    "function": "GLOBAL_QUOTE",
-                    "symbol": symbol,
-                    "apikey": ALPHA_VANTAGE_KEY
-                }
+                f"{FINNHUB_BASE}/quote",
+                params={"symbol": symbol, "token": FINNHUB_KEY}
             )
             if response.status_code == 200:
                 data = response.json()
-                # Handle rate limit / info messages
-                if "Information" in data:
-                    raise HTTPException(status_code=429, detail="Alpha Vantage rate limit reached (25 requests/day on free tier). Try again later.")
-                if "Note" in data:
-                    raise HTTPException(status_code=429, detail="Alpha Vantage API call frequency limit. Wait 15 seconds.")
-                quote = data.get("Global Quote", {})
-                if quote:
-                    return {
-                        "symbol": quote.get("01. symbol", symbol),
-                        "price": float(quote.get("05. price", 0)),
-                        "change": float(quote.get("09. change", 0)),
-                        "change_percent": quote.get("10. change percent", "0%")
-                    }
-            raise HTTPException(status_code=404, detail="Stock not found")
+                price = float(data.get("c", 0) or 0)
+                prev_close = float(data.get("pc", 0) or 0)
+                if price <= 0:
+                    raise HTTPException(status_code=404, detail=f"No quote found for {symbol}")
+                change = price - prev_close
+                change_percent = ((change / prev_close) * 100) if prev_close > 0 else 0
+                return {
+                    "symbol": symbol,
+                    "price": price,
+                    "change": change,
+                    "change_percent": f"{change_percent:.2f}%",
+                    "high": float(data.get("h", 0) or 0),
+                    "low": float(data.get("l", 0) or 0),
+                    "open": float(data.get("o", 0) or 0),
+                    "prev_close": prev_close,
+                }
+            if response.status_code == 429:
+                raise HTTPException(status_code=429, detail="Finnhub rate limit reached (60/min). Try again shortly.")
+            raise HTTPException(status_code=response.status_code, detail=f"Finnhub error: {response.text[:200]}")
     except HTTPException:
         raise
     except httpx.TimeoutException:
-        raise HTTPException(status_code=504, detail="Alpha Vantage API timeout")
+        raise HTTPException(status_code=504, detail="Finnhub API timeout")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 @api_router.get("/prices/stock/search/{query}")
 async def search_stock(query: str):
+    """Search stock tickers via Finnhub."""
     try:
         async with httpx.AsyncClient(timeout=10) as client_http:
             response = await client_http.get(
-                ALPHA_VANTAGE_BASE,
-                params={
-                    "function": "SYMBOL_SEARCH",
-                    "keywords": query,
-                    "apikey": ALPHA_VANTAGE_KEY
-                }
+                f"{FINNHUB_BASE}/search",
+                params={"q": query, "token": FINNHUB_KEY}
             )
             if response.status_code == 200:
                 data = response.json()
-                matches = data.get("bestMatches", [])[:10]
-                return [{"symbol": m["1. symbol"], "name": m["2. name"]} for m in matches]
+                results = data.get("result", [])[:15]
+                # Prefer common stocks (no dots/colons meaning US tickers)
+                return [
+                    {
+                        "symbol": r.get("symbol", ""),
+                        "name": r.get("description", ""),
+                        "type": r.get("type", ""),
+                    }
+                    for r in results
+                    if r.get("symbol") and "." not in r.get("symbol", "")
+                ][:10]
             return []
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Stock search failed: {e}")
         return []
 
 # --- Bulk price update ---
@@ -429,35 +442,32 @@ async def refresh_all_prices():
         except Exception as e:
             logger.warning(f"Failed to refresh crypto prices: {e}")
     
-    # Stock prices - batch updates after fetching
+    # Stock prices via Finnhub (60 req/min free tier — no practical limit for typical portfolios)
     stock_operations = []
-    for asset in stock_assets[:3]:  # Limit to 3 to stay within free tier
-        try:
-            async with httpx.AsyncClient(timeout=10) as client_http:
-                response = await client_http.get(
-                    ALPHA_VANTAGE_BASE,
-                    params={
-                        "function": "GLOBAL_QUOTE",
-                        "symbol": asset["symbol"],
-                        "apikey": ALPHA_VANTAGE_KEY
-                    }
+    async with httpx.AsyncClient(timeout=10) as client_http:
+        async def fetch_one_stock(asset):
+            try:
+                resp = await client_http.get(
+                    f"{FINNHUB_BASE}/quote",
+                    params={"symbol": asset["symbol"].upper(), "token": FINNHUB_KEY}
                 )
-                if response.status_code == 200:
-                    data = response.json()
-                    # Skip if rate limited
-                    if "Information" in data or "Note" in data:
-                        logger.warning(f"Alpha Vantage rate limit hit for {asset.get('symbol')}")
-                        break
-                    quote = data.get("Global Quote", {})
-                    if quote:
-                        new_price = float(quote.get("05. price", 0))
-                        if new_price > 0:
-                            stock_operations.append(UpdateOne(
-                                {"id": asset["id"]},
-                                {"$set": {"current_price": new_price, "updated_at": datetime.now(timezone.utc).isoformat()}}
-                            ))
-        except Exception as e:
-            logger.warning(f"Failed to refresh stock price for {asset.get('symbol')}: {e}")
+                if resp.status_code == 200:
+                    d = resp.json()
+                    price = float(d.get("c", 0) or 0)
+                    if price > 0:
+                        return UpdateOne(
+                            {"id": asset["id"]},
+                            {"$set": {"current_price": price, "updated_at": datetime.now(timezone.utc).isoformat()}}
+                        )
+            except Exception as e:
+                logger.warning(f"Failed to refresh stock price for {asset.get('symbol')}: {e}")
+            return None
+
+        # Fetch up to 30 stock prices concurrently (well within 60/min)
+        results = await asyncio.gather(*[fetch_one_stock(a) for a in stock_assets[:30]], return_exceptions=True)
+        for r in results:
+            if isinstance(r, UpdateOne):
+                stock_operations.append(r)
     
     if stock_operations:
         await db.assets.bulk_write(stock_operations)
@@ -1366,8 +1376,8 @@ async def daily_snapshot_task():
             if cached_crypto is not None:
                 categories["crypto"] = cached_crypto
             
-            # Projects/investments are tracked separately and do NOT contribute to net worth
-            total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] - categories["debts"]
+            # crypto_projects and investments do NOT contribute to net worth
+            total = categories["stocks"] + categories["crypto"] + categories["cash"] - categories["debts"]
             
             snapshot = {
                 "id": str(uuid.uuid4()),
