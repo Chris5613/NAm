@@ -14,6 +14,7 @@ import {
   TrendingUp,
   Landmark,
   CreditCard,
+  Boxes,
   MoreVertical,
   Pencil,
   Trash2,
@@ -24,6 +25,7 @@ const CATEGORY_META = {
   stocks: { label: "Stocks", Icon: TrendingUp, color: "text-emerald-400" },
   cash: { label: "Cash", Icon: Landmark, color: "text-blue-400" },
   debts: { label: "Debts", Icon: CreditCard, color: "text-rose-400" },
+  other: { label: "Other Assets", Icon: Boxes, color: "text-amber-400" },
 };
 
 function formatCurrency(v) {

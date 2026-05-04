@@ -8,6 +8,7 @@ const STORAGE_KEYS = {
   PREFS: 'networth_prefs',
   CRYPTO_CACHE: 'networth_crypto_cache',
   HISTORY: 'networth_history',
+  LIVE_HISTORY: 'networth_live_history',
 };
 
 export const localStorage = {
@@ -66,5 +67,8 @@ export const localStorage = {
 
   getHistory: () => localStorage.get(STORAGE_KEYS.HISTORY) || [],
   setHistory: (history) => localStorage.set(STORAGE_KEYS.HISTORY, history),
+
+  getLiveHistory: () => localStorage.get(STORAGE_KEYS.LIVE_HISTORY) || [],
+  setLiveHistory: (points) => localStorage.set(STORAGE_KEYS.LIVE_HISTORY, points),
 
 };

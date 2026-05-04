@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { assetsApi, netWorthApi, pricesApi } from "@/lib/api";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { assetsApi, netWorthApi, pricesApi, walletSyncApi } from "@/lib/api";
+import { localStorage as storage } from "@/lib/localStorage";
 import { toast } from "sonner";
 import NetWorthHero from "@/components/NetWorthHero";
 import PortfolioChart from "@/components/PortfolioChart";
@@ -11,13 +12,20 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Plus, Camera, Radio } from "lucide-react";
 
-const REFRESH_INTERVAL = 30000; // 30 seconds
+const FAST_INTERVAL_MS = 15_000;          // refresh stock + coin prices every 15s
+const SLOW_TICK_RATIO = 4;                // every 4th fast tick → ~60s wallet refresh
+const LIVE_HISTORY_MAX_POINTS = 200;      // rolling window persisted to localStorage
+const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
 
 export default function Dashboard() {
   const [assets, setAssets] = useState([]);
   const [netWorth, setNetWorth] = useState(null);
   const [history, setHistory] = useState([]);
-  const [liveHistory, setLiveHistory] = useState([]);
+  // Hydrate live history from localStorage so the chart isn't blank on reload.
+  const [liveHistory, setLiveHistory] = useState(() => {
+    const persisted = storage.getLiveHistory();
+    return Array.isArray(persisted) ? persisted : [];
+  });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
@@ -25,6 +33,15 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [liveEnabled, setLiveEnabled] = useState(true);
   const intervalRef = useRef(null);
+  const tickCountRef = useRef(0);
+  const walletSyncInFlightRef = useRef(false);
+
+  // Persist liveHistory whenever it changes (capped to last N points).
+  useEffect(() => {
+    if (!Array.isArray(liveHistory)) return;
+    const trimmed = liveHistory.slice(-LIVE_HISTORY_MAX_POINTS);
+    storage.setLiveHistory(trimmed);
+  }, [liveHistory]);
 
   const fetchData = useCallback(async () => {
     try {
@@ -37,8 +54,8 @@ export default function Dashboard() {
       setNetWorth(netWorthRes.data);
       setHistory(historyRes.data);
       setLastUpdated(new Date());
-      // Add initial point to live history
-      setLiveHistory(prev => {
+      // Seed live history with first point if empty
+      setLiveHistory((prev) => {
         if (prev.length === 0) {
           return [{ timestamp: new Date().toISOString(), value: netWorthRes.data.total_net_worth }];
         }
@@ -51,10 +68,24 @@ export default function Dashboard() {
     }
   }, []);
 
-  // Auto-refresh prices at interval
-  const refreshPricesQuiet = useCallback(async () => {
+  // Fast tick: refresh stock + coin prices, recompute net worth, append a live point.
+  // Every Nth tick we ALSO refresh wallet balances (slower / more expensive).
+  const tick = useCallback(async () => {
     try {
+      tickCountRef.current += 1;
+      const isSlowTick = tickCountRef.current % SLOW_TICK_RATIO === 0;
+
+      // Fast path: stock & coin prices (cheap, aggregated calls).
       await pricesApi.refreshAll();
+
+      // Slow path: re-fetch every wallet → write crypto_cache. Skip if already in flight.
+      if (isSlowTick && !walletSyncInFlightRef.current) {
+        walletSyncInFlightRef.current = true;
+        walletSyncApi.refreshAll()
+          .catch(() => {})
+          .finally(() => { walletSyncInFlightRef.current = false; });
+      }
+
       const [assetsRes, netWorthRes] = await Promise.all([
         assetsApi.getAll(),
         netWorthApi.getCurrent(),
@@ -62,13 +93,12 @@ export default function Dashboard() {
       setAssets(assetsRes.data);
       setNetWorth(netWorthRes.data);
       setLastUpdated(new Date());
-      // Append to live history for real-time chart
-      setLiveHistory(prev => [
-        ...prev,
-        { timestamp: new Date().toISOString(), value: netWorthRes.data.total_net_worth }
-      ]);
+      setLiveHistory((prev) => {
+        const next = [...prev, { timestamp: new Date().toISOString(), value: netWorthRes.data.total_net_worth }];
+        return next.length > LIVE_HISTORY_MAX_POINTS ? next.slice(-LIVE_HISTORY_MAX_POINTS) : next;
+      });
     } catch {
-      // Silent fail for auto-refresh
+      /* silent — auto-refresh shouldn't toast */
     }
   }, []);
 
@@ -76,20 +106,23 @@ export default function Dashboard() {
     fetchData();
   }, [fetchData]);
 
-  // Set up live polling
   useEffect(() => {
-    if (liveEnabled) {
-      intervalRef.current = setInterval(refreshPricesQuiet, REFRESH_INTERVAL);
+    if (!liveEnabled) {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
+      return;
     }
+    intervalRef.current = setInterval(tick, FAST_INTERVAL_MS);
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
+      intervalRef.current = null;
     };
-  }, [liveEnabled, refreshPricesQuiet]);
+  }, [liveEnabled, tick]);
 
   const handleRefreshPrices = async () => {
     setRefreshing(true);
     try {
-      await pricesApi.refreshAll();
+      await Promise.all([pricesApi.refreshAll(), walletSyncApi.refreshAll()]);
       await fetchData();
       toast.success("Prices refreshed");
     } catch (err) {
@@ -115,13 +148,34 @@ export default function Dashboard() {
     fetchData();
   };
 
-  const handleAssetUpdated = () => {
-    fetchData();
-  };
+  const handleAssetUpdated = () => fetchData();
+  const handleAssetDeleted = () => fetchData();
 
-  const handleAssetDeleted = () => {
-    fetchData();
-  };
+  // For the "All" tab — render the category cards sorted by value descending.
+  // Crypto comes from netWorth.breakdown.crypto (which already includes wallets).
+  const sortedAllSections = useMemo(() => {
+    const stocksTotal = (assets || [])
+      .filter((a) => a.category === "stocks")
+      .reduce((s, a) => s + (a.quantity || 0) * (a.current_price || 0), 0);
+    const cashTotal = (assets || [])
+      .filter((a) => a.category === "cash")
+      .reduce((s, a) => s + (a.quantity || 0) * (a.current_price || 0), 0);
+    const debtsTotal = (assets || [])
+      .filter((a) => a.category === "debts")
+      .reduce((s, a) => s + (a.quantity || 0) * (a.current_price || 0), 0);
+    const otherTotal = (assets || [])
+      .filter((a) => a.category === "other")
+      .reduce((s, a) => s + (a.quantity || 0) * (a.current_price || 0), 0);
+    const cryptoTotal = netWorth?.breakdown?.crypto || 0;
+
+    return [
+      { kind: "stocks", total: stocksTotal },
+      { kind: "crypto", total: cryptoTotal },
+      { kind: "cash",   total: cashTotal },
+      { kind: "other",  total: otherTotal },
+      { kind: "debts",  total: debtsTotal },
+    ].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+  }, [assets, netWorth]);
 
   if (loading) {
     return (
@@ -142,8 +196,8 @@ export default function Dashboard() {
           <button
             onClick={() => setLiveEnabled(!liveEnabled)}
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-              liveEnabled 
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+              liveEnabled
+                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
                 : "bg-secondary text-muted-foreground border border-border/40"
             }`}
             data-testid="live-toggle-btn"
@@ -212,6 +266,7 @@ export default function Dashboard() {
             <TabsTrigger value="stocks" data-testid="tab-stocks">Stocks</TabsTrigger>
             <TabsTrigger value="crypto" data-testid="tab-crypto">Crypto</TabsTrigger>
             <TabsTrigger value="cash" data-testid="tab-cash">Cash</TabsTrigger>
+            <TabsTrigger value="other" data-testid="tab-other">Other</TabsTrigger>
             <TabsTrigger value="debts" data-testid="tab-debts">Debts</TabsTrigger>
           </TabsList>
           <TabsContent value={activeTab}>
@@ -227,12 +282,26 @@ export default function Dashboard() {
             {activeTab === "debts" && (
               <AssetBreakdown category="debts" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
             )}
+            {activeTab === "other" && (
+              <AssetBreakdown category="other" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
+            )}
             {activeTab === "all" && (
               <div className="space-y-4">
-                <AssetBreakdown key="all-stocks" category="stocks" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={false} />
-                <CryptoBreakdown key="all-crypto" defaultOpen={false} />
-                <AssetBreakdown key="all-cash" category="cash" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={false} />
-                <AssetBreakdown key="all-debts" category="debts" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={false} />
+                {sortedAllSections.map((section) => {
+                  if (section.kind === "crypto") {
+                    return <CryptoBreakdown key="all-crypto" defaultOpen={false} />;
+                  }
+                  return (
+                    <AssetBreakdown
+                      key={`all-${section.kind}`}
+                      category={section.kind}
+                      assets={assets}
+                      onUpdate={handleAssetUpdated}
+                      onDelete={handleAssetDeleted}
+                      defaultOpen={false}
+                    />
+                  );
+                })}
               </div>
             )}
           </TabsContent>
@@ -243,7 +312,7 @@ export default function Dashboard() {
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         onCreated={handleAssetCreated}
-        defaultCategory={["stocks", "cash", "debts", "crypto"].includes(activeTab) ? activeTab : "stocks"}
+        defaultCategory={SUPPORTED_TABS.has(activeTab) && activeTab !== "all" ? activeTab : "stocks"}
       />
     </div>
   );

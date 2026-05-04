@@ -37,10 +37,17 @@ export default function NetWorthHero({ netWorth }) {
           )}
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
-          <MetricItem label="Stocks" value={breakdown?.stocks || 0} />
-          <MetricItem label="Crypto" value={breakdown?.crypto || 0} />
-          <MetricItem label="Cash" value={breakdown?.cash || 0} />
-          <MetricItem label="Debts" value={breakdown?.debts || 0} negative />
+          {[
+            { label: "Stocks", value: breakdown?.stocks || 0 },
+            { label: "Crypto", value: breakdown?.crypto || 0 },
+            { label: "Cash", value: breakdown?.cash || 0 },
+            { label: "Other", value: breakdown?.other || 0 },
+            { label: "Debts", value: breakdown?.debts || 0, negative: true },
+          ]
+            .sort((a, b) => Math.abs(b.value) - Math.abs(a.value))
+            .map((m) => (
+              <MetricItem key={m.label} label={m.label} value={m.value} negative={m.negative} />
+            ))}
         </div>
       </CardContent>
     </Card>

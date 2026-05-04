@@ -52,7 +52,10 @@ export default function CryptoBreakdown({ defaultOpen = false }) {
     );
   }
 
-  const chains = (cache?.chains || []).filter(c => (c.value || 0) > 0.01);
+  const chains = (cache?.chains || [])
+    .filter(c => (c.value || 0) > 0.01)
+    .slice()
+    .sort((a, b) => (b.value || 0) - (a.value || 0));
   const total = cache?.total || 0;
 
   if (chains.length === 0 && total < 0.01) {
@@ -104,7 +107,10 @@ export default function CryptoBreakdown({ defaultOpen = false }) {
             const meta = CHAIN_META[c.chain] || { name: c.chain, icon: "" };
             const pct = total > 0 ? ((c.value / total) * 100).toFixed(1) : "0.0";
             const isExpanded = expandedChain === c.chain;
-            const tokens = (c.tokens || []).filter(t => (t.usd_value || 0) > 0.01);
+            const tokens = (c.tokens || [])
+              .filter(t => (t.usd_value || 0) > 0.01)
+              .slice()
+              .sort((a, b) => (b.usd_value || 0) - (a.usd_value || 0));
             return (
               <div key={c.chain}>
                 <Card

@@ -11,12 +11,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TrendingUp, Landmark, CreditCard, Coins, RefreshCw, Loader2 } from "lucide-react";
+import { TrendingUp, Landmark, CreditCard, Coins, RefreshCw, Loader2, Boxes } from "lucide-react";
 
 const CATEGORIES = [
   { value: "stocks", label: "Stocks", icon: TrendingUp, hint: "Stock holdings with real-time prices" },
   { value: "cash", label: "Cash / Bank", icon: Landmark, hint: "Savings, checking, emergency funds" },
   { value: "debts", label: "Debts / Liabilities", icon: CreditCard, hint: "Loans, credit cards, mortgages" },
+  { value: "other", label: "Other Assets", icon: Boxes, hint: "Real estate, vehicles, gold, watches, collectibles, anything manual" },
   { value: "crypto", label: "Crypto (manual)", icon: Coins, hint: "Use the Crypto tab for wallets. Use this only for manual crypto entries." },
 ];
 
@@ -139,7 +140,7 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
           manual_value: null,
           icon_url: null,
         };
-      } else if (category === "cash" || category === "debts") {
+      } else if (category === "cash" || category === "debts" || category === "other") {
         if (!name) { toast.error("Enter a name"); setSubmitting(false); return; }
         if (!amount) { toast.error("Enter an amount"); setSubmitting(false); return; }
         payload = {
@@ -309,14 +310,22 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
             </>
           )}
 
-          {/* ===== CASH / DEBTS ===== */}
-          {(category === "cash" || category === "debts") && (
+          {/* ===== CASH / DEBTS / OTHER ===== */}
+          {(category === "cash" || category === "debts" || category === "other") && (
             <>
               <div className="space-y-2">
-                <Label htmlFor="cd-name">{category === "debts" ? "Debt Name" : "Account Name"}</Label>
+                <Label htmlFor="cd-name">
+                  {category === "debts" ? "Debt Name" : category === "other" ? "Asset Name" : "Account Name"}
+                </Label>
                 <Input
                   id="cd-name"
-                  placeholder={category === "debts" ? "e.g. Chase Credit Card" : "e.g. Chase Savings"}
+                  placeholder={
+                    category === "debts"
+                      ? "e.g. Chase Credit Card"
+                      : category === "other"
+                      ? "e.g. House, Tesla Model 3, Rolex Submariner"
+                      : "e.g. Chase Savings"
+                  }
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   data-testid="input-name"
@@ -324,7 +333,9 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cd-amount">{category === "debts" ? "Amount Owed ($)" : "Balance ($)"}</Label>
+                <Label htmlFor="cd-amount">
+                  {category === "debts" ? "Amount Owed ($)" : category === "other" ? "Estimated Value ($)" : "Balance ($)"}
+                </Label>
                 <Input
                   id="cd-amount"
                   type="number"

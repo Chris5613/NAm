@@ -365,6 +365,7 @@ export const netWorthApi = {
       crypto: cryptoCache.total || 0,
       cash: 0,
       debts: 0,
+      other: 0,
       phones: phones.reduce((sum, p) => sum + (p.market_value || 0), 0),
     };
 
@@ -374,9 +375,10 @@ export const netWorthApi = {
       else if (asset.category === 'crypto') breakdown.crypto += value;
       else if (asset.category === 'cash') breakdown.cash += value;
       else if (asset.category === 'debts') breakdown.debts += value;
+      else if (asset.category === 'other') breakdown.other += value;
     });
 
-    const totalNetWorth = breakdown.stocks + breakdown.crypto + breakdown.cash + breakdown.phones - breakdown.debts;
+    const totalNetWorth = breakdown.stocks + breakdown.crypto + breakdown.cash + breakdown.other + breakdown.phones - breakdown.debts;
     return toResponse({ total_net_worth: totalNetWorth, breakdown, last_updated: new Date().toISOString() });
   },
   getHistory: async () => toResponse(storage.getHistory()),
@@ -387,6 +389,7 @@ export const netWorthApi = {
       stocks_value: current.data.breakdown.stocks,
       crypto_value: current.data.breakdown.crypto,
       cash_value: current.data.breakdown.cash,
+      other_value: current.data.breakdown.other || 0,
       crypto_projects_value: 0,
       debts_value: current.data.breakdown.debts,
       timestamp: new Date().toISOString(),
@@ -395,6 +398,95 @@ export const netWorthApi = {
     const nextHistory = [...history, snapshot];
     storage.setHistory(nextHistory);
     return toResponse(snapshot);
+  },
+};
+
+// Live-refresh wallet balances + write to crypto_cache. Used by the dashboard's
+// "real-time" loop so the net-worth chart picks up crypto price moves even when
+// the user isn't on the Crypto page.
+export const walletSyncApi = {
+  refreshAll: async () => {
+    const wallets = normalizeItems(storage.getWallets());
+    if (wallets.length === 0) return toResponse({ total: 0, chains: [], tokens: [] });
+    const customTokens = normalizeItems(storage.getTokens());
+    const tokenPrefs = storage.getPrefs();
+    const hidden = new Set(
+      Object.entries(tokenPrefs)
+        .filter(([, p]) => p?.hidden)
+        .map(([s]) => s),
+    );
+
+    // Sequential to keep us under CoinStats rate limits.
+    const balances = {};
+    for (const w of wallets) {
+      try {
+        const res = await walletsApi.getBalances(w.id);
+        balances[w.id] = res.data;
+      } catch { /* silent */ }
+    }
+    const solWallets = wallets.filter((w) => w.chain === 'solana');
+    const allDefi = [];
+    for (const w of solWallets) {
+      try {
+        const res = await walletsApi.getDefiPositions(w.address);
+        if (Array.isArray(res.data?.positions)) allDefi.push(...res.data.positions);
+      } catch { /* silent */ }
+    }
+
+    const chainBreakdown = {};
+    const tokensByChain = {};
+    wallets.forEach((w) => {
+      (balances[w.id]?.tokens || []).forEach((t) => {
+        if (hidden.has(t.symbol)) return;
+        if ((t.usd_value || 0) < 0.01) return;
+        chainBreakdown[w.chain] = (chainBreakdown[w.chain] || 0) + t.usd_value;
+        if (!tokensByChain[w.chain]) tokensByChain[w.chain] = [];
+        tokensByChain[w.chain].push({
+          symbol: t.symbol,
+          name: t.name,
+          icon_url: tokenPrefs[t.symbol]?.custom_icon_url || t.icon_url || '',
+          amount: t.amount,
+          price: t.price,
+          usd_value: t.usd_value,
+        });
+      });
+    });
+    customTokens.forEach((ct) => {
+      if (hidden.has(ct.symbol)) return;
+      const v = (ct.amount || 0) * (ct.price || 0);
+      if (v < 0.01) return;
+      const c = ct.chain || 'custom';
+      chainBreakdown[c] = (chainBreakdown[c] || 0) + v;
+      if (!tokensByChain[c]) tokensByChain[c] = [];
+      tokensByChain[c].push({
+        symbol: ct.symbol,
+        name: ct.name,
+        icon_url: ct.icon_url || '',
+        amount: ct.amount,
+        price: ct.price,
+        usd_value: v,
+      });
+    });
+    const defiTotal = allDefi.reduce((s, p) => s + (p.total_value || 0), 0);
+    if (defiTotal > 0) chainBreakdown.solana = (chainBreakdown.solana || 0) + defiTotal;
+
+    const total = Object.values(chainBreakdown).reduce((s, v) => s + v, 0);
+    const chains = Object.entries(chainBreakdown)
+      .sort((a, b) => b[1] - a[1])
+      .map(([chain, value]) => ({
+        chain,
+        value,
+        tokens: (tokensByChain[chain] || []).sort((a, b) => b.usd_value - a.usd_value),
+      }));
+
+    const cache = {
+      total,
+      chains,
+      tokens: chains.flatMap((c) => c.tokens),
+      updated_at: new Date().toISOString(),
+    };
+    storage.setCryptoCache(cache);
+    return toResponse(cache);
   },
 };
 

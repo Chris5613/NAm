@@ -7,6 +7,8 @@ const CATEGORY_LABELS = {
   stocks: "Stocks",
   crypto: "Crypto",
   cash: "Cash",
+  other: "Other",
+  phones: "Phones",
   investments: "Investments",
   crypto_projects: "Projects",
   debts: "Debts",
@@ -29,7 +31,8 @@ export default function PortfolioChart({ netWorth }) {
     .map(([key, val]) => ({
       name: CATEGORY_LABELS[key] || key,
       value: val,
-    }));
+    }))
+    .sort((a, b) => b.value - a.value);
 
   if (data.length === 0) {
     return (
