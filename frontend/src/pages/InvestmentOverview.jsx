@@ -3,7 +3,7 @@ import { projectsApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, ChevronDown, ChevronRight, Trash2, Pencil } from "lucide-react";
+import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Timer } from "lucide-react";
 import AddProjectDialog from "@/components/AddProjectDialog";
 import EditProjectDialog from "@/components/EditProjectDialog";
 
@@ -65,6 +65,15 @@ export default function InvestmentOverview() {
     { invested: 0, earned: 0, per_day: 0, per_week: 0, per_month: 0, per_year: 0 }
   );
   const totalPnl = totals.earned - totals.invested;
+
+  // Calculate days until ROI (remaining amount / daily earnings)
+  function getRoiDays(project) {
+    const remaining = (project.invested || 0) - (project.earned || 0);
+    const daily = project.per_day || 0;
+    if (daily <= 0) return null; // Can't calculate without daily earnings
+    if (remaining <= 0) return 0; // Already hit ROI
+    return Math.ceil(remaining / daily);
+  }
 
   if (loading) {
     return (
@@ -138,11 +147,14 @@ export default function InvestmentOverview() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {projects.map((project) => {
+          {[...projects]
+            .sort((a, b) => ((b.earned || 0) - (b.invested || 0)) - ((a.earned || 0) - (a.invested || 0)))
+            .map((project) => {
             const pnl = (project.earned || 0) - (project.invested || 0);
             const isExpanded = expandedId === project.id;
+            const roiDays = getRoiDays(project);
             return (
-              <div key={project.id} className="space-y-0">
+              <div key={project.id}>
                 {/* Main Project Box */}
                 <Card
                   className="border-border/40 bg-card hover:border-white/10 transition-colors cursor-pointer"
@@ -158,6 +170,15 @@ export default function InvestmentOverview() {
                           <ChevronRight className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
                         )}
                         <span className="font-medium text-foreground text-lg">{project.name}</span>
+                        {/* ROI Countdown */}
+                        {roiDays !== null && (
+                          <span className={`flex items-center gap-1 text-xs font-mono px-2 py-0.5 rounded ${
+                            roiDays <= 0 ? "bg-emerald-500/10 text-emerald-400" : "bg-amber-500/10 text-amber-400"
+                          }`} data-testid={`roi-badge-${project.id}`}>
+                            <Timer className="w-3 h-3" strokeWidth={2} />
+                            {roiDays <= 0 ? "ROI reached" : `${roiDays}d to ROI`}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-6">
                         <div className="text-right">
@@ -209,7 +230,7 @@ export default function InvestmentOverview() {
 
                 {/* Expanded Sub-categories */}
                 {isExpanded && project.categories && project.categories.length > 0 && (
-                  <div className="ml-8 mt-1 space-y-1" data-testid={`project-categories-${project.id}`}>
+                  <div className="ml-10 mt-2 mb-2 space-y-1.5" data-testid={`project-categories-${project.id}`}>
                     {project.categories.map((cat, idx) => (
                       <Card key={idx} className="border-border/20 bg-secondary/50">
                         <CardContent className="px-5 py-3 flex items-center justify-between">
@@ -222,7 +243,7 @@ export default function InvestmentOverview() {
                 )}
 
                 {isExpanded && (!project.categories || project.categories.length === 0) && (
-                  <div className="ml-8 mt-1">
+                  <div className="ml-10 mt-2 mb-2">
                     <Card className="border-border/20 bg-secondary/50">
                       <CardContent className="px-5 py-3">
                         <p className="text-xs text-muted-foreground">No sub-categories added yet</p>
