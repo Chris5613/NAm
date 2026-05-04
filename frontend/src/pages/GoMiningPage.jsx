@@ -22,7 +22,6 @@ const COLS = [
   { key: "service",         label: "Service",       type: "money",  width: 110 },
   // Reward is computed (read-only).
   { key: "reward",          label: "Reward",        type: "computed", width: 110 },
-  { key: "total_discount",  label: "Total discount",type: "money",  width: 130 },
   { key: "gmt_earned",      label: "GMT Earned",    type: "number", width: 120 },
 ];
 
@@ -127,12 +126,11 @@ export default function GoMiningPage() {
         acc.pr += Number(r.pr) || 0;
         acc.electricity += Number(r.electricity) || 0;
         acc.service += Number(r.service) || 0;
-        acc.total_discount += Number(r.total_discount) || 0;
         acc.gmt_earned += Number(r.gmt_earned) || 0;
         acc.reward += computeReward(r, gmtPrice);
         return acc;
       },
-      { pr: 0, electricity: 0, service: 0, total_discount: 0, reward: 0, gmt_earned: 0 },
+      { pr: 0, electricity: 0, service: 0, reward: 0, gmt_earned: 0 },
     );
   }, [rows, gmtPrice]);
 
@@ -247,7 +245,7 @@ export default function GoMiningPage() {
       toast.error("Nothing to export");
       return;
     }
-    const header = ["Date", "CP (TH/s)", "PR", "Electricity", "Service", "Reward", "Total discount", "GMT Earned"];
+    const header = ["Date", "CP (TH/s)", "PR", "Electricity", "Service", "Reward", "GMT Earned"];
     const lines = [header.join(",")];
     sortedRows.forEach((r) => {
       lines.push([
@@ -257,7 +255,6 @@ export default function GoMiningPage() {
         Number(r.electricity) || 0,
         Number(r.service) || 0,
         computeReward(r, gmtPrice),
-        Number(r.total_discount) || 0,
         Number(r.gmt_earned) || 0,
       ].join(","));
     });
