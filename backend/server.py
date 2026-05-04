@@ -581,6 +581,233 @@ async def delete_transaction(txn_id: str):
     return {"message": "Transaction deleted and project updated"}
 
 
+# --- Wallets (Crypto Portfolio) ---
+
+class Wallet(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    address: str
+    chain: str  # "solana", "bitcoin"
+    label: Optional[str] = None
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class WalletCreate(BaseModel):
+    address: str
+    chain: str
+    label: Optional[str] = None
+
+@api_router.get("/wallets")
+async def get_wallets():
+    wallets = await db.wallets.find({}, {"_id": 0}).to_list(50)
+    return wallets
+
+@api_router.post("/wallets", response_model=Wallet)
+async def add_wallet(input_data: WalletCreate):
+    wallet = Wallet(**input_data.model_dump())
+    await db.wallets.insert_one(wallet.model_dump())
+    return wallet
+
+@api_router.delete("/wallets/{wallet_id}")
+async def delete_wallet(wallet_id: str):
+    result = await db.wallets.delete_one({"id": wallet_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Wallet not found")
+    return {"message": "Wallet deleted"}
+
+@api_router.get("/wallets/{wallet_id}/balances")
+async def get_wallet_balances(wallet_id: str):
+    wallet = await db.wallets.find_one({"id": wallet_id}, {"_id": 0})
+    if not wallet:
+        raise HTTPException(status_code=404, detail="Wallet not found")
+
+    if wallet["chain"] == "bitcoin":
+        return await _fetch_btc_balance(wallet["address"])
+    elif wallet["chain"] == "solana":
+        return await _fetch_solana_balances(wallet["address"])
+    else:
+        raise HTTPException(status_code=400, detail=f"Unsupported chain: {wallet['chain']}")
+
+async def _fetch_btc_balance(address: str):
+    try:
+        async with httpx.AsyncClient(timeout=15) as client_http:
+            # Get BTC balance
+            resp = await client_http.get(f"https://blockchain.info/balance?active={address}")
+            if resp.status_code != 200:
+                return {"tokens": [], "total_usd": 0, "error": "Failed to fetch BTC balance"}
+            data = resp.json()
+            balance_satoshi = data.get(address, {}).get("final_balance", 0)
+            balance_btc = balance_satoshi / 100_000_000
+
+            # Get BTC price from CoinGecko
+            price_resp = await client_http.get(
+                f"{COINGECKO_BASE}/simple/price",
+                params={"ids": "bitcoin", "vs_currencies": "usd"}
+            )
+            btc_price = 0
+            if price_resp.status_code == 200:
+                btc_price = price_resp.json().get("bitcoin", {}).get("usd", 0)
+
+            usd_value = balance_btc * btc_price
+            tokens = []
+            if balance_btc > 0:
+                tokens.append({
+                    "symbol": "BTC",
+                    "name": "Bitcoin",
+                    "amount": balance_btc,
+                    "price": btc_price,
+                    "usd_value": usd_value,
+                    "icon_url": "https://assets.coingecko.com/coins/images/1/small/bitcoin.png"
+                })
+            return {"tokens": tokens, "total_usd": usd_value}
+    except Exception as e:
+        logger.warning(f"BTC balance fetch error: {e}")
+        return {"tokens": [], "total_usd": 0, "error": str(e)}
+
+async def _fetch_solana_balances(address: str):
+    try:
+        tokens = []
+        total_usd = 0
+        async with httpx.AsyncClient(timeout=20) as client_http:
+            # Get SOL balance
+            sol_resp = await client_http.post(
+                "https://api.mainnet-beta.solana.com",
+                json={"jsonrpc": "2.0", "id": 1, "method": "getBalance", "params": [address]}
+            )
+            sol_balance = 0
+            if sol_resp.status_code == 200:
+                sol_data = sol_resp.json()
+                sol_balance = sol_data.get("result", {}).get("value", 0) / 1_000_000_000
+
+            # Get SPL token accounts
+            token_resp = await client_http.post(
+                "https://api.mainnet-beta.solana.com",
+                json={
+                    "jsonrpc": "2.0", "id": 2,
+                    "method": "getTokenAccountsByOwner",
+                    "params": [
+                        address,
+                        {"programId": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"},
+                        {"encoding": "jsonParsed"}
+                    ]
+                }
+            )
+
+            spl_tokens = []
+            if token_resp.status_code == 200:
+                token_data = token_resp.json()
+                accounts = token_data.get("result", {}).get("value", [])
+                for acc in accounts:
+                    parsed = acc.get("account", {}).get("data", {}).get("parsed", {}).get("info", {})
+                    token_amount = parsed.get("tokenAmount", {})
+                    ui_amount = token_amount.get("uiAmount", 0)
+                    if ui_amount and ui_amount > 0:
+                        mint = parsed.get("mint", "")
+                        spl_tokens.append({"mint": mint, "amount": ui_amount})
+
+            # Fetch token metadata from Jupiter
+            token_list = {}
+            try:
+                jup_resp = await client_http.get("https://token.jup.ag/strict", timeout=10)
+                if jup_resp.status_code == 200:
+                    for t in jup_resp.json():
+                        token_list[t["address"]] = {
+                            "symbol": t.get("symbol", "???"),
+                            "name": t.get("name", "Unknown"),
+                            "icon_url": t.get("logoURI", ""),
+                            "decimals": t.get("decimals", 0)
+                        }
+            except Exception:
+                pass
+
+            # Get SOL price
+            price_resp = await client_http.get(
+                f"{COINGECKO_BASE}/simple/price",
+                params={"ids": "solana", "vs_currencies": "usd"}
+            )
+            sol_price = 0
+            if price_resp.status_code == 200:
+                sol_price = price_resp.json().get("solana", {}).get("usd", 0)
+
+            # Add SOL
+            if sol_balance > 0:
+                sol_usd = sol_balance * sol_price
+                tokens.append({
+                    "symbol": "SOL",
+                    "name": "Solana",
+                    "amount": sol_balance,
+                    "price": sol_price,
+                    "usd_value": sol_usd,
+                    "icon_url": "https://assets.coingecko.com/coins/images/4128/small/solana.png"
+                })
+                total_usd += sol_usd
+
+            # Get prices for known SPL tokens via CoinGecko
+            known_tokens = []
+            unknown_tokens = []
+            for spl in spl_tokens:
+                meta = token_list.get(spl["mint"])
+                if meta:
+                    known_tokens.append({**spl, **meta})
+                else:
+                    unknown_tokens.append(spl)
+
+            # Batch price fetch for known tokens by symbol
+            if known_tokens:
+                # Try to get prices from CoinGecko by symbol mapping
+                symbols_to_fetch = list(set(t["symbol"].lower() for t in known_tokens))
+                # Use CoinGecko search for top tokens
+                coin_ids_map = {
+                    "usdc": "usd-coin", "usdt": "tether", "bonk": "bonk",
+                    "jup": "jupiter-exchange-solana", "ray": "raydium",
+                    "wif": "dogwifcoin", "jto": "jito-governance-token",
+                    "pyth": "pyth-network", "wen": "wen-4", "w": "wormhole",
+                    "tnsr": "tensor", "render": "render-token", "orca": "orca",
+                    "msol": "marinade-staked-sol", "bsol": "blazestake-staked-sol",
+                    "jitosol": "jito-staked-sol", "hnt": "helium", "rndr": "render-token",
+                }
+                ids_to_fetch = []
+                for sym in symbols_to_fetch:
+                    if sym in coin_ids_map:
+                        ids_to_fetch.append(coin_ids_map[sym])
+
+                prices = {}
+                if ids_to_fetch:
+                    try:
+                        pr = await client_http.get(
+                            f"{COINGECKO_BASE}/simple/price",
+                            params={"ids": ",".join(ids_to_fetch), "vs_currencies": "usd"}
+                        )
+                        if pr.status_code == 200:
+                            prices = pr.json()
+                    except Exception:
+                        pass
+
+                for t in known_tokens:
+                    sym_lower = t["symbol"].lower()
+                    coin_id = coin_ids_map.get(sym_lower)
+                    price = prices.get(coin_id, {}).get("usd", 0) if coin_id else 0
+                    usd_val = t["amount"] * price
+                    tokens.append({
+                        "symbol": t["symbol"],
+                        "name": t["name"],
+                        "amount": t["amount"],
+                        "price": price,
+                        "usd_value": usd_val,
+                        "icon_url": t.get("icon_url", "")
+                    })
+                    total_usd += usd_val
+
+            # Skip unknown tokens - only show recognized ones
+            # Unknown tokens can be added back if user wants to see all
+
+        # Sort by USD value descending
+        tokens.sort(key=lambda x: x["usd_value"], reverse=True)
+        return {"tokens": tokens, "total_usd": total_usd}
+    except Exception as e:
+        logger.warning(f"Solana balance fetch error: {e}")
+        return {"tokens": [], "total_usd": 0, "error": str(e)}
+
+
 # Include the router
 app.include_router(api_router)
 

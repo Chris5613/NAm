@@ -40,4 +40,11 @@ export const projectsApi = {
   deleteTransaction: (txnId) => api.delete(`/transactions/${txnId}`),
 };
 
+export const walletsApi = {
+  getAll: () => api.get("/wallets"),
+  add: (data) => api.post("/wallets", data),
+  delete: (id) => api.delete(`/wallets/${id}`),
+  getBalances: (id) => api.get(`/wallets/${id}/balances`),
+};
+
 export default api;
