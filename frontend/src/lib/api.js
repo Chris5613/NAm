@@ -47,6 +47,17 @@ export const walletsApi = {
   delete: (id) => api.delete(`/wallets/${id}`),
   getBalances: (id) => api.get(`/wallets/${id}/balances`),
   getDefiPositions: (address) => api.get(`/wallets/solana/defi/${address}`),
+  getCoinStatsBalance: (address, chain = "solana") => api.get(`/wallets/coinstats/${address}`, { params: { chain } }),
+};
+
+export const tokenPrefsApi = {
+  getAll: () => api.get("/token-prefs"),
+  update: (symbol, data) => api.put(`/token-prefs/${symbol}`, data),
+};
+
+export const nosTrackingApi = {
+  getStatus: () => api.get("/nos-tracking/status"),
+  configure: (wallet_address, project_name) => api.post(`/nos-tracking/configure?wallet_address=${wallet_address}&project_name=${project_name}`),
 };
 
 export default api;

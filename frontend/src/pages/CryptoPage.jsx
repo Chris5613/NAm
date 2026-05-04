@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { walletsApi } from "@/lib/api";
+import { walletsApi, tokenPrefsApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
-import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins, Layers, Settings } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins, Layers, Settings, EyeOff, Eye, Image } from "lucide-react";
 
 function formatCurrency(v) {
   if (!v && v !== 0) return "$0.00";
@@ -25,16 +25,24 @@ export default function CryptoPage() {
   const [wallets, setWallets] = useState([]);
   const [balances, setBalances] = useState({});
   const [defiPositions, setDefiPositions] = useState([]);
+  const [tokenPrefs, setTokenPrefs] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
   const [liveHistory, setLiveHistory] = useState([]);
   const [activeChain, setActiveChain] = useState(null);
+  const [logoEditToken, setLogoEditToken] = useState(null);
 
   const fetchWallets = useCallback(async () => {
     try {
-      const res = await walletsApi.getAll();
-      setWallets(res.data || []);
+      const [walletsRes, prefsRes] = await Promise.all([
+        walletsApi.getAll(),
+        tokenPrefsApi.getAll(),
+      ]);
+      setWallets(walletsRes.data || []);
+      const prefsMap = {};
+      (prefsRes.data || []).forEach(p => { prefsMap[p.symbol] = p; });
+      setTokenPrefs(prefsMap);
     } catch { toast.error("Failed to load wallets"); } finally { setLoading(false); }
   }, []);
 
@@ -110,6 +118,24 @@ export default function CryptoPage() {
     toast.success("Refreshed");
   };
 
+  const toggleHideToken = async (symbol) => {
+    const current = tokenPrefs[symbol]?.hidden || false;
+    try {
+      await tokenPrefsApi.update(symbol, { hidden: !current });
+      setTokenPrefs(prev => ({ ...prev, [symbol]: { ...prev[symbol], symbol, hidden: !current } }));
+      toast.success(!current ? `${symbol} hidden` : `${symbol} shown`);
+    } catch { toast.error("Failed to update"); }
+  };
+
+  const setTokenLogo = async (symbol, url) => {
+    try {
+      await tokenPrefsApi.update(symbol, { custom_icon_url: url });
+      setTokenPrefs(prev => ({ ...prev, [symbol]: { ...prev[symbol], symbol, custom_icon_url: url } }));
+      setLogoEditToken(null);
+      toast.success("Logo updated");
+    } catch { toast.error("Failed to update"); }
+  };
+
   // Aggregate
   const totalValue = Object.values(balances).reduce((s, b) => s + (b?.total_usd || 0), 0);
   const defiTotalValue = defiPositions.reduce((s, p) => s + p.total_value, 0);
@@ -134,7 +160,16 @@ export default function CryptoPage() {
     else combined[key] = { ...t };
   });
   const combinedTokens = Object.values(combined).sort((a, b) => b.usd_value - a.usd_value);
-  const walletTokens = combinedTokens.filter(t => t.category === "wallet" && t.usd_value > 0.01);
+  // Apply token prefs: filter hidden, apply custom icons
+  const walletTokens = combinedTokens
+    .filter(t => t.category === "wallet" && t.usd_value > 0.01)
+    .filter(t => !tokenPrefs[t.symbol]?.hidden)
+    .map(t => ({
+      ...t,
+      icon_url: tokenPrefs[t.symbol]?.custom_icon_url || t.icon_url,
+    }));
+  const hiddenTokens = combinedTokens
+    .filter(t => t.category === "wallet" && t.usd_value > 0.01 && tokenPrefs[t.symbol]?.hidden);
   const walletTotal = walletTokens.reduce((s, t) => s + t.usd_value, 0);
 
   // Filter DeFi by chain (defi is always solana)
@@ -223,10 +258,39 @@ export default function CryptoPage() {
                 </div>
               </CardHeader>
               <CardContent className="px-2 pb-2 pt-2">
-                <div className="px-3 py-1.5 grid grid-cols-4 text-xs text-muted-foreground border-b border-border/20">
-                  <span>Asset</span><span className="text-right">Balance</span><span className="text-right">Price</span><span className="text-right">Value</span>
+                <div className="px-3 py-1.5 grid grid-cols-5 text-xs text-muted-foreground border-b border-border/20">
+                  <span>Asset</span><span className="text-right">Balance</span><span className="text-right">Price</span><span className="text-right">Value</span><span></span>
                 </div>
-                {walletTokens.map((t, i) => <TokenRow key={i} token={t} />)}
+                {walletTokens.map((t, i) => (
+                  <div key={i} className="px-3 py-2.5 grid grid-cols-5 items-center hover:bg-secondary/30 transition-colors group">
+                    <div className="flex items-center gap-2">
+                      <button onClick={() => setLogoEditToken(t.symbol)} className="relative flex-shrink-0" title="Set custom logo">
+                        {t.icon_url ? <img src={t.icon_url} alt="" className="w-5 h-5 rounded-full" onError={e => e.target.style.display='none'} /> : <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center"><span className="text-[9px] font-bold text-muted-foreground">{(t.symbol||"?")[0]}</span></div>}
+                      </button>
+                      <span className="text-sm font-medium text-foreground">{t.symbol}</span>
+                    </div>
+                    <span className="font-mono text-xs text-foreground text-right">{t.amount < 0.0001 ? t.amount.toExponential(2) : t.amount.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                    <span className="font-mono text-xs text-muted-foreground text-right">{t.price > 0 ? formatCurrency(t.price) : "-"}</span>
+                    <span className="font-mono text-sm text-foreground text-right font-medium">{t.usd_value > 0.01 ? formatCurrency(t.usd_value) : "<$0.01"}</span>
+                    <div className="flex justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => toggleHideToken(t.symbol)} className="text-muted-foreground hover:text-foreground p-1" title="Hide token" data-testid={`hide-${t.symbol}`}>
+                        <EyeOff className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                {hiddenTokens.length > 0 && (
+                  <div className="px-3 py-2 border-t border-border/20">
+                    <p className="text-xs text-muted-foreground mb-1">{hiddenTokens.length} hidden token{hiddenTokens.length > 1 ? "s" : ""}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {hiddenTokens.map(t => (
+                        <button key={t.symbol} onClick={() => toggleHideToken(t.symbol)} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded bg-secondary/50" data-testid={`show-${t.symbol}`}>
+                          <Eye className="w-3 h-3" /> {t.symbol}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
@@ -266,6 +330,7 @@ export default function CryptoPage() {
       )}
 
       <WalletManageModal open={walletModalOpen} onOpenChange={setWalletModalOpen} wallets={wallets} onUpdate={fetchWallets} />
+      <LogoEditDialog symbol={logoEditToken} open={!!logoEditToken} onOpenChange={(o) => !o && setLogoEditToken(null)} onSave={setTokenLogo} />
     </div>
   );
 }
@@ -361,6 +426,35 @@ function WalletManageModal({ open, onOpenChange, wallets, onUpdate }) {
             ))}
           </div>
         )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+
+function LogoEditDialog({ symbol, open, onOpenChange, onSave }) {
+  const [url, setUrl] = useState("");
+  if (!symbol) return null;
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-card border-border sm:max-w-sm" data-testid="logo-edit-dialog">
+        <DialogHeader>
+          <DialogTitle>Set Logo — {symbol}</DialogTitle>
+          <DialogDescription>Paste an image URL for this token</DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          {url && <img src={url} alt="" className="w-10 h-10 rounded-full mx-auto border border-border" />}
+          <Input
+            placeholder="https://example.com/logo.png"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="bg-background border-border font-mono text-sm"
+            data-testid="logo-url-input"
+          />
+          <Button onClick={() => onSave(symbol, url)} className="w-full bg-white text-black hover:bg-neutral-200" disabled={!url} data-testid="save-logo-btn">
+            Save Logo
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   );
