@@ -1,6 +1,7 @@
 import axios from "axios";
 
-const API = "https://nam1-dmte.onrender.com/api";
+const BACKEND_URL = "https://nam1-dmte.onrender.com";
+const API = `${BACKEND_URL}/api`;
 
 const api = axios.create({
   baseURL: API,
@@ -23,6 +24,7 @@ export const netWorthApi = {
 export const cryptoCacheApi = {
   get: () => api.get("/crypto/cache"),
   set: (payload) => {
+    // Accept either a bare number (legacy) or a full payload { total, chains, tokens }
     const body = typeof payload === "number" ? { total: payload } : payload;
     return api.post("/crypto/cache", body);
   },
@@ -64,8 +66,7 @@ export const walletsApi = {
   delete: (id) => api.delete(`/wallets/${id}`),
   getBalances: (id) => api.get(`/wallets/${id}/balances`),
   getDefiPositions: (address) => api.get(`/wallets/solana/defi/${address}`),
-  getCoinStatsBalance: (address, chain = "solana") =>
-    api.get(`/wallets/coinstats/${address}`, { params: { chain } }),
+  getCoinStatsBalance: (address, chain = "solana") => api.get(`/wallets/coinstats/${address}`, { params: { chain } }),
 };
 
 export const tokenPrefsApi = {
@@ -83,10 +84,7 @@ export const customTokensApi = {
 
 export const nosTrackingApi = {
   getStatus: () => api.get("/nos-tracking/status"),
-  configure: (wallet_address, project_name) =>
-    api.post(
-      `/nos-tracking/configure?wallet_address=${wallet_address}&project_name=${project_name}`
-    ),
+  configure: (wallet_address, project_name) => api.post(`/nos-tracking/configure?wallet_address=${wallet_address}&project_name=${project_name}`),
 };
 
 export default api;
