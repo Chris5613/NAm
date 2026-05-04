@@ -247,10 +247,12 @@ export default function InvestmentOverview() {
                   </CardContent>
                 </Card>
 
-                {/* Expanded Sub-categories */}
+                {/* Expanded Sub-categories — sorted highest to lowest */}
                 {isExpanded && project.categories && project.categories.length > 0 && (
                   <div className="ml-10 mt-2 mb-2 space-y-1.5" data-testid={`project-categories-${project.id}`}>
-                    {project.categories.map((cat, idx) => (
+                    {[...project.categories]
+                      .sort((a, b) => (Number(b.earned) || 0) - (Number(a.earned) || 0))
+                      .map((cat, idx) => (
                       <Card key={idx} className="border-border/20 bg-secondary/50">
                         <CardContent className="px-5 py-3 flex items-center justify-between">
                           <span className="text-sm text-muted-foreground">{cat.name}</span>
