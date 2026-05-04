@@ -28,6 +28,8 @@ Track personal net worth and all investments (stocks, crypto wallets, DeFi, cryp
 - Hi-Lo dynamic sorting across asset breakdowns
 - GoMining tab — pickaxe icon, inline-editable rows, live GMT price (CoinGecko), Reward = `PR − Electricity + Service + (GMT × GMT_price)`
 - **GoMining → Investment Overview sync (Feb 2026 latest)** — `Save & Sync` button compares current rewards to last-synced snapshot; popup lists each row's `prev → new (+delta)` plus total; on confirm auto-creates "GoMining" project (if missing), appends one earning transaction per increased row, bumps `project.earned` by total delta. Idempotent (badge disappears after sync).
+- **Editable & undo-able auto-synced transactions (Feb 2026 latest)** — auto-synced transactions are tagged `source: 'gomining'` + `source_row_id` and visibly badged in the Transactions dialog. Editing or deleting them via the Investment Overview reverses/adjusts both the GoMining synced snapshot and `project.earned`, so the GoMining tab's pending badge re-arms when appropriate. GoMining page listens to focus/storage events to stay live.
+- **Daily auto-snapshot (Feb 2026 latest)** — `App.js` mounts a one-shot effect that appends a net-worth snapshot to `networth_history` if the latest snapshot's calendar day is not today. StrictMode-safe via module-level guard.
 
 ## Storage Keys (localStorage)
 - `networth_assets`, `networth_phones`, `networth_wallets`, `networth_projects`
@@ -42,11 +44,12 @@ Track personal net worth and all investments (stocks, crypto wallets, DeFi, cryp
 - [x] Real-time Net Worth chart + manual Other Assets
 - [x] GoMining tab with live GMT price
 - [x] GoMining → Investment Overview sync with confirmation popup
+- [x] Editable / deletable auto-synced GoMining transactions (with snapshot reversal)
+- [x] Daily auto-snapshot of net-worth history
 
 ### P1 — Pending
 - [ ] JSON Export/Import for full localStorage backup & restore
 - [ ] CSV import for bulk phone entries
-- [ ] Auto-snapshot scheduling for net-worth history (daily)
 
 ### P2 — Future
 - [ ] Asset allocation target vs actual
@@ -57,4 +60,4 @@ Track personal net worth and all investments (stocks, crypto wallets, DeFi, cryp
 
 ## Next Tasks
 1. JSON Export/Import — single button on settings/dashboard to dump and restore all `networth_*` localStorage keys
-2. Optional: undo/edit individual GoMining sync transactions from Investment Overview
+2. Visual marker on the net-worth history chart for daily auto-snapshots vs manual ones

@@ -87,6 +87,21 @@ export default function GoMiningPage() {
   // Persist on every change.
   useEffect(() => { storage.setGoMining(rows); }, [rows]);
 
+  // Re-read the synced snapshot whenever the tab regains focus — covers the
+  // case where the user edited/deleted a GoMining auto-sync transaction in
+  // the Investment Overview, which mutates `networth_gomining_synced`.
+  useEffect(() => {
+    const refresh = () => setSyncedMap(storage.getGoMiningSynced());
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    window.addEventListener("storage", refresh);
+    return () => {
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+      window.removeEventListener("storage", refresh);
+    };
+  }, []);
+
   // Live GoMining (GMT) token price.
   useEffect(() => {
     let cancelled = false;
@@ -189,6 +204,8 @@ export default function GoMiningPage() {
 
       // Add one earning transaction per row that increased — mirrors the daily
       // reward log so each entry shows up in the recent transactions list.
+      // `source` + `source_row_id` let us reverse the synced snapshot if the
+      // user later edits or deletes the txn from Investment Overview.
       for (const d of syncDiffs.rows) {
         await projectsApi.addTransaction(project.id, {
           type: "earning",
@@ -196,6 +213,8 @@ export default function GoMiningPage() {
           category: "Mining",
           notes: `GoMining auto-sync (${d.date})`,
           date: d.date || new Date().toISOString().split("T")[0],
+          source: "gomining",
+          source_row_id: d.id,
         });
       }
 

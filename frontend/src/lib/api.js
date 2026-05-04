@@ -218,13 +218,74 @@ export const projectsApi = {
     storage.setProjects(next);
     return toResponse(next.find((item) => item.id === id)?.transactions || []);
   },
+  updateTransaction: async (txnId, data) => {
+    const all = normalizeItems(storage.getProjects());
+    let updated = null;
+    let prev = null;
+    let parentId = null;
+    const next = all.map((project) => {
+      const txns = project.transactions || [];
+      const hit = txns.find((t) => t.id === txnId);
+      if (!hit) return project;
+      parentId = project.id;
+      prev = { ...hit };
+      updated = normalizeId({ ...hit, ...data });
+      return { ...project, transactions: txns.map((t) => (t.id === txnId ? updated : t)) };
+    });
+    if (!updated) return toResponse(null);
+    storage.setProjects(next);
+    // If this is a GoMining auto-synced txn, keep the synced snapshot honest:
+    // adjust the row's last-synced reward by (newAmount - oldAmount).
+    if (prev?.source === 'gomining' && prev?.source_row_id) {
+      const snap = storage.getGoMiningSynced();
+      const cur = Number(snap[prev.source_row_id]) || 0;
+      const diff = (Number(updated.amount) || 0) - (Number(prev.amount) || 0);
+      snap[prev.source_row_id] = Math.max(0, cur + diff);
+      storage.setGoMiningSynced(snap);
+    }
+    // Keep project.earned in sync only for GoMining auto-synced txns
+    // (manual transactions don't bump earned on insert, so we shouldn't on update either).
+    if (prev?.source === 'gomining' && parentId) {
+      const projects = storage.getProjects();
+      const adjusted = projects.map((p) => {
+        if (p.id !== parentId) return p;
+        const oldEarn = prev.type === 'earning' ? (Number(prev.amount) || 0) : 0;
+        const newEarn = updated.type === 'earning' ? (Number(updated.amount) || 0) : 0;
+        return { ...p, earned: Math.max(0, (Number(p.earned) || 0) + (newEarn - oldEarn)) };
+      });
+      storage.setProjects(adjusted);
+    }
+    return toResponse(updated);
+  },
   deleteTransaction: async (txnId) => {
     const all = normalizeItems(storage.getProjects());
-    const next = all.map((project) => ({
-      ...project,
-      transactions: (project.transactions || []).filter((txn) => txn.id !== txnId),
-    }));
+    let removed = null;
+    let parentId = null;
+    const next = all.map((project) => {
+      const txns = project.transactions || [];
+      const hit = txns.find((t) => t.id === txnId);
+      if (hit) { removed = { ...hit }; parentId = project.id; }
+      return { ...project, transactions: txns.filter((txn) => txn.id !== txnId) };
+    });
     storage.setProjects(next);
+    // Reverse the synced snapshot for GoMining auto-syncs so the GoMining
+    // tab re-arms the pending badge and lets you re-sync if desired.
+    if (removed?.source === 'gomining' && removed?.source_row_id) {
+      const snap = storage.getGoMiningSynced();
+      const cur = Number(snap[removed.source_row_id]) || 0;
+      snap[removed.source_row_id] = Math.max(0, cur - (Number(removed.amount) || 0));
+      storage.setGoMiningSynced(snap);
+    }
+    // Decrement project.earned only for GoMining auto-synced earning txns
+    // (manual earnings don't bump earned on insert, so we shouldn't on delete either).
+    if (removed?.source === 'gomining' && removed?.type === 'earning' && parentId) {
+      const projects = storage.getProjects();
+      const adjusted = projects.map((p) => {
+        if (p.id !== parentId) return p;
+        return { ...p, earned: Math.max(0, (Number(p.earned) || 0) - (Number(removed.amount) || 0)) };
+      });
+      storage.setProjects(adjusted);
+    }
     return toResponse({ id: txnId });
   },
 };

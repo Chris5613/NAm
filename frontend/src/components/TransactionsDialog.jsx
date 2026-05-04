@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Trash2 } from "lucide-react";
+import { Trash2, Pencil, Check, X, Pickaxe } from "lucide-react";
 
 function formatCurrency(value) {
   if (!value && value !== 0) return "$0.00";
@@ -20,6 +20,8 @@ function formatCurrency(value) {
 export default function TransactionsDialog({ project, open, onOpenChange, onUpdated }) {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ amount: "", category: "", notes: "", date: "" });
   const [form, setForm] = useState({
     type: "earning",
     amount: "",
@@ -80,6 +82,40 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
       onUpdated();
     } catch {
       toast.error("Failed to delete transaction");
+    }
+  };
+
+  const startEdit = (txn) => {
+    setEditingId(txn.id);
+    setEditForm({
+      amount: String(txn.amount ?? ""),
+      category: txn.category || "",
+      notes: txn.notes || "",
+      date: txn.date || "",
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({ amount: "", category: "", notes: "", date: "" });
+  };
+
+  const saveEdit = async (txnId) => {
+    const amt = parseFloat(editForm.amount);
+    if (!isFinite(amt) || amt <= 0) { toast.error("Amount must be greater than 0"); return; }
+    try {
+      await projectsApi.updateTransaction(txnId, {
+        amount: amt,
+        category: editForm.category || null,
+        notes: editForm.notes || null,
+        date: editForm.date || null,
+      });
+      toast.success("Transaction updated");
+      cancelEdit();
+      loadTransactions();
+      onUpdated();
+    } catch {
+      toast.error("Failed to update transaction");
     }
   };
 
@@ -180,39 +216,121 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
             <p className="text-xs text-muted-foreground">No transactions yet</p>
           ) : (
             <div className="space-y-1 max-h-[250px] overflow-y-auto">
-              {transactions.map((txn) => (
-                <div
-                  key={txn.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-md bg-secondary/50"
-                  data-testid={`txn-row-${txn.id}`}
-                >
-                  <div className="flex items-center gap-3">
-                    <span className={`text-xs font-mono font-medium px-1.5 py-0.5 rounded ${
-                      txn.type === "earning" ? "bg-emerald-500/10 text-emerald-400" : "bg-blue-500/10 text-blue-400"
-                    }`}>
-                      {txn.type === "earning" ? "+" : "INV"}
-                    </span>
-                    <div>
-                      <span className="font-mono text-sm text-foreground">{formatCurrency(txn.amount)}</span>
-                      {txn.category && (
-                        <span className="text-xs text-muted-foreground ml-2">{txn.category}</span>
-                      )}
+              {transactions.map((txn) => {
+                const isEditing = editingId === txn.id;
+                const isAutoSync = txn.source === "gomining";
+                if (isEditing) {
+                  return (
+                    <div
+                      key={txn.id}
+                      className="px-3 py-2 rounded-md bg-secondary border border-border/40 space-y-2"
+                      data-testid={`txn-edit-${txn.id}`}
+                    >
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          type="number" step="any" placeholder="Amount"
+                          value={editForm.amount}
+                          onChange={(e) => setEditForm({ ...editForm, amount: e.target.value })}
+                          data-testid={`edit-txn-amount-${txn.id}`}
+                          className="bg-background border-border font-mono h-8 text-sm"
+                        />
+                        <Input
+                          type="date"
+                          value={editForm.date}
+                          onChange={(e) => setEditForm({ ...editForm, date: e.target.value })}
+                          data-testid={`edit-txn-date-${txn.id}`}
+                          className="bg-background border-border font-mono h-8 text-sm"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Input
+                          placeholder="Category"
+                          value={editForm.category}
+                          onChange={(e) => setEditForm({ ...editForm, category: e.target.value })}
+                          data-testid={`edit-txn-category-${txn.id}`}
+                          className="bg-background border-border h-8 text-sm"
+                        />
+                        <Input
+                          placeholder="Notes"
+                          value={editForm.notes}
+                          onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                          data-testid={`edit-txn-notes-${txn.id}`}
+                          className="bg-background border-border h-8 text-sm"
+                        />
+                      </div>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={cancelEdit}
+                          className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-secondary transition-colors"
+                          data-testid={`cancel-edit-${txn.id}`}
+                        >
+                          <X className="w-3.5 h-3.5" strokeWidth={1.5} />
+                          <span>Cancel</span>
+                        </button>
+                        <button
+                          onClick={() => saveEdit(txn.id)}
+                          className="flex items-center gap-1 text-emerald-400 hover:text-emerald-300 text-xs px-2 py-1 rounded hover:bg-emerald-500/10 transition-colors"
+                          data-testid={`save-edit-${txn.id}`}
+                        >
+                          <Check className="w-3.5 h-3.5" strokeWidth={1.5} />
+                          <span>Save</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <div
+                    key={txn.id}
+                    className="flex items-center justify-between px-3 py-2 rounded-md bg-secondary/50"
+                    data-testid={`txn-row-${txn.id}`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-mono font-medium px-1.5 py-0.5 rounded ${
+                        txn.type === "earning" ? "bg-emerald-500/10 text-emerald-400" : "bg-blue-500/10 text-blue-400"
+                      }`}>
+                        {txn.type === "earning" ? "+" : "INV"}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-sm text-foreground">{formatCurrency(txn.amount)}</span>
+                        {txn.category && (
+                          <span className="text-xs text-muted-foreground">{txn.category}</span>
+                        )}
+                        {isAutoSync && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono"
+                            title="Auto-synced from GoMining"
+                            data-testid={`auto-sync-badge-${txn.id}`}
+                          >
+                            <Pickaxe className="w-2.5 h-2.5" strokeWidth={2} />
+                            auto
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-xs text-muted-foreground">{txn.date}</span>
+                      {txn.notes && <span className="text-xs text-muted-foreground truncate max-w-[100px]">{txn.notes}</span>}
+                      <button
+                        onClick={() => startEdit(txn)}
+                        className="flex items-center gap-1 text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-secondary transition-colors"
+                        data-testid={`edit-txn-${txn.id}`}
+                        title="Edit"
+                      >
+                        <Pencil className="w-3.5 h-3.5" strokeWidth={1.5} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(txn.id)}
+                        className="flex items-center gap-1 text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded hover:bg-rose-500/10 transition-colors"
+                        data-testid={`delete-txn-${txn.id}`}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                        <span>Delete</span>
+                      </button>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
-                    <span className="font-mono text-xs text-muted-foreground">{txn.date}</span>
-                    {txn.notes && <span className="text-xs text-muted-foreground truncate max-w-[100px]">{txn.notes}</span>}
-                    <button
-                      onClick={() => handleDelete(txn.id)}
-                      className="flex items-center gap-1 text-rose-400 hover:text-rose-300 text-xs px-2 py-1 rounded hover:bg-rose-500/10 transition-colors"
-                      data-testid={`delete-txn-${txn.id}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
-                      <span>Delete</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
