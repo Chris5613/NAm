@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { walletsApi, tokenPrefsApi, customTokensApi, cryptoCacheApi } from "@/lib/api";
+import { coinGeckoApi } from "@/lib/external-apis";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,23 @@ const CHAIN_META = {
   base: { name: "Base", color: "border-blue-500/30 text-blue-400", activeBg: "bg-blue-500/15", icon: "https://assets.coingecko.com/asset_platforms/images/131/small/base.jpeg" },
   tron: { name: "Tron", color: "border-red-500/30 text-red-400", activeBg: "bg-red-500/15", icon: "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png" },
   fantom: { name: "Fantom", color: "border-blue-500/30 text-blue-400", activeBg: "bg-blue-500/15", icon: "https://assets.coingecko.com/coins/images/4001/small/Fantom_round.png" },
+};
+
+// Native-asset map per chain — used by the "Manual Holding" quick-add so the
+// user only picks the chain (icon) and we resolve the right symbol + CoinGecko
+// id automatically. Layer-2s (Arbitrum / Optimism / Base) use ETH natively.
+const CHAIN_NATIVE = {
+  bitcoin:   { symbol: "BTC",   coingecko_id: "bitcoin" },
+  solana:    { symbol: "SOL",   coingecko_id: "solana" },
+  ethereum:  { symbol: "ETH",   coingecko_id: "ethereum" },
+  bsc:       { symbol: "BNB",   coingecko_id: "binancecoin" },
+  polygon:   { symbol: "MATIC", coingecko_id: "matic-network" },
+  avalanche: { symbol: "AVAX",  coingecko_id: "avalanche-2" },
+  arbitrum:  { symbol: "ETH",   coingecko_id: "ethereum" },
+  optimism:  { symbol: "ETH",   coingecko_id: "ethereum" },
+  base:      { symbol: "ETH",   coingecko_id: "ethereum" },
+  tron:      { symbol: "TRX",   coingecko_id: "tron" },
+  fantom:    { symbol: "FTM",   coingecko_id: "fantom" },
 };
 
 export default function CryptoPage() {
@@ -648,6 +666,44 @@ function CustomTokensSection({ customTokens, onUpdate }) {
   const [refreshingPrices, setRefreshingPrices] = useState(false);
   const priceTimeout = useRef(null);
 
+  // Manual Holding sub-form: chain + amount + optional label (e.g. "Coinbase",
+  // "Kraken"). Symbol + price are auto-derived from the chain's native asset.
+  const [manualForm, setManualForm] = useState({ chain: "bitcoin", amount: "", label: "" });
+  const [manualSubmitting, setManualSubmitting] = useState(false);
+
+  const handleAddManual = async () => {
+    const amt = parseFloat(manualForm.amount);
+    if (!isFinite(amt) || amt <= 0) { toast.error("Enter an amount > 0"); return; }
+    const native = CHAIN_NATIVE[manualForm.chain];
+    if (!native) { toast.error("Unsupported chain"); return; }
+    setManualSubmitting(true);
+    try {
+      // Live price from CoinGecko (cached if recent). 0 is acceptable — the
+      // user can hit "Refresh prices" later.
+      const price = await coinGeckoApi.getPrice(native.coingecko_id);
+      const meta = CHAIN_META[manualForm.chain];
+      const labeledName = manualForm.label
+        ? `${manualForm.label} ${native.symbol}`
+        : `${meta?.name || manualForm.chain} ${native.symbol}`;
+      await customTokensApi.create({
+        symbol: native.symbol,
+        name: labeledName,
+        amount: amt,
+        price: Number(price) || 0,
+        icon_url: meta?.icon || null,
+        chain: manualForm.chain,
+        coingecko_id: native.coingecko_id,
+        is_manual_holding: true,
+        label: manualForm.label || null,
+      });
+      toast.success(`${labeledName} added`);
+      setManualForm({ chain: manualForm.chain, amount: "", label: "" });
+      onUpdate();
+    } catch {
+      toast.error("Failed to add manual holding");
+    } finally { setManualSubmitting(false); }
+  };
+
   // Auto-fetch price + enrich (name, icon) when symbol changes — uses the
   // CoinGecko search endpoint to map "TRX" → "tron" so /simple/price returns
   // a real number instead of 0.
@@ -769,10 +825,138 @@ function CustomTokensSection({ customTokens, onUpdate }) {
         )}
       </div>
 
-      {/* Existing custom tokens list */}
-      {customTokens && customTokens.length > 0 && (
+      {/* Manual Holdings — wallets with no on-chain address (e.g. exchange-held BTC). */}
+      <div
+        className="space-y-2 p-3 rounded-md bg-secondary/30 border border-border/30"
+        data-testid="manual-holding-section"
+      >
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] uppercase tracking-wider text-muted-foreground/80 font-medium">
+            Manual Holdings
+          </p>
+          <span className="text-[10px] text-muted-foreground/60">
+            For exchange or hardware wallets without an address
+          </span>
+        </div>
+
+        {/* Existing manual holdings */}
+        {customTokens?.some((t) => t.is_manual_holding) && (
+          <div className="space-y-1">
+            {customTokens
+              .filter((t) => t.is_manual_holding)
+              .map((t) => {
+                const meta = CHAIN_META[t.chain];
+                const value = (Number(t.amount) || 0) * (Number(t.price) || 0);
+                return (
+                  <div
+                    key={t.id}
+                    className="flex items-center justify-between px-3 py-2 rounded-md bg-background/40"
+                    data-testid={`manual-holding-${t.id}`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {meta?.icon ? (
+                        <img src={meta.icon} alt="" className="w-4 h-4 rounded-full flex-shrink-0" />
+                      ) : (
+                        <div className="w-4 h-4 rounded-full bg-secondary flex-shrink-0" />
+                      )}
+                      <span className="text-xs font-medium text-foreground truncate">
+                        {t.label || meta?.name || t.chain}
+                      </span>
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {Number(t.amount).toLocaleString(undefined, { maximumFractionDigits: 8 })} {t.symbol}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="font-mono text-xs text-foreground">
+                        ${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                      <button
+                        onClick={() => handleDelete(t.id, t.label || t.symbol)}
+                        className="text-rose-400 hover:text-rose-300 p-1"
+                        data-testid={`del-manual-${t.id}`}
+                        title="Delete manual holding"
+                      >
+                        <Trash2 className="w-3 h-3" strokeWidth={1.5} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
+        {/* Add form: chain icon picker + amount + label */}
+        <div
+          className="grid grid-cols-6 gap-1.5"
+          role="radiogroup"
+          aria-label="Manual holding chain"
+          data-testid="manual-chain-picker"
+        >
+          {Object.keys(CHAIN_NATIVE).map((id) => {
+            const m = CHAIN_META[id];
+            const native = CHAIN_NATIVE[id];
+            const active = manualForm.chain === id;
+            return (
+              <button
+                key={id}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                onClick={() => setManualForm({ ...manualForm, chain: id })}
+                title={`${m.name} — ${native.symbol}`}
+                data-testid={`manual-chain-${id}`}
+                className={`flex flex-col items-center gap-1 px-1 py-1.5 rounded transition-all ${
+                  active
+                    ? `${m.activeBg} ${m.color} ring-1 ring-current/40`
+                    : "border border-transparent text-muted-foreground hover:bg-secondary/40"
+                }`}
+              >
+                <img
+                  src={m.icon}
+                  alt=""
+                  className={`w-5 h-5 rounded-full ${active ? "" : "opacity-70"}`}
+                  onError={(e) => { e.target.style.display = "none"; }}
+                />
+                <span className="text-[9px] font-mono">{native.symbol}</span>
+              </button>
+            );
+          })}
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <Input
+            type="number"
+            step="any"
+            placeholder={`Amount (${CHAIN_NATIVE[manualForm.chain]?.symbol || "?"})`}
+            value={manualForm.amount}
+            onChange={(e) => setManualForm({ ...manualForm, amount: e.target.value })}
+            className="bg-background border-border font-mono text-sm"
+            data-testid="manual-amount"
+          />
+          <Input
+            placeholder="Label (optional, e.g. Coinbase)"
+            value={manualForm.label}
+            onChange={(e) => setManualForm({ ...manualForm, label: e.target.value })}
+            className="bg-background border-border text-sm"
+            data-testid="manual-label"
+          />
+        </div>
+        <Button
+          type="button"
+          onClick={handleAddManual}
+          disabled={manualSubmitting || !manualForm.amount}
+          size="sm"
+          className="w-full bg-white text-black hover:bg-neutral-200"
+          data-testid="manual-add-btn"
+        >
+          {manualSubmitting ? "Adding..." : `Add ${CHAIN_NATIVE[manualForm.chain]?.symbol || ""} Holding`}
+        </Button>
+      </div>
+
+      {/* Existing custom tokens list (excluding manual holdings — those have
+          their own section above). */}
+      {customTokens && customTokens.some((ct) => !ct.is_manual_holding) && (
         <div className="space-y-1 mb-3">
-          {customTokens.map(ct => (
+          {customTokens.filter((ct) => !ct.is_manual_holding).map(ct => (
             <div key={ct.id} className="flex items-center justify-between px-3 py-2 rounded-md bg-secondary/30">
               <div className="flex items-center gap-2">
                 {ct.icon_url ? <img src={ct.icon_url} alt="" className="w-4 h-4 rounded-full" /> : <div className="w-4 h-4 rounded-full bg-secondary flex items-center justify-center"><span className="text-[8px] font-bold text-muted-foreground">{(ct.symbol || "?")[0]}</span></div>}
