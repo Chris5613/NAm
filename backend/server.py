@@ -852,9 +852,68 @@ async def add_custom_token(input_data: CustomTokenCreate):
 
 @api_router.put("/custom-tokens/{token_id}")
 async def update_custom_token(token_id: str, input_data: CustomTokenCreate):
+    # Get old token data before update
+    old_token = await db.custom_tokens.find_one({"id": token_id}, {"_id": 0})
+    
     await db.custom_tokens.update_one({"id": token_id}, {"$set": input_data.model_dump()})
     updated = await db.custom_tokens.find_one({"id": token_id}, {"_id": 0})
+    
+    # Auto-track earnings for configured tokens
+    if old_token and updated:
+        await _check_token_earning_tracking(old_token, updated)
+    
     return updated
+
+async def _check_token_earning_tracking(old_token, new_token):
+    """Check if a custom token update should trigger an earning transaction"""
+    # Token tracking configs: symbol -> {project_name, category}
+    tracking_configs = await db.token_tracking.find({}, {"_id": 0}).to_list(50)
+    tracking_map = {t["symbol"].upper(): t for t in tracking_configs}
+    
+    symbol = new_token.get("symbol", "").upper()
+    if symbol not in tracking_map:
+        return
+    
+    config = tracking_map[symbol]
+    old_amount = old_token.get("amount", 0)
+    new_amount = new_token.get("amount", 0)
+    price = new_token.get("price", 0)
+    
+    if new_amount > old_amount:
+        diff = new_amount - old_amount
+        earning_usd = diff * price
+        
+        project = await db.projects.find_one({"name": {"$regex": config["project_name"], "$options": "i"}}, {"_id": 0})
+        if project:
+            txn = {
+                "id": str(uuid.uuid4()),
+                "project_id": project["id"],
+                "type": "earning",
+                "amount": earning_usd,
+                "category": config.get("category", f"{symbol} Earnings"),
+                "notes": f"Auto: +{diff:.4f} {symbol} @ ${price:.4f}",
+                "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await db.transactions.insert_one(txn)
+            await db.projects.update_one(
+                {"id": project["id"]},
+                {"$inc": {"earned": earning_usd}}
+            )
+            # Update category
+            cat_name = config.get("category", f"{symbol} Earnings")
+            cat_exists = await db.projects.find_one({"id": project["id"], "categories.name": cat_name})
+            if cat_exists:
+                await db.projects.update_one(
+                    {"id": project["id"], "categories.name": cat_name},
+                    {"$inc": {"categories.$.earned": earning_usd}}
+                )
+            else:
+                await db.projects.update_one(
+                    {"id": project["id"]},
+                    {"$push": {"categories": {"name": cat_name, "earned": earning_usd}}}
+                )
+            logger.info(f"Token tracking: +{diff:.4f} {symbol} (${earning_usd:.2f}) added to {config['project_name']} / {cat_name}")
 
 @api_router.delete("/custom-tokens/{token_id}")
 async def delete_custom_token(token_id: str):
