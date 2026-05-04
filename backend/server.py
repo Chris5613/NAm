@@ -185,7 +185,7 @@ async def get_net_worth():
         if cat in categories:
             categories[cat] += value
     
-    # Include investment projects net value (earned so far = current value of those investments)
+    # Track investment projects' earnings separately (NOT included in net worth total)
     for project in projects:
         categories["investments"] += (project.get("earned", 0))
     
@@ -194,7 +194,8 @@ async def get_net_worth():
     if cached_crypto is not None:
         categories["crypto"] = cached_crypto
     
-    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
+    # Projects/investments are tracked separately and do NOT contribute to net worth
+    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] - categories["debts"]
     
     return {
         "total_net_worth": total,
@@ -232,14 +233,15 @@ async def save_snapshot():
     if cached_crypto is not None:
         categories["crypto"] = cached_crypto
     
-    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
+    # Projects/investments are tracked separately and do NOT contribute to net worth
+    total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] - categories["debts"]
     
     snapshot = NetWorthSnapshot(
         total_net_worth=total,
         stocks_value=categories["stocks"],
         crypto_value=categories["crypto"],
         cash_value=categories["cash"],
-        crypto_projects_value=categories["crypto_projects"] + categories["investments"],
+        crypto_projects_value=categories["crypto_projects"],
         debts_value=categories["debts"]
     )
     
@@ -1350,7 +1352,8 @@ async def daily_snapshot_task():
             if cached_crypto is not None:
                 categories["crypto"] = cached_crypto
             
-            total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
+            # Projects/investments are tracked separately and do NOT contribute to net worth
+            total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] - categories["debts"]
             
             snapshot = {
                 "id": str(uuid.uuid4()),
@@ -1358,7 +1361,7 @@ async def daily_snapshot_task():
                 "stocks_value": categories["stocks"],
                 "crypto_value": categories["crypto"],
                 "cash_value": categories["cash"],
-                "crypto_projects_value": categories["crypto_projects"] + categories["investments"],
+                "crypto_projects_value": categories["crypto_projects"],
                 "debts_value": categories["debts"],
                 "timestamp": datetime.now(timezone.utc).isoformat()
             }
