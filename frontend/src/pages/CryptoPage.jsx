@@ -195,22 +195,21 @@ export default function CryptoPage() {
     if (activeChain && w.chain !== activeChain) return;
     balances[w.id]?.tokens?.forEach(t => allTokens.push({ ...t, chain: w.chain }));
   });
-  // Add custom tokens
-  if (!activeChain || activeChain === "custom") {
-    customTokens.forEach(ct => {
-      allTokens.push({
-        symbol: ct.symbol,
-        name: ct.name,
-        amount: ct.amount,
-        price: ct.price,
-        usd_value: ct.amount * ct.price,
-        icon_url: ct.icon_url || "",
-        category: "wallet",
-        protocol: null,
-        chain: ct.chain || "custom",
-      });
+  // Add custom tokens matching active chain filter
+  customTokens.forEach(ct => {
+    if (activeChain && ct.chain !== activeChain) return;
+    allTokens.push({
+      symbol: ct.symbol,
+      name: ct.name,
+      amount: ct.amount,
+      price: ct.price,
+      usd_value: ct.amount * ct.price,
+      icon_url: ct.icon_url || "",
+      category: "wallet",
+      protocol: null,
+      chain: ct.chain || "custom",
     });
-  }
+  });
   const combined = {};
   allTokens.forEach(t => {
     const key = `${t.symbol}_${t.category}_${t.protocol || ""}`;
