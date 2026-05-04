@@ -1,31 +1,39 @@
 // External API calls are executed directly in the frontend
 import axios from "axios";
+import { withCorsProxy, fetchWithCors } from "./cors-proxy";
 
-// CoinGecko API (free, no auth required)
+// CoinGecko API (free, no auth required) - CORS-friendly
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 
 export const coinGeckoApi = {
   getPrice: async (coinId, vsCurrency = "usd") => {
-    const response = await axios.get(`${COINGECKO_BASE}/simple/price`, {
-      params: { ids: coinId, vs_currencies: vsCurrency },
-      timeout: 10000,
-    });
-    return response.data[coinId]?.[vsCurrency] || 0;
+    try {
+      const response = await withCorsProxy(`${COINGECKO_BASE}/simple/price?ids=${coinId}&vs_currencies=${vsCurrency}`);
+      return response.data[coinId]?.[vsCurrency] || 0;
+    } catch (error) {
+      console.warn(`CoinGecko price fetch failed for ${coinId}:`, error);
+      return 0;
+    }
   },
 
   search: async (query) => {
-    const response = await axios.get(`${COINGECKO_BASE}/search`, {
-      params: { query },
-      timeout: 10000,
-    });
-    return response.data.coins || [];
+    try {
+      const response = await withCorsProxy(`${COINGECKO_BASE}/search?query=${query}`);
+      return response.data.coins || [];
+    } catch (error) {
+      console.warn(`CoinGecko search failed for ${query}:`, error);
+      return [];
+    }
   },
 
   getInfo: async (coinId) => {
-    const response = await axios.get(`${COINGECKO_BASE}/coins/${coinId}`, {
-      timeout: 10000,
-    });
-    return response.data;
+    try {
+      const response = await withCorsProxy(`${COINGECKO_BASE}/coins/${coinId}`);
+      return response.data || {};
+    } catch (error) {
+      console.warn(`CoinGecko info fetch failed for ${coinId}:`, error);
+      return {};
+    }
   },
 };
 
@@ -35,19 +43,25 @@ const FINNHUB_KEY = process.env.REACT_APP_FINNHUB_API_KEY;
 
 export const finnhubApi = {
   getQuote: async (symbol) => {
-    const response = await axios.get(`${FINNHUB_BASE}/quote`, {
-      params: { symbol, token: FINNHUB_KEY },
-      timeout: 10000,
-    });
-    return response.data;
+    try {
+      const url = `${FINNHUB_BASE}/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
+      const response = await withCorsProxy(url);
+      return response.data || {};
+    } catch (error) {
+      console.warn(`Finnhub quote fetch failed for ${symbol}:`, error);
+      return {};
+    }
   },
 
   search: async (query) => {
-    const response = await axios.get(`${FINNHUB_BASE}/search`, {
-      params: { q: query, token: FINNHUB_KEY },
-      timeout: 10000,
-    });
-    return response.data.result || [];
+    try {
+      const url = `${FINNHUB_BASE}/search?q=${query}&token=${FINNHUB_KEY}`;
+      const response = await withCorsProxy(url);
+      return response.data.result || [];
+    } catch (error) {
+      console.warn(`Finnhub search failed for ${query}:`, error);
+      return [];
+    }
   },
 };
 
@@ -57,99 +71,115 @@ const JUPITER_BASE = "https://api.jup.ag";
 
 export const jupiterApi = {
   getPortfolio: async (walletAddress) => {
-    const response = await axios.get(`${JUPITER_BASE}/portfolio/${walletAddress}`, {
-      headers: JUPITER_API_KEY ? { "x-api-key": JUPITER_API_KEY } : {},
-      timeout: 10000,
-    });
-    return response.data;
+    try {
+      const url = `${JUPITER_BASE}/portfolio/${walletAddress}`;
+      const response = await withCorsProxy(url, {
+        headers: JUPITER_API_KEY ? { "x-api-key": JUPITER_API_KEY } : {},
+      });
+      return response.data || [];
+    } catch (error) {
+      console.warn(`Jupiter portfolio fetch failed for ${walletAddress}:`, error);
+      return [];
+    }
   },
 };
 
-// CoinStats API for wallet balances
+// CoinStats API for wallet balances - needs CORS proxy
 const COINSTATS_API_KEY = process.env.REACT_APP_COINSTATS_API_KEY;
 const COINSTATS_BASE = "https://api.coinstats.app/public/v1";
 
 export const coinStatsApi = {
   getWalletBalance: async (address, chain = "solana") => {
-    const response = await axios.get(`${COINSTATS_BASE}/wallets/${address}`, {
-      params: { chain },
-      headers: { "X-API-KEY": COINSTATS_API_KEY },
-      timeout: 10000,
-    });
-    return response.data;
+    try {
+      const url = `${COINSTATS_BASE}/wallets/${address}?chain=${chain}`;
+      const response = await withCorsProxy(url, {
+        headers: { "X-API-KEY": COINSTATS_API_KEY },
+      });
+      return response.data || {};
+    } catch (error) {
+      console.warn(`CoinStats wallet balance fetch failed for ${address}:`, error);
+      return {};
+    }
   },
 };
 
-// Solana RPC
+// Solana RPC - might need CORS proxy for some setups
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
 
 export const solanaApi = {
   getBalance: async (address) => {
-    const response = await axios.post(SOLANA_RPC, {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "getBalance",
-      params: [address],
-    }, { timeout: 10000 });
-    return response.data.result?.value || 0;
+    try {
+      const response = await withCorsProxy(SOLANA_RPC, {
+        method: "POST",
+        data: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getBalance",
+          params: [address],
+        },
+      });
+      return response.data.result?.value || 0;
+    } catch (error) {
+      console.warn(`Solana balance fetch failed for ${address}:`, error);
+      return 0;
+    }
   },
 
   getTokenAccounts: async (address) => {
-    const response = await axios.post(SOLANA_RPC, {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "getTokenAccountsByOwner",
-      params: [address, { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }, { encoding: "jsonParsed" }],
-    }, { timeout: 10000 });
-    return response.data.result?.value || [];
+    try {
+      const response = await withCorsProxy(SOLANA_RPC, {
+        method: "POST",
+        data: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getTokenAccountsByOwner",
+          params: [address, { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }, { encoding: "jsonParsed" }],
+        },
+      });
+      return response.data.result?.value || [];
+    } catch (error) {
+      console.warn(`Solana token accounts fetch failed for ${address}:`, error);
+      return [];
+    }
   },
 };
 
-// Bitcoin Blockchain.info
+// Bitcoin Blockchain.info - needs CORS proxy
 const BITCOIN_API = "https://blockchain.info";
 
 export const bitcoinApi = {
   getBalance: async (address) => {
-    const response = await axios.get(`${BITCOIN_API}/balance`, {
-      params: { active: address },
-      timeout: 10000,
-    });
-    return response.data[address]?.final_balance || 0;
+    try {
+      const response = await fetchWithCors(`${BITCOIN_API}/balance?active=${address}`);
+      const data = typeof response === "string" ? JSON.parse(response) : response;
+      return data[address]?.final_balance || 0;
+    } catch (error) {
+      console.warn(`Bitcoin balance fetch failed for ${address}:`, error);
+      return 0;
+    }
   },
 };
 
-// RapidAPI eBay API (requires API key)
+// RapidAPI eBay API (SECURITY WARNING: API keys should never be exposed in frontend code)
+// This endpoint requires a backend proxy for security. Until then, prices cannot be fetched.
 const RAPIDAPI_KEY = process.env.REACT_APP_RAPIDAPI_KEY;
 const RAPIDAPI_EBAY_HOST = process.env.REACT_APP_RAPIDAPI_EBAY_HOST || "ebay-average-selling-price.p.rapidapi.com";
 
 export const ebayApi = {
   getAveragePrice: async (model) => {
     if (!model) return 0;
-    try {
-      const response = await axios.get(`https://${RAPIDAPI_EBAY_HOST}/findCompletedItems`, {
-        params: {
-          keywords: model,
-          max_search_results: "50",
-          sort_order: "PricePlusShippingLowest",
-        },
-        headers: {
-          "x-rapidapi-key": RAPIDAPI_KEY,
-          "x-rapidapi-host": RAPIDAPI_EBAY_HOST,
-        },
-        timeout: 15000,
-      });
-      // Parse the external API response structure
-      const items = response.data.findCompletedItemsResponse?.[0]?.searchResult?.[0]?.item || [];
-      if (!items.length) return 0;
-      const prices = items
-        .map(item => parseFloat(item.sellingStatus?.[0]?.currentPrice?.[0]?.__value__ || 0))
-        .filter(price => price > 0);
-      if (!prices.length) return 0;
-      const avg = prices.reduce((a, b) => a + b, 0) / prices.length;
-      return Math.round(avg * 100) / 100; // Round to 2 decimals
-    } catch (error) {
-      console.warn(`eBay price fetch failed for '${model}':`, error);
-      return 0;
+    
+    // Security: Do not expose API keys in frontend code
+    if (RAPIDAPI_KEY) {
+      console.warn(
+        "⚠️ SECURITY WARNING: API keys detected in frontend environment variables. " +
+        "API keys should never be exposed in client-side code. " +
+        "Set up a backend endpoint to proxy eBay API requests instead."
+      );
     }
+    
+    // For now, return 0 and suggest using a backend endpoint
+    console.info(`eBay price lookup for '${model}' requires a backend endpoint (security limitation).`);
+    return 0;
   },
 };
