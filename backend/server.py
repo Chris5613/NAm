@@ -394,6 +394,79 @@ async def refresh_all_prices():
     return {"updated_count": updated_count, "total_assets": len(assets)}
 
 
+# --- Investment Projects ---
+
+class ProjectCategory(BaseModel):
+    name: str
+    earned: float = 0
+
+class Project(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    invested: float = 0
+    earned: float = 0
+    per_day: float = 0
+    per_week: float = 0
+    per_month: float = 0
+    per_year: float = 0
+    categories: List[ProjectCategory] = []
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+class ProjectCreate(BaseModel):
+    name: str
+    invested: float = 0
+    earned: float = 0
+    per_day: float = 0
+    per_week: float = 0
+    per_month: float = 0
+    per_year: float = 0
+    categories: List[ProjectCategory] = []
+
+class ProjectUpdate(BaseModel):
+    name: Optional[str] = None
+    invested: Optional[float] = None
+    earned: Optional[float] = None
+    per_day: Optional[float] = None
+    per_week: Optional[float] = None
+    per_month: Optional[float] = None
+    per_year: Optional[float] = None
+    categories: Optional[List[ProjectCategory]] = None
+
+@api_router.get("/projects")
+async def get_projects():
+    projects = await db.projects.find({}, {"_id": 0}).to_list(100)
+    return projects
+
+@api_router.post("/projects", response_model=Project)
+async def create_project(input_data: ProjectCreate):
+    project = Project(**input_data.model_dump())
+    doc = project.model_dump()
+    await db.projects.insert_one(doc)
+    return project
+
+@api_router.put("/projects/{project_id}", response_model=Project)
+async def update_project(project_id: str, input_data: ProjectUpdate):
+    existing = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Project not found")
+    update_data = {k: v for k, v in input_data.model_dump().items() if v is not None}
+    if "categories" in update_data:
+        update_data["categories"] = [c.model_dump() if hasattr(c, 'model_dump') else c for c in update_data["categories"]]
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.projects.update_one({"id": project_id}, {"$set": update_data})
+    updated = await db.projects.find_one({"id": project_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/projects/{project_id}")
+async def delete_project(project_id: str):
+    result = await db.projects.delete_one({"id": project_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"message": "Project deleted"}
+
+
 # Include the router
 app.include_router(api_router)
 
