@@ -102,20 +102,30 @@ export const phonesApi = {
     let updated = 0;
     let failed = 0;
     let skipped = 0;
-    const refreshed = await Promise.all(all.map(async (phone) => {
+    // Serialize to respect RapidAPI's per-second rate limit (parallel calls 429).
+    const refreshed = [];
+    for (const phone of all) {
       if (phone.market_value_source === 'manual' && phone.market_value > 0) {
         skipped += 1;
-        return phone;
+        refreshed.push(phone);
+        continue;
       }
       try {
         const price = await ebayApi.getAveragePrice(phone.model);
-        updated += 1;
-        return normalizeId({ ...phone, market_value: price, market_value_source: 'ebay' });
+        if (price > 0) {
+          updated += 1;
+          refreshed.push(normalizeId({ ...phone, market_value: price, market_value_source: 'ebay' }));
+        } else {
+          failed += 1;
+          refreshed.push(phone);
+        }
       } catch (err) {
         failed += 1;
-        return phone;
+        refreshed.push(phone);
       }
-    }));
+      // Small gap between calls — keeps us comfortably under the rate limit.
+      await new Promise((r) => setTimeout(r, 350));
+    }
     storage.setPhones(refreshed);
     return toResponse({ updated, failed, skipped, total: all.length });
   },

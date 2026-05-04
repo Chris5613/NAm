@@ -307,26 +307,90 @@ export const bitcoinApi = {
   },
 };
 
-// RapidAPI eBay API (SECURITY WARNING: API keys should never be exposed in frontend code)
-// This endpoint requires a backend proxy for security. Until then, prices cannot be fetched.
+// RapidAPI eBay average selling price.
+// Since the app is fully client-side, the key rides in the browser bundle (same
+// posture as the other public API keys here). The endpoint sets permissive CORS
+// for the browser origin so we can call it directly.
 const RAPIDAPI_KEY = process.env.REACT_APP_RAPIDAPI_KEY;
 const RAPIDAPI_EBAY_HOST = process.env.REACT_APP_RAPIDAPI_EBAY_HOST || "ebay-average-selling-price.p.rapidapi.com";
+const EBAY_CATEGORY_CELL_PHONES = "9355"; // Cell Phones & Smartphones
+const EBAY_CACHE_TTL_MS = 60 * 60 * 1000; // 1h
+
+function readEbayCache(key) {
+  try {
+    const raw = sessionStorage.getItem(`ebay:${key}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || Date.now() - parsed.t > EBAY_CACHE_TTL_MS) return null;
+    return parsed.v;
+  } catch {
+    return null;
+  }
+}
+
+function writeEbayCache(key, value) {
+  try {
+    sessionStorage.setItem(`ebay:${key}`, JSON.stringify({ t: Date.now(), v: value }));
+  } catch {
+    /* sessionStorage full / unavailable — non-fatal */
+  }
+}
 
 export const ebayApi = {
+  // Returns the median sold price for `model` on eBay, in USD. 0 if unavailable.
   getAveragePrice: async (model) => {
-    if (!model) return 0;
-    
-    // Security: Do not expose API keys in frontend code
-    if (RAPIDAPI_KEY) {
-      console.warn(
-        "⚠️ SECURITY WARNING: API keys detected in frontend environment variables. " +
-        "API keys should never be exposed in client-side code. " +
-        "Set up a backend endpoint to proxy eBay API requests instead."
-      );
+    const data = await ebayApi.getMarketData(model);
+    return data?.median_price || data?.average_price || 0;
+  },
+
+  // Full market snapshot (median, avg, min, max, sample size, link to eBay search).
+  getMarketData: async (model) => {
+    if (!model) return null;
+    if (!RAPIDAPI_KEY) {
+      console.warn("eBay: REACT_APP_RAPIDAPI_KEY is not set — skipping price lookup.");
+      return null;
     }
-    
-    // For now, return 0 and suggest using a backend endpoint
-    console.info(`eBay price lookup for '${model}' requires a backend endpoint (security limitation).`);
-    return 0;
+
+    const key = model.trim().toLowerCase();
+    const cached = readEbayCache(key);
+    if (cached) return cached;
+
+    try {
+      const response = await fetch(`https://${RAPIDAPI_EBAY_HOST}/findCompletedItems`, {
+        method: "POST",
+        headers: {
+          "X-RapidAPI-Key": RAPIDAPI_KEY,
+          "X-RapidAPI-Host": RAPIDAPI_EBAY_HOST,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          keywords: model,
+          max_search_results: "240",
+          category_id: EBAY_CATEGORY_CELL_PHONES,
+          remove_outliers: "true",
+          site_id: "0",
+        }),
+      });
+      if (!response.ok) {
+        let detail = "";
+        try { detail = await response.text(); } catch { /* body already consumed */ }
+        console.warn(`eBay ${response.status} for "${model}": ${detail.slice(0, 200)}`);
+        return null;
+      }
+      const data = await response.json();
+      const result = {
+        median_price: Number(data?.median_price ?? 0),
+        average_price: Number(data?.average_price ?? 0),
+        min_price: Number(data?.min_price ?? 0),
+        max_price: Number(data?.max_price ?? 0),
+        sample_size: Number(data?.results ?? 0),
+        ebay_url: data?.response_url || `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(model)}&LH_Sold=1&LH_Complete=1`,
+      };
+      writeEbayCache(key, result);
+      return result;
+    } catch (error) {
+      console.warn(`eBay price lookup failed for "${model}":`, error);
+      return null;
+    }
   },
 };
