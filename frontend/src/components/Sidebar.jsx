@@ -5,7 +5,7 @@ const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
   { path: "/investments", label: "Investment Overview", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
-  { path: "/phone-list", label: "Unity Phone List", icon: Phone },
+  { path: "/phone-list", label: "Phone List", icon: Phone },
 ];
 
 export default function Sidebar() {

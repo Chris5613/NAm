@@ -1323,6 +1323,248 @@ async def _fetch_solana_balances(address: str):
         return {"tokens": [], "total_usd": 0, "error": str(e)}
 
 
+
+# ===========================================================================
+# Phone List feature
+# ===========================================================================
+
+RAPIDAPI_KEY = os.environ.get("RAPIDAPI_KEY", "")
+RAPIDAPI_EBAY_HOST = os.environ.get("RAPIDAPI_EBAY_HOST", "ebay-average-selling-price.p.rapidapi.com")
+PHONE_PRICE_CACHE_TTL_HOURS = 24
+
+
+class PhoneCreate(BaseModel):
+    device_id: Optional[str] = None
+    os: Optional[str] = ""
+    model: str
+    unity_id: Optional[str] = ""
+    carrier: Optional[str] = ""
+    tags: List[str] = Field(default_factory=list)
+    market_value: Optional[float] = None
+    notes: Optional[str] = ""
+
+
+class PhoneUpdate(BaseModel):
+    device_id: Optional[str] = None
+    os: Optional[str] = None
+    model: Optional[str] = None
+    unity_id: Optional[str] = None
+    carrier: Optional[str] = None
+    tags: Optional[List[str]] = None
+    market_value: Optional[float] = None
+    market_value_source: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class Phone(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    device_id: str = ""
+    os: str = ""
+    model: str = ""
+    unity_id: str = ""
+    carrier: str = ""
+    tags: List[str] = Field(default_factory=list)
+    market_value: float = 0.0
+    market_value_source: str = "manual"
+    market_value_updated_at: Optional[str] = None
+    notes: str = ""
+    created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    updated_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+def _normalize_model(model: str) -> str:
+    return (model or "").strip().lower()
+
+
+async def _fetch_ebay_avg_price(model: str) -> Optional[dict]:
+    if not RAPIDAPI_KEY or not model:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=20) as client_http:
+            resp = await client_http.post(
+                f"https://{RAPIDAPI_EBAY_HOST}/findCompletedItems",
+                headers={
+                    "x-rapidapi-key": RAPIDAPI_KEY,
+                    "x-rapidapi-host": RAPIDAPI_EBAY_HOST,
+                    "content-type": "application/json",
+                },
+                json={
+                    "keywords": model,
+                    "max_search_results": "60",
+                    "remove_outliers": "true",
+                    "site_id": "0",
+                },
+            )
+            if resp.status_code != 200:
+                logger.warning(f"eBay price API non-200 for '{model}': {resp.status_code} {resp.text[:200]}")
+                return None
+            data = resp.json()
+            if not data.get("success"):
+                return None
+            return {
+                "average_price": float(data.get("average_price") or 0),
+                "median_price": float(data.get("median_price") or 0),
+                "min_price": float(data.get("min_price") or 0),
+                "max_price": float(data.get("max_price") or 0),
+                "results": int(data.get("results") or 0),
+                "total_results": int(data.get("total_results") or 0),
+            }
+    except Exception as e:
+        logger.warning(f"eBay price fetch failed for '{model}': {e}")
+        return None
+
+
+async def _get_cached_or_fetch_price(model: str, force_refresh: bool = False) -> Optional[dict]:
+    key = _normalize_model(model)
+    if not key:
+        return None
+    if not force_refresh:
+        cached = await db.phone_price_cache.find_one({"_id": key})
+        if cached:
+            try:
+                fetched_at = datetime.fromisoformat(cached.get("fetched_at"))
+                if fetched_at.tzinfo is None:
+                    fetched_at = fetched_at.replace(tzinfo=timezone.utc)
+                age_hours = (datetime.now(timezone.utc) - fetched_at).total_seconds() / 3600
+                if age_hours < PHONE_PRICE_CACHE_TTL_HOURS:
+                    return {k: v for k, v in cached.items() if k != "_id"}
+            except Exception:
+                pass
+    fresh = await _fetch_ebay_avg_price(model)
+    if fresh is None:
+        return None
+    fresh["fetched_at"] = datetime.now(timezone.utc).isoformat()
+    fresh["model"] = model
+    await db.phone_price_cache.update_one({"_id": key}, {"$set": fresh}, upsert=True)
+    return fresh
+
+
+@api_router.get("/phones/tags")
+async def list_phone_tags():
+    phones = await db.phones.find({}, {"_id": 0, "tags": 1}).to_list(1000)
+    seen = {}
+    for p in phones:
+        for t in p.get("tags", []):
+            if not t:
+                continue
+            key = t.strip().lower()
+            if key not in seen:
+                seen[key] = t.strip()
+    return sorted(seen.values(), key=lambda s: s.lower())
+
+
+@api_router.get("/phones")
+async def list_phones():
+    phones = await db.phones.find({}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    total_value = sum(p.get("market_value", 0) for p in phones)
+    return {"phones": phones, "total_value": total_value, "count": len(phones)}
+
+
+@api_router.post("/phones", response_model=Phone)
+async def create_phone(input_data: PhoneCreate):
+    phone = Phone(
+        device_id=(input_data.device_id or "").strip(),
+        os=(input_data.os or "").strip(),
+        model=(input_data.model or "").strip(),
+        unity_id=(input_data.unity_id or "").strip(),
+        carrier=(input_data.carrier or "").strip(),
+        tags=[t.strip() for t in (input_data.tags or []) if t and t.strip()],
+        market_value=float(input_data.market_value or 0),
+        market_value_source="manual",
+        notes=(input_data.notes or "").strip(),
+    )
+    if (input_data.market_value is None or input_data.market_value == 0) and phone.model:
+        try:
+            ebay = await _get_cached_or_fetch_price(phone.model)
+            if ebay and ebay.get("average_price", 0) > 0:
+                phone.market_value = ebay["average_price"]
+                phone.market_value_source = "ebay"
+                phone.market_value_updated_at = datetime.now(timezone.utc).isoformat()
+        except Exception as e:
+            logger.warning(f"Auto-price fetch failed: {e}")
+    await db.phones.insert_one(phone.model_dump())
+    return phone
+
+
+@api_router.put("/phones/{phone_id}", response_model=Phone)
+async def update_phone(phone_id: str, input_data: PhoneUpdate):
+    existing = await db.phones.find_one({"id": phone_id}, {"_id": 0})
+    if not existing:
+        raise HTTPException(status_code=404, detail="Phone not found")
+    update_dict = {k: v for k, v in input_data.model_dump(exclude_unset=True).items() if v is not None}
+    if "tags" in update_dict and update_dict["tags"] is not None:
+        update_dict["tags"] = [t.strip() for t in update_dict["tags"] if t and t.strip()]
+    if "market_value" in update_dict:
+        update_dict["market_value_source"] = update_dict.get("market_value_source", "manual")
+        update_dict["market_value_updated_at"] = datetime.now(timezone.utc).isoformat()
+    update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+    await db.phones.update_one({"id": phone_id}, {"$set": update_dict})
+    merged = {**existing, **update_dict}
+    return Phone(**{k: merged.get(k, "") for k in Phone.model_fields.keys()})
+
+
+@api_router.delete("/phones/{phone_id}")
+async def delete_phone(phone_id: str):
+    result = await db.phones.delete_one({"id": phone_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Phone not found")
+    return {"deleted": True}
+
+
+@api_router.post("/phones/{phone_id}/refresh-price")
+async def refresh_phone_price(phone_id: str):
+    phone = await db.phones.find_one({"id": phone_id}, {"_id": 0})
+    if not phone:
+        raise HTTPException(status_code=404, detail="Phone not found")
+    if not phone.get("model"):
+        raise HTTPException(status_code=400, detail="Phone has no model set")
+    ebay = await _get_cached_or_fetch_price(phone["model"], force_refresh=True)
+    if not ebay or ebay.get("average_price", 0) <= 0:
+        raise HTTPException(status_code=502, detail="Could not fetch price from eBay")
+    update = {
+        "market_value": ebay["average_price"],
+        "market_value_source": "ebay",
+        "market_value_updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.phones.update_one({"id": phone_id}, {"$set": update})
+    return {"phone_id": phone_id, "ebay": ebay, **update}
+
+
+@api_router.post("/phones/refresh-all-prices")
+async def refresh_all_phone_prices():
+    phones = await db.phones.find({}, {"_id": 0}).to_list(1000)
+    updated, failed, skipped = 0, 0, 0
+    for p in phones:
+        if p.get("market_value_source") == "manual" and p.get("market_value", 0) > 0:
+            skipped += 1
+            continue
+        if not p.get("model"):
+            skipped += 1
+            continue
+        try:
+            ebay = await _get_cached_or_fetch_price(p["model"])
+            if ebay and ebay.get("average_price", 0) > 0:
+                await db.phones.update_one(
+                    {"id": p["id"]},
+                    {"$set": {
+                        "market_value": ebay["average_price"],
+                        "market_value_source": "ebay",
+                        "market_value_updated_at": datetime.now(timezone.utc).isoformat(),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }}
+                )
+                updated += 1
+            else:
+                failed += 1
+        except Exception as e:
+            logger.warning(f"Refresh price for {p.get('model')}: {e}")
+            failed += 1
+    return {"updated": updated, "failed": failed, "skipped": skipped, "total": len(phones)}
+
+
+
+
 # Include the router
 app.include_router(api_router)
 

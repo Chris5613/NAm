@@ -102,9 +102,83 @@
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
 
-user_problem_statement: "Major Net Worth dashboard redesign: Added expandable hierarchy pattern for Stocks, Cash, and Debts (like Crypto). Removed 'Projects' tab entirely. Replaced stock price API with Finnhub for real-time quotes. Redesigned Add Asset modal with per-category smart forms."
+user_problem_statement: "Phone List backend endpoints with MongoDB and RapidAPI eBay integration for phone market values (24h cached). Endpoints: GET /api/phones (list all), GET /api/phones/tags (distinct tags), POST /api/phones (create with auto/manual price), PUT /api/phones/{id} (update), DELETE /api/phones/{id} (delete), POST /api/phones/{id}/refresh-price (force refresh), POST /api/phones/refresh-all-prices (bulk refresh)."
 
 backend:
+  - task: "Phone List CRUD endpoints (GET/POST/PUT/DELETE /api/phones)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "All Phone List CRUD endpoints working correctly. GET /api/phones returns {phones: [], total_value: 0, count: 0} with correct structure. POST /api/phones creates phones with auto eBay price fetch (iPhone 8: $121.98) or manual price (iPhone X: $250). Fake model 'totallymadeupphonefoobar' creates successfully with market_value=0 (no failure). PUT /api/phones/{id} updates fields while preserving existing ones. DELETE /api/phones/{id} deletes correctly and returns 404 for nonexistent phones. Total value calculation verified: $533.17 = sum of all phone market_values. Test file: /app/backend_test_phones.py"
+  
+  - task: "Phone tags endpoint (GET /api/phones/tags)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "GET /api/phones/tags endpoint working correctly. Returns deduped, sorted tag list (case-insensitive). Tested with 8 tags: ['Android', 'FakeDevice', 'MainProject', 'Manual', 'NOS', 'Secondary', 'Test', 'TestDevice']. No duplicates, correctly sorted. Test file: /app/backend_test_phones.py"
+  
+  - task: "Phone price refresh endpoints (POST /api/phones/{id}/refresh-price and POST /api/phones/refresh-all-prices)"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "Both price refresh endpoints working correctly. POST /api/phones/{id}/refresh-price force-fetches fresh eBay price (tested: Moto G $68.93 -> $70.38). POST /api/phones/refresh-all-prices bulk refreshes all phones, returns {updated, failed, skipped, total}. Manual-priced phones correctly skipped (skipped=1 for iPhone X with manual $250). Tested results: updated=3, failed=1, skipped=1, total=5. eBay API integration with 24h cache working correctly. Test file: /app/backend_test_phones.py"
+  
+  - task: "RapidAPI eBay integration for phone market values"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "RapidAPI eBay average-selling-price integration working correctly. Auto-fetch on phone creation: iPhone 8 returned $121.98, iPhone XR returned $92.26, Moto G returned $68.93. Fake model 'totallymadeupphonefoobar' returned $0 (no results) without failing. 24h cache implemented in db.phone_price_cache. Manual prices (market_value_source='manual') correctly bypass eBay fetch. RAPIDAPI_KEY configured in backend/.env. Test file: /app/backend_test_phones.py"
+  
+  - task: "Crypto cache endpoints (GET/POST /api/crypto/cache) and net-worth crypto override"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Added /api/crypto/cache GET and POST endpoints backed by a singleton doc in db.crypto_cache. Modified /api/net-worth, /api/net-worth/snapshot and daily_snapshot_task to override breakdown.crypto with the cached crypto total when present. Smoke-tested with curl: cache set/get works, net-worth reflects cached crypto."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive backend testing completed. All crypto cache endpoints working correctly: GET /api/crypto/cache returns {total, updated_at} correctly (returns 0 when empty). POST /api/crypto/cache properly validates input (rejects non-numeric with 400, handles missing fields safely). GET /api/net-worth correctly uses cached crypto value in breakdown.crypto and includes it in total_net_worth calculation. POST /api/net-worth/snapshot correctly persists crypto_value from cache. All review request scenarios passed: cache set to 50000 reflects in net-worth, invalid inputs handled safely, snapshots persist correct crypto_value. Frontend actively manages cache (CryptoPage POSTs grandTotal), which is expected behavior. Test files: /app/backend_test_focused.py, /app/backend_test_scenarios.py"
+  
+  - task: "Finnhub stock price API integration (GET /api/prices/stock/{symbol} and /api/prices/stock/search/{query})"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "Finnhub stock API endpoints verified working correctly. GET /api/prices/stock/{symbol} returns real-time quote with price, change, change_percent, high, low, open, prev_close. GET /api/prices/stock/search/{query} returns filtered ticker search results (US stocks only, no dots). Tested with AAPL: search returned correct results, price fetch returned $275.49 with live data. API integration fully functional."
   - task: "Crypto cache endpoints (GET/POST /api/crypto/cache) and net-worth crypto override"
     implemented: true
     working: true
@@ -225,16 +299,16 @@ frontend:
 
 metadata:
   created_by: "main_agent"
-  version: "1.1"
-  test_sequence: 4
-  run_ui: true
+  version: "1.2"
+  test_sequence: 5
+  run_ui: false
 
 test_plan:
   current_focus:
-    - "Dashboard tabs redesign"
-    - "Add Asset modal redesign"
-    - "Stocks/Cash/Debts breakdowns with expandable hierarchy"
-    - "Finnhub stock price integration"
+    - "Phone List CRUD endpoints"
+    - "Phone tags endpoint"
+    - "Phone price refresh endpoints"
+    - "RapidAPI eBay integration"
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
@@ -250,3 +324,5 @@ agent_communication:
     -message: "BUG FIX VERIFICATION COMPLETE - All three reported bugs are FIXED and working correctly: (1) Bitcoin wallet balance is now being fetched correctly - shows $98,651.48 for 1.25 BTC (not $0 anymore). (2) Main Net Worth 'All' tab now shows crypto breakdown immediately without needing to visit Crypto tab first - crypto-breakdown component renders with full hierarchy. (3) Top-level label correctly says 'Crypto' with chains (Bitcoin, Solana) as sub-categories (not 'Solana' at top level). All three flows tested successfully: Flow A (Crypto page Bitcoin balance), Flow B (Main Net Worth 'All' tab breakdown), Flow C (Dashboard Crypto tab). Bitcoin value verified: 1.2501 BTC @ $78,910.01 = $98,651.48. No console errors. Minor network errors for /api/crypto/cache (CDN/RUM related) but functionality works perfectly. Screenshots captured for all flows. All bugs are resolved."
     -agent: "testing"
     -message: "MAJOR REDESIGN TESTING COMPLETE - All 8 test scenarios PASSED successfully. (1) Tabs: Verified exactly 5 tabs (All, Stocks, Crypto, Cash, Debts), NO Projects tab. All tab shows 4 category cards. (2) Add Stock with Finnhub: Ticker search working, AAPL price auto-fetched at $275.49, 10 shares added successfully. (3) Stocks breakdown: Expandable hierarchy working, item details showing Quantity/Price, Edit/Delete menu functional. (4) Add Cash: 'Chase Savings' $5,000 added successfully. (5) Add Debt: 'Credit Card' $1,500 added successfully. (6) Cash/Debts breakdowns: Both working with expandable hierarchy, correct values and colors (debts in rose/red). (7) Hero card: All 4 metrics correct (Stocks $2,759.80, Crypto $98,809.48, Cash $5,000, Debts $1,500), total calculation verified $105,069.28. (8) Cleanup: All test entries deleted successfully. BUG FIXED: pricesApi.getStockPrice → pricesApi.getStock in api.js. NO console errors. All features fully functional. Screenshots captured for all scenarios."
+    -agent: "testing"
+    -message: "PHONE LIST BACKEND TESTING COMPLETE - All 12 test scenarios PASSED successfully. (1) GET /api/phones: Returns correct structure {phones, total_value, count}. (2) POST /api/phones with auto eBay price: iPhone 8 created with $121.98 from eBay API. (3) POST /api/phones with manual price: iPhone X created with manual $250. (4) POST /api/phones with fake model: 'totallymadeupphonefoobar' created successfully with market_value=0 (no failure). (5) Additional phones: iPhone XR ($92.26) and Moto G ($68.93) created. (6) Total value calculation: Verified $533.17 = sum of all phone market_values. (7) GET /api/phones/tags: Returns deduped, sorted tags ['Android', 'FakeDevice', 'MainProject', 'Manual', 'NOS', 'Secondary', 'Test', 'TestDevice']. (8) PUT /api/phones/{id}: Update preserves existing fields (model, market_value) while updating specified fields (tags, carrier). (9) POST /api/phones/{id}/refresh-price: Force refresh works (Moto G: $68.93 -> $70.38). (10) POST /api/phones/refresh-all-prices: Bulk refresh works (updated=3, failed=1, skipped=1, total=5), manual-priced phones correctly skipped. (11) DELETE /api/phones/{id}: Delete works correctly. (12) DELETE nonexistent phone: Returns 404 correctly. RapidAPI eBay integration fully functional with 24h cache. All review request scenarios verified. Test file: /app/backend_test_phones.py. NO issues found. Ready for main agent to summarize and finish."

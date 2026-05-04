@@ -30,6 +30,16 @@ export const cryptoCacheApi = {
   },
 };
 
+export const phonesApi = {
+  list: () => api.get("/phones"),
+  create: (data) => api.post("/phones", data),
+  update: (id, data) => api.put(`/phones/${id}`, data),
+  delete: (id) => api.delete(`/phones/${id}`),
+  tags: () => api.get("/phones/tags"),
+  refreshPrice: (id) => api.post(`/phones/${id}/refresh-price`),
+  refreshAllPrices: () => api.post("/phones/refresh-all-prices"),
+};
+
 export const pricesApi = {
   getCryptoPrice: (coinId) => api.get(`/prices/crypto/${coinId}`),
   getCryptoInfo: (coinId) => api.get(`/prices/crypto/info/${coinId}`),
