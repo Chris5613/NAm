@@ -21,6 +21,11 @@ export const netWorthApi = {
   saveSnapshot: () => api.post("/net-worth/snapshot"),
 };
 
+export const cryptoCacheApi = {
+  get: () => api.get("/crypto/cache"),
+  set: (total) => api.post("/crypto/cache", { total }),
+};
+
 export const pricesApi = {
   getCryptoPrice: (coinId) => api.get(`/prices/crypto/${coinId}`),
   getCryptoInfo: (coinId) => api.get(`/prices/crypto/info/${coinId}`),

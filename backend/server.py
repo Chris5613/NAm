@@ -133,6 +133,37 @@ async def delete_asset(asset_id: str):
 
 # --- Net Worth ---
 
+async def _get_cached_crypto_total():
+    """Read the crypto total cached from the Crypto tab (wallets + DeFi + custom tokens)."""
+    doc = await db.crypto_cache.find_one({"_id": "singleton"})
+    if not doc:
+        return None
+    return doc.get("total")
+
+
+@api_router.get("/crypto/cache")
+async def get_crypto_cache():
+    doc = await db.crypto_cache.find_one({"_id": "singleton"})
+    if not doc:
+        return {"total": 0, "updated_at": None}
+    return {"total": doc.get("total", 0), "updated_at": doc.get("updated_at")}
+
+
+@api_router.post("/crypto/cache")
+async def set_crypto_cache(data: dict):
+    try:
+        total = float(data.get("total", 0))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid total value")
+    updated_at = datetime.now(timezone.utc).isoformat()
+    await db.crypto_cache.update_one(
+        {"_id": "singleton"},
+        {"$set": {"total": total, "updated_at": updated_at}},
+        upsert=True
+    )
+    return {"total": total, "updated_at": updated_at}
+
+
 @api_router.get("/net-worth")
 async def get_net_worth():
     assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
@@ -157,6 +188,11 @@ async def get_net_worth():
     # Include investment projects net value (earned so far = current value of those investments)
     for project in projects:
         categories["investments"] += (project.get("earned", 0))
+    
+    # Override crypto with the live Crypto tab total (wallets + DeFi + custom tokens)
+    cached_crypto = await _get_cached_crypto_total()
+    if cached_crypto is not None:
+        categories["crypto"] = cached_crypto
     
     total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
     
@@ -190,6 +226,11 @@ async def save_snapshot():
     
     for project in projects:
         categories["investments"] += (project.get("earned", 0))
+    
+    # Override crypto with the live Crypto tab total (wallets + DeFi + custom tokens)
+    cached_crypto = await _get_cached_crypto_total()
+    if cached_crypto is not None:
+        categories["crypto"] = cached_crypto
     
     total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
     
@@ -1303,6 +1344,11 @@ async def daily_snapshot_task():
                     categories[cat] += value
             for project in projects:
                 categories["investments"] += project.get("earned", 0)
+            
+            # Override crypto with the live Crypto tab total (wallets + DeFi + custom tokens)
+            cached_crypto = await _get_cached_crypto_total()
+            if cached_crypto is not None:
+                categories["crypto"] = cached_crypto
             
             total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
             

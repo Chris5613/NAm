@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { walletsApi, tokenPrefsApi, customTokensApi } from "@/lib/api";
+import { walletsApi, tokenPrefsApi, customTokensApi, cryptoCacheApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -233,6 +233,17 @@ export default function CryptoPage() {
   const filteredDefi = (!activeChain || activeChain === "solana") ? defiPositions : [];
 
   useEffect(() => { if (grandTotal > 0 && liveHistory.length === 0) setLiveHistory([{ time: "Now", value: grandTotal }]); }, [grandTotal]);
+
+  // Sync crypto total to backend cache so the main Net Worth page reflects it
+  const lastSyncedRef = useRef(null);
+  useEffect(() => {
+    if (loading) return;
+    // Only sync when we have fetched balances (wallets may still be loading)
+    if (wallets.length > 0 && Object.keys(balances).length === 0) return;
+    if (lastSyncedRef.current === grandTotal) return;
+    lastSyncedRef.current = grandTotal;
+    cryptoCacheApi.set(grandTotal).catch(() => { /* silent */ });
+  }, [grandTotal, loading, wallets.length, balances]);
 
   if (loading) return <div className="flex items-center justify-center min-h-[300px]"><p className="text-muted-foreground font-mono animate-pulse">Loading...</p></div>;
 

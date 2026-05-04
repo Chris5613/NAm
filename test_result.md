@@ -101,3 +101,53 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: "Change the main net worth page so there is only one single box for Crypto, and the net worth number shown on the Crypto tab reflects on the main Net Worth page."
+
+backend:
+  - task: "Crypto cache endpoints (GET/POST /api/crypto/cache) and net-worth crypto override"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "main"
+        -comment: "Added /api/crypto/cache GET and POST endpoints backed by a singleton doc in db.crypto_cache. Modified /api/net-worth, /api/net-worth/snapshot and daily_snapshot_task to override breakdown.crypto with the cached crypto total when present. Smoke-tested with curl: cache set/get works, net-worth reflects cached crypto."
+        -working: true
+        -agent: "testing"
+        -comment: "Comprehensive backend testing completed. All crypto cache endpoints working correctly: GET /api/crypto/cache returns {total, updated_at} correctly (returns 0 when empty). POST /api/crypto/cache properly validates input (rejects non-numeric with 400, handles missing fields safely). GET /api/net-worth correctly uses cached crypto value in breakdown.crypto and includes it in total_net_worth calculation. POST /api/net-worth/snapshot correctly persists crypto_value from cache. All review request scenarios passed: cache set to 50000 reflects in net-worth, invalid inputs handled safely, snapshots persist correct crypto_value. Frontend actively manages cache (CryptoPage POSTs grandTotal), which is expected behavior. Test files: /app/backend_test_focused.py, /app/backend_test_scenarios.py"
+
+frontend:
+  - task: "Main Net Worth page shows single Crypto box reflecting Crypto tab total"
+    implemented: true
+    working: "NA"
+    file: "frontend/src/components/NetWorthHero.jsx, frontend/src/pages/CryptoPage.jsx, frontend/src/lib/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+        -working: "NA"
+        -agent: "main"
+        -comment: "Removed the separate 'Projects' (crypto_projects) metric item from NetWorthHero — only one 'Crypto' box remains. CryptoPage now POSTs its grandTotal to /api/crypto/cache whenever it changes so the main Net Worth page shows the same crypto number as the Crypto tab. Added cryptoCacheApi in api.js."
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 2
+  run_ui: true
+
+test_plan:
+  current_focus:
+    - "Main Net Worth page shows single Crypto box reflecting Crypto tab total"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+    -agent: "main"
+    -message: "Implemented unified Crypto box on the main Net Worth page. Backend caches the crypto total in db.crypto_cache (singleton). Crypto page pushes its grandTotal to the cache on changes. NetWorthHero no longer shows the Projects metric. Please verify that the Crypto box on the main Net Worth tab matches the Net Worth figure shown on the Crypto tab after visiting/refreshing the Crypto tab."
+    -agent: "testing"
+    -message: "Backend testing complete - all crypto cache endpoints working perfectly. Tested all scenarios from review request: cache GET/POST, net-worth override, snapshot persistence, invalid input handling. All tests passed (6/6 focused tests, 4/4 scenario tests). The crypto cache mechanism is functioning as designed: frontend CryptoPage actively updates cache with grandTotal, backend correctly uses cached value in net-worth calculations and snapshots. No issues found. Ready for main agent to summarize and finish."
