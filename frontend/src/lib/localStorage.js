@@ -9,6 +9,7 @@ const STORAGE_KEYS = {
   CRYPTO_CACHE: 'networth_crypto_cache',
   HISTORY: 'networth_history',
   LIVE_HISTORY: 'networth_live_history',
+  GOMINING: 'networth_gomining',
 };
 
 export const localStorage = {
@@ -70,5 +71,8 @@ export const localStorage = {
 
   getLiveHistory: () => localStorage.get(STORAGE_KEYS.LIVE_HISTORY) || [],
   setLiveHistory: (points) => localStorage.set(STORAGE_KEYS.LIVE_HISTORY, points),
+
+  getGoMining: () => localStorage.get(STORAGE_KEYS.GOMINING) || [],
+  setGoMining: (rows) => localStorage.set(STORAGE_KEYS.GOMINING, rows),
 
 };
