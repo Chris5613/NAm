@@ -58,7 +58,6 @@ function newRow() {
     pr: 0,
     electricity: 0,
     service: 0,
-    total_discount: 0,
     gmt_earned: 0,
   };
 }
@@ -69,7 +68,7 @@ function computeReward(row, gmtPrice = 0) {
   const elec = Number(row.electricity) || 0;
   const svc = Number(row.service) || 0;
   const gmt = Number(row.gmt_earned) || 0;
-  return pr - elec + svc + gmt * gmtPrice;
+  return pr - elec - svc + gmt * gmtPrice;
 }
 
 export default function GoMiningPage() {
