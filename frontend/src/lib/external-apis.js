@@ -65,13 +65,71 @@ export const finnhubApi = {
   },
 };
 
-// Jupiter API for Solana DeFi positions
-// NOTE: The legacy public Jupiter Portfolio endpoint at api.jup.ag/portfolio/* now
-// returns 404. We keep the export for backward-compatibility but make it a no-op.
-// Wallet balances (incl. Solana) come from CoinStats below.
+// Jupiter Portfolio API — new endpoint (replaces the old /portfolio/{address} path
+// which now 404s). Returns Solana DeFi positions (staking, lending, LP, leverage, …).
+// Docs: https://dev.jup.ag/docs/api-reference/portfolio/get-positions
+const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY;
+const JUPITER_PORTFOLIO_BASE = "https://api.jup.ag/portfolio/v1";
+
+// Translate a Jupiter Portfolio "element" → the position shape our UI expects:
+// { platform_id, platform, label, total_value, apy, tokens: [...] }
+function mapJupiterElement(el, tokenInfo = {}) {
+  const assets = el?.data?.assets || [];
+  const yields = el?.data?.assetsYields || [];
+  const tokens = assets.map((a, idx) => {
+    const networkId = a.networkId || el.networkId || "solana";
+    const addr = a?.data?.address || a?.data?.mint || "";
+    const amount = Number(a?.data?.amount ?? 0);
+    const price = Number(a?.data?.price ?? 0);
+    const value = Number(a?.value ?? amount * price);
+    const tokInfo = tokenInfo?.[networkId]?.[addr] || {};
+    const apy = Number(yields?.[idx]?.apy ?? a?.attributes?.apy ?? 0);
+    return {
+      address: addr,
+      symbol: tokInfo.symbol || a?.data?.symbol || "",
+      name: tokInfo.name || a?.data?.name || "",
+      image_uri: tokInfo.logoURI || tokInfo.image || "",
+      amount,
+      price,
+      value,
+      apy,
+    };
+  });
+  return {
+    platform_id: el?.platformId || el?.fetcherId || el?.name || "unknown",
+    platform: el?.name || el?.platformId || "Unknown",
+    label: el?.label || "",
+    total_value: Number(el?.value ?? tokens.reduce((s, t) => s + (t.value || 0), 0)),
+    apy: Number(el?.netApy ?? 0),
+    tokens,
+  };
+}
+
 export const jupiterApi = {
-  getPortfolio: async (_walletAddress) => {
-    return { positions: [] };
+  getPortfolio: async (walletAddress) => {
+    if (!walletAddress) return { positions: [] };
+    try {
+      const url = `${JUPITER_PORTFOLIO_BASE}/positions/${walletAddress}`;
+      const response = await fetch(url, {
+        headers: JUPITER_API_KEY ? { "x-api-key": JUPITER_API_KEY } : {},
+      });
+      if (!response.ok) {
+        console.warn(`Jupiter portfolio ${response.status} for ${walletAddress}`);
+        return { positions: [] };
+      }
+      const data = await response.json();
+      const elements = Array.isArray(data?.elements) ? data.elements : [];
+      const tokenInfo = data?.tokenInfo || {};
+      // Skip the implicit "Wallet" element — those tokens already come from CoinStats.
+      const positions = elements
+        .filter((el) => (el?.label || "").toLowerCase() !== "wallet")
+        .map((el) => mapJupiterElement(el, tokenInfo))
+        .filter((p) => p.total_value > 0.01 || p.tokens.length > 0);
+      return { positions };
+    } catch (error) {
+      console.warn(`Jupiter portfolio fetch failed for ${walletAddress}:`, error);
+      return { positions: [] };
+    }
   },
 };
 
