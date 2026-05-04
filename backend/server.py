@@ -8,9 +8,10 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import httpx
 from pymongo import UpdateOne
+import asyncio
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -838,29 +839,72 @@ async def _fetch_solana_balances(address: str):
                         mint = parsed.get("mint", "")
                         spl_tokens.append({"mint": mint, "amount": ui_amount})
 
-            # Fetch token metadata from Jupiter
+            # Token metadata from hardcoded known mints (Jupiter strict list DNS fails in this env)
             token_list = {}
-            try:
-                jup_resp = await client_http.get("https://token.jup.ag/strict", timeout=10)
-                if jup_resp.status_code == 200:
-                    for t in jup_resp.json():
-                        token_list[t["address"]] = {
-                            "symbol": t.get("symbol", "???"),
-                            "name": t.get("name", "Unknown"),
-                            "icon_url": t.get("logoURI", ""),
-                            "decimals": t.get("decimals", 0)
-                        }
-            except Exception:
-                pass
+            known_mints = {
+                "nosXBVoaCTtYdLvKY6Csb4AC8JCdQKKAaWYtx2ZMoo7": {"symbol": "NOS", "name": "Nosana", "icon_url": "https://coin-images.coingecko.com/coins/images/22553/small/nosana.png", "decimals": 6},
+                "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v": {"symbol": "USDC", "name": "USD Coin", "icon_url": "https://coin-images.coingecko.com/coins/images/6319/small/usdc.png", "decimals": 6},
+                "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB": {"symbol": "USDT", "name": "Tether", "icon_url": "https://coin-images.coingecko.com/coins/images/325/small/Tether.png", "decimals": 6},
+                "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263": {"symbol": "BONK", "name": "Bonk", "icon_url": "https://coin-images.coingecko.com/coins/images/28600/small/bonk.png", "decimals": 5},
+                "JUPyiwrYJFskUPiHa7hkeR8VUtAeFoSYbKedZNsDvCN": {"symbol": "JUP", "name": "Jupiter", "icon_url": "https://coin-images.coingecko.com/coins/images/34188/small/jup.png", "decimals": 6},
+                "EKpQGSJtjMFqKZ9KQanSqYXRcF8fBopzLHYxdM65zcjm": {"symbol": "WIF", "name": "dogwifhat", "icon_url": "https://coin-images.coingecko.com/coins/images/33566/small/wif.png", "decimals": 6},
+                "jtojtomepa8beP8AuQc6eXt5FriJwfFMwQx2v2f9mCL": {"symbol": "JTO", "name": "Jito", "icon_url": "https://coin-images.coingecko.com/coins/images/33228/small/jto.png", "decimals": 9},
+                "HZ1JovNiVvGrGNiiYvEozEVgZ58xaU3RKwX8eACQBCt3": {"symbol": "PYTH", "name": "Pyth Network", "icon_url": "https://coin-images.coingecko.com/coins/images/31924/small/pyth.png", "decimals": 6},
+                "4k3Dyjzvzp8eMZWUXbBCjEvwSkkk59S5iCNLY3QrkX6R": {"symbol": "RAY", "name": "Raydium", "icon_url": "https://coin-images.coingecko.com/coins/images/13928/small/raydium.png", "decimals": 6},
+                "orcaEKTdK7LKz57vaAYr9QeNsVEPfiu6QeMU1kektZE": {"symbol": "ORCA", "name": "Orca", "icon_url": "https://coin-images.coingecko.com/coins/images/17547/small/Orca_Logo.png", "decimals": 6},
+                "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So": {"symbol": "mSOL", "name": "Marinade SOL", "icon_url": "https://coin-images.coingecko.com/coins/images/17752/small/msol.png", "decimals": 9},
+                "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn": {"symbol": "jitoSOL", "name": "Jito Staked SOL", "icon_url": "https://coin-images.coingecko.com/coins/images/33800/small/jitosol.png", "decimals": 9},
+                "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1": {"symbol": "bSOL", "name": "BlazeStake SOL", "icon_url": "https://coin-images.coingecko.com/coins/images/26636/small/blazestake.png", "decimals": 9},
+                "jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v": {"symbol": "JupSOL", "name": "Jupiter Staked SOL", "icon_url": "https://coin-images.coingecko.com/coins/images/36432/small/jupsol.png", "decimals": 9},
+                "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4": {"symbol": "JLP", "name": "Jupiter Perps LP", "icon_url": "https://coin-images.coingecko.com/coins/images/34700/small/jlp.png", "decimals": 6},
+                "rndrizKT3MK1iimdxRdWabcF7Zg7AR5T4nud4EkHBof": {"symbol": "RNDR", "name": "Render", "icon_url": "https://coin-images.coingecko.com/coins/images/11636/small/rndr.png", "decimals": 8},
+                "KMNo3nJsBXfcpJTVhZcXLW7RmTwTt4GVFE7suUBo9sS": {"symbol": "KMNO", "name": "Kamino", "icon_url": "", "decimals": 6},
+                "DriFtupJYLTosbwoN8koMbEYSx54aFAVLddWsbksjwg7": {"symbol": "DRIFT", "name": "Drift", "icon_url": "", "decimals": 6},
+                "9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D": {"symbol": "GOMINING", "name": "GoMining", "icon_url": "https://coin-images.coingecko.com/coins/images/32625/small/gomining.png", "decimals": 8},
+                "TNSRxcUxoT9xBG3de7PiJyTDYu7kskLqcpddxnEJAS6": {"symbol": "TNSR", "name": "Tensor", "icon_url": "", "decimals": 9},
+                "MEFNBXixkEbait3xn9x0tMkNKMWCzLVH3AdRQmab4aG": {"symbol": "ME", "name": "Magic Eden", "icon_url": "", "decimals": 6},
+                "6p6xgHyF7AeE6TZkSmFsko444wqoP15icUSqi2jfGiPN": {"symbol": "TRUMP", "name": "Official Trump", "icon_url": "", "decimals": 6},
+                "2b1kV6DkPAnxd5ixfnxCpjxmKwqjjaYmCZfHsFu24GXo": {"symbol": "SOCN", "name": "Socean Staked SOL", "icon_url": "", "decimals": 9},
+            }
+            # Use known_mints directly as token_list
+            token_list = known_mints
 
-            # Get SOL price
-            price_resp = await client_http.get(
-                f"{COINGECKO_BASE}/simple/price",
-                params={"ids": "solana", "vs_currencies": "usd"}
-            )
-            sol_price = 0
-            if price_resp.status_code == 200:
-                sol_price = price_resp.json().get("solana", {}).get("usd", 0)
+            # Get SOL price + all SPL token prices via Jupiter Price API (no rate limits with API key)
+            sol_mint = "So11111111111111111111111111111111111111112"
+            all_mints_to_price = [sol_mint]
+            for spl in spl_tokens:
+                all_mints_to_price.append(spl["mint"])
+            
+            # DeFi categorization by mint address
+            defi_mints = {
+                "jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v": {"category": "defi", "protocol": "Jupiter", "type": "Staking"},
+                "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4": {"category": "defi", "protocol": "Jupiter", "type": "Vault"},
+                "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So": {"category": "staking", "protocol": "Marinade", "type": "Staking"},
+                "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1": {"category": "staking", "protocol": "BlazeStake", "type": "Staking"},
+                "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn": {"category": "staking", "protocol": "Jito", "type": "Staking"},
+            }
+            
+            jup_prices = {}
+            try:
+                jup_price_headers = {}
+                if JUPITER_API_KEY:
+                    jup_price_headers["x-api-key"] = JUPITER_API_KEY
+                logger.info(f"Fetching Jupiter prices for {len(all_mints_to_price)} mints")
+                price_resp = await client_http.get(
+                    "https://api.jup.ag/price/v3",
+                    params={"ids": ",".join(all_mints_to_price)},
+                    headers=jup_price_headers,
+                    timeout=15
+                )
+                if price_resp.status_code == 200:
+                    jup_prices = price_resp.json()
+                    logger.info(f"Jupiter prices returned {len(jup_prices)} tokens")
+                else:
+                    logger.warning(f"Jupiter price API returned {price_resp.status_code}")
+            except Exception as e:
+                logger.warning(f"Jupiter price API error: {e}")
+            
+            sol_price = jup_prices.get(sol_mint, {}).get("usdPrice", 0)
 
             # Add SOL
             if sol_balance > 0:
@@ -877,151 +921,54 @@ async def _fetch_solana_balances(address: str):
                 })
                 total_usd += sol_usd
 
-            # Get prices for known SPL tokens via CoinGecko
-            known_tokens = []
-            unknown_tokens = []
+            # Process SPL tokens using Jupiter prices + metadata
             for spl in spl_tokens:
-                meta = token_list.get(spl["mint"])
-                if meta:
-                    known_tokens.append({**spl, **meta})
+                mint = spl["mint"]
+                meta = token_list.get(mint)
+                if not meta:
+                    continue  # Skip tokens we can't identify
+                
+                price_data = jup_prices.get(mint, {})
+                price = price_data.get("usdPrice", 0)
+                usd_val = spl["amount"] * price
+                
+                # Categorize
+                sym_lower = meta["symbol"].lower()
+                mint_info = defi_mints.get(mint)
+                if mint_info:
+                    category = mint_info["category"]
+                    protocol = mint_info["protocol"]
+                    defi_type = mint_info.get("type", "")
+                elif sym_lower in ("msol", "jitosol", "bsol", "stsol", "scnsol", "jupsol"):
+                    category = "staking"
+                    protocol_map = {"msol": "Marinade", "jitosol": "Jito", "bsol": "BlazeStake", "stsol": "Lido", "scnsol": "Socean", "jupsol": "Jupiter"}
+                    protocol = protocol_map.get(sym_lower, "Staking")
+                    defi_type = "Staking"
+                elif sym_lower == "jlp":
+                    category = "defi"
+                    protocol = "Jupiter"
+                    defi_type = "Vault"
                 else:
-                    unknown_tokens.append(spl)
-
-            # Batch price fetch for known tokens by symbol
-            if known_tokens:
-                # Try to get prices from CoinGecko by symbol mapping
-                symbols_to_fetch = list(set(t["symbol"].lower() for t in known_tokens))
-                # Use CoinGecko search for top tokens
-                coin_ids_map = {
-                    "usdc": "usd-coin", "usdt": "tether", "bonk": "bonk",
-                    "jup": "jupiter-exchange-solana", "ray": "raydium",
-                    "wif": "dogwifcoin", "jto": "jito-governance-token",
-                    "pyth": "pyth-network", "wen": "wen-4", "w": "wormhole",
-                    "tnsr": "tensor", "render": "render-token", "orca": "orca",
-                    "msol": "marinade-staked-sol", "bsol": "blazestake-staked-sol",
-                    "jitosol": "jito-staked-sol", "hnt": "helium", "rndr": "render-token",
-                    "jupsol": "jupiter-staked-sol", "jlp": "jupiter-perpetuals-liquidity-provider-token",
-                    "nos": "nosana", "kmno": "kamino", "drift": "drift-protocol",
-                    "me": "magic-eden", "tensor": "tensor", "popcat": "popcat",
-                    "wen": "wen-4", "trump": "official-trump",
-                }
-                # DeFi categorization by mint address
-                defi_mints = {
-                    "jupSoLaHXQiZZTSfEWMTRRgpnyFm8f6sZdosWBjx93v": {"category": "defi", "protocol": "Jupiter", "type": "Staking"},
-                    "27G8MtK7VtTcCHkpASjSDdkWWYfoqT6ggEuKidVJidD4": {"category": "defi", "protocol": "Jupiter", "type": "Vault"},
-                    "mSoLzYCxHdYgdzU16g5QSh3i5K3z3KZK7ytfqcJm7So": {"category": "staking", "protocol": "Marinade", "type": "Staking"},
-                    "bSo13r4TkiE4KumL71LsHTPpL2euBYLFx6h9HP3piy1": {"category": "staking", "protocol": "BlazeStake", "type": "Staking"},
-                    "J1toso1uCk3RLmjorhTtrVwY9HJ7X8V9yYac6Y7kGCPn": {"category": "staking", "protocol": "Jito", "type": "Staking"},
-                    "7Q2afV64in6N6SeZsAAB81TJzwpeLmhBBNhwEr6XxJA": {"category": "staking", "protocol": "Sanctum (INF)", "type": "Staking"},
-                }
-                ids_to_fetch = []
-                symbols_needing_lookup = []
-                for sym in symbols_to_fetch:
-                    if sym in coin_ids_map:
-                        ids_to_fetch.append(coin_ids_map[sym])
-                    else:
-                        symbols_needing_lookup.append(sym)
-
-                # Dynamic lookup: try CoinGecko search for unknown tokens
-                for sym in symbols_needing_lookup:
-                    try:
-                        search_resp = await client_http.get(
-                            f"{COINGECKO_BASE}/search",
-                            params={"query": sym}
-                        )
-                        if search_resp.status_code == 200:
-                            coins = search_resp.json().get("coins", [])
-                            # Find best match - prefer exact symbol match
-                            for coin in coins:
-                                if coin.get("symbol", "").lower() == sym:
-                                    coin_ids_map[sym] = coin["id"]
-                                    ids_to_fetch.append(coin["id"])
-                                    break
-                    except Exception:
-                        pass
-
-                prices = {}
-                if ids_to_fetch:
-                    try:
-                        pr = await client_http.get(
-                            f"{COINGECKO_BASE}/simple/price",
-                            params={"ids": ",".join(set(ids_to_fetch)), "vs_currencies": "usd"}
-                        )
-                        if pr.status_code == 200:
-                            prices = pr.json()
-                    except Exception:
-                        pass
-
-                for t in known_tokens:
-                    sym_lower = t["symbol"].lower()
-                    coin_id = coin_ids_map.get(sym_lower)
-                    price = prices.get(coin_id, {}).get("usd", 0) if coin_id else 0
-                    usd_val = t["amount"] * price
-                    # Categorize by mint address first, then by symbol
-                    mint_info = defi_mints.get(t["mint"])
-                    if mint_info:
-                        category = mint_info["category"]
-                        protocol = mint_info["protocol"]
-                        defi_type = mint_info.get("type", "")
-                    elif sym_lower in ("msol", "jitosol", "bsol", "stsol", "scnsol", "jupsol"):
-                        category = "staking"
-                        protocol_map = {"msol": "Marinade", "jitosol": "Jito", "bsol": "BlazeStake", "stsol": "Lido", "scnsol": "Socean", "jupsol": "Jupiter"}
-                        protocol = protocol_map.get(sym_lower, "Staking")
-                        defi_type = "Staking"
-                    elif sym_lower == "jlp":
-                        category = "defi"
-                        protocol = "Jupiter"
-                        defi_type = "Vault"
-                    else:
-                        category = "wallet"
-                        protocol = None
-                        defi_type = None
-                    tokens.append({
-                        "symbol": t["symbol"],
-                        "name": t["name"],
-                        "amount": t["amount"],
-                        "price": price,
-                        "usd_value": usd_val,
-                        "icon_url": t.get("icon_url", ""),
-                        "category": category,
-                        "protocol": protocol,
-                        "defi_type": defi_type
-                    })
-                    total_usd += usd_val
-
-            # Try to identify unknown tokens via CoinGecko contract lookup
-            for t in unknown_tokens:
-                mint = t["mint"]
-                try:
-                    # CoinGecko supports Solana contract address lookup
-                    cg_resp = await client_http.get(
-                        f"{COINGECKO_BASE}/coins/solana/contract/{mint}"
-                    )
-                    if cg_resp.status_code == 200:
-                        cg_data = cg_resp.json()
-                        symbol = cg_data.get("symbol", "").upper()
-                        name = cg_data.get("name", "Unknown")
-                        price = cg_data.get("market_data", {}).get("current_price", {}).get("usd", 0)
-                        icon = cg_data.get("image", {}).get("small", "")
-                        usd_val = t["amount"] * price
-                        if symbol:
-                            tokens.append({
-                                "symbol": symbol,
-                                "name": name,
-                                "amount": t["amount"],
-                                "price": price,
-                                "usd_value": usd_val,
-                                "icon_url": icon,
-                                "category": "wallet",
-                                "protocol": None,
-                                "defi_type": None
-                            })
-                            total_usd += usd_val
-                except Exception:
-                    pass
+                    category = "wallet"
+                    protocol = None
+                    defi_type = None
+                
+                tokens.append({
+                    "symbol": meta["symbol"],
+                    "name": meta["name"],
+                    "amount": spl["amount"],
+                    "price": price,
+                    "usd_value": usd_val,
+                    "icon_url": meta.get("icon_url", ""),
+                    "category": category,
+                    "protocol": protocol,
+                    "defi_type": defi_type
+                })
+                total_usd += usd_val
 
         # Sort by USD value descending
         tokens.sort(key=lambda x: x["usd_value"], reverse=True)
+        logger.info(f"Solana wallet {address[:10]}...: {len(tokens)} tokens, total=${total_usd:.2f}")
         return {"tokens": tokens, "total_usd": total_usd}
     except Exception as e:
         logger.warning(f"Solana balance fetch error: {e}")
@@ -1042,3 +989,58 @@ app.add_middleware(
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+# --- Daily Midnight PST Snapshot Scheduler ---
+
+async def daily_snapshot_task():
+    """Runs a net worth snapshot every day at midnight PST (UTC-8)"""
+    while True:
+        try:
+            # Calculate time until next midnight PST
+            now_utc = datetime.now(timezone.utc)
+            pst_offset = timedelta(hours=-8)
+            now_pst = now_utc + pst_offset
+            # Next midnight PST
+            next_midnight_pst = now_pst.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(days=1)
+            # Convert back to UTC
+            next_midnight_utc = next_midnight_pst - pst_offset
+            wait_seconds = (next_midnight_utc - now_utc).total_seconds()
+            
+            logger.info(f"Next snapshot scheduled in {wait_seconds/3600:.1f} hours (midnight PST)")
+            await asyncio.sleep(wait_seconds)
+            
+            # Take snapshot
+            assets = await db.assets.find({}, {"_id": 0}).to_list(1000)
+            projects = await db.projects.find({}, {"_id": 0}).to_list(100)
+            
+            categories = {"stocks": 0, "crypto": 0, "cash": 0, "crypto_projects": 0, "debts": 0, "investments": 0}
+            for asset in assets:
+                manual = asset.get("manual_value")
+                value = manual if manual is not None else (asset.get("quantity", 0) * asset.get("current_price", 0))
+                cat = asset.get("category", "cash")
+                if cat in categories:
+                    categories[cat] += value
+            for project in projects:
+                categories["investments"] += project.get("earned", 0)
+            
+            total = categories["stocks"] + categories["crypto"] + categories["cash"] + categories["crypto_projects"] + categories["investments"] - categories["debts"]
+            
+            snapshot = {
+                "id": str(uuid.uuid4()),
+                "total_net_worth": total,
+                "stocks_value": categories["stocks"],
+                "crypto_value": categories["crypto"],
+                "cash_value": categories["cash"],
+                "crypto_projects_value": categories["crypto_projects"] + categories["investments"],
+                "debts_value": categories["debts"],
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+            await db.net_worth_history.insert_one(snapshot)
+            logger.info(f"Daily snapshot saved: ${total:,.2f}")
+        except Exception as e:
+            logger.error(f"Daily snapshot error: {e}")
+            await asyncio.sleep(3600)  # Retry in 1 hour on error
+
+@app.on_event("startup")
+async def start_scheduler():
+    asyncio.create_task(daily_snapshot_task())

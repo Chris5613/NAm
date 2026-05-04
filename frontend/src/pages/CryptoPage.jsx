@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { walletsApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,12 +40,27 @@ export default function CryptoPage() {
 
   useEffect(() => { fetchWallets(); }, [fetchWallets]);
 
+  const fetchedRef = useRef(false);
+  
   useEffect(() => {
-    if (wallets.length > 0) {
-      wallets.forEach(w => { if (!balances[w.id]) fetchBalance(w.id); });
-      // Fetch DeFi for all Solana wallets
-      const solWallets = wallets.filter(w => w.chain === "solana");
-      if (solWallets.length > 0) fetchAllDefi(solWallets);
+    if (wallets.length > 0 && !fetchedRef.current) {
+      fetchedRef.current = true;
+      // Always fetch fresh balances for all wallets
+      const fetchAll = async () => {
+        const newBalances = {};
+        for (const w of wallets) {
+          try {
+            const res = await walletsApi.getBalances(w.id);
+            newBalances[w.id] = res.data;
+          } catch (err) { console.error(`Balance fetch error for ${w.id}:`, err); }
+        }
+        setBalances(newBalances);
+        
+        // Then fetch DeFi
+        const solWallets = wallets.filter(w => w.chain === "solana");
+        if (solWallets.length > 0) fetchAllDefi(solWallets);
+      };
+      fetchAll();
     }
   }, [wallets]);
 
@@ -79,10 +94,17 @@ export default function CryptoPage() {
 
   const refreshAll = async () => {
     setRefreshing(true);
-    for (const w of wallets) await fetchBalance(w.id);
+    const newBalances = {};
+    for (const w of wallets) {
+      try {
+        const res = await walletsApi.getBalances(w.id);
+        newBalances[w.id] = res.data;
+      } catch { /* silent */ }
+    }
+    setBalances(newBalances);
     const solWallets = wallets.filter(w => w.chain === "solana");
     if (solWallets.length > 0) await fetchAllDefi(solWallets);
-    const total = Object.values(balances).reduce((s, b) => s + (b?.total_usd || 0), 0);
+    const total = Object.values(newBalances).reduce((s, b) => s + (b?.total_usd || 0), 0);
     if (total > 0) setLiveHistory(prev => [...prev, { time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), value: total }]);
     setRefreshing(false);
     toast.success("Refreshed");
