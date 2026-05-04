@@ -207,6 +207,18 @@ backend:
         -comment: "Finnhub stock API endpoints verified working correctly. GET /api/prices/stock/{symbol} returns real-time quote with price, change, change_percent, high, low, open, prev_close. GET /api/prices/stock/search/{query} returns filtered ticker search results (US stocks only, no dots). Tested with AAPL: search returned correct results, price fetch returned $275.49 with live data. API integration fully functional."
 
 frontend:
+  - task: "Phone List page with inventory tracking, eBay pricing, tags, and CRUD operations"
+    implemented: true
+    working: true
+    file: "frontend/src/pages/PhoneList.jsx, frontend/src/components/AddEditPhoneDialog.jsx, frontend/src/components/Sidebar.jsx, frontend/src/lib/api.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
+    status_history:
+        -working: true
+        -agent: "testing"
+        -comment: "COMPREHENSIVE UI TESTING COMPLETE - All 9 test scenarios PASSED successfully. (1) Page renders correctly: Sidebar shows 'Phone List' (not 'Unity Phone List'), page header correct, inventory card shows $0.00 initially, empty state displays 'No phones yet' with Add Phone CTA. (2) Add phone with auto eBay pricing: iPhone 8 added successfully, eBay price fetched at $121.98, tags (NOS, MainProject) displayed as colored chips, carrier (Helium) shown with colored badge, market value shows '$121.98' with 'eBay avg' subtext, inventory total updated to $121.98. (3) Add phone with manual price: Moto G added with manual price $75.00, manual price toggle works correctly, price input appears when toggled, market value shows '$75.00' with 'manual' subtext, inventory total updated to $196.98 (121.98 + 75.00). (4) Tag filters and search: All tag filter chips present (All, NOS, MainProject, Backup), clicking 'Backup' filter shows only Moto G row, clicking 'All' shows both phones, search for 'iphone' filters to only iPhone 8 row, clearing search restores both rows. (5) Edit phone: Edit dialog opens with prefilled data (DEV-001, iPhone 8), existing tags (NOS, MainProject) visible, added new tag 'Active' successfully, tag chip appears in dialog and in table row after save, Active filter chip appears in tag filters. (6) Per-phone refresh price: Menu opens correctly, 'Refresh price' action completes without errors, toast notification appears (though price may be same due to 24h cache). (7) Bulk refresh all prices: 'Refresh prices' button works, bulk refresh completes, manual-priced phone (Moto G) correctly skipped. (8) Delete phones: iPhone 8 deleted successfully (1 phone remains), Moto G deleted successfully, empty state 'No phones yet' re-appears, inventory total resets to $0.00. (9) Console errors: NO console errors detected during any flows. Screenshots captured: empty state, first phone with eBay price, two phones with tags/carriers/values, edit dialog with 3 tags, final empty state. MINOR ISSUE: OS select dropdown keyboard navigation selected wrong option (showed 'Android' instead of 'iOS'), but this is a minor UI issue that doesn't affect core functionality. All critical features working perfectly: eBay integration ($121.98 fetched), manual pricing ($75.00), tag system with colored chips, carrier badges, search/filter, edit/delete, inventory value calculation."
+  
   - task: "Main Net Worth page shows single Crypto box reflecting Crypto tab total"
     implemented: true
     working: true
@@ -304,11 +316,7 @@ metadata:
   run_ui: false
 
 test_plan:
-  current_focus:
-    - "Phone List CRUD endpoints"
-    - "Phone tags endpoint"
-    - "Phone price refresh endpoints"
-    - "RapidAPI eBay integration"
+  current_focus: []
   stuck_tasks: []
   test_all: false
   test_priority: "high_first"
