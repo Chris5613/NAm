@@ -84,16 +84,12 @@ export const jupiterApi = {
   },
 };
 
-// CoinStats API for wallet balances - needs CORS proxy
-const COINSTATS_API_KEY = process.env.REACT_APP_COINSTATS_API_KEY;
-const COINSTATS_BASE = "https://api.coinstats.app/public/v1";
-
 export const coinStatsApi = {
   getWalletBalance: async (address, chain = "solana") => {
     try {
 const response = await fetch(
   `https://openapiv1.coinstats.app/wallet/balance?address=${address}&connectionId=solana`,
-  { headers: { 'X-API-KEY': 'COINSTATS_API_KEY' } }
+  { headers: { 'X-API-KEY': 'F90juaYvtu8cek9UAWqj7q/FqhFE7QR00lWU84HXues=' } }
 );
       return response.data || {};
     } catch (error) {
