@@ -91,10 +91,10 @@ const COINSTATS_BASE = "https://api.coinstats.app/public/v1";
 export const coinStatsApi = {
   getWalletBalance: async (address, chain = "solana") => {
     try {
-      const url = `${COINSTATS_BASE}/wallets/${address}?chain=${chain}`;
-      const response = await withCorsProxy(url, {
-        headers: { "X-API-KEY": COINSTATS_API_KEY },
-      });
+const response = await fetch(
+  `https://openapiv1.coinstats.app/wallet/balance?address=${address}&connectionId=solana`,
+  { headers: { 'X-API-KEY': 'your-api-key' } }
+);
       return response.data || {};
     } catch (error) {
       console.warn(`CoinStats wallet balance fetch failed for ${address}:`, error);
