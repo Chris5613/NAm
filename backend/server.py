@@ -626,9 +626,47 @@ async def get_wallet_balances(wallet_id: str):
     if wallet["chain"] == "bitcoin":
         return await _fetch_btc_balance(wallet["address"])
     elif wallet["chain"] == "solana":
-        return await _fetch_solana_balances(wallet["address"])
+        return await _fetch_coinstats_balance(wallet["address"], "solana")
     else:
         raise HTTPException(status_code=400, detail=f"Unsupported chain: {wallet['chain']}")
+
+async def _fetch_coinstats_balance(address: str, chain: str = "solana"):
+    """Primary balance fetcher using CoinStats API"""
+    try:
+        async with httpx.AsyncClient(timeout=15) as client_http:
+            resp = await client_http.get(
+                "https://openapiv1.coinstats.app/wallet/balance",
+                params={"address": address, "connectionId": chain},
+                headers={"X-API-KEY": COINSTATS_API_KEY}
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                tokens = []
+                total = 0
+                for item in data:
+                    amount = item.get("amount", 0) or 0
+                    price = item.get("price", 0) or 0
+                    value = amount * price
+                    tokens.append({
+                        "symbol": item.get("symbol", "?").upper(),
+                        "name": item.get("name", ""),
+                        "amount": amount,
+                        "price": price,
+                        "usd_value": value,
+                        "icon_url": item.get("icon", ""),
+                        "category": "wallet",
+                        "protocol": None,
+                        "defi_type": None,
+                    })
+                    total += value
+                tokens.sort(key=lambda x: x["usd_value"], reverse=True)
+                return {"tokens": tokens, "total_usd": total}
+            else:
+                logger.warning(f"CoinStats returned {resp.status_code} for {address[:10]}")
+                return {"tokens": [], "total_usd": 0, "error": f"CoinStats returned {resp.status_code}"}
+    except Exception as e:
+        logger.warning(f"CoinStats balance error: {e}")
+        return {"tokens": [], "total_usd": 0, "error": str(e)}
 
 @api_router.get("/wallets/solana/defi/{address}")
 async def get_solana_defi_positions(address: str):
@@ -1133,8 +1171,8 @@ async def start_scheduler():
     asyncio.create_task(nos_tracking_task())
 
 async def nos_tracking_task():
-    """Polls every hour to check for new NOS deposits and auto-add as earnings"""
-    await asyncio.sleep(30)  # Wait for app to be ready
+    """Runs daily at 23:45 UTC - fetches Nosana earnings for the day and adds as transaction"""
+    await asyncio.sleep(10)  # Wait for app to be ready
     while True:
         try:
             config = await db.nos_tracking.find_one({"key": "config"}, {"_id": 0})
@@ -1149,61 +1187,75 @@ async def nos_tracking_task():
                 await asyncio.sleep(3600)
                 continue
             
-            # Get current NOS balance from CoinStats
-            current_nos = 0
-            nos_price = 0
+            # Calculate time until 23:45 UTC
+            now_utc = datetime.now(timezone.utc)
+            target_today = now_utc.replace(hour=23, minute=45, second=0, microsecond=0)
+            if now_utc >= target_today:
+                # Already past 23:45 today, wait until tomorrow
+                target = target_today + timedelta(days=1)
+            else:
+                target = target_today
+            
+            wait_seconds = (target - now_utc).total_seconds()
+            logger.info(f"NOS tracking: next check in {wait_seconds/3600:.1f} hours (23:45 UTC)")
+            await asyncio.sleep(wait_seconds)
+            
+            # Fetch today's earnings from Nosana API
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            start_date = f"{today}T00:00:00.000Z"
+            end_date = f"{today}T23:59:59.000Z"
+            
+            earning_usd = 0
             try:
                 async with httpx.AsyncClient(timeout=15) as client_http:
                     resp = await client_http.get(
-                        "https://openapiv1.coinstats.app/wallet/balance",
-                        params={"address": wallet_address, "connectionId": "solana"},
-                        headers={"X-API-KEY": COINSTATS_API_KEY}
+                        "https://dashboard.k8s.prd.nos.ci/api/stats/earning-history",
+                        params={
+                            "address": wallet_address,
+                            "start_date": start_date,
+                            "end_date": end_date,
+                        }
                     )
                     if resp.status_code == 200:
                         data = resp.json()
-                        for item in data:
-                            if item.get("symbol", "").upper() == "NOS":
-                                current_nos = item.get("amount", 0) or 0
-                                nos_price = item.get("price", 0) or 0
-                                break
+                        results = data.get("results", [])
+                        # Sum up daily breakdown for today
+                        for result in results:
+                            daily = result.get("daily_breakdown", {})
+                            if today in daily:
+                                for market, amount in daily[today].items():
+                                    earning_usd += amount
+                        logger.info(f"NOS tracking: today's earnings = ${earning_usd:.4f}")
+                    else:
+                        logger.warning(f"Nosana API returned {resp.status_code}")
+                        continue
             except Exception as e:
-                logger.warning(f"NOS tracking - CoinStats fetch error: {e}")
-                await asyncio.sleep(3600)
+                logger.warning(f"NOS tracking - Nosana API error: {e}")
                 continue
             
-            # Get last known balance
-            status = await db.nos_tracking.find_one({"key": "status"}, {"_id": 0})
-            last_balance = status.get("last_balance", 0) if status else 0
-            total_added = status.get("total_added", 0) if status else 0
-            
-            # First run - just record the baseline
-            if not status or status.get("last_checked") is None:
-                await db.nos_tracking.update_one(
-                    {"key": "status"},
-                    {"$set": {"last_balance": current_nos, "last_checked": datetime.now(timezone.utc).isoformat(), "total_added": 0}},
-                    upsert=True
-                )
-                logger.info(f"NOS tracking initialized: baseline={current_nos} NOS")
-                await asyncio.sleep(3600)
-                continue
-            
-            # Check if balance increased (new deposits)
-            if current_nos > last_balance:
-                new_nos = current_nos - last_balance
-                earning_usd = new_nos * nos_price
+            if earning_usd > 0.001:
+                # Check if we already added for today (prevent duplicates on restart)
+                existing = await db.transactions.find_one({
+                    "category": "NOS Daily Earnings",
+                    "date": today,
+                    "notes": {"$regex": wallet_address[:10]}
+                }, {"_id": 0})
                 
-                # Find the project to credit
+                if existing:
+                    logger.info(f"NOS tracking: already recorded for {today}, skipping")
+                    continue
+                
+                # Find the Nosana project
                 project = await db.projects.find_one({"name": {"$regex": project_name, "$options": "i"}}, {"_id": 0})
                 if project:
-                    # Add as transaction
                     txn = {
                         "id": str(uuid.uuid4()),
                         "project_id": project["id"],
                         "type": "earning",
                         "amount": earning_usd,
-                        "category": "NOS Deposit",
-                        "notes": f"Auto-detected: +{new_nos:.6f} NOS @ ${nos_price:.4f}",
-                        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                        "category": "NOS Daily Earnings",
+                        "notes": f"Auto: {wallet_address[:10]}... earned ${earning_usd:.4f} on {today}",
+                        "date": today,
                         "created_at": datetime.now(timezone.utc).isoformat()
                     }
                     await db.transactions.insert_one(txn)
@@ -1211,19 +1263,37 @@ async def nos_tracking_task():
                         {"id": project["id"]},
                         {"$inc": {"earned": earning_usd}}
                     )
-                    total_added += earning_usd
-                    logger.info(f"NOS tracking: +{new_nos:.6f} NOS (${earning_usd:.2f}) added to {project_name}")
+                    # Also update the category if it exists
+                    cat_exists = await db.projects.find_one({"id": project["id"], "categories.name": "NOS Daily Earnings"})
+                    if cat_exists:
+                        await db.projects.update_one(
+                            {"id": project["id"], "categories.name": "NOS Daily Earnings"},
+                            {"$inc": {"categories.$.earned": earning_usd}}
+                        )
+                    else:
+                        await db.projects.update_one(
+                            {"id": project["id"]},
+                            {"$push": {"categories": {"name": "NOS Daily Earnings", "earned": earning_usd}}}
+                        )
+                    
+                    # Update tracking status
+                    status = await db.nos_tracking.find_one({"key": "status"}, {"_id": 0})
+                    total_added = (status.get("total_added", 0) if status else 0) + earning_usd
+                    await db.nos_tracking.update_one(
+                        {"key": "status"},
+                        {"$set": {"last_checked": datetime.now(timezone.utc).isoformat(), "last_earning": earning_usd, "total_added": total_added}},
+                        upsert=True
+                    )
+                    logger.info(f"NOS tracking: +${earning_usd:.4f} added to {project_name} for {today}")
                 else:
                     logger.warning(f"NOS tracking: project '{project_name}' not found")
-            
-            # Update status (always update balance even if it decreased)
-            await db.nos_tracking.update_one(
-                {"key": "status"},
-                {"$set": {"last_balance": current_nos, "last_checked": datetime.now(timezone.utc).isoformat(), "total_added": total_added}},
-                upsert=True
-            )
-            
+            else:
+                logger.info(f"NOS tracking: no earnings for {today}")
+                await db.nos_tracking.update_one(
+                    {"key": "status"},
+                    {"$set": {"last_checked": datetime.now(timezone.utc).isoformat(), "last_earning": 0}},
+                    upsert=True
+                )
         except Exception as e:
             logger.error(f"NOS tracking error: {e}")
-        
-        await asyncio.sleep(3600)  # Check every hour
+            await asyncio.sleep(3600)  # Retry in 1 hour on error

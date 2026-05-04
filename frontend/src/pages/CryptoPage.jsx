@@ -264,8 +264,11 @@ export default function CryptoPage() {
                 {walletTokens.map((t, i) => (
                   <div key={i} className="px-3 py-2.5 grid grid-cols-5 items-center hover:bg-secondary/30 transition-colors group">
                     <div className="flex items-center gap-2">
-                      <button onClick={() => setLogoEditToken(t.symbol)} className="relative flex-shrink-0" title="Set custom logo">
-                        {t.icon_url ? <img src={t.icon_url} alt="" className="w-5 h-5 rounded-full" onError={e => e.target.style.display='none'} /> : <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center"><span className="text-[9px] font-bold text-muted-foreground">{(t.symbol||"?")[0]}</span></div>}
+                      <button onClick={() => setLogoEditToken(t.symbol)} className="relative flex-shrink-0 group/logo" title="Click to set custom logo">
+                        {t.icon_url ? <img src={t.icon_url} alt="" className="w-6 h-6 rounded-full" onError={e => e.target.style.display='none'} /> : <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center border border-border/40"><span className="text-[10px] font-bold text-muted-foreground">{(t.symbol||"?")[0]}</span></div>}
+                        <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity">
+                          <Image className="w-3 h-3 text-white" strokeWidth={2} />
+                        </div>
                       </button>
                       <span className="text-sm font-medium text-foreground">{t.symbol}</span>
                     </div>
