@@ -622,13 +622,27 @@ async def get_wallet_balances(wallet_id: str):
     wallet = await db.wallets.find_one({"id": wallet_id}, {"_id": 0})
     if not wallet:
         raise HTTPException(status_code=404, detail="Wallet not found")
-
-    if wallet["chain"] == "bitcoin":
-        return await _fetch_btc_balance(wallet["address"])
-    elif wallet["chain"] == "solana":
-        return await _fetch_coinstats_balance(wallet["address"], "solana")
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported chain: {wallet['chain']}")
+    
+    chain = wallet["chain"]
+    address = wallet["address"]
+    
+    # CoinStats connectionId mapping
+    coinstats_chain_map = {
+        "solana": "solana",
+        "bitcoin": "bitcoin",
+        "ethereum": "ethereum",
+        "bsc": "binance-smart-chain",
+        "polygon": "polygon",
+        "avalanche": "avalanche",
+        "arbitrum": "arbitrum",
+        "optimism": "optimism",
+        "base": "base",
+        "tron": "tron",
+        "fantom": "fantom",
+    }
+    
+    connection_id = coinstats_chain_map.get(chain, chain)
+    return await _fetch_coinstats_balance(address, connection_id)
 
 async def _fetch_coinstats_balance(address: str, chain: str = "solana"):
     """Primary balance fetcher using CoinStats API"""
@@ -805,7 +819,47 @@ async def update_token_pref(symbol: str, input_data: TokenPrefUpdate):
     return pref
 
 
-# --- CoinStats Wallet Balance ---
+# --- Custom Tokens ---
+
+class CustomToken(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    symbol: str
+    name: str
+    amount: float = 0
+    price: float = 0
+    icon_url: Optional[str] = None
+    chain: str = "custom"
+
+class CustomTokenCreate(BaseModel):
+    symbol: str
+    name: str
+    amount: float = 0
+    price: float = 0
+    icon_url: Optional[str] = None
+    chain: str = "custom"
+
+@api_router.get("/custom-tokens")
+async def get_custom_tokens():
+    tokens = await db.custom_tokens.find({}, {"_id": 0}).to_list(100)
+    return tokens
+
+@api_router.post("/custom-tokens", response_model=CustomToken)
+async def add_custom_token(input_data: CustomTokenCreate):
+    token = CustomToken(**input_data.model_dump())
+    await db.custom_tokens.insert_one(token.model_dump())
+    return token
+
+@api_router.put("/custom-tokens/{token_id}")
+async def update_custom_token(token_id: str, input_data: CustomTokenCreate):
+    await db.custom_tokens.update_one({"id": token_id}, {"$set": input_data.model_dump()})
+    updated = await db.custom_tokens.find_one({"id": token_id}, {"_id": 0})
+    return updated
+
+@api_router.delete("/custom-tokens/{token_id}")
+async def delete_custom_token(token_id: str):
+    await db.custom_tokens.delete_one({"id": token_id})
+    return {"message": "Deleted"}
 
 @api_router.get("/wallets/coinstats/{address}")
 async def get_coinstats_balance(address: str, chain: str = "solana"):

@@ -55,6 +55,13 @@ export const tokenPrefsApi = {
   update: (symbol, data) => api.put(`/token-prefs/${symbol}`, data),
 };
 
+export const customTokensApi = {
+  getAll: () => api.get("/custom-tokens"),
+  create: (data) => api.post("/custom-tokens", data),
+  update: (id, data) => api.put(`/custom-tokens/${id}`, data),
+  delete: (id) => api.delete(`/custom-tokens/${id}`),
+};
+
 export const nosTrackingApi = {
   getStatus: () => api.get("/nos-tracking/status"),
   configure: (wallet_address, project_name) => api.post(`/nos-tracking/configure?wallet_address=${wallet_address}&project_name=${project_name}`),

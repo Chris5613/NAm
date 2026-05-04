@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { walletsApi, tokenPrefsApi } from "@/lib/api";
+import { walletsApi, tokenPrefsApi, customTokensApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,15 @@ function shortenAddr(a) { return a?.length > 12 ? `${a.slice(0, 6)}...${a.slice(
 const CHAIN_META = {
   bitcoin: { name: "Bitcoin", color: "border-amber-500/30 text-amber-400", activeBg: "bg-amber-500/15", icon: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png" },
   solana: { name: "Solana", color: "border-purple-500/30 text-purple-400", activeBg: "bg-purple-500/15", icon: "https://assets.coingecko.com/coins/images/4128/small/solana.png" },
+  ethereum: { name: "Ethereum", color: "border-blue-500/30 text-blue-400", activeBg: "bg-blue-500/15", icon: "https://assets.coingecko.com/coins/images/279/small/ethereum.png" },
+  bsc: { name: "BNB Chain", color: "border-yellow-500/30 text-yellow-400", activeBg: "bg-yellow-500/15", icon: "https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png" },
+  polygon: { name: "Polygon", color: "border-violet-500/30 text-violet-400", activeBg: "bg-violet-500/15", icon: "https://assets.coingecko.com/coins/images/4713/small/polygon.png" },
+  avalanche: { name: "Avalanche", color: "border-red-500/30 text-red-400", activeBg: "bg-red-500/15", icon: "https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png" },
+  arbitrum: { name: "Arbitrum", color: "border-sky-500/30 text-sky-400", activeBg: "bg-sky-500/15", icon: "https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg" },
+  optimism: { name: "Optimism", color: "border-rose-500/30 text-rose-400", activeBg: "bg-rose-500/15", icon: "https://assets.coingecko.com/coins/images/25244/small/Optimism.png" },
+  base: { name: "Base", color: "border-blue-500/30 text-blue-400", activeBg: "bg-blue-500/15", icon: "https://assets.coingecko.com/asset_platforms/images/131/small/base.jpeg" },
+  tron: { name: "Tron", color: "border-red-500/30 text-red-400", activeBg: "bg-red-500/15", icon: "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png" },
+  fantom: { name: "Fantom", color: "border-blue-500/30 text-blue-400", activeBg: "bg-blue-500/15", icon: "https://assets.coingecko.com/coins/images/4001/small/Fantom_round.png" },
 };
 
 export default function CryptoPage() {
@@ -26,6 +35,7 @@ export default function CryptoPage() {
   const [balances, setBalances] = useState({});
   const [defiPositions, setDefiPositions] = useState([]);
   const [tokenPrefs, setTokenPrefs] = useState({});
+  const [customTokens, setCustomTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
@@ -35,14 +45,16 @@ export default function CryptoPage() {
 
   const fetchWallets = useCallback(async () => {
     try {
-      const [walletsRes, prefsRes] = await Promise.all([
+      const [walletsRes, prefsRes, customRes] = await Promise.all([
         walletsApi.getAll(),
         tokenPrefsApi.getAll(),
+        customTokensApi.getAll(),
       ]);
       setWallets(walletsRes.data || []);
       const prefsMap = {};
       (prefsRes.data || []).forEach(p => { prefsMap[p.symbol] = p; });
       setTokenPrefs(prefsMap);
+      setCustomTokens(customRes.data || []);
     } catch { toast.error("Failed to load wallets"); } finally { setLoading(false); }
   }, []);
 
@@ -71,6 +83,16 @@ export default function CryptoPage() {
       fetchAll();
     }
   }, [wallets]);
+
+  // Auto-poll every hour
+  useEffect(() => {
+    if (wallets.length === 0) return;
+    const interval = setInterval(() => {
+      fetchedRef.current = false;
+      fetchWallets();
+    }, 3600000); // 1 hour
+    return () => clearInterval(interval);
+  }, [wallets.length, fetchWallets]);
 
   const fetchBalance = async (wid) => {
     try {
@@ -136,23 +158,52 @@ export default function CryptoPage() {
     } catch { toast.error("Failed to update"); }
   };
 
-  // Aggregate
-  const totalValue = Object.values(balances).reduce((s, b) => s + (b?.total_usd || 0), 0);
+  // Aggregate - exclude hidden tokens from totals
+  const allTokensRaw = [];
+  wallets.forEach(w => {
+    balances[w.id]?.tokens?.forEach(t => allTokensRaw.push({ ...t, chain: w.chain }));
+  });
+  // Add custom tokens to raw totals
+  customTokens.forEach(ct => {
+    allTokensRaw.push({ symbol: ct.symbol, usd_value: ct.amount * ct.price, chain: ct.chain || "custom" });
+  });
+  // Calculate total excluding hidden
+  const hiddenSymbols = new Set(Object.entries(tokenPrefs).filter(([_, p]) => p.hidden).map(([s]) => s));
+  const visibleTotal = allTokensRaw.filter(t => !hiddenSymbols.has(t.symbol)).reduce((s, t) => s + (t.usd_value || 0), 0);
   const defiTotalValue = defiPositions.reduce((s, p) => s + p.total_value, 0);
-  const grandTotal = totalValue + defiTotalValue;
+  const grandTotal = visibleTotal + defiTotalValue;
 
   const chainBreakdown = {};
-  wallets.forEach(w => { const b = balances[w.id]; if (b) chainBreakdown[w.chain] = (chainBreakdown[w.chain] || 0) + (b.total_usd || 0); });
-  // Add defi to solana
+  wallets.forEach(w => {
+    const tokens = balances[w.id]?.tokens || [];
+    const visibleValue = tokens.filter(t => !hiddenSymbols.has(t.symbol)).reduce((s, t) => s + (t.usd_value || 0), 0);
+    chainBreakdown[w.chain] = (chainBreakdown[w.chain] || 0) + visibleValue;
+  });
   if (defiTotalValue > 0) chainBreakdown["solana"] = (chainBreakdown["solana"] || 0) + defiTotalValue;
   const sortedChains = Object.entries(chainBreakdown).sort((a, b) => b[1] - a[1]);
 
-  // Combine tokens
+  // Combine tokens (wallet balances + custom tokens)
   const allTokens = [];
   wallets.forEach(w => {
     if (activeChain && w.chain !== activeChain) return;
     balances[w.id]?.tokens?.forEach(t => allTokens.push({ ...t, chain: w.chain }));
   });
+  // Add custom tokens
+  if (!activeChain || activeChain === "custom") {
+    customTokens.forEach(ct => {
+      allTokens.push({
+        symbol: ct.symbol,
+        name: ct.name,
+        amount: ct.amount,
+        price: ct.price,
+        usd_value: ct.amount * ct.price,
+        icon_url: ct.icon_url || "",
+        category: "wallet",
+        protocol: null,
+        chain: ct.chain || "custom",
+      });
+    });
+  }
   const combined = {};
   allTokens.forEach(t => {
     const key = `${t.symbol}_${t.category}_${t.protocol || ""}`;
@@ -390,8 +441,17 @@ function WalletManageModal({ open, onOpenChange, wallets, onUpdate }) {
             <Select value={chain} onValueChange={setChain}>
               <SelectTrigger className="bg-background border-border"><SelectValue /></SelectTrigger>
               <SelectContent className="bg-card border-border">
-                <SelectItem value="solana">Solana</SelectItem>
-                <SelectItem value="bitcoin">Bitcoin</SelectItem>
+                <SelectItem value="solana">Solana (SOL)</SelectItem>
+                <SelectItem value="bitcoin">Bitcoin (BTC)</SelectItem>
+                <SelectItem value="ethereum">Ethereum (ETH)</SelectItem>
+                <SelectItem value="bsc">BNB Chain (BSC)</SelectItem>
+                <SelectItem value="polygon">Polygon (MATIC)</SelectItem>
+                <SelectItem value="avalanche">Avalanche (AVAX)</SelectItem>
+                <SelectItem value="arbitrum">Arbitrum (ARB)</SelectItem>
+                <SelectItem value="optimism">Optimism (OP)</SelectItem>
+                <SelectItem value="base">Base</SelectItem>
+                <SelectItem value="tron">Tron (TRX)</SelectItem>
+                <SelectItem value="fantom">Fantom (FTM)</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -416,11 +476,9 @@ function WalletManageModal({ open, onOpenChange, wallets, onUpdate }) {
             {wallets.map(w => (
               <div key={w.id} className="flex items-center justify-between px-3 py-2 rounded-md bg-secondary/30">
                 <div className="flex items-center gap-2">
-                  <img src={CHAIN_META[w.chain]?.icon || ""} alt="" className="w-4 h-4 rounded-full" />
+                  <img src={CHAIN_META[w.chain]?.icon || ""} alt="" className="w-4 h-4 rounded-full" onError={e => e.target.style.display='none'} />
+                  <span className="text-xs text-muted-foreground">{CHAIN_META[w.chain]?.name || w.chain}</span>
                   <span className="font-mono text-xs text-foreground">{shortenAddr(w.address)}</span>
-                  <a href={w.chain === "bitcoin" ? `https://mempool.space/address/${w.address}` : `https://solscan.io/account/${w.address}`} target="_blank" rel="noopener noreferrer">
-                    <ExternalLink className="w-3 h-3 text-muted-foreground hover:text-foreground" />
-                  </a>
                 </div>
                 <Button variant="ghost" size="icon" className="h-6 w-6 text-rose-400 hover:text-rose-300" onClick={() => handleDelete(w)} data-testid={`del-wallet-${w.id}`}>
                   <Trash2 className="w-3 h-3" strokeWidth={1.5} />
@@ -429,6 +487,9 @@ function WalletManageModal({ open, onOpenChange, wallets, onUpdate }) {
             ))}
           </div>
         )}
+
+        {/* Custom Tokens */}
+        <CustomTokensSection onUpdate={onUpdate} />
       </DialogContent>
     </Dialog>
   );
@@ -460,5 +521,46 @@ function LogoEditDialog({ symbol, open, onOpenChange, onSave }) {
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function CustomTokensSection({ onUpdate }) {
+  const [form, setForm] = useState({ symbol: "", name: "", amount: "", price: "", icon_url: "" });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleAdd = async () => {
+    if (!form.symbol || !form.amount) { toast.error("Symbol and amount required"); return; }
+    setSubmitting(true);
+    try {
+      await customTokensApi.create({
+        symbol: form.symbol.toUpperCase(),
+        name: form.name || form.symbol,
+        amount: parseFloat(form.amount) || 0,
+        price: parseFloat(form.price) || 0,
+        icon_url: form.icon_url || null,
+        chain: "custom",
+      });
+      toast.success(`${form.symbol} added`);
+      setForm({ symbol: "", name: "", amount: "", price: "", icon_url: "" });
+      onUpdate();
+    } catch { toast.error("Failed to add"); } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="space-y-3 pt-4 border-t border-border/40">
+      <p className="text-xs text-muted-foreground font-medium">Custom Tokens</p>
+      <div className="grid grid-cols-2 gap-2">
+        <Input placeholder="Symbol (e.g. PEPE)" value={form.symbol} onChange={e => setForm({...form, symbol: e.target.value})} className="bg-background border-border text-sm" data-testid="custom-token-symbol" />
+        <Input placeholder="Name (optional)" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="bg-background border-border text-sm" />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <Input type="number" step="any" placeholder="Amount" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} className="bg-background border-border font-mono text-sm" data-testid="custom-token-amount" />
+        <Input type="number" step="any" placeholder="Price ($)" value={form.price} onChange={e => setForm({...form, price: e.target.value})} className="bg-background border-border font-mono text-sm" />
+      </div>
+      <Input placeholder="Icon URL (optional)" value={form.icon_url} onChange={e => setForm({...form, icon_url: e.target.value})} className="bg-background border-border text-sm" />
+      <Button onClick={handleAdd} disabled={submitting} size="sm" className="w-full bg-secondary text-foreground hover:bg-secondary/80" data-testid="add-custom-token-btn">
+        {submitting ? "Adding..." : "Add Custom Token"}
+      </Button>
+    </div>
   );
 }
