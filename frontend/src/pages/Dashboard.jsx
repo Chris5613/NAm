@@ -227,7 +227,18 @@ export default function Dashboard() {
           </TabsList>
           <TabsContent value={activeTab}>
             {activeTab === "crypto" ? (
-              <CryptoBreakdown key={activeTab} />
+              <CryptoBreakdown key="crypto" defaultOpen={true} />
+            ) : activeTab === "all" ? (
+              <div className="space-y-4">
+                <CryptoBreakdown key="all-crypto" defaultOpen={false} />
+                {filteredAssets.length > 0 && (
+                  <AssetList
+                    assets={filteredAssets}
+                    onUpdate={handleAssetUpdated}
+                    onDelete={handleAssetDeleted}
+                  />
+                )}
+              </div>
             ) : (
               <AssetList
                 assets={filteredAssets}

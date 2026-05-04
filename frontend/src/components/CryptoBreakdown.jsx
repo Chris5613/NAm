@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { cryptoCacheApi } from "@/lib/api";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, ChevronRight, Layers } from "lucide-react";
+import { ChevronDown, ChevronRight, Coins } from "lucide-react";
 
 const CHAIN_META = {
   bitcoin: { name: "Bitcoin", icon: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png" },
@@ -23,9 +23,10 @@ function formatCurrency(v) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(v);
 }
 
-export default function CryptoBreakdown() {
+export default function CryptoBreakdown({ defaultOpen = false }) {
   const [cache, setCache] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [cryptoOpen, setCryptoOpen] = useState(defaultOpen);
   const [expandedChain, setExpandedChain] = useState(null);
 
   useEffect(() => {
@@ -54,7 +55,7 @@ export default function CryptoBreakdown() {
   const chains = (cache?.chains || []).filter(c => (c.value || 0) > 0.01);
   const total = cache?.total || 0;
 
-  if (chains.length === 0) {
+  if (chains.length === 0 && total < 0.01) {
     return (
       <Card className="border-border/40 bg-card">
         <CardContent className="p-6 text-center text-muted-foreground text-sm">
@@ -66,97 +67,131 @@ export default function CryptoBreakdown() {
 
   return (
     <div className="space-y-3" data-testid="crypto-breakdown">
-      {chains.map((c) => {
-        const meta = CHAIN_META[c.chain] || { name: c.chain, icon: "" };
-        const pct = total > 0 ? ((c.value / total) * 100).toFixed(1) : "0.0";
-        const isExpanded = expandedChain === c.chain;
-        const tokens = (c.tokens || []).filter(t => (t.usd_value || 0) > 0.01);
-        return (
-          <div key={c.chain}>
-            <Card
-              className="border-border/40 bg-card hover:border-white/10 transition-colors cursor-pointer"
-              data-testid={`chain-box-${c.chain}`}
-              onClick={() => setExpandedChain(isExpanded ? null : c.chain)}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {isExpanded ? (
-                      <ChevronDown className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
-                    )}
-                    {meta.icon ? (
-                      <img src={meta.icon} alt="" className="w-7 h-7 rounded-full object-contain" onError={e => (e.target.style.display = "none")} />
-                    ) : (
-                      <div className="w-7 h-7 rounded-full bg-secondary flex items-center justify-center">
-                        <Layers className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />
-                      </div>
-                    )}
-                    <span className="font-medium text-foreground text-lg">{meta.name}</span>
-                    <span className="text-xs font-mono text-muted-foreground bg-secondary/60 px-2 py-0.5 rounded">
-                      {pct}%
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    <div className="text-right">
-                      <p className="text-xs text-muted-foreground">Tokens</p>
-                      <p className="font-mono text-sm text-foreground">{tokens.length}</p>
-                    </div>
-                    <div className="text-right min-w-[120px]">
-                      <p className="text-xs text-muted-foreground">Value</p>
-                      <p className="font-mono text-sm font-bold text-foreground">{formatCurrency(c.value)}</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+      {/* Level 1: Crypto top card */}
+      <Card
+        className="border-border/40 bg-card hover:border-white/10 transition-colors cursor-pointer"
+        data-testid="crypto-top-card"
+        onClick={() => setCryptoOpen(!cryptoOpen)}
+      >
+        <CardContent className="p-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              {cryptoOpen ? (
+                <ChevronDown className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+              ) : (
+                <ChevronRight className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+              )}
+              <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
+                <Coins className="w-4 h-4 text-foreground" strokeWidth={1.5} />
+              </div>
+              <div>
+                <span className="font-semibold text-foreground text-lg">Crypto</span>
+                <p className="text-xs text-muted-foreground mt-0.5">{chains.length} network{chains.length === 1 ? "" : "s"}</p>
+              </div>
+            </div>
+            <div className="text-right min-w-[120px]">
+              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="font-mono text-base font-bold text-foreground">{formatCurrency(total)}</p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
-            {isExpanded && tokens.length > 0 && (
-              <div className="ml-10 mt-2 mb-2 space-y-1.5" data-testid={`chain-tokens-${c.chain}`}>
-                {tokens.map((t, i) => (
-                  <Card key={`${t.symbol}-${i}`} className="border-border/20 bg-secondary/40">
-                    <CardContent className="px-5 py-2.5 flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        {t.icon_url ? (
-                          <img src={t.icon_url} alt="" className="w-5 h-5 rounded-full" onError={e => (e.target.style.display = "none")} />
+      {/* Level 2: Chain sub-cards */}
+      {cryptoOpen && (
+        <div className="ml-6 space-y-2" data-testid="crypto-chains-list">
+          {chains.map((c) => {
+            const meta = CHAIN_META[c.chain] || { name: c.chain, icon: "" };
+            const pct = total > 0 ? ((c.value / total) * 100).toFixed(1) : "0.0";
+            const isExpanded = expandedChain === c.chain;
+            const tokens = (c.tokens || []).filter(t => (t.usd_value || 0) > 0.01);
+            return (
+              <div key={c.chain}>
+                <Card
+                  className="border-border/30 bg-secondary/30 hover:border-white/10 transition-colors cursor-pointer"
+                  data-testid={`chain-box-${c.chain}`}
+                  onClick={() => setExpandedChain(isExpanded ? null : c.chain)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        {isExpanded ? (
+                          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />
                         ) : (
-                          <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center">
-                            <span className="text-[9px] font-bold text-muted-foreground">{(t.symbol || "?")[0]}</span>
+                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />
+                        )}
+                        {meta.icon ? (
+                          <img src={meta.icon} alt="" className="w-6 h-6 rounded-full object-contain" onError={e => (e.target.style.display = "none")} />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
+                            <Coins className="w-3 h-3 text-muted-foreground" strokeWidth={1.5} />
                           </div>
                         )}
-                        <span className="text-sm font-medium text-foreground">{t.symbol}</span>
-                        {t.name && <span className="text-xs text-muted-foreground">{t.name}</span>}
+                        <span className="font-medium text-foreground">{meta.name}</span>
+                        <span className="text-xs font-mono text-muted-foreground bg-secondary/60 px-2 py-0.5 rounded">{pct}%</span>
                       </div>
                       <div className="flex items-center gap-6">
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {t.amount < 0.0001 ? (t.amount || 0).toExponential(2) : (t.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                        </span>
-                        <span className="font-mono text-xs text-muted-foreground min-w-[80px] text-right">
-                          {t.price > 0 ? formatCurrency(t.price) : "-"}
-                        </span>
-                        <span className="font-mono text-sm text-foreground min-w-[100px] text-right font-medium">
-                          {formatCurrency(t.usd_value)}
-                        </span>
+                        <div className="text-right">
+                          <p className="text-[10px] text-muted-foreground">Tokens</p>
+                          <p className="font-mono text-xs text-foreground">{tokens.length}</p>
+                        </div>
+                        <div className="text-right min-w-[110px]">
+                          <p className="text-[10px] text-muted-foreground">Value</p>
+                          <p className="font-mono text-sm font-medium text-foreground">{formatCurrency(c.value)}</p>
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-
-            {isExpanded && tokens.length === 0 && (
-              <div className="ml-10 mt-2 mb-2">
-                <Card className="border-border/20 bg-secondary/40">
-                  <CardContent className="px-5 py-3">
-                    <p className="text-xs text-muted-foreground">No token details cached yet. Open the Crypto tab and refresh.</p>
+                    </div>
                   </CardContent>
                 </Card>
+
+                {/* Level 3: Tokens */}
+                {isExpanded && tokens.length > 0 && (
+                  <div className="ml-8 mt-2 mb-2 space-y-1.5" data-testid={`chain-tokens-${c.chain}`}>
+                    {tokens.map((t, i) => (
+                      <Card key={`${t.symbol}-${i}`} className="border-border/20 bg-secondary/20">
+                        <CardContent className="px-4 py-2.5 flex items-center justify-between">
+                          <div className="flex items-center gap-2.5">
+                            {t.icon_url ? (
+                              <img src={t.icon_url} alt="" className="w-5 h-5 rounded-full" onError={e => (e.target.style.display = "none")} />
+                            ) : (
+                              <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center">
+                                <span className="text-[9px] font-bold text-muted-foreground">{(t.symbol || "?")[0]}</span>
+                              </div>
+                            )}
+                            <span className="text-sm font-medium text-foreground">{t.symbol}</span>
+                            {t.name && <span className="text-xs text-muted-foreground">{t.name}</span>}
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <span className="font-mono text-xs text-muted-foreground">
+                              {t.amount < 0.0001 ? (t.amount || 0).toExponential(2) : (t.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
+                            </span>
+                            <span className="font-mono text-xs text-muted-foreground min-w-[80px] text-right">
+                              {t.price > 0 ? formatCurrency(t.price) : "-"}
+                            </span>
+                            <span className="font-mono text-sm text-foreground min-w-[100px] text-right font-medium">
+                              {formatCurrency(t.usd_value)}
+                            </span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+
+                {isExpanded && tokens.length === 0 && (
+                  <div className="ml-8 mt-2 mb-2">
+                    <Card className="border-border/20 bg-secondary/20">
+                      <CardContent className="px-4 py-3">
+                        <p className="text-xs text-muted-foreground">No token details cached yet. Open the Crypto tab and refresh.</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        );
-      })}
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

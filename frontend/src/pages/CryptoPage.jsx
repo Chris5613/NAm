@@ -60,39 +60,47 @@ export default function CryptoPage() {
 
   useEffect(() => { fetchWallets(); }, [fetchWallets]);
 
-  const fetchedRef = useRef(false);
-  
+  const fetchingRef = useRef(new Set());
+
   useEffect(() => {
-    if (wallets.length > 0 && !fetchedRef.current) {
-      fetchedRef.current = true;
-      // Always fetch fresh balances for all wallets
-      const fetchAll = async () => {
-        const newBalances = {};
-        for (const w of wallets) {
-          try {
-            const res = await walletsApi.getBalances(w.id);
-            newBalances[w.id] = res.data;
-          } catch (err) { console.error(`Balance fetch error for ${w.id}:`, err); }
-        }
-        setBalances(newBalances);
-        
-        // Then fetch DeFi
-        const solWallets = wallets.filter(w => w.chain === "solana");
-        if (solWallets.length > 0) fetchAllDefi(solWallets);
-      };
-      fetchAll();
-    }
+    if (wallets.length === 0) return;
+    // Fetch balances for any wallet that hasn't been fetched yet (covers newly added wallets too)
+    wallets.forEach(async (w) => {
+      if (balances[w.id] || fetchingRef.current.has(w.id)) return;
+      fetchingRef.current.add(w.id);
+      try {
+        const res = await walletsApi.getBalances(w.id);
+        setBalances(prev => ({ ...prev, [w.id]: res.data }));
+      } catch (err) {
+        console.error(`Balance fetch error for ${w.id}:`, err);
+      } finally {
+        fetchingRef.current.delete(w.id);
+      }
+    });
+    // Fetch DeFi positions once for Solana wallets
+    const solWallets = wallets.filter(w => w.chain === "solana");
+    if (solWallets.length > 0 && defiPositions.length === 0) fetchAllDefi(solWallets);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallets]);
 
   // Auto-poll every hour
   useEffect(() => {
     if (wallets.length === 0) return;
     const interval = setInterval(() => {
-      fetchedRef.current = false;
       fetchWallets();
+      // Re-fetch balances for all wallets
+      wallets.forEach(async (w) => {
+        if (fetchingRef.current.has(w.id)) return;
+        fetchingRef.current.add(w.id);
+        try {
+          const res = await walletsApi.getBalances(w.id);
+          setBalances(prev => ({ ...prev, [w.id]: res.data }));
+        } catch { /* silent */ }
+        finally { fetchingRef.current.delete(w.id); }
+      });
     }, 3600000); // 1 hour
     return () => clearInterval(interval);
-  }, [wallets.length, fetchWallets]);
+  }, [wallets.length, fetchWallets, wallets]);
 
   const fetchBalance = async (wid) => {
     try {
