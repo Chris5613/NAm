@@ -256,30 +256,33 @@ export const walletsApi = {
             amount: btcAmount,
             price: btcPrice,
             usd_value: btcAmount * btcPrice,
-            icon_url: '',
+            icon_url: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
             chain: 'bitcoin',
+            category: 'wallet',
+            protocol: null,
           }],
         });
       }
 
-      const data = await coinStatsApi.getWalletBalance(wallet.address, wallet.chain);
-      const tokenList = Array.isArray(data.tokens) ? data.tokens : Array.isArray(data.coins) ? data.coins : [];
-      const tokens = tokenList.map((t) => {
+      const tokenList = await coinStatsApi.getWalletBalance(wallet.address, wallet.chain);
+      const tokens = (Array.isArray(tokenList) ? tokenList : []).map((t) => {
         const amount = Number(t.amount ?? t.balance ?? t.quantity ?? 0);
         const price = Number(t.price ?? t.current_price ?? 0);
         const usdValue = Number(t.usd_value ?? t.value ?? (amount * price));
         return {
-          id: t.id || `${t.symbol || t.name}_${wallet.address}`,
+          id: t.id || t.coinId || `${t.symbol || t.name}_${wallet.address}`,
           symbol: t.symbol || t.name || wallet.chain,
           name: t.name || t.symbol || wallet.chain,
           amount,
           price,
           usd_value: usdValue,
-          icon_url: t.icon || t.image || t.logo || '',
+          icon_url: t.imgUrl || t.icon || t.image || t.logo || '',
           chain: wallet.chain,
+          category: 'wallet',
+          protocol: null,
         };
       });
-      const totalUsd = Number(data.total ?? data.total_value ?? data.value ?? tokens.reduce((sum, t) => sum + (t.usd_value || 0), 0));
+      const totalUsd = tokens.reduce((sum, t) => sum + (t.usd_value || 0), 0);
       return toResponse({ total_usd: totalUsd, tokens });
     } catch (error) {
       console.warn(`Balance fetch failed for ${wallet.address}:`, error);
@@ -301,7 +304,7 @@ export const walletsApi = {
       return toResponse(data);
     } catch (error) {
       console.warn(`CoinStats fetch failed for ${address}:`, error);
-      return toResponse({});
+      return toResponse([]);
     }
   },
 };

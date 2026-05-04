@@ -66,35 +66,55 @@ export const finnhubApi = {
 };
 
 // Jupiter API for Solana DeFi positions
-const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY;
-const JUPITER_BASE = "https://api.jup.ag";
-
+// NOTE: The legacy public Jupiter Portfolio endpoint at api.jup.ag/portfolio/* now
+// returns 404. We keep the export for backward-compatibility but make it a no-op.
+// Wallet balances (incl. Solana) come from CoinStats below.
 export const jupiterApi = {
-  getPortfolio: async (walletAddress) => {
-    try {
-      const url = `${JUPITER_BASE}/portfolio/${walletAddress}`;
-      const response = await withCorsProxy(url, {
-        headers: JUPITER_API_KEY ? { "x-api-key": JUPITER_API_KEY } : {},
-      });
-      return response.data || [];
-    } catch (error) {
-      console.warn(`Jupiter portfolio fetch failed for ${walletAddress}:`, error);
-      return [];
-    }
+  getPortfolio: async (_walletAddress) => {
+    return { positions: [] };
   },
+};
+
+// CoinStats — returns an array of token holdings for a wallet on a given chain.
+// Docs: https://openapi.coinstats.app/  GET /wallet/balance
+const COINSTATS_BASE = "https://openapiv1.coinstats.app";
+const COINSTATS_API_KEY = process.env.REACT_APP_COINSTATS_API_KEY;
+
+// Map our internal chain names → the CoinStats connectionId values
+// (verified via /wallet/blockchains).
+const COINSTATS_CHAIN_MAP = {
+  solana: "solana",
+  bitcoin: "bitcoin",
+  ethereum: "ethereum",
+  bsc: "binancesmartchain",
+  polygon: "polygon-wallet",
+  avalanche: "avalanche-wallet",
+  arbitrum: "arbitrum-wallet",
+  optimism: "optimism-wallet",
+  base: "base-wallet",
+  tron: "tron",
+  fantom: "fantom-wallet",
 };
 
 export const coinStatsApi = {
   getWalletBalance: async (address, chain = "solana") => {
     try {
-const response = await fetch(
-  `https://openapiv1.coinstats.app/wallet/balance?address=${address}&connectionId=solana`,
-  { headers: { 'X-API-KEY': 'F90juaYvtu8cek9UAWqj7q/FqhFE7QR00lWU84HXues=' } }
-);
-      return response.data || {};
+      const connectionId = COINSTATS_CHAIN_MAP[chain] || chain;
+      const url = `${COINSTATS_BASE}/wallet/balance?address=${encodeURIComponent(address)}&connectionId=${encodeURIComponent(connectionId)}`;
+      const response = await fetch(url, {
+        headers: COINSTATS_API_KEY ? { "X-API-KEY": COINSTATS_API_KEY } : {},
+      });
+      if (!response.ok) {
+        const text = await response.text();
+        console.warn(`CoinStats ${response.status} for ${address} on ${chain}: ${text.slice(0, 200)}`);
+        return [];
+      }
+      const data = await response.json();
+      // Endpoint returns an array of token objects.
+      return Array.isArray(data) ? data : (data?.tokens || data?.coins || []);
     } catch (error) {
       console.warn(`CoinStats wallet balance fetch failed for ${address}:`, error);
-      return {};
+      return [];
     }
   },
 };
