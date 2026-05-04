@@ -93,7 +93,7 @@ export const coinStatsApi = {
     try {
 const response = await fetch(
   `https://openapiv1.coinstats.app/wallet/balance?address=${address}&connectionId=solana`,
-  { headers: { 'X-API-KEY': 'your-api-key' } }
+  { headers: { 'X-API-KEY': 'COINSTATS_API_KEY' } }
 );
       return response.data || {};
     } catch (error) {
