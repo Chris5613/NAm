@@ -12,7 +12,7 @@
 // Investment Overview decrements project.earned AND lowers the baseline by
 // that TRX delta, so the next "Update balance" re-arms correctly.
 import { coinGeckoApi } from "./external-apis";
-import { projectsApi } from "./api";
+import { projectsApi, customTokensApi } from "./api";
 import { localStorage as storage } from "./localStorage";
 
 const ROLLERCOIN_PROJECT_NAME_DEFAULT = "RollerCoin";
@@ -89,6 +89,7 @@ export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPric
   if (action === "no_change" || Math.abs(deltaTrx) < AMOUNT_EPSILON) {
     const next = { ...config, last_updated_at: new Date().toISOString() };
     storage.setRollerCoinConfig(next);
+    await syncCryptoHolding(baselineBefore, trxPriceOverride || 0);
     window.dispatchEvent(new CustomEvent("rollercoin-sync-complete"));
     return {
       txn: null, delta_trx: 0, delta_usd: 0, action: "no_change",
@@ -104,6 +105,7 @@ export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPric
       last_updated_at: new Date().toISOString(),
     };
     storage.setRollerCoinConfig(next);
+    await syncCryptoHolding(nextBalance, trxPriceOverride || 0);
     window.dispatchEvent(new CustomEvent("rollercoin-sync-complete"));
     return {
       txn: null, delta_trx: deltaTrx, delta_usd: 0, action: "withdrawal",
@@ -155,6 +157,9 @@ export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPric
   };
   storage.setRollerCoinConfig(nextConfig);
 
+  // 6. Sync TRX holding in Crypto tab.
+  await syncCryptoHolding(nextBalance, trxPrice);
+
   window.dispatchEvent(new CustomEvent("rollercoin-sync-complete"));
 
   return {
@@ -166,4 +171,36 @@ export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPric
     baseline_after: nextBalance,
     trx_price: trxPrice,
   };
+}
+
+// ─── Crypto tab holding sync ───────────────────────────────────────────────
+// After every balance update we ensure the "TRX" custom token in the Crypto
+// tab reflects the current RollerCoin balance. Keeps the portfolio in sync.
+async function syncCryptoHolding(newBalance, trxPrice) {
+  try {
+    const all = (await customTokensApi.getAll()).data || [];
+    const existing = all.find(
+      (t) => (t.symbol || "").toUpperCase() === "TRX",
+    );
+    if (existing) {
+      await customTokensApi.update(existing.id, {
+        amount: newBalance,
+        price: trxPrice > 0 ? trxPrice : (existing.price || 0),
+        coingecko_id: existing.coingecko_id || TRX_COINGECKO_ID,
+      });
+    } else {
+      await customTokensApi.create({
+        symbol: "TRX",
+        name: "Tron",
+        amount: newBalance,
+        price: trxPrice > 0 ? trxPrice : 0,
+        icon_url: "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png",
+        chain: "tron",
+        coingecko_id: TRX_COINGECKO_ID,
+      });
+    }
+    window.dispatchEvent(new CustomEvent("crypto-holding-updated"));
+  } catch (err) {
+    console.warn("RollerCoin: failed to sync crypto holding", err);
+  }
 }

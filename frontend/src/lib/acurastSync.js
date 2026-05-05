@@ -18,7 +18,7 @@
 //   synced txn lowers `baseline_acu` by that delta and decrements
 //   `project.earned`, so the next "Update balance" re-arms correctly.
 import { coinGeckoApi } from "./external-apis";
-import { projectsApi } from "./api";
+import { projectsApi, customTokensApi } from "./api";
 import { localStorage as storage } from "./localStorage";
 
 const ACURAST_PROJECT_NAME_DEFAULT = "Phone Farm";
@@ -101,6 +101,7 @@ export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOv
   if (action === "no_change" || Math.abs(deltaAcu) < AMOUNT_EPSILON) {
     const next = { ...config, last_updated_at: new Date().toISOString() };
     storage.setAcurastConfig(next);
+    await syncCryptoHolding(baselineBefore, acuPriceOverride || 0);
     window.dispatchEvent(new CustomEvent("acurast-sync-complete"));
     return {
       txn: null, delta_acu: 0, delta_usd: 0, action: "no_change",
@@ -116,6 +117,7 @@ export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOv
       last_updated_at: new Date().toISOString(),
     };
     storage.setAcurastConfig(next);
+    await syncCryptoHolding(nextBalance, acuPriceOverride || 0);
     window.dispatchEvent(new CustomEvent("acurast-sync-complete"));
     return {
       txn: null, delta_acu: deltaAcu, delta_usd: 0, action: "withdrawal",
@@ -167,6 +169,9 @@ export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOv
   };
   storage.setAcurastConfig(nextConfig);
 
+  // 6. Sync ACU holding in Crypto tab.
+  await syncCryptoHolding(nextBalance, acuPrice);
+
   window.dispatchEvent(new CustomEvent("acurast-sync-complete"));
 
   return {
@@ -178,6 +183,39 @@ export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOv
     baseline_after: nextBalance,
     acu_price: acuPrice,
   };
+}
+
+// ─── Crypto tab holding sync ───────────────────────────────────────────────
+// After every balance update (earning, withdrawal, or no_change) we ensure the
+// "ACU" custom token in the Crypto tab reflects the current balance. This keeps
+// the portfolio view in sync without the user manually editing it.
+async function syncCryptoHolding(newBalance, acuPrice) {
+  try {
+    const all = (await customTokensApi.getAll()).data || [];
+    const existing = all.find(
+      (t) => (t.symbol || "").toUpperCase() === "ACU",
+    );
+    if (existing) {
+      await customTokensApi.update(existing.id, {
+        amount: newBalance,
+        price: acuPrice > 0 ? acuPrice : (existing.price || 0),
+        coingecko_id: existing.coingecko_id || ACU_COINGECKO_ID,
+      });
+    } else {
+      await customTokensApi.create({
+        symbol: "ACU",
+        name: "Acurast",
+        amount: newBalance,
+        price: acuPrice > 0 ? acuPrice : 0,
+        icon_url: null,
+        chain: "ethereum",
+        coingecko_id: ACU_COINGECKO_ID,
+      });
+    }
+    window.dispatchEvent(new CustomEvent("crypto-holding-updated"));
+  } catch (err) {
+    console.warn("Acurast: failed to sync crypto holding", err);
+  }
 }
 
 // One-shot migration: an earlier prototype tracked Acurast in plain USD

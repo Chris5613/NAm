@@ -78,6 +78,13 @@ export default function CryptoPage() {
 
   useEffect(() => { fetchWallets(); }, [fetchWallets]);
 
+  // Listen for holding updates from integrations (Acurast ACU, RollerCoin TRX)
+  useEffect(() => {
+    const refresh = () => fetchWallets();
+    window.addEventListener("crypto-holding-updated", refresh);
+    return () => window.removeEventListener("crypto-holding-updated", refresh);
+  }, [fetchWallets]);
+
   const fetchingRef = useRef(new Set());
 
   useEffect(() => {
@@ -330,7 +337,7 @@ export default function CryptoPage() {
         </div>
       </div>
 
-      {wallets.length === 0 ? (
+      {wallets.length === 0 && customTokens.length === 0 ? (
         <Card className="border-border/40 bg-card">
           <CardContent className="p-8 flex flex-col items-center justify-center text-center">
             <Wallet className="w-10 h-10 text-muted-foreground mb-4" strokeWidth={1.5} />
@@ -340,6 +347,43 @@ export default function CryptoPage() {
             </Button>
           </CardContent>
         </Card>
+      ) : wallets.length === 0 && customTokens.length > 0 ? (
+        <>
+          {/* No wallets but has custom tokens (from integrations) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="border-border/40 bg-card" data-testid="crypto-net-worth">
+              <CardContent className="p-6">
+                <p className="text-sm text-muted-foreground mb-1">Net Worth</p>
+                <p className="font-mono text-4xl font-bold text-foreground">{formatCurrency(grandTotal)}</p>
+                <p className="text-xs text-muted-foreground mt-1">from {customTokens.length} custom token{customTokens.length > 1 ? "s" : ""}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-border/40 bg-card">
+              <CardContent className="p-6 flex items-center justify-center">
+                <Button size="sm" onClick={() => setWalletModalOpen(true)} variant="outline" className="border-border/40">
+                  <Plus className="w-4 h-4 mr-2" />Add Wallets for more tracking
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Custom tokens list */}
+          <Card className="border-border/40 bg-card">
+            <CardHeader className="pb-2 border-b border-border/40">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Coins className="w-4 h-4" strokeWidth={1.5} /> Holdings
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0 divide-y divide-border/40">
+              <div className="px-3 py-2 grid grid-cols-4 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/20">
+                <span>Token</span><span className="text-right">Amount</span><span className="text-right">Price</span><span className="text-right">Value</span>
+              </div>
+              {walletTokens.length > 0 ? walletTokens.map((t, i) => <TokenRow key={`${t.symbol}-${i}`} token={t} />) : (
+                <div className="px-3 py-4 text-center text-xs text-muted-foreground">No holdings to display</div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       ) : (
         <>
           {/* Net Worth + Chart */}
