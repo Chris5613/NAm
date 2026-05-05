@@ -7,6 +7,7 @@ import NosanaEarningsCard from "@/components/NosanaEarningsCard";
 import RollerCoinEarningsCard from "@/components/RollerCoinEarningsCard";
 import AcurastEarningsCard from "@/components/AcurastEarningsCard";
 import UnityNetworkEarningsCard from "@/components/UnityNetworkEarningsCard";
+import GoMiningEarningsCard from "@/components/GoMiningEarningsCard";
 import { Zap } from "lucide-react";
 
 export default function IntegrationsPage() {
@@ -32,6 +33,7 @@ export default function IntegrationsPage() {
         <RollerCoinEarningsCard />
         <AcurastEarningsCard />
         <UnityNetworkEarningsCard />
+        <GoMiningEarningsCard />
         {/* Future integrations go here (e.g. Helium, Akash, Render Network). */}
       </div>
     </div>

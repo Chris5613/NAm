@@ -56,6 +56,7 @@ export default function InvestmentOverview() {
       "rollercoin-sync-complete",
       "nosana-sync-complete",
       "gomining-sync-complete",
+      "gomining-token-sync-complete",
     ];
     events.forEach((e) => window.addEventListener(e, refresh));
     return () => events.forEach((e) => window.removeEventListener(e, refresh));

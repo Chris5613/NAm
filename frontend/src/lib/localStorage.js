@@ -16,6 +16,7 @@ export const STORAGE_KEYS = {
   ROLLERCOIN_CONFIG: 'networth_rollercoin_config',
   ACURAST_CONFIG: 'networth_acurast_config',
   UNITY_NETWORK_CONFIG: 'networth_unity_network_config',
+  GOMINING_TOKEN_CONFIG: 'networth_gomining_token_config',
 };
 
 export const localStorage = {
@@ -123,5 +124,14 @@ export const localStorage = {
   //   { baseline_usd, project_name, enabled, last_updated_at }
   getUnityNetworkConfig: () => localStorage.get(STORAGE_KEYS.UNITY_NETWORK_CONFIG) || null,
   setUnityNetworkConfig: (config) => localStorage.set(STORAGE_KEYS.UNITY_NETWORK_CONFIG, config),
+
+  // GoMining (Integrations card) — separate from the GoMining tab's per-row
+  // reward sync. Tracks the user's account-level GMT + BTC balances with a
+  // boost-spend pathway that records GMT decreases as additional invested
+  // capital (not withdrawals).
+  //   { baseline_gmt, baseline_btc, project_name, enabled, last_updated_at }
+  // Posts to a "GoMining" investment project by default.
+  getGoMiningTokenConfig: () => localStorage.get(STORAGE_KEYS.GOMINING_TOKEN_CONFIG) || null,
+  setGoMiningTokenConfig: (config) => localStorage.set(STORAGE_KEYS.GOMINING_TOKEN_CONFIG, config),
 
 };

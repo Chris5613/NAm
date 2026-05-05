@@ -258,13 +258,21 @@ export const projectsApi = {
     }
     // Keep project.earned in sync only for GoMining auto-synced txns
     // (manual transactions don't bump earned on insert, so we shouldn't on update either).
-    if ((prev?.source === 'gomining' || prev?.source === 'nosana' || prev?.source === 'rollercoin' || prev?.source === 'acurast' || prev?.source === 'unity_network') && parentId) {
+    // For the GoMining Integrations card, also handle type='investment'
+    // (boost spend) so editing a boost amount keeps project.invested honest.
+    if ((prev?.source === 'gomining' || prev?.source === 'nosana' || prev?.source === 'rollercoin' || prev?.source === 'acurast' || prev?.source === 'unity_network' || prev?.source === 'gomining_gmt' || prev?.source === 'gomining_btc') && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;
         const oldEarn = prev.type === 'earning' ? (Number(prev.amount) || 0) : 0;
         const newEarn = updated.type === 'earning' ? (Number(updated.amount) || 0) : 0;
-        return { ...p, earned: Math.max(0, (Number(p.earned) || 0) + (newEarn - oldEarn)) };
+        const oldInv = prev.type === 'investment' ? (Number(prev.amount) || 0) : 0;
+        const newInv = updated.type === 'investment' ? (Number(updated.amount) || 0) : 0;
+        return {
+          ...p,
+          earned: Math.max(0, (Number(p.earned) || 0) + (newEarn - oldEarn)),
+          invested: Math.max(0, (Number(p.invested) || 0) + (newInv - oldInv)),
+        };
       });
       storage.setProjects(adjusted);
     }
@@ -334,14 +342,45 @@ export const projectsApi = {
         storage.setUnityNetworkConfig({ ...un, baseline_usd: nextBaseline });
       }
     }
-    // Decrement project.earned only for GoMining/Nosana/RollerCoin/Acurast/Unity Network auto-synced earning
+    // GoMining (Integrations card) — both earning AND investment txns share
+    // the signed-delta reversal formula `new_baseline = current - delta`,
+    // so the same code path works for boost txns (negative delta) and
+    // earning txns (positive delta). GMT and BTC have separate baselines.
+    if (removed?.source === 'gomining_gmt') {
+      const gm = storage.getGoMiningTokenConfig();
+      if (gm?.baseline_gmt != null) {
+        const dec = Number(removed.source_gmt_delta) || 0;
+        const nextBaseline = Math.max(0, (Number(gm.baseline_gmt) || 0) - dec);
+        storage.setGoMiningTokenConfig({ ...gm, baseline_gmt: nextBaseline });
+      }
+    }
+    if (removed?.source === 'gomining_btc') {
+      const gm = storage.getGoMiningTokenConfig();
+      if (gm?.baseline_btc != null) {
+        const dec = Number(removed.source_btc_delta) || 0;
+        const nextBaseline = Math.max(0, (Number(gm.baseline_btc) || 0) - dec);
+        storage.setGoMiningTokenConfig({ ...gm, baseline_btc: nextBaseline });
+      }
+    }
+    // Decrement project.earned only for GoMining/Nosana/RollerCoin/Acurast/Unity Network/GoMining-token auto-synced earning
     // txns (manual earnings don't bump earned on insert, so we shouldn't on
     // delete either).
-    if ((removed?.source === 'gomining' || removed?.source === 'nosana' || removed?.source === 'rollercoin' || removed?.source === 'acurast' || removed?.source === 'unity_network') && removed?.type === 'earning' && parentId) {
+    if ((removed?.source === 'gomining' || removed?.source === 'nosana' || removed?.source === 'rollercoin' || removed?.source === 'acurast' || removed?.source === 'unity_network' || removed?.source === 'gomining_gmt' || removed?.source === 'gomining_btc') && removed?.type === 'earning' && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;
         return { ...p, earned: Math.max(0, (Number(p.earned) || 0) - (Number(removed.amount) || 0)) };
+      });
+      storage.setProjects(adjusted);
+    }
+    // Boost spends are stored as type='investment' on the GoMining token
+    // sources. Deleting one rolls back project.invested by the same USD
+    // amount so the project reflects only currently-deployed capital.
+    if ((removed?.source === 'gomining_gmt' || removed?.source === 'gomining_btc') && removed?.type === 'investment' && parentId) {
+      const projects = storage.getProjects();
+      const adjusted = projects.map((p) => {
+        if (p.id !== parentId) return p;
+        return { ...p, invested: Math.max(0, (Number(p.invested) || 0) - (Number(removed.amount) || 0)) };
       });
       storage.setProjects(adjusted);
     }
