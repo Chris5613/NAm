@@ -26,6 +26,12 @@ function formatDate(isoString) {
   return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
+function formatAxisLabel(label) {
+  if (typeof label !== "string") return label ?? "";
+  const parsed = Date.parse(label);
+  return Number.isNaN(parsed) ? label : formatDate(label);
+}
+
 // Recharts dot renderer — only draws a marker for *snapshot* points so the
 // live polling line stays clean. Auto vs manual are visually distinct.
 function SnapshotDot(props) {
@@ -63,25 +69,29 @@ function SnapshotDot(props) {
 }
 
 export default function NetWorthHistory() {
-const chartData = [
-  { time: "Jan 2025", value: 10782.51 },
-  { time: "Feb 2025", value: 10693.68 },
-  { time: "Mar 2025", value: 9528.58 },
-  { time: "Apr 2025", value: 8632.42 },
-  { time: "May 2025", value: 10896.34 },
-  { time: "Jun 2025", value: 8972.98 },
-  { time: "Jul 2025", value: 11405.74 },
-  { time: "Aug 2025", value: 12575.42 },
-  { time: "Sep 2025", value: 11304.91 },
-  { time: "Oct 2025", value: 13220.50 },
-  { time: "Nov 2025", value: 12834.66 },
-  { time: "Dec 2025", value: 11257.05 },
-  { time: "Jan 2026", value: 13684.99 },
-  { time: "Feb 2026", value: 15225.50 },
-  { time: "Mar 2026", value: 16233.31 },
-  { time: "Apr 2026", value: 17271.75 },
-  { time: "May 2026", value: 17491.19 },
-];
+  const sessionDelta = null;
+  const chartData = useMemo(
+    () => [
+      { time: "Jan 2025", value: 10782.51 },
+      { time: "Feb 2025", value: 10693.68 },
+      { time: "Mar 2025", value: 9528.58 },
+      { time: "Apr 2025", value: 8632.42 },
+      { time: "May 2025", value: 10896.34 },
+      { time: "Jun 2025", value: 8972.98 },
+      { time: "Jul 2025", value: 11405.74 },
+      { time: "Aug 2025", value: 12575.42 },
+      { time: "Sep 2025", value: 11304.91 },
+      { time: "Oct 2025", value: 13220.50 },
+      { time: "Nov 2025", value: 12834.66 },
+      { time: "Dec 2025", value: 11257.05 },
+      { time: "Jan 2026", value: 13684.99 },
+      { time: "Feb 2026", value: 15225.50 },
+      { time: "Mar 2026", value: 16233.31 },
+      { time: "Apr 2026", value: 17271.75 },
+      { time: "May 2026", value: 17491.19 },
+    ],
+    []
+  );
 
   if (chartData.length === 0) {
     return (
@@ -152,6 +162,7 @@ const chartData = [
               tickLine={false}
               axisLine={false}
               minTickGap={32}
+              tickFormatter={formatAxisLabel}
             />
             <YAxis
               stroke="#52525B"
@@ -162,34 +173,36 @@ const chartData = [
               tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
               domain={["dataMin - 100", "dataMax + 100"]}
             />
-<Tooltip
-  content={({ active, payload, label }) => {
-    if (!active || !payload?.length) return null;
+            <Tooltip
+              labelFormatter={formatAxisLabel}
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null;
 
-    const point = payload[0]?.payload;
-    const value = point?.value ?? payload[0]?.value;
+                const point = payload[0]?.payload;
+                const value = point?.value ?? payload[0]?.value;
+                const itemLabel = formatAxisLabel(point?.time ?? label);
 
-    return (
-      <div
-        style={{
-          background: "#121214",
-          border: "1px solid #27272A",
-          borderRadius: "6px",
-          padding: "8px 10px",
-          fontFamily: "'Space Mono', monospace",
-          fontSize: "12px",
-        }}
-      >
-        <div style={{ color: "#A1A1AA", marginBottom: 4 }}>
-          {label}
-        </div>
-        <div style={{ color: "#FAFAFA" }}>
-          Net Worth: {formatCurrency(value)}
-        </div>
-      </div>
-    );
-  }}
-/>
+                return (
+                  <div
+                    style={{
+                      background: "#121214",
+                      border: "1px solid #27272A",
+                      borderRadius: "6px",
+                      padding: "8px 10px",
+                      fontFamily: "'Space Mono', monospace",
+                      fontSize: "12px",
+                    }}
+                  >
+                    <div style={{ color: "#A1A1AA", marginBottom: 4 }}>
+                      {itemLabel}
+                    </div>
+                    <div style={{ color: "#FAFAFA" }}>
+                      Net Worth: {formatCurrency(value)}
+                    </div>
+                  </div>
+                );
+              }}
+            />
             <Area
               type="monotone"
               dataKey="value"
