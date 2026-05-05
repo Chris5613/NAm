@@ -10,6 +10,9 @@ import {
   syncFromExtensionNow,
   hasTodayReading,
   onExtensionApply,
+  listAccounts,
+  removeAccount,
+  clearAllAccounts,
 } from "@/lib/unityNetworkExtensionSync";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -20,7 +23,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   RefreshCw, Settings, Network, CheckCircle2, AlertCircle, Clock,
-  TrendingUp, ArrowDown, MinusCircle, Plug, Zap,
+  TrendingUp, ArrowDown, MinusCircle, Plug, Zap, Trash2, Mail, Users,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -78,10 +81,10 @@ export default function UnityNetworkEarningsCard() {
     const unsub = onExtensionApply((result) => {
       if (!result?.applied) return;
       if (result.action === "earning") {
+        const projectName = (storage.getUnityNetworkConfig()?.project_name) || "Phone Farm";
+        const who = result.account_email ? ` (${result.account_email})` : "";
         toast.success(
-          `+${formatUsd(result.delta_usd)} from extension → ${
-            (storage.getUnityNetworkConfig()?.project_name) || "Phone Farm"
-          }`,
+          `+${formatUsd(result.delta_usd)} from extension${who} → ${projectName}`,
         );
       } else if (result.action === "withdrawal") {
         toast.info("Extension reported a baseline reset (no earnings credited).");
@@ -104,6 +107,25 @@ export default function UnityNetworkEarningsCard() {
   const lastAppliedSyncedAt = extState?.last_applied_synced_at;
   const autoSync = extState?.auto_sync_enabled !== false;
   const hasAnyExtensionData = !!(lastSeenAt || lastAppliedSyncedAt);
+
+  // Per-account breakdown — the extension can only hold one Unity Nodes
+  // session at a time, so the user signs into each account in turn and the
+  // app remembers each one. The lifetime tile sums across all of them.
+  const accounts = useMemo(() => listAccounts(), [extState, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const hasMultipleAccounts = accounts.length > 0;
+
+  const handleRemoveAccount = async (key, email) => {
+    const label = email || "this account";
+    if (!window.confirm(`Remove ${label} from the tracker? Phone Farm baseline will be lowered to match the new total (no earnings credited).`)) return;
+    const result = await removeAccount(key);
+    if (result?.ok) {
+      setExtState(getExtensionState());
+      setConfig(storage.getUnityNetworkConfig());
+      toast.success(`Removed ${label}.`);
+    } else {
+      toast.error("Could not remove account.");
+    }
+  };
 
   const handleManualExtensionSync = async () => {
     setExtSyncing(true);
@@ -327,6 +349,79 @@ export default function UnityNetworkEarningsCard() {
             </div>
           )}
 
+          {/* Per-account breakdown — the extension only holds one logged-in
+              Unity Nodes session at a time, so we accumulate per-email rows
+              here and sum them into the Lifetime tile above. Tap "remove"
+              to drop an account (lowers the Phone Farm baseline to match,
+              no earnings credited). */}
+          {hasMultipleAccounts && (
+            <div
+              className="mt-4 pt-4 border-t border-border/30"
+              data-testid="unity-network-accounts-panel"
+            >
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  <Users className="w-2.5 h-2.5 text-violet-400" strokeWidth={2} />
+                  Accounts ({accounts.length})
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Sign into each account in the extension and click "Sync from extension" once.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                {accounts.map((acct) => {
+                  const todayUtc = new Date().toISOString().split("T")[0];
+                  const hasTodayForAcct = acct.last_today_date === todayUtc;
+                  const acctTodayUsd = hasTodayForAcct ? Number(acct.last_today_usd) || 0 : 0;
+                  const isLegacyKey = acct.key === "_legacy";
+                  return (
+                    <div
+                      key={acct.key}
+                      className="flex items-center justify-between gap-3 p-2 rounded-md bg-secondary/30 border border-border/30"
+                      data-testid={`unity-network-account-row-${acct.key}`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Mail className="w-3 h-3 text-violet-400 flex-shrink-0" strokeWidth={1.8} />
+                        <span
+                          className={`text-xs font-mono truncate ${
+                            isLegacyKey ? "text-amber-400 italic" : "text-foreground"
+                          }`}
+                          title={acct.email || "Legacy migration entry — sign into one of your accounts and sync to assign."}
+                        >
+                          {acct.email || "(unknown — legacy)"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3 text-[11px] font-mono flex-shrink-0">
+                        <div className="text-right">
+                          <p className="text-muted-foreground text-[9px] uppercase tracking-wider">Lifetime</p>
+                          <p className="text-foreground">{formatUsd(acct.last_lifetime_usd)}</p>
+                        </div>
+                        <div className="text-right hidden sm:block">
+                          <p className="text-muted-foreground text-[9px] uppercase tracking-wider">Today</p>
+                          <p className={hasTodayForAcct ? "text-emerald-400" : "text-muted-foreground"}>
+                            {hasTodayForAcct ? formatUsd(acctTodayUsd) : "—"}
+                          </p>
+                        </div>
+                        <div className="text-right hidden md:block">
+                          <p className="text-muted-foreground text-[9px] uppercase tracking-wider">Last</p>
+                          <p className="text-muted-foreground">{formatRelativeTime(acct.last_seen_at)}</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveAccount(acct.key, acct.email)}
+                          className="p-1 rounded hover:bg-rose-500/10 text-muted-foreground hover:text-rose-400 transition"
+                          title="Remove this account"
+                          data-testid={`unity-network-remove-account-${acct.key}`}
+                        >
+                          <Trash2 className="w-3 h-3" strokeWidth={1.8} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {isConfigured && (
             <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-2 gap-3">
               <div>
@@ -382,6 +477,12 @@ function UnityNetworkConfigDialog({ open, onOpenChange, config, onSaved }) {
       setEnabled(config?.enabled ?? true);
     }
   }, [open, config]);
+
+  const handleResetExtensionData = () => {
+    if (!window.confirm("Wipe every per-account record from the Chrome extension? This does not change your Phone Farm baseline — sign into each account in the extension and click Sync to rebuild the list.")) return;
+    clearAllAccounts();
+    toast.success("Extension per-account data cleared.");
+  };
 
   const handleSave = () => {
     const bn = Number(baseline);
@@ -482,6 +583,15 @@ function UnityNetworkConfigDialog({ open, onOpenChange, config, onSaved }) {
               Disable
             </Button>
           )}
+          <Button
+            variant="outline"
+            onClick={handleResetExtensionData}
+            className="border-amber-500/30 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+            data-testid="unity-network-reset-extension-btn"
+            title="Wipes the per-account list — sign into each account and re-sync to rebuild."
+          >
+            Reset extension data
+          </Button>
           <Button variant="outline" onClick={() => onOpenChange(false)} className="border-border/40">
             Cancel
           </Button>

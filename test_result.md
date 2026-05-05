@@ -62,6 +62,38 @@ frontend:
               date, Lifetime $200.00, Devices 3, "Last push: just now",
               auto-apply checkbox checked.
             - 0 console errors.
+      - working: true
+        agent: "main"
+        comment: |
+          MULTI-ACCOUNT FIX (2026-05-05): User reported lifetime did not
+          accumulate when syncing 3 different Unity Nodes accounts (only the
+          most-recently-synced account's lifetime showed; switching accounts
+          even flagged a phantom withdrawal).
+
+          Fix: per-email account map (`state.accounts[email]`) + aggregate
+          tiles. applyPayload now updates that one email's snapshot, recomputes
+          summed lifetime/devices/today across all known accounts, and feeds
+          the aggregate to applyUnityNetworkBalanceUpdate so only that
+          account's growth is credited as the delta. Per-account synced_at
+          gives independent idempotency timelines. Auto-migrates existing
+          single-account baseline to the per-email map on first read.
+          Concurrency-safe via a module-level applyChain promise queue
+          (listener + manual sync share the queue).
+
+          UI: per-account list under the tiles (email, lifetime, today,
+          last-push, remove button) and a "Reset extension data" button in
+          the Configure dialog as a manual escape hatch.
+
+          Verified end-to-end via Playwright (6 scenarios all passing):
+            1. A($32.38) + B($20) + C($10) → lifetime $62.38, baseline
+               tracks aggregate, devices=15, today=$4.10
+            2. A grows 32.38→35 → only +$2.62 credited
+            3. Duplicate synced_at → idempotent
+            4. A withdraws 35→5 → baseline drops to new aggregate, no
+               earnings credited
+            5. A regrows 5→10 → +$5 credited (no double-dip)
+            6. Migration from legacy single-account state → seeds per-email
+               map cleanly
 
   - task: "Nosana auto-sync (Crypto tab → Investment Overview)"
     implemented: true
