@@ -20,9 +20,10 @@ const COLS = [
   { key: "pr",              label: "PR",            type: "money",  width: 110 },
   { key: "electricity",     label: "Electricity",   type: "money",  width: 110 },
   { key: "service",         label: "Service",       type: "money",  width: 110 },
-  // Reward is computed (read-only).
-  { key: "reward",          label: "Reward",        type: "computed", width: 110 },
   { key: "gmt_earned",      label: "GMT Earned",    type: "number", width: 120 },
+  { key: "gmt_boosted",     label: "GMT Boosted",   type: "number", width: 120 },
+  // Reward is computed (read-only) — moved to far right.
+  { key: "reward",          label: "Reward",        type: "computed", width: 110 },
 ];
 
 function formatMoney(value) {
@@ -58,16 +59,18 @@ function newRow() {
     electricity: 0,
     service: 0,
     gmt_earned: 0,
+    gmt_boosted: 0,
   };
 }
 
-// Per the user's formula: Reward = PR − Electricity + Service + (GMT_earned × GMT_price)
+// Per the user's formula: Reward = PR − Electricity − Service + (GMT_earned × GMT_price) − (GMT_boosted × GMT_price)
 function computeReward(row, gmtPrice = 0) {
   const pr = Number(row.pr) || 0;
   const elec = Number(row.electricity) || 0;
   const svc = Number(row.service) || 0;
   const gmt = Number(row.gmt_earned) || 0;
-  return pr - elec - svc + gmt * gmtPrice;
+  const boost = Number(row.gmt_boosted) || 0;
+  return pr - elec - svc + gmt * gmtPrice - boost * gmtPrice;
 }
 
 export default function GoMiningPage() {
@@ -127,14 +130,16 @@ export default function GoMiningPage() {
         acc.electricity += Number(r.electricity) || 0;
         acc.service += Number(r.service) || 0;
         acc.gmt_earned += Number(r.gmt_earned) || 0;
+        acc.gmt_boosted += Number(r.gmt_boosted) || 0;
         acc.reward += computeReward(r, gmtPrice);
         return acc;
       },
-      { pr: 0, electricity: 0, service: 0, reward: 0, gmt_earned: 0 },
+      { pr: 0, electricity: 0, service: 0, reward: 0, gmt_earned: 0, gmt_boosted: 0 },
     );
   }, [rows, gmtPrice]);
 
   const gmtUsd = totals.gmt_earned * gmtPrice;
+  const gmtBoostUsd = totals.gmt_boosted * gmtPrice;
 
   const updateRow = (id, key, value) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
@@ -245,7 +250,7 @@ export default function GoMiningPage() {
       toast.error("Nothing to export");
       return;
     }
-    const header = ["Date", "CP (TH/s)", "PR", "Electricity", "Service", "Reward", "GMT Earned"];
+    const header = ["Date", "CP (TH/s)", "PR", "Electricity", "Service", "GMT Earned", "GMT Boosted", "Reward"];
     const lines = [header.join(",")];
     sortedRows.forEach((r) => {
       lines.push([
@@ -254,8 +259,9 @@ export default function GoMiningPage() {
         Number(r.pr) || 0,
         Number(r.electricity) || 0,
         Number(r.service) || 0,
-        computeReward(r, gmtPrice),
         Number(r.gmt_earned) || 0,
+        Number(r.gmt_boosted) || 0,
+        computeReward(r, gmtPrice),
       ].join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
@@ -324,10 +330,9 @@ export default function GoMiningPage() {
         </div>
       </div>
 
-      {/* Summary cards — order: PR → Reward → Electricity → Service → GMT Earned */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      {/* Summary cards — order: PR → Electricity → Service → GMT Earned → GMT Boosted → Reward */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <SummaryStat label="Total PR"    value={`$${formatMoney(totals.pr)}`} />
-        <SummaryStat label="Reward"      value={`$${formatMoney(totals.reward)}`} accent />
         <SummaryStat label="Electricity" value={`$${formatMoney(totals.electricity)}`} negative />
         <SummaryStat label="Service"     value={`$${formatMoney(totals.service)}`} />
         <SummaryStat
@@ -340,6 +345,17 @@ export default function GoMiningPage() {
           }
           accent
         />
+        <SummaryStat
+          label="GMT Boosted"
+          value={`-$${formatMoney(gmtBoostUsd)}`}
+          subtitle={
+            priceLoading
+              ? "loading price…"
+              : `${formatNumber(totals.gmt_boosted)} GMT @ $${formatNumber(gmtPrice, 6)}`
+          }
+          negative
+        />
+        <SummaryStat label="Reward"      value={`$${formatMoney(totals.reward)}`} accent />
       </div>
 
       <Card className="border-border/40 bg-card overflow-hidden">
@@ -477,6 +493,7 @@ function Row({ row, gmtPrice, onChange, onDelete }) {
   const reward = computeReward(row, gmtPrice);
   const rewardPositive = reward >= 0;
   const gmtUsdRow = (Number(row.gmt_earned) || 0) * gmtPrice;
+  const gmtBoostUsdRow = (Number(row.gmt_boosted) || 0) * gmtPrice;
   return (
     <tr className="border-b border-border/40 hover:bg-secondary/20 transition-colors" data-testid={`gomining-row-${row.id}`}>
       {COLS.map((c) => {
@@ -489,7 +506,7 @@ function Row({ row, gmtPrice, onChange, onDelete }) {
                     ? "text-emerald-400 bg-emerald-500/10"
                     : "text-rose-400 bg-rose-500/10"
                 }`}
-                title={`PR (${formatMoney(row.pr)}) − Electricity (${formatMoney(row.electricity)}) + Service (${formatMoney(row.service)}) + GMT $${formatMoney(gmtUsdRow)}`}
+                title={`PR (${formatMoney(row.pr)}) − Elec (${formatMoney(row.electricity)}) − Svc (${formatMoney(row.service)}) + GMT $${formatMoney(gmtUsdRow)} − Boost $${formatMoney(gmtBoostUsdRow)}`}
               >
                 ${formatMoney(reward)}
               </span>
@@ -509,6 +526,25 @@ function Row({ row, gmtPrice, onChange, onDelete }) {
                 {gmtPrice > 0 && Number(row.gmt_earned) > 0 && (
                   <span className="text-[10px] text-muted-foreground/70 font-mono px-2 mt-0.5">
                     ≈ ${formatMoney(gmtUsdRow)}
+                  </span>
+                )}
+              </div>
+            </td>
+          );
+        }
+        if (c.key === "gmt_boosted") {
+          return (
+            <td key={c.key} className="px-3 py-2 align-middle">
+              <div className="flex flex-col">
+                <CellInput
+                  row={row}
+                  colKey={c.key}
+                  type={c.type}
+                  onChange={onChange}
+                />
+                {gmtPrice > 0 && Number(row.gmt_boosted) > 0 && (
+                  <span className="text-[10px] text-rose-400/70 font-mono px-2 mt-0.5">
+                    -${formatMoney(gmtBoostUsdRow)}
                   </span>
                 )}
               </div>
