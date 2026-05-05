@@ -12,8 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Plus, Camera, Radio } from "lucide-react";
 
-const FAST_INTERVAL_MS = 15_000;          // refresh stock + coin prices every 15s
-const SLOW_TICK_RATIO = 4;                // every 4th fast tick → ~60s wallet refresh
+
 const LIVE_HISTORY_MAX_POINTS = 200;      // rolling window persisted to localStorage
 const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
 
@@ -67,11 +66,7 @@ export default function Dashboard() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [liveEnabled, setLiveEnabled] = useState(true);
-  const intervalRef = useRef(null);
-  const tickCountRef = useRef(0);
-  const walletSyncInFlightRef = useRef(false);
-
+ 
   // Persist liveHistory whenever it changes (capped to last N points).
   useEffect(() => {
     if (!Array.isArray(liveHistory)) return;
@@ -112,69 +107,10 @@ const fetchData = useCallback(async () => {
   }
 }, []);
 
-  // Fast tick: refresh stock + coin prices, recompute net worth, append a live point.
-  // Every Nth tick we ALSO refresh wallet balances (slower / more expensive).
-  const tick = useCallback(async () => {
-    try {
-      tickCountRef.current += 1;
-      const isSlowTick = tickCountRef.current % SLOW_TICK_RATIO === 0;
-
-      // Fast path: stock & coin prices (cheap, aggregated calls).
-      await pricesApi.refreshAll();
-
-      // Slow path: re-fetch every wallet → write crypto_cache. Skip if already in flight.
-      if (isSlowTick && !walletSyncInFlightRef.current) {
-        walletSyncInFlightRef.current = true;
-        walletSyncApi.refreshAll()
-          .catch(() => {})
-          .finally(() => { walletSyncInFlightRef.current = false; });
-      }
-
-      const [assetsRes, netWorthRes] = await Promise.all([
-        assetsApi.getAll(),
-        netWorthApi.getCurrent(),
-      ]);
-      setAssets(assetsRes.data);
-      setNetWorth(netWorthRes.data);
-      setLastUpdated(new Date());
-      setLiveHistory((prev) => {
-        const next = [...prev, { timestamp: new Date().toISOString(), value: netWorthRes.data.total_net_worth }];
-        return next.length > LIVE_HISTORY_MAX_POINTS ? next.slice(-LIVE_HISTORY_MAX_POINTS) : next;
-      });
-    } catch {
-      /* silent — auto-refresh shouldn't toast */
-    }
-  }, []);
-
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  useEffect(() => {
-    if (!liveEnabled) {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-      return;
-    }
-    intervalRef.current = setInterval(tick, FAST_INTERVAL_MS);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    };
-  }, [liveEnabled, tick]);
-
-  const handleRefreshPrices = async () => {
-    setRefreshing(true);
-    try {
-      await Promise.all([pricesApi.refreshAll(), walletSyncApi.refreshAll()]);
-      await fetchData();
-      toast.success("Prices refreshed");
-    } catch (err) {
-      toast.error("Failed to refresh prices");
-    } finally {
-      setRefreshing(false);
-    }
-  };
 
   const handleSnapshot = async () => {
     try {
