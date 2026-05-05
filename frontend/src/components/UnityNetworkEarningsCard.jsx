@@ -7,8 +7,9 @@ import {
 import {
   getExtensionState,
   setAutoSyncEnabled,
-  pollAndApplyExtension,
+  syncFromExtensionNow,
   hasTodayReading,
+  onExtensionApply,
 } from "@/lib/unityNetworkExtensionSync";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,27 @@ export default function UnityNetworkEarningsCard() {
     };
   }, []);
 
+  // Toast when the background listener auto-applies an extension push while
+  // the user is looking at this card. We only fire for "applied" results so
+  // duplicate / no-op pushes don't spam the user.
+  useEffect(() => {
+    const unsub = onExtensionApply((result) => {
+      if (!result?.applied) return;
+      if (result.action === "earning") {
+        toast.success(
+          `+${formatUsd(result.delta_usd)} from extension → ${
+            (storage.getUnityNetworkConfig()?.project_name) || "Phone Farm"
+          }`,
+        );
+      } else if (result.action === "withdrawal") {
+        toast.info("Extension reported a baseline reset (no earnings credited).");
+      } else if (result.action === "bootstrap") {
+        toast.success("Unity Nodes tracking auto-enabled from extension push.");
+      }
+    });
+    return unsub;
+  }, []);
+
   const isConfigured = !!(config?.enabled);
   const stale = useMemo(() => isUnityNetworkStale(config), [config, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const baselineUsd = Number(config?.baseline_usd) || 0;
@@ -86,16 +108,18 @@ export default function UnityNetworkEarningsCard() {
   const handleManualExtensionSync = async () => {
     setExtSyncing(true);
     try {
-      const result = await pollAndApplyExtension({
+      const result = await syncFromExtensionNow({
         allowAutoConfigure: !isConfigured,
-        force: true,
+        timeoutMs: 4000,
       });
       if (!result.ok) {
-        toast.error("Couldn't reach the extension inbox — is the backend up?");
-        return;
-      }
-      if (result.reason === "empty") {
-        toast.info("No extension data yet — open the extension and hit Sync Now.");
+        if (result.reason === "timeout") {
+          toast.error(
+            "No response from extension. Make sure the Unity Nodes Earnings Tracker is installed and active on this page.",
+          );
+        } else {
+          toast.error(result.error || "Extension sync failed");
+        }
         return;
       }
       if (!result.applied) {
@@ -105,6 +129,8 @@ export default function UnityNetworkEarningsCard() {
           toast.info("Tracking is disabled. Enable it in Configure first.");
         } else if (result.reason === "invalid_lifetime") {
           toast.error("Extension payload is missing lifetime_usd.");
+        } else if (result.reason === "empty_payload") {
+          toast.info("Extension hasn't run a sync yet. Open it and click Sync Now.");
         } else {
           toast.info("No change to apply.");
         }
@@ -119,7 +145,9 @@ export default function UnityNetworkEarningsCard() {
       } else if (result.action === "withdrawal") {
         toast.info(`Lifetime decreased — baseline reset, no earnings credited.`);
       } else if (result.action === "bootstrap") {
-        toast.success(`Tracking enabled. Baseline locked to ${formatUsd(extState.last_lifetime_usd)}.`);
+        toast.success(
+          `Tracking enabled. Baseline locked to ${formatUsd(getExtensionState().last_lifetime_usd)}.`,
+        );
       } else {
         toast.info("Up to date — stale timer reset.");
       }

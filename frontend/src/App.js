@@ -18,10 +18,7 @@ import {
   runTodayOnlyMigrationIfNeeded,
 } from "@/lib/nosanaSync";
 import { runAcurastUsdToAcuMigrationIfNeeded } from "@/lib/acurastSync";
-import {
-  pollAndApplyExtension,
-  getExtensionState,
-} from "@/lib/unityNetworkExtensionSync";
+import { installExtensionListener } from "@/lib/unityNetworkExtensionSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
@@ -29,7 +26,7 @@ import { bootstrapDemoData } from "@/lib/bootstrap";
 let dailySnapshotAttempted = false;
 let nosanaSchedulerStarted = false;
 let demoBootstrapAttempted = false;
-let unityExtensionPollerStarted = false;
+let unityExtensionListenerStarted = false;
 
 function App() {
   // Daily auto-snapshot: on first mount each calendar day, append a net-worth
@@ -112,41 +109,15 @@ function App() {
     };
   }, []);
 
-  // Unity Nodes Chrome-extension poller — drains the backend inbox every
-  // 60 s + on focus and applies any new payload to the Phone Farm project.
-  // The extension itself runs on its own schedule (default 7:30 PM PST), so
-  // this is just a passive "did anything new arrive?" check. Idempotent —
-  // applying the same `synced_at` twice is a no-op.
+  // Unity Nodes Chrome-extension listener — registers a window.postMessage
+  // handler so the extension's content script can push earnings to us in
+  // real time. Pure client-side: no polling, no backend hop. The extension
+  // runs its own schedule (default 7:30 PM PST) and posts whenever it has
+  // fresh data. Idempotent on payload.synced_at.
   useEffect(() => {
-    if (unityExtensionPollerStarted) return;
-    unityExtensionPollerStarted = true;
-
-    let intervalId = null;
-    let cancelled = false;
-
-    const tick = async () => {
-      if (cancelled) return;
-      const ext = getExtensionState();
-      if (ext?.auto_sync_enabled === false) return; // user opted out
-      try {
-        await pollAndApplyExtension({ allowAutoConfigure: false });
-      } catch (err) {
-        // Network blips are expected — keep polling.
-        console.warn("Unity extension poll failed:", err?.message || err);
-      }
-    };
-
-    // First check shortly after mount, then every 60 s, plus on tab focus.
-    const bootTimer = setTimeout(tick, 3000);
-    intervalId = setInterval(tick, 60_000);
-    window.addEventListener("focus", tick);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(bootTimer);
-      if (intervalId) clearInterval(intervalId);
-      window.removeEventListener("focus", tick);
-    };
+    if (unityExtensionListenerStarted) return;
+    unityExtensionListenerStarted = true;
+    installExtensionListener();
   }, []);
 
   return (
