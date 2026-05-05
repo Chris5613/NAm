@@ -173,16 +173,6 @@ const fetchData = useCallback(async () => {
           <h1 className="text-4xl font-medium tracking-tight" data-testid="page-title">
             Net Worth
           </h1>
-          <button
-
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-              liveEnabled
-                ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
-                : "bg-secondary text-muted-foreground border border-border/40"
-            }`}
-            data-testid="live-toggle-btn"
-          >
-          </button>
           {lastUpdated && (
             <span className="text-xs text-muted-foreground font-mono" data-testid="last-updated">
               {lastUpdated.toLocaleTimeString()}
