@@ -63,6 +63,7 @@ export async function syncNosanaEarnings(opts = {}) {
   }
   const address = config.node_address.trim();
   const projectName = config.project_name || NOSANA_PROJECT_NAME_DEFAULT;
+  const categoryName = (config.label || "").trim() || "Nosana";
 
   // Lazy-init the start-tracking cursor on the very first sync — from here
   // onward we only post earnings dated >= this cursor. This prevents a huge
@@ -111,7 +112,7 @@ export async function syncNosanaEarnings(opts = {}) {
       const txnsRes = await projectsApi.addTransaction(project.id, {
         type: "earning",
         amount: Number(amount.toFixed(6)),
-        category: "Nosana",
+        category: categoryName,
         notes: `Nosana auto-sync (${date})`,
         date,
         source: "nosana",
@@ -157,7 +158,7 @@ export async function syncNosanaEarnings(opts = {}) {
       await projectsApi.addTransaction(project.id, {
         type: "earning",
         amount: Number(diff.toFixed(6)),
-        category: "Nosana",
+        category: categoryName,
         notes: `Nosana auto-sync adjustment (${date})`,
         date,
         source: "nosana",
@@ -176,7 +177,7 @@ export async function syncNosanaEarnings(opts = {}) {
     await projectsApi.update(project.id, { earned: nextEarned });
 
     // Auto-update sub-category breakdown.
-    await projectsApi.addToCategory(project.id, "Nosana", earnedDelta);
+    await projectsApi.addToCategory(project.id, categoryName, earnedDelta);
   }
 
   // 5. Stamp the config with the last-sync time.

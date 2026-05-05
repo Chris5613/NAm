@@ -314,6 +314,7 @@ function UnityNetworkUpdateDialog({ open, onOpenChange, config, onDone }) {
   const [newBalance, setNewBalance] = useState("");
   const [action, setAction] = useState("earning");
   const [submitting, setSubmitting] = useState(false);
+  const [label, setLabel] = useState("");
 
   const baseline = Number(config?.baseline_usd) || 0;
   const parsed = Number(newBalance);
@@ -333,6 +334,7 @@ function UnityNetworkUpdateDialog({ open, onOpenChange, config, onDone }) {
       setNewBalance("");
       setAction("earning");
       setSubmitting(false);
+      setLabel("");
     }
   }, [open]);
 
@@ -346,6 +348,7 @@ function UnityNetworkUpdateDialog({ open, onOpenChange, config, onDone }) {
       const result = await applyUnityNetworkBalanceUpdate({
         newBalanceUsd: parsed,
         action,
+        label: label.trim() || null,
       });
       if (result.action === "earning") {
         toast.success(
@@ -483,6 +486,20 @@ function UnityNetworkUpdateDialog({ open, onOpenChange, config, onDone }) {
             </div>
           )}
         </div>
+
+        {/* Label for sub-category */}
+        {hasInput && delta > 0 && action === "earning" && (
+          <div className="space-y-2 pb-2">
+            <Label className="text-xs">Label (sub-category)</Label>
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={`e.g. Mining, Bonus (default: "Unity Network")`}
+              className="bg-background border-border text-sm"
+              data-testid="unity-network-label-input"
+            />
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} className="border-border/40">

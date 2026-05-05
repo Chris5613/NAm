@@ -57,7 +57,7 @@ export function isUnityNetworkStale(config = null) {
 //   - "withdrawal" → baseline lowered, no transaction
 //   - "no_change"  → bump `last_updated_at` only (resets the stale nudge)
 // Returns: { txn, delta_usd, action, baseline_before, baseline_after }
-export async function applyUnityNetworkBalanceUpdate({ newBalanceUsd, action }) {
+export async function applyUnityNetworkBalanceUpdate({ newBalanceUsd, action, label = null }) {
   const config = storage.getUnityNetworkConfig();
   if (!config?.enabled) throw new Error("Unity Network integration is disabled");
 
@@ -98,11 +98,12 @@ export async function applyUnityNetworkBalanceUpdate({ newBalanceUsd, action }) 
   const project = await findOrCreateProject(projectName);
 
   // 2. Post the earning transaction tagged with the source metadata.
+  const categoryName = label || "Unity Network";
   const today = new Date().toISOString().split("T")[0];
   const txnsRes = await projectsApi.addTransaction(project.id, {
     type: "earning",
     amount: deltaUsd,
-    category: "Unity Network",
+    category: categoryName,
     notes: `Unity Network balance update: +$${deltaUsd.toFixed(2)}`,
     date: today,
     source: "unity_network",
@@ -118,7 +119,7 @@ export async function applyUnityNetworkBalanceUpdate({ newBalanceUsd, action }) 
   await projectsApi.update(project.id, { earned: nextEarned });
 
   // 3b. Auto-update sub-category breakdown.
-  await projectsApi.addToCategory(project.id, "Unity Network", deltaUsd);
+  await projectsApi.addToCategory(project.id, categoryName, deltaUsd);
 
   // 4. Update baseline + last_updated_at.
   const nextConfig = {

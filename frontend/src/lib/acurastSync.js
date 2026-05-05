@@ -90,7 +90,7 @@ export function isAcurastStale(config = null) {
 //   - "withdrawal" → baseline lowered, no transaction (any delta direction)
 //   - "no_change"  → bump `last_updated_at` only (resets the stale nudge)
 // Returns: { txn, delta_acu, delta_usd, action, baseline_before, baseline_after }
-export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOverride = null }) {
+export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOverride = null, label = null }) {
   const config = storage.getAcurastConfig();
   if (!config?.enabled) throw new Error("Acurast integration is disabled");
 
@@ -141,11 +141,12 @@ export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOv
   const project = await findOrCreateProject(projectName);
 
   // 3. Post the earning transaction tagged with the source metadata.
+  const categoryName = label || "Acurast";
   const today = new Date().toISOString().split("T")[0];
   const txnsRes = await projectsApi.addTransaction(project.id, {
     type: "earning",
     amount: deltaUsd,
-    category: "Acurast",
+    category: categoryName,
     notes: `Acurast balance update: +${deltaAcu.toFixed(4)} ACU @ $${acuPrice.toFixed(4)}`,
     date: today,
     source: "acurast",
@@ -162,7 +163,7 @@ export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOv
   await projectsApi.update(project.id, { earned: nextEarned });
 
   // 4b. Auto-update sub-category breakdown.
-  await projectsApi.addToCategory(project.id, "Acurast", deltaUsd);
+  await projectsApi.addToCategory(project.id, categoryName, deltaUsd);
 
   // 5. Update baseline + last_updated_at.
   const nextConfig = {

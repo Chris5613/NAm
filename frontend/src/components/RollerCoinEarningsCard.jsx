@@ -345,6 +345,7 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
   const [action, setAction] = useState("earning"); // earning | withdrawal | no_change
   const [submitting, setSubmitting] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
+  const [label, setLabel] = useState("");
 
   const baseline = Number(config?.baseline_trx) || 0;
   const parsed = Number(newBalance);
@@ -372,6 +373,7 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
       setAction("earning");
       setSubmitting(false);
       setManualPrice("");
+      setLabel("");
     }
   }, [open]);
 
@@ -390,6 +392,7 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
         newBalance: parsed,
         action,
         trxPriceOverride: effectivePrice > 0 ? effectivePrice : null,
+        label: label.trim() || null,
       });
       if (result.action === "earning") {
         toast.success(
@@ -575,6 +578,20 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
             </div>
           )}
         </div>
+
+        {/* Label for sub-category */}
+        {hasInput && delta > 0 && action === "earning" && (
+          <div className="space-y-2 pb-2">
+            <Label className="text-xs">Label (sub-category)</Label>
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={`e.g. Mining, Game (default: "RollerCoin")`}
+              className="bg-background border-border text-sm"
+              data-testid="rollercoin-label-input"
+            />
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} className="border-border/40">

@@ -124,6 +124,7 @@ export async function applyGoMiningBalanceUpdate({
   btcAction = "skip",
   gmtPriceOverride = null,
   btcPriceOverride = null,
+  label = null,
 }) {
   const config = storage.getGoMiningTokenConfig();
   if (!config?.enabled) throw new Error("GoMining integration is disabled");
@@ -152,6 +153,12 @@ export async function applyGoMiningBalanceUpdate({
   const projectName = config.project_name || GOMINING_PROJECT_NAME_DEFAULT;
   const project = await findOrCreateProject(projectName);
   const today = new Date().toISOString().split("T")[0];
+
+  // Optional user-supplied label overrides each side's default category.
+  const labelOverride = (label || "").trim() || null;
+  const gmtEarningCategory = labelOverride || "GoMining (GMT)";
+  const gmtBoostCategory = labelOverride || "GoMining (Boost)";
+  const btcEarningCategory = labelOverride || "GoMining (BTC)";
 
   // Resolve prices once for the whole update so all txns share the same
   // snapshot rate (predictable rollback math + matches user's mental model).
@@ -184,7 +191,7 @@ export async function applyGoMiningBalanceUpdate({
       const txnsRes = await projectsApi.addTransaction(project.id, {
         type: "earning",
         amount: deltaUsd,
-        category: "GoMining (GMT)",
+        category: gmtEarningCategory,
         notes: `GoMining GMT earned: +${deltaGmt.toFixed(4)} GMT @ $${gmtPrice.toFixed(4)}`,
         date: today,
         source: "gomining_gmt",
@@ -205,7 +212,7 @@ export async function applyGoMiningBalanceUpdate({
       const txnsRes = await projectsApi.addTransaction(project.id, {
         type: "investment",
         amount: investUsd,
-        category: "GoMining (Boost)",
+        category: gmtBoostCategory,
         notes: `GoMining boost spend: −${spendGmt.toFixed(4)} GMT @ $${gmtPrice.toFixed(4)}`,
         date: today,
         source: "gomining_gmt",
@@ -237,7 +244,7 @@ export async function applyGoMiningBalanceUpdate({
       const txnsRes = await projectsApi.addTransaction(project.id, {
         type: "earning",
         amount: deltaUsd,
-        category: "GoMining (BTC)",
+        category: btcEarningCategory,
         notes: `GoMining BTC earned: +${deltaBtc.toFixed(8)} BTC @ $${btcPrice.toFixed(2)}`,
         date: today,
         source: "gomining_btc",
@@ -267,13 +274,13 @@ export async function applyGoMiningBalanceUpdate({
 
   // Auto-update sub-category breakdown for each side that moved.
   if (results.gmt?.action === "earning" && results.gmt.delta_usd > 0) {
-    await projectsApi.addToCategory(project.id, "GoMining (GMT)", results.gmt.delta_usd);
+    await projectsApi.addToCategory(project.id, gmtEarningCategory, results.gmt.delta_usd);
   }
   if (results.gmt?.action === "boost" && investedDeltaUsd > 0) {
-    await projectsApi.addToCategory(project.id, "GoMining (Boost)", -investedDeltaUsd);
+    await projectsApi.addToCategory(project.id, gmtBoostCategory, -investedDeltaUsd);
   }
   if (results.btc?.action === "earning" && results.btc.delta_usd > 0) {
-    await projectsApi.addToCategory(project.id, "GoMining (BTC)", results.btc.delta_usd);
+    await projectsApi.addToCategory(project.id, btcEarningCategory, results.btc.delta_usd);
   }
 
   // Persist new baselines + last_updated_at.

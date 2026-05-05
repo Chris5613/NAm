@@ -343,6 +343,7 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
   const [action, setAction] = useState("earning");
   const [submitting, setSubmitting] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
+  const [label, setLabel] = useState("");
 
   const baseline = Number(config?.baseline_acu) || 0;
   const parsed = Number(newBalance);
@@ -370,6 +371,7 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
       setAction("earning");
       setSubmitting(false);
       setManualPrice("");
+      setLabel("");
     }
   }, [open]);
 
@@ -388,6 +390,7 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
         newBalance: parsed,
         action,
         acuPriceOverride: effectivePrice > 0 ? effectivePrice : null,
+        label: label.trim() || null,
       });
       if (result.action === "earning") {
         toast.success(
@@ -577,6 +580,20 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
             </div>
           )}
         </div>
+
+        {/* Label for sub-category */}
+        {hasInput && delta > 0 && action === "earning" && (
+          <div className="space-y-2 pb-2">
+            <Label className="text-xs">Label (sub-category)</Label>
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={`e.g. Mining, Staking (default: "Acurast")`}
+              className="bg-background border-border text-sm"
+              data-testid="acurast-label-input"
+            />
+          </div>
+        )}
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} className="border-border/40">

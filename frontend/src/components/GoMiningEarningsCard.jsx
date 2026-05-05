@@ -400,6 +400,7 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
   const [refetching, setRefetching] = useState(false);
   const [manualGmtPrice, setManualGmtPrice] = useState("");
   const [manualBtcPrice, setManualBtcPrice] = useState("");
+  const [label, setLabel] = useState("");
 
   // On open, re-fetch prices if either is missing so the user isn't stuck
   // when the card's initial mount-time fetch hit a flaky CoinGecko reply.
@@ -465,6 +466,7 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
       setGmtAction("skip");
       setBtcAction("skip");
       setSubmitting(false);
+      setLabel("");
     }
   }, [open]);
 
@@ -491,6 +493,7 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
         btcAction: btcTouched ? btcAction : "skip",
         gmtPriceOverride: effectiveGmtPrice > 0 ? effectiveGmtPrice : null,
         btcPriceOverride: effectiveBtcPrice > 0 ? effectiveBtcPrice : null,
+        label: label.trim() || null,
       });
 
       // Compose a single toast that summarizes whichever sides moved.
@@ -654,6 +657,25 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
               testidPrefix="gomining-btc"
             />
           </div>
+
+          {/* Optional label override for sub-category */}
+          {((gmtTouched && (gmtAction === "earning" || gmtAction === "boost")) ||
+            (btcTouched && btcAction === "earning")) && (
+            <div className="space-y-2">
+              <Label className="text-xs">Label (sub-category, optional)</Label>
+              <Input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder={`e.g. Mining, Bonus (default: GoMining (GMT/Boost/BTC))`}
+                className="bg-background border-border text-sm"
+                data-testid="gomining-label-input"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Overrides the default sub-category for any earning/boost
+                transactions created by this update.
+              </p>
+            </div>
+          )}
         </div>
 
         <DialogFooter>

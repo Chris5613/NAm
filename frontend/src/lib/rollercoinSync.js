@@ -78,7 +78,7 @@ export function isRollerCoinStale(config = null) {
 //   - "withdrawal" → baseline lowered, no transaction (any delta direction)
 //   - "no_change"  → bump `last_updated_at` only (resets the stale nudge)
 // Returns: { txn, delta_trx, delta_usd, action, baseline_before, baseline_after }
-export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPriceOverride = null }) {
+export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPriceOverride = null, label = null }) {
   const config = storage.getRollerCoinConfig();
   if (!config?.enabled) throw new Error("RollerCoin integration is disabled");
 
@@ -129,11 +129,12 @@ export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPric
   const project = await findOrCreateProject(projectName);
 
   // 3. Post the earning transaction tagged with the source metadata.
+  const categoryName = label || "RollerCoin";
   const today = new Date().toISOString().split("T")[0];
   const txnsRes = await projectsApi.addTransaction(project.id, {
     type: "earning",
     amount: deltaUsd,
-    category: "RollerCoin",
+    category: categoryName,
     notes: `RollerCoin balance update: +${deltaTrx.toFixed(4)} TRX @ $${trxPrice.toFixed(4)}`,
     date: today,
     source: "rollercoin",
@@ -150,7 +151,7 @@ export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPric
   await projectsApi.update(project.id, { earned: nextEarned });
 
   // 4b. Auto-update sub-category breakdown.
-  await projectsApi.addToCategory(project.id, "RollerCoin", deltaUsd);
+  await projectsApi.addToCategory(project.id, categoryName, deltaUsd);
 
   // 5. Update baseline + last_updated_at.
   const nextConfig = {

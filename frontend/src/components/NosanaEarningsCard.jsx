@@ -239,6 +239,7 @@ export default function NosanaEarningsCard() {
 function NosanaConfigDialog({ open, onOpenChange, config, onSaved }) {
   const [address, setAddress] = useState(config?.node_address || "");
   const [projectName, setProjectName] = useState(config?.project_name || "Nosana");
+  const [label, setLabel] = useState(config?.label || "");
   const [enabled, setEnabled] = useState(config?.enabled ?? true);
   const [submitting, setSubmitting] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -249,6 +250,7 @@ function NosanaConfigDialog({ open, onOpenChange, config, onSaved }) {
     if (open) {
       setAddress(config?.node_address || "");
       setProjectName(config?.project_name || "Nosana");
+      setLabel(config?.label || "");
       setEnabled(config?.enabled ?? true);
       setConfirmReset(false);
     }
@@ -265,6 +267,7 @@ function NosanaConfigDialog({ open, onOpenChange, config, onSaved }) {
       const next = {
         node_address: trimmed,
         project_name: (projectName || "Nosana").trim() || "Nosana",
+        label: (label || "").trim() || null,
         enabled,
         last_synced_at: config?.last_synced_at || null,
       };
@@ -348,6 +351,20 @@ function NosanaConfigDialog({ open, onOpenChange, config, onSaved }) {
             />
             <p className="text-[10px] text-muted-foreground">
               Earnings will be posted to this project (created if it doesn't exist).
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-xs">Label (sub-category)</Label>
+            <Input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder={`e.g. Mining, Bonus (default: "Nosana")`}
+              className="bg-background border-border text-sm"
+              data-testid="nosana-label-input"
+            />
+            <p className="text-[10px] text-muted-foreground">
+              Auto-synced earnings will be tagged with this sub-category in the Investment Overview.
             </p>
           </div>
 
