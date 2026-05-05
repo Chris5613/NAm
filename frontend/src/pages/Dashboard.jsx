@@ -17,6 +17,42 @@ const SLOW_TICK_RATIO = 4;                // every 4th fast tick → ~60s wallet
 const LIVE_HISTORY_MAX_POINTS = 200;      // rolling window persisted to localStorage
 const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
 
+function calculateNetWorth(assets = [], cryptoTotal = 0) {
+  const breakdown = {
+    stocks: 0,
+    crypto: cryptoTotal,
+    cash: 0,
+    other: 0,
+    debts: 0,
+  };
+
+  assets.forEach((asset) => {
+    const value =
+      asset.manual_value != null
+        ? Number(asset.manual_value) || 0
+        : (Number(asset.quantity) || 0) * (Number(asset.current_price) || 0);
+
+    if (asset.category === "debts") {
+      breakdown.debts += value;
+    } else if (breakdown[asset.category] !== undefined) {
+      breakdown[asset.category] += value;
+    }
+  });
+
+  const total_net_worth =
+    breakdown.stocks +
+    breakdown.crypto +
+    breakdown.cash +
+    breakdown.other -
+    breakdown.debts;
+
+  return {
+    total_net_worth,
+    breakdown,
+    asset_count: assets.length,
+  };
+}
+
 export default function Dashboard() {
   const [assets, setAssets] = useState([]);
   const [netWorth, setNetWorth] = useState(null);
@@ -43,30 +79,38 @@ export default function Dashboard() {
     storage.setLiveHistory(trimmed);
   }, [liveHistory]);
 
-  const fetchData = useCallback(async () => {
-    try {
-      const [assetsRes, netWorthRes, historyRes] = await Promise.all([
-        assetsApi.getAll(),
-        netWorthApi.getCurrent(),
-        netWorthApi.getHistory(),
-      ]);
-      setAssets(assetsRes.data);
-      setNetWorth(netWorthRes.data);
-      setHistory(historyRes.data);
-      setLastUpdated(new Date());
-      // Seed live history with first point if empty
-      setLiveHistory((prev) => {
-        if (prev.length === 0) {
-          return [{ timestamp: new Date().toISOString(), value: netWorthRes.data.total_net_worth }];
-        }
-        return prev;
-      });
-    } catch (err) {
-      toast.error("Failed to load data");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+const fetchData = useCallback(async () => {
+  try {
+    const assets = storage.getAssets?.() || [];
+    const history = storage.getNetWorthHistory?.() || [];
+
+    const cryptoCache = storage.getCryptoCache?.() || {};
+    const cryptoTotal = Number(cryptoCache.total) || 0;
+
+    const calculatedNetWorth = calculateNetWorth(assets, cryptoTotal);
+
+    setAssets(assets);
+    setNetWorth(calculatedNetWorth);
+    setHistory(history);
+    setLastUpdated(new Date());
+
+    setLiveHistory((prev) => {
+      if (prev.length === 0) {
+        return [
+          {
+            timestamp: new Date().toISOString(),
+            value: calculatedNetWorth.total_net_worth,
+          },
+        ];
+      }
+      return prev;
+    });
+  } catch (err) {
+    toast.error("Failed to load data");
+  } finally {
+    setLoading(false);
+  }
+}, []);
 
   // Fast tick: refresh stock + coin prices, recompute net worth, append a live point.
   // Every Nth tick we ALSO refresh wallet balances (slower / more expensive).
