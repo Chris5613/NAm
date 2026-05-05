@@ -68,14 +68,14 @@ export default function NetWorthHistory({ history, liveData }) {
   // so the chart can render distinguishing markers without affecting the line shape.
   const chartData = useMemo(() => {
     const savedPoints = (history || []).map((item) => ({
-      time: formatTime(item.timestamp),
+ time: formatDate(item.timestamp),
       value: Number(item.total_net_worth) || 0,
       kind: "snapshot",
       source: item.source === "auto" ? "auto" : "manual",
       timestamp: item.timestamp,
     }));
     const livePoints = (liveData || []).map((item) => ({
-      time: formatTime(item.timestamp),
+time: formatDate(item.timestamp),
       value: Number(item.value) || 0,
       kind: "live",
       source: null,
