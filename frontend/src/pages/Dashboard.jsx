@@ -165,6 +165,19 @@ const fetchData = useCallback(async () => {
     );
   }
 
+  const handleRefreshPrices = async () => {
+  setRefreshing(true);
+  try {
+    await pricesApi.refreshAll?.(); // optional if you still use it
+    await fetchData();
+    toast.success("Refreshed");
+  } catch {
+    toast.error("Failed to refresh");
+  } finally {
+    setRefreshing(false);
+  }
+};
+
   return (
     <div className="space-y-6" data-testid="dashboard">
       {/* Header */}
