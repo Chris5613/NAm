@@ -26,7 +26,7 @@ app.add_middleware(
 
 
 @app.get("/api/")
-async def root():
+async def root() -> dict[str, str]:
     return {
         "status": "ok",
         "message": "App is fully client-side. This stub backend is intentionally empty.",
@@ -34,5 +34,5 @@ async def root():
 
 
 @app.get("/api/health")
-async def health():
+async def health() -> dict[str, str]:
     return {"status": "ok"}

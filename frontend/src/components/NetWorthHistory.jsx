@@ -3,6 +3,23 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from "recharts";
 import { TrendingUp, TrendingDown, Minus, Activity } from "lucide-react";
 
+// Static chart config — pulled out of render so Recharts doesn't see fresh
+// object references on every parent re-render (avoids needless reconciles).
+const CHART_MARGIN = { top: 5, right: 10, left: 10, bottom: 5 };
+const Y_AXIS_DOMAIN = ["dataMin - 100", "dataMax + 100"];
+const AREA_DOT = { r: 3.5, fill: "#FAFAFA", stroke: "#52525B", strokeWidth: 1.5 };
+const AREA_ACTIVE_DOT = { r: 5.5, fill: "#FAFAFA", stroke: "#FACC15", strokeWidth: 2 };
+const TOOLTIP_BOX_STYLE = {
+  background: "#121214",
+  border: "1px solid #27272A",
+  borderRadius: "6px",
+  padding: "8px 10px",
+  fontFamily: "'Space Mono', monospace",
+  fontSize: "12px",
+};
+const TOOLTIP_LABEL_STYLE = { color: "#A1A1AA", marginBottom: 4 };
+const TOOLTIP_VALUE_STYLE = { color: "#FAFAFA" };
+
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -147,7 +164,7 @@ export default function NetWorthHistory() {
       </CardHeader>
       <CardContent className="p-4">
         <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
+          <AreaChart data={chartData} margin={CHART_MARGIN}>
             <defs>
               <linearGradient id="netWorthGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#FAFAFA" stopOpacity={0.18} />
@@ -171,7 +188,7 @@ export default function NetWorthHistory() {
               tickLine={false}
               axisLine={false}
               tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
-              domain={["dataMin - 100", "dataMax + 100"]}
+              domain={Y_AXIS_DOMAIN}
             />
             <Tooltip
               labelFormatter={formatAxisLabel}
@@ -183,20 +200,11 @@ export default function NetWorthHistory() {
                 const itemLabel = formatAxisLabel(point?.time ?? label);
 
                 return (
-                  <div
-                    style={{
-                      background: "#121214",
-                      border: "1px solid #27272A",
-                      borderRadius: "6px",
-                      padding: "8px 10px",
-                      fontFamily: "'Space Mono', monospace",
-                      fontSize: "12px",
-                    }}
-                  >
-                    <div style={{ color: "#A1A1AA", marginBottom: 4 }}>
+                  <div style={TOOLTIP_BOX_STYLE}>
+                    <div style={TOOLTIP_LABEL_STYLE}>
                       {itemLabel}
                     </div>
-                    <div style={{ color: "#FAFAFA" }}>
+                    <div style={TOOLTIP_VALUE_STYLE}>
                       Net Worth: {formatCurrency(value)}
                     </div>
                   </div>
@@ -209,8 +217,8 @@ export default function NetWorthHistory() {
               stroke="#FAFAFA"
               strokeWidth={2}
               fill="url(#netWorthGradient)"
-              dot={{ r: 3.5, fill: "#FAFAFA", stroke: "#52525B", strokeWidth: 1.5 }}
-              activeDot={{ r: 5.5, fill: "#FAFAFA", stroke: "#FACC15", strokeWidth: 2 }}
+              dot={AREA_DOT}
+              activeDot={AREA_ACTIVE_DOT}
               isAnimationActive={true}
               animationDuration={400}
               animationEasing="ease-out"

@@ -3,6 +3,16 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 
 const COLORS = ["#FAFAFA", "#A1A1AA", "#52525B", "#3F3F46", "#27272A"];
 
+// Hoisted out of render so Recharts gets stable refs across re-renders.
+const TOOLTIP_CONTENT_STYLE = {
+  background: "#121214",
+  border: "1px solid #27272A",
+  borderRadius: "6px",
+  fontFamily: "'Space Mono', monospace",
+  fontSize: "12px",
+};
+const TOOLTIP_LABEL_STYLE = { color: "#FAFAFA" };
+
 const CATEGORY_LABELS = {
   stocks: "Stocks",
   crypto: "Crypto",
@@ -75,14 +85,8 @@ export default function PortfolioChart({ netWorth }) {
                 ))}
               </Pie>
               <Tooltip
-                contentStyle={{
-                  background: "#121214",
-                  border: "1px solid #27272A",
-                  borderRadius: "6px",
-                  fontFamily: "'Space Mono', monospace",
-                  fontSize: "12px",
-                }}
-                labelStyle={{ color: "#FAFAFA" }}
+                contentStyle={TOOLTIP_CONTENT_STYLE}
+                labelStyle={TOOLTIP_LABEL_STYLE}
                 formatter={(value) => [formatCurrency(value), ""]}
               />
             </PieChart>
