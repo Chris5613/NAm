@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional
 import requests
 
 # Backend URL from frontend/.env
-BASE_URL = "https://auto-earnings-sync.preview.emergentagent.com"
+BASE_URL = "https://sync-multi-account.preview.emergentagent.com"
 INBOX_URL = f"{BASE_URL}/api/integrations/unity-network/inbox"
 
 
