@@ -16,6 +16,7 @@ export const STORAGE_KEYS = {
   ROLLERCOIN_CONFIG: 'networth_rollercoin_config',
   ACURAST_CONFIG: 'networth_acurast_config',
   UNITY_NETWORK_CONFIG: 'networth_unity_network_config',
+  UNITY_NETWORK_EXTENSION: 'networth_unity_network_extension',
   GOMINING_TOKEN_CONFIG: 'networth_gomining_token_config',
   ACU_PRICE_CACHE: 'networth_acu_price_cache',
   GOMINING_PRICE_CACHE: 'networth_gomining_price_cache',
@@ -128,6 +129,25 @@ export const localStorage = {
   //   { baseline_usd, project_name, enabled, last_updated_at }
   getUnityNetworkConfig: () => localStorage.get(STORAGE_KEYS.UNITY_NETWORK_CONFIG) || null,
   setUnityNetworkConfig: (config) => localStorage.set(STORAGE_KEYS.UNITY_NETWORK_CONFIG, config),
+
+  // Unity Nodes Chrome-extension auto-sync state. Tracks what the extension
+  // most recently pushed so we can render it on the card and stay idempotent
+  // when polling the backend inbox.
+  //   {
+  //     last_applied_synced_at,        // extension's synced_at we last applied
+  //     last_applied_received_at,      // server received_at when we applied
+  //     last_applied_lifetime_usd,     // baseline at apply time
+  //     last_today_date,               // YYYY-MM-DD of the latest reading
+  //     last_today_usd,                // payload.total_usd (today's earnings)
+  //     last_balance_usd,              // payload.balance_usd snapshot
+  //     last_lifetime_usd,             // payload.lifetime_usd snapshot
+  //     last_device_count,
+  //     last_email,
+  //     last_seen_at,                  // when frontend last successfully fetched
+  //     auto_sync_enabled,             // user toggle on the card (default true)
+  //   }
+  getUnityNetworkExtension: () => localStorage.get(STORAGE_KEYS.UNITY_NETWORK_EXTENSION) || null,
+  setUnityNetworkExtension: (state) => localStorage.set(STORAGE_KEYS.UNITY_NETWORK_EXTENSION, state),
 
   // GoMining (Integrations card) — separate from the GoMining tab's per-row
   // reward sync. Tracks the user's account-level GMT + BTC balances with a

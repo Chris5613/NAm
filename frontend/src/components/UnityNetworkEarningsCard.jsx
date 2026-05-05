@@ -4,6 +4,12 @@ import {
   applyUnityNetworkBalanceUpdate,
   isUnityNetworkStale,
 } from "@/lib/unityNetworkSync";
+import {
+  getExtensionState,
+  setAutoSyncEnabled,
+  pollAndApplyExtension,
+  hasTodayReading,
+} from "@/lib/unityNetworkExtensionSync";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +19,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   RefreshCw, Settings, Network, CheckCircle2, AlertCircle, Clock,
-  TrendingUp, ArrowDown, MinusCircle,
+  TrendingUp, ArrowDown, MinusCircle, Plug, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -34,9 +40,11 @@ function formatRelativeTime(iso) {
 
 export default function UnityNetworkEarningsCard() {
   const [config, setConfig] = useState(() => storage.getUnityNetworkConfig());
+  const [extState, setExtState] = useState(() => getExtensionState());
   const [configOpen, setConfigOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
   const [tickKey, setTickKey] = useState(0);
+  const [extSyncing, setExtSyncing] = useState(false);
   const tickRef = useRef(null);
 
   // Minute ticker so "last update" + stale badge stay live.
@@ -46,20 +54,87 @@ export default function UnityNetworkEarningsCard() {
   }, []);
 
   useEffect(() => {
-    const refresh = () => setConfig(storage.getUnityNetworkConfig());
+    const refresh = () => {
+      setConfig(storage.getUnityNetworkConfig());
+      setExtState(getExtensionState());
+    };
     window.addEventListener("focus", refresh);
     window.addEventListener("storage", refresh);
     window.addEventListener("unity-network-sync-complete", refresh);
+    window.addEventListener("unity-network-extension-update", refresh);
     return () => {
       window.removeEventListener("focus", refresh);
       window.removeEventListener("storage", refresh);
       window.removeEventListener("unity-network-sync-complete", refresh);
+      window.removeEventListener("unity-network-extension-update", refresh);
     };
   }, []);
 
   const isConfigured = !!(config?.enabled);
   const stale = useMemo(() => isUnityNetworkStale(config), [config, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const baselineUsd = Number(config?.baseline_usd) || 0;
+
+  // Extension-driven: a reading dated for today (UTC) means the card should
+  // show today's earnings tile sourced from the latest Chrome-extension push.
+  const showTodayTile = useMemo(() => hasTodayReading(), [extState, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const todayUsd = Number(extState?.last_today_usd) || 0;
+  const lastSeenAt = extState?.last_seen_at;
+  const lastAppliedSyncedAt = extState?.last_applied_synced_at;
+  const autoSync = extState?.auto_sync_enabled !== false;
+  const hasAnyExtensionData = !!(lastSeenAt || lastAppliedSyncedAt);
+
+  const handleManualExtensionSync = async () => {
+    setExtSyncing(true);
+    try {
+      const result = await pollAndApplyExtension({
+        allowAutoConfigure: !isConfigured,
+        force: true,
+      });
+      if (!result.ok) {
+        toast.error("Couldn't reach the extension inbox — is the backend up?");
+        return;
+      }
+      if (result.reason === "empty") {
+        toast.info("No extension data yet — open the extension and hit Sync Now.");
+        return;
+      }
+      if (!result.applied) {
+        if (result.reason === "already_applied") {
+          toast.info("Already up to date — no new earnings since the last push.");
+        } else if (result.reason === "tracking_disabled") {
+          toast.info("Tracking is disabled. Enable it in Configure first.");
+        } else if (result.reason === "invalid_lifetime") {
+          toast.error("Extension payload is missing lifetime_usd.");
+        } else {
+          toast.info("No change to apply.");
+        }
+        return;
+      }
+      if (result.action === "earning") {
+        toast.success(
+          `+${formatUsd(result.delta_usd)} synced from extension → ${
+            (storage.getUnityNetworkConfig()?.project_name) || "Phone Farm"
+          }`,
+        );
+      } else if (result.action === "withdrawal") {
+        toast.info(`Lifetime decreased — baseline reset, no earnings credited.`);
+      } else if (result.action === "bootstrap") {
+        toast.success(`Tracking enabled. Baseline locked to ${formatUsd(extState.last_lifetime_usd)}.`);
+      } else {
+        toast.info("Up to date — stale timer reset.");
+      }
+    } catch (err) {
+      toast.error(err?.message || "Extension sync failed");
+    } finally {
+      setExtSyncing(false);
+    }
+  };
+
+  const handleAutoSyncToggle = (enabled) => {
+    setAutoSyncEnabled(enabled);
+    setExtState(getExtensionState());
+    toast.info(enabled ? "Auto-sync from extension: on" : "Auto-sync from extension: off");
+  };
 
   return (
     <>
@@ -76,15 +151,25 @@ export default function UnityNetworkEarningsCard() {
                   {isConfigured ? (
                     <span
                       className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono"
-                      title="Manual USD-balance tracking"
+                      title={hasAnyExtensionData ? "Earnings auto-fetched by Chrome extension" : "Manual USD-balance tracking"}
                     >
                       <CheckCircle2 className="w-2.5 h-2.5" strokeWidth={2} />
-                      manual
+                      {hasAnyExtensionData ? "auto-sync" : "manual"}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono">
                       <AlertCircle className="w-2.5 h-2.5" strokeWidth={2} />
                       not configured
+                    </span>
+                  )}
+                  {hasAnyExtensionData && (
+                    <span
+                      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-mono"
+                      title="Chrome extension is the data source"
+                      data-testid="unity-network-extension-badge"
+                    >
+                      <Plug className="w-2.5 h-2.5" strokeWidth={2} />
+                      extension
                     </span>
                   )}
                   {isConfigured && stale && (
@@ -104,15 +189,23 @@ export default function UnityNetworkEarningsCard() {
                       Project: <span className="font-mono text-foreground">{config.project_name || "Phone Farm"}</span>
                       <span className="mx-2">·</span>
                       last update: {formatRelativeTime(config.last_updated_at)}
+                      {hasAnyExtensionData && (
+                        <>
+                          <span className="mx-2">·</span>
+                          extension: {formatRelativeTime(lastSeenAt || lastAppliedSyncedAt)}
+                        </>
+                      )}
                     </>
+                  ) : hasAnyExtensionData ? (
+                    "Chrome extension is reporting earnings — click Configure to start tracking and we'll lock the current lifetime as your baseline."
                   ) : (
-                    "Track Unity Network earnings in USD. No public API — enter your dashboard's USD total periodically and we'll log the delta as earnings on Phone Farm."
+                    "Track Unity Network earnings in USD. Install the Chrome extension to auto-sync daily, or enter your dashboard's USD total manually below."
                   )}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
@@ -122,6 +215,18 @@ export default function UnityNetworkEarningsCard() {
               >
                 <Settings className="w-4 h-4 mr-2" strokeWidth={1.5} />
                 {isConfigured ? "Edit" : "Configure"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManualExtensionSync}
+                disabled={extSyncing}
+                className="border-violet-500/40 text-violet-300 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
+                data-testid="unity-network-extension-sync-btn"
+                title="Pull the latest payload pushed by the Chrome extension"
+              >
+                <Zap className={`w-4 h-4 mr-2 ${extSyncing ? "animate-pulse" : ""}`} strokeWidth={1.5} />
+                {extSyncing ? "Syncing…" : "Sync from extension"}
               </Button>
               <Button
                 size="sm"
@@ -137,6 +242,62 @@ export default function UnityNetworkEarningsCard() {
               </Button>
             </div>
           </div>
+
+          {/* Extension status panel — shows today's earnings + last push when
+              the Chrome extension has reported in. Hidden when there's no
+              extension data yet so the card stays clean for manual-only users. */}
+          {hasAnyExtensionData && (
+            <div
+              className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-4 gap-3"
+              data-testid="unity-network-extension-panel"
+            >
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  <Zap className="w-2.5 h-2.5 text-violet-400" strokeWidth={2} />
+                  Today's earnings
+                </p>
+                <p
+                  className={`font-mono text-lg font-medium ${showTodayTile ? "text-emerald-400" : "text-muted-foreground"}`}
+                  data-testid="unity-network-today-usd"
+                >
+                  {showTodayTile ? formatUsd(todayUsd) : "—"}
+                </p>
+                {extState?.last_today_date && (
+                  <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+                    {extState.last_today_date}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Lifetime</p>
+                <p className="font-mono text-base font-medium text-foreground">
+                  {formatUsd(extState?.last_lifetime_usd)}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Devices</p>
+                <p className="font-mono text-base font-medium text-foreground">
+                  {extState?.last_device_count || 0}
+                </p>
+              </div>
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Last push</p>
+                <p className="font-mono text-sm font-medium text-foreground">
+                  {formatRelativeTime(lastSeenAt || lastAppliedSyncedAt)}
+                </p>
+                <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoSync}
+                    onChange={(e) => handleAutoSyncToggle(e.target.checked)}
+                    className="accent-violet-500 w-3 h-3"
+                    data-testid="unity-network-auto-sync-toggle"
+                  />
+                  <span>auto-apply</span>
+                </label>
+              </div>
+            </div>
+          )}
 
           {isConfigured && (
             <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-2 gap-3">
