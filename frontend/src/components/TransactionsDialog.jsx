@@ -173,7 +173,7 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-card border-border sm:max-w-lg max-h-[85vh] overflow-y-auto" data-testid="transactions-dialog">
+      <DialogContent className="bg-card border-border sm:max-w-2xl max-h-[85vh] overflow-y-auto" data-testid="transactions-dialog">
         <DialogHeader>
           <DialogTitle>Transactions — {project?.name}</DialogTitle>
           <DialogDescription>Add earnings or investments. Numbers auto-update.</DialogDescription>
