@@ -121,6 +121,26 @@ export default function GoMiningPage() {
     return () => { cancelled = true; clearInterval(id); };
   }, []);
 
+  // Migration: backfill gmt_price_locked for existing rows that have GMT data
+  // but no locked price yet. Uses the first live price we fetch.
+  const migratedRef = useRef(false);
+  useEffect(() => {
+    if (migratedRef.current || gmtPrice <= 0) return;
+    const needsMigration = rows.some(
+      (r) => ((Number(r.gmt_earned) || 0) > 0 || (Number(r.gmt_boosted) || 0) > 0) && !(Number(r.gmt_price_locked) > 0),
+    );
+    if (!needsMigration) { migratedRef.current = true; return; }
+    migratedRef.current = true;
+    setRows((prev) =>
+      prev.map((r) => {
+        if (((Number(r.gmt_earned) || 0) > 0 || (Number(r.gmt_boosted) || 0) > 0) && !(Number(r.gmt_price_locked) > 0)) {
+          return { ...r, gmt_price_locked: gmtPrice };
+        }
+        return r;
+      }),
+    );
+  }, [gmtPrice, rows]);
+
   const sortedRows = useMemo(
     () => [...rows].sort((a, b) => (b.date || "").localeCompare(a.date || "")),
     [rows],
