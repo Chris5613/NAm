@@ -20,6 +20,7 @@ export const STORAGE_KEYS = {
   ACU_PRICE_CACHE: 'networth_acu_price_cache',
   GOMINING_PRICE_CACHE: 'networth_gomining_price_cache',
   TRX_PRICE_CACHE: 'networth_trx_price_cache',
+  CUSTOM_INTEGRATIONS: 'networth_custom_integrations',
 };
 
 export const localStorage = {
@@ -151,5 +152,9 @@ export const localStorage = {
   //   { price, fetched_at }
   getTrxPriceCache: () => localStorage.get(STORAGE_KEYS.TRX_PRICE_CACHE) || null,
   setTrxPriceCache: (cache) => localStorage.set(STORAGE_KEYS.TRX_PRICE_CACHE, cache),
+
+  // Custom integrations list
+  getCustomIntegrations: () => localStorage.get(STORAGE_KEYS.CUSTOM_INTEGRATIONS) || [],
+  setCustomIntegrations: (list) => localStorage.set(STORAGE_KEYS.CUSTOM_INTEGRATIONS, list),
 
 };

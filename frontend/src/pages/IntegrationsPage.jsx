@@ -3,14 +3,25 @@
 // them into the Investment Overview.
 //
 // Add a new integration: drop another card component into the grid below.
+import { useState, useCallback } from "react";
 import NosanaEarningsCard from "@/components/NosanaEarningsCard";
 import RollerCoinEarningsCard from "@/components/RollerCoinEarningsCard";
 import AcurastEarningsCard from "@/components/AcurastEarningsCard";
 import UnityNetworkEarningsCard from "@/components/UnityNetworkEarningsCard";
 import GoMiningEarningsCard from "@/components/GoMiningEarningsCard";
-import { Zap } from "lucide-react";
+import { AddIntegrationDialog, CustomIntegrationCard } from "@/components/CustomIntegrationCard";
+import * as customSync from "@/lib/customIntegrationSync";
+import { Zap, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function IntegrationsPage() {
+  const [addOpen, setAddOpen] = useState(false);
+  const [customIntegrations, setCustomIntegrations] = useState(customSync.getAll());
+
+  const refresh = useCallback(() => {
+    setCustomIntegrations(customSync.getAll());
+  }, []);
+
   return (
     <div className="space-y-6" data-testid="integrations-page">
       {/* Page header */}
@@ -24,6 +35,13 @@ export default function IntegrationsPage() {
             Auto-sync earnings from external project APIs into your Investment Overview.
           </p>
         </div>
+        <Button
+          onClick={() => setAddOpen(true)}
+          className="bg-white text-black hover:bg-neutral-200"
+          data-testid="add-custom-integration-btn"
+        >
+          <Plus className="w-4 h-4 mr-2" /> Add Integration
+        </Button>
       </div>
 
       {/* Integration cards. Each card is self-contained — config, status,
@@ -34,8 +52,23 @@ export default function IntegrationsPage() {
         <AcurastEarningsCard />
         <UnityNetworkEarningsCard />
         <GoMiningEarningsCard />
-        {/* Future integrations go here (e.g. Helium, Akash, Render Network). */}
+
+        {/* Custom integrations */}
+        {customIntegrations.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider pt-2">Custom Integrations</h2>
+            {customIntegrations.map((integration) => (
+              <CustomIntegrationCard
+                key={integration.id}
+                integration={integration}
+                onUpdated={refresh}
+              />
+            ))}
+          </div>
+        )}
       </div>
+
+      <AddIntegrationDialog open={addOpen} onOpenChange={setAddOpen} onCreated={refresh} />
     </div>
   );
 }
