@@ -63,6 +63,18 @@ export async function syncNosanaEarnings(opts = {}) {
   }
   const address = config.node_address.trim();
   const projectName = config.project_name || NOSANA_PROJECT_NAME_DEFAULT;
+
+  // Lazy-init the start-tracking cursor on the very first sync — from here
+  // onward we only post earnings dated >= this cursor. This prevents a huge
+  // one-time backfill on setup: users only want going-forward data.
+  let startTrackingDate = config.start_tracking_date;
+  if (!startTrackingDate) {
+    startTrackingDate = todayUtcIso();
+    storage.setNosanaConfig({ ...config, start_tracking_date: startTrackingDate });
+  }
+
+  // We still pull a small window (35 days) from the API so same-day intra-day
+  // updates and short catch-ups work, but we filter to the cursor below.
   const startDate = opts.startDate || daysAgoUtcIso(LOOKBACK_DAYS);
   const endDate = opts.endDate || todayUtcIso();
 
@@ -75,9 +87,11 @@ export async function syncNosanaEarnings(opts = {}) {
     console.warn("Nosana sync: API fetch failed", err);
     return { added: 0, updated: 0, skipped: 0, total_added_usd: 0, skippedReason: "fetch-failed" };
   }
-  const days = nosanaApi.flattenDailyEarnings(api);
+  const allDays = nosanaApi.flattenDailyEarnings(api);
+  // Hard-cut: only consider days on/after the cursor.
+  const days = allDays.filter(({ date }) => date >= startTrackingDate);
   if (days.length === 0) {
-    return { added: 0, updated: 0, skipped: 0, total_added_usd: 0, skippedReason: "no-data" };
+    return { added: 0, updated: 0, skipped: 0, total_added_usd: 0, skippedReason: "no-data-since-cursor" };
   }
 
   // 2. Locate (or create) the project.
@@ -220,4 +234,77 @@ export function shouldRunCatchupNow(now = new Date()) {
   if (!sameDay) return true;
   const lastMin = last.getUTCHours() * 60 + last.getUTCMinutes();
   return lastMin < cutoffMin;
+}
+
+
+// Wipes all auto-synced Nosana transactions and resets the cursor so sync
+// only considers days from "now" forward. Useful when a previous setup
+// backfilled too much history, or when the user wants a clean slate.
+// `opts.cursorDate` (YYYY-MM-DD) overrides the default of today.
+export async function resetNosanaSyncHistory(opts = {}) {
+  const config = storage.getNosanaConfig();
+  const synced = storage.getNosanaSyncedDates() || {};
+  const entries = Object.entries(synced);
+
+  // 1. Delete each auto-synced transaction. `projectsApi.deleteTransaction`
+  //    automatically decrements `project.earned` and removes the date from
+  //    the synced-dates map (via the reversal hook in api.js), so we end up
+  //    with a consistent state without having to touch project totals.
+  let removed = 0;
+  for (const [, entry] of entries) {
+    if (!entry?.txn_id) continue;
+    try {
+      await projectsApi.deleteTransaction(entry.txn_id);
+      removed += 1;
+    } catch (err) {
+      console.warn("resetNosanaSyncHistory: failed to delete txn", entry.txn_id, err);
+    }
+  }
+
+  // 2. Belt-and-suspenders: explicitly clear the map (in case any entry had
+  //    no txn_id / the reversal hook didn't fully clean up).
+  storage.setNosanaSyncedDates({});
+
+  // 3. Advance the tracking cursor. Default: today (UTC).
+  const cursor = opts.cursorDate || todayUtcIso();
+  if (config) {
+    storage.setNosanaConfig({
+      ...config,
+      start_tracking_date: cursor,
+      last_synced_at: null,
+    });
+  }
+
+  try {
+    window.dispatchEvent(new CustomEvent("nosana-sync-complete"));
+  } catch { /* ignore */ }
+
+  return { removed, cursor };
+}
+
+// One-shot migration: detects users who were seeded with the old multi-day
+// backfill behavior and silently collapses it to "today only" so they don't
+// see legacy $50+ histories. No-op after the first run.
+const MIGRATION_FLAG = "networth_nosana_today_only_migration_v1";
+export async function runTodayOnlyMigrationIfNeeded() {
+  try {
+    if (window.localStorage.getItem(MIGRATION_FLAG) === "true") return { migrated: false, reason: "already-run" };
+    const config = storage.getNosanaConfig();
+    const synced = storage.getNosanaSyncedDates() || {};
+    // Only migrate the demo-seeded state — don't touch users who opted in
+    // themselves and intentionally synced historical data.
+    const demoSeeded = window.localStorage.getItem("networth_demo_seeded") === "true";
+    if (!demoSeeded || !config || Object.keys(synced).length === 0) {
+      window.localStorage.setItem(MIGRATION_FLAG, "true");
+      return { migrated: false, reason: "no-op" };
+    }
+    const result = await resetNosanaSyncHistory();
+    window.localStorage.setItem(MIGRATION_FLAG, "true");
+    // Kick a fresh sync so today's data appears right after migration.
+    try { await syncNosanaEarnings({ silent: true }); } catch { /* ignore */ }
+    return { migrated: true, ...result };
+  } catch (err) {
+    console.warn("runTodayOnlyMigrationIfNeeded failed:", err);
+    return { migrated: false, reason: "error", error: String(err) };
+  }
 }
