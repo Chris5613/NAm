@@ -174,7 +174,7 @@ const fetchData = useCallback(async () => {
             Net Worth
           </h1>
           <button
-            onClick={() => setLiveEnabled(!liveEnabled)}
+
             className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
               liveEnabled
                 ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20"
@@ -182,8 +182,6 @@ const fetchData = useCallback(async () => {
             }`}
             data-testid="live-toggle-btn"
           >
-            <Radio className={`w-3 h-3 ${liveEnabled ? "animate-pulse" : ""}`} strokeWidth={2} />
-            {liveEnabled ? "LIVE" : "PAUSED"}
           </button>
           {lastUpdated && (
             <span className="text-xs text-muted-foreground font-mono" data-testid="last-updated">
