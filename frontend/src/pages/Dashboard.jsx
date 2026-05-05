@@ -180,25 +180,6 @@ const fetchData = useCallback(async () => {
   }
 };
 
-const monthlyNetWorth = [
-  { timestamp: "2025-01-31T12:00:00.000Z", total_net_worth: 10782.51, source: "manual" },
-  { timestamp: "2025-02-28T12:00:00.000Z", total_net_worth: 10693.68, source: "manual" },
-  { timestamp: "2025-03-31T12:00:00.000Z", total_net_worth: 9528.58, source: "manual" },
-  { timestamp: "2025-04-30T12:00:00.000Z", total_net_worth: 8632.42, source: "manual" },
-  { timestamp: "2025-05-31T12:00:00.000Z", total_net_worth: 10896.34, source: "manual" },
-  { timestamp: "2025-06-30T12:00:00.000Z", total_net_worth: 8972.98, source: "manual" },
-  { timestamp: "2025-07-31T12:00:00.000Z", total_net_worth: 11405.74, source: "manual" },
-  { timestamp: "2025-08-31T12:00:00.000Z", total_net_worth: 12575.42, source: "manual" },
-  { timestamp: "2025-09-30T12:00:00.000Z", total_net_worth: 11304.91, source: "manual" },
-  { timestamp: "2025-10-31T12:00:00.000Z", total_net_worth: 13220.50, source: "manual" },
-  { timestamp: "2025-11-30T12:00:00.000Z", total_net_worth: 12834.66, source: "manual" },
-  { timestamp: "2025-12-31T12:00:00.000Z", total_net_worth: 11257.05, source: "manual" },
-  { timestamp: "2026-01-31T12:00:00.000Z", total_net_worth: 13684.99, source: "manual" },
-  { timestamp: "2026-02-28T12:00:00.000Z", total_net_worth: 15225.50, source: "manual" },
-  { timestamp: "2026-03-31T12:00:00.000Z", total_net_worth: 16233.31, source: "manual" },
-  { timestamp: "2026-04-30T12:00:00.000Z", total_net_worth: 17271.75, source: "manual" },
-  { timestamp: "2026-05-31T12:00:00.000Z", total_net_worth: 17491.19, source: "manual" },
-];
   return (
     <div className="space-y-6" data-testid="dashboard">
       {/* Header */}
@@ -257,7 +238,7 @@ const monthlyNetWorth = [
         </div>
       </div>
 
-<NetWorthHistory history={monthlyNetWorth} liveData={[]} />
+<NetWorthHistory />
 
       {/* Asset List with Tabs */}
       <div className="space-y-4">

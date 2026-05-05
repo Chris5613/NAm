@@ -62,51 +62,26 @@ function SnapshotDot(props) {
   );
 }
 
-export default function NetWorthHistory({ history, liveData }) {
-  // Merge saved history with live session data.
-  // Each point keeps a `kind` ('snapshot' | 'live') and `source` ('auto' | 'manual')
-  // so the chart can render distinguishing markers without affecting the line shape.
-  const chartData = useMemo(() => {
-    const savedPoints = (history || []).map((item) => ({
- time: formatDate(item.timestamp),
-      value: Number(item.total_net_worth) || 0,
-      kind: "snapshot",
-      source: item.source === "auto" ? "auto" : "manual",
-      timestamp: item.timestamp,
-    }));
-    const livePoints = (liveData || []).map((item) => ({
-time: formatDate(item.timestamp),
-      value: Number(item.value) || 0,
-      kind: "live",
-      source: null,
-      timestamp: item.timestamp,
-    }));
-    return [...savedPoints, ...livePoints];
-  }, [history, liveData]);
-
-  // Snapshot counts for the inline legend
-  const snapshotCounts = useMemo(() => {
-    let auto = 0;
-    let manual = 0;
-    for (const p of chartData) {
-      if (p.kind !== "snapshot") continue;
-      if (p.source === "auto") auto += 1;
-      else manual += 1;
-    }
-    return { auto, manual };
-  }, [chartData]);
-
-  // Session delta: change since the FIRST live point this session.
-  const sessionDelta = useMemo(() => {
-    const live = (liveData || []).filter((p) => Number.isFinite(Number(p.value)));
-    if (live.length < 2) return null;
-    const first = Number(live[0].value);
-    const last = Number(live[live.length - 1].value);
-    if (!first) return null;
-    const diff = last - first;
-    const pct = (diff / first) * 100;
-    return { diff, pct, first, last };
-  }, [liveData]);
+export default function NetWorthHistory() {
+const chartData = [
+  { time: "Jan 2025", value: 10782.51 },
+  { time: "Feb 2025", value: 10693.68 },
+  { time: "Mar 2025", value: 9528.58 },
+  { time: "Apr 2025", value: 8632.42 },
+  { time: "May 2025", value: 10896.34 },
+  { time: "Jun 2025", value: 8972.98 },
+  { time: "Jul 2025", value: 11405.74 },
+  { time: "Aug 2025", value: 12575.42 },
+  { time: "Sep 2025", value: 11304.91 },
+  { time: "Oct 2025", value: 13220.50 },
+  { time: "Nov 2025", value: 12834.66 },
+  { time: "Dec 2025", value: 11257.05 },
+  { time: "Jan 2026", value: 13684.99 },
+  { time: "Feb 2026", value: 15225.50 },
+  { time: "Mar 2026", value: 16233.31 },
+  { time: "Apr 2026", value: 17271.75 },
+  { time: "May 2026", value: 17491.19 },
+];
 
   if (chartData.length === 0) {
     return (
@@ -221,7 +196,6 @@ time: formatDate(item.timestamp),
               stroke="#FAFAFA"
               strokeWidth={2}
               fill="url(#netWorthGradient)"
-              dot={<SnapshotDot />}
               activeDot={{ r: 4, fill: "#FAFAFA" }}
               isAnimationActive={true}
               animationDuration={400}
