@@ -18,6 +18,8 @@ export const STORAGE_KEYS = {
   UNITY_NETWORK_CONFIG: 'networth_unity_network_config',
   GOMINING_TOKEN_CONFIG: 'networth_gomining_token_config',
   ACU_PRICE_CACHE: 'networth_acu_price_cache',
+  GOMINING_PRICE_CACHE: 'networth_gomining_price_cache',
+  TRX_PRICE_CACHE: 'networth_trx_price_cache',
 };
 
 export const localStorage = {
@@ -139,5 +141,15 @@ export const localStorage = {
   //   { price, fetched_at }
   getAcuPriceCache: () => localStorage.get(STORAGE_KEYS.ACU_PRICE_CACHE) || null,
   setAcuPriceCache: (cache) => localStorage.set(STORAGE_KEYS.ACU_PRICE_CACHE, cache),
+
+  // Cached GoMining prices (GMT + BTC) — used as fallback when rate-limited.
+  //   { gmt, btc, fetched_at }
+  getGoMiningPriceCache: () => localStorage.get(STORAGE_KEYS.GOMINING_PRICE_CACHE) || null,
+  setGoMiningPriceCache: (cache) => localStorage.set(STORAGE_KEYS.GOMINING_PRICE_CACHE, cache),
+
+  // Cached TRX price — used as fallback when rate-limited.
+  //   { price, fetched_at }
+  getTrxPriceCache: () => localStorage.get(STORAGE_KEYS.TRX_PRICE_CACHE) || null,
+  setTrxPriceCache: (cache) => localStorage.set(STORAGE_KEYS.TRX_PRICE_CACHE, cache),
 
 };

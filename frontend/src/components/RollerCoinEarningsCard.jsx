@@ -3,6 +3,7 @@ import { localStorage as storage } from "@/lib/localStorage";
 import {
   applyRollerCoinBalanceUpdate,
   getTrxPrice,
+  getTrxPriceCacheInfo,
   isRollerCoinStale,
 } from "@/lib/rollercoinSync";
 import { Card, CardContent } from "@/components/ui/card";
@@ -343,12 +344,19 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
   const [newBalance, setNewBalance] = useState("");
   const [action, setAction] = useState("earning"); // earning | withdrawal | no_change
   const [submitting, setSubmitting] = useState(false);
+  const [manualPrice, setManualPrice] = useState("");
 
   const baseline = Number(config?.baseline_trx) || 0;
   const parsed = Number(newBalance);
   const hasInput = newBalance !== "" && Number.isFinite(parsed) && parsed >= 0;
   const delta = hasInput ? parsed - baseline : 0;
-  const deltaUsd = delta * (Number(trxPrice) || 0);
+
+  // Effective price: live > manual > cached
+  const manualPriceNum = Number(manualPrice) || 0;
+  const cachedInfo = getTrxPriceCacheInfo();
+  const effectivePrice = trxPrice > 0 ? trxPrice : manualPriceNum > 0 ? manualPriceNum : (cachedInfo?.price || 0);
+  const priceSource = trxPrice > 0 ? "live" : manualPriceNum > 0 ? "manual" : cachedInfo?.price ? "cached" : "none";
+  const deltaUsd = delta * effectivePrice;
 
   // Auto-pick the most likely action as the user types.
   useEffect(() => {
@@ -363,6 +371,7 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
       setNewBalance("");
       setAction("earning");
       setSubmitting(false);
+      setManualPrice("");
     }
   }, [open]);
 
@@ -371,12 +380,16 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
       toast.error("Enter your current RollerCoin TRX balance");
       return;
     }
+    if (action === "earning" && effectivePrice <= 0) {
+      toast.error("TRX price required — enter a manual price below to proceed");
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await applyRollerCoinBalanceUpdate({
         newBalance: parsed,
         action,
-        trxPriceOverride: trxPrice > 0 ? trxPrice : null,
+        trxPriceOverride: effectivePrice > 0 ? effectivePrice : null,
       });
       if (result.action === "earning") {
         toast.success(
@@ -461,6 +474,50 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
             </div>
           </div>
 
+          {/* TRX Price indicator + manual override */}
+          <div className="p-3 rounded-md border border-border/30 bg-secondary/20 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">TRX Price</p>
+              {priceSource === "live" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">live</span>
+              )}
+              {priceSource === "cached" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono">cached</span>
+              )}
+              {priceSource === "manual" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono">manual</span>
+              )}
+              {priceSource === "none" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-mono">unavailable</span>
+              )}
+            </div>
+            {effectivePrice > 0 ? (
+              <p className="font-mono text-sm text-foreground">${effectivePrice.toFixed(4)}</p>
+            ) : (
+              <p className="text-xs text-rose-400">CoinGecko rate-limited. Enter TRX price manually below.</p>
+            )}
+            {trxPrice <= 0 && (
+              <div className="space-y-1 pt-1">
+                <Label className="text-[10px] text-muted-foreground">Manual TRX price (USD)</Label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                  placeholder={cachedInfo?.price ? cachedInfo.price.toFixed(4) : "0.0000"}
+                  className="bg-background border-border font-mono text-xs h-8"
+                  data-testid="rollercoin-manual-price-input"
+                />
+                {cachedInfo?.price > 0 && !manualPriceNum && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Using cached: ${cachedInfo.price.toFixed(4)}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           {hasInput && (
             <div
               className={`p-3 rounded-md border ${
@@ -482,9 +539,9 @@ function RollerCoinUpdateDialog({ open, onOpenChange, config, trxPrice, onDone }
                   {delta >= 0 ? "+" : ""}{delta.toFixed(4)} TRX
                 </p>
                 <p className="font-mono text-sm text-muted-foreground">
-                  ({trxPrice > 0
+                  ({effectivePrice > 0
                     ? `${delta >= 0 ? "+" : ""}${formatUsd(deltaUsd)}`
-                    : "TRX price unavailable"})
+                    : "enter TRX price above"})
                 </p>
               </div>
             </div>

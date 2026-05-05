@@ -51,27 +51,48 @@ async function findOrCreateProject(name) {
   return created.data;
 }
 
-// Fetch both prices in parallel. Each call hits CoinGecko's
+// Fetch both prices in parallel with caching. Each call hits CoinGecko's
 // `simple/price` endpoint with a single id — the in-house wrapper
 // (`coinGeckoApi.getPrice`) only returns a number for single-id queries,
 // so a comma-separated call would silently come back as 0.
+// When CoinGecko succeeds, prices are cached in localStorage.
+// When CoinGecko fails (rate-limited), cached prices are returned.
 export async function getGoMiningPrices() {
+  let gmt = 0;
+  let btc = 0;
   try {
     const [gmtRaw, btcRaw] = await Promise.all([
-      coinGeckoApi.getPrice(GMT_COINGECKO_ID).catch((err) => {
-        console.warn("getGoMiningPrices: GMT fetch failed", err);
-        return 0;
-      }),
-      coinGeckoApi.getPrice(BTC_COINGECKO_ID).catch((err) => {
-        console.warn("getGoMiningPrices: BTC fetch failed", err);
-        return 0;
-      }),
+      coinGeckoApi.getPrice(GMT_COINGECKO_ID).catch(() => 0),
+      coinGeckoApi.getPrice(BTC_COINGECKO_ID).catch(() => 0),
     ]);
-    return { gmt: Number(gmtRaw) || 0, btc: Number(btcRaw) || 0 };
-  } catch (err) {
-    console.warn("getGoMiningPrices failed:", err);
-    return { gmt: 0, btc: 0 };
+    gmt = Number(gmtRaw) || 0;
+    btc = Number(btcRaw) || 0;
+  } catch {
+    // both failed
   }
+
+  // Cache any successful prices
+  if (gmt > 0 || btc > 0) {
+    const cached = storage.getGoMiningPriceCache() || {};
+    const next = {
+      gmt: gmt > 0 ? gmt : (Number(cached.gmt) || 0),
+      btc: btc > 0 ? btc : (Number(cached.btc) || 0),
+      fetched_at: new Date().toISOString(),
+    };
+    storage.setGoMiningPriceCache(next);
+    return next;
+  }
+
+  // Both failed — fall back to cached
+  const cached = storage.getGoMiningPriceCache();
+  return { gmt: Number(cached?.gmt) || 0, btc: Number(cached?.btc) || 0 };
+}
+
+// Returns cached price metadata for UI staleness indicators.
+export function getGoMiningPriceCacheInfo() {
+  const cached = storage.getGoMiningPriceCache();
+  if (!cached) return null;
+  return { gmt: Number(cached.gmt) || 0, btc: Number(cached.btc) || 0, fetched_at: cached.fetched_at };
 }
 
 export function isGoMiningTokenStale(config = null) {
@@ -158,7 +179,7 @@ export async function applyGoMiningBalanceUpdate({
   // ──────────────────── GMT side ────────────────────
   if (gmtAction !== "skip" && Math.abs(deltaGmt) >= GMT_EPSILON) {
     if (gmtAction === "earning") {
-      if (!(gmtPrice > 0)) throw new Error("Could not fetch GMT price — try again in a moment.");
+      if (!(gmtPrice > 0)) throw new Error("GMT price unavailable — enter a manual price in the dialog or try again later.");
       const deltaUsd = Number((deltaGmt * gmtPrice).toFixed(6));
       const txnsRes = await projectsApi.addTransaction(project.id, {
         type: "earning",
@@ -178,7 +199,7 @@ export async function applyGoMiningBalanceUpdate({
       earnedDeltaUsd += deltaUsd;
       baselineGmtAfter = nextGmtBalance;
     } else if (gmtAction === "boost") {
-      if (!(gmtPrice > 0)) throw new Error("Could not fetch GMT price — try again in a moment.");
+      if (!(gmtPrice > 0)) throw new Error("GMT price unavailable — enter a manual price in the dialog or try again later.");
       const spendGmt = Math.abs(deltaGmt);
       const investUsd = Number((spendGmt * gmtPrice).toFixed(6));
       const txnsRes = await projectsApi.addTransaction(project.id, {
@@ -211,7 +232,7 @@ export async function applyGoMiningBalanceUpdate({
   // ──────────────────── BTC side ────────────────────
   if (btcAction !== "skip" && Math.abs(deltaBtc) >= BTC_EPSILON) {
     if (btcAction === "earning") {
-      if (!(btcPrice > 0)) throw new Error("Could not fetch BTC price — try again in a moment.");
+      if (!(btcPrice > 0)) throw new Error("BTC price unavailable — enter a manual price in the dialog or try again later.");
       const deltaUsd = Number((deltaBtc * btcPrice).toFixed(6));
       const txnsRes = await projectsApi.addTransaction(project.id, {
         type: "earning",

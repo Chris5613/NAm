@@ -40,14 +40,27 @@ async function findOrCreateProject(name) {
   return created.data;
 }
 
-// Live TRX → USD price (with a graceful fallback if CoinGecko hiccups).
+// Live TRX → USD price with caching and fallback (same pattern as ACU/GMT).
 export async function getTrxPrice() {
   try {
     const price = await coinGeckoApi.getPrice(TRX_COINGECKO_ID);
-    return Number(price) || 0;
+    const numPrice = Number(price) || 0;
+    if (numPrice > 0) {
+      storage.setTrxPriceCache({ price: numPrice, fetched_at: new Date().toISOString() });
+      return numPrice;
+    }
   } catch {
-    return 0;
+    // fall through to cached
   }
+  const cached = storage.getTrxPriceCache();
+  return Number(cached?.price) || 0;
+}
+
+// Returns cached price metadata for UI staleness indicators.
+export function getTrxPriceCacheInfo() {
+  const cached = storage.getTrxPriceCache();
+  if (!cached?.price) return null;
+  return { price: Number(cached.price), fetched_at: cached.fetched_at };
 }
 
 // Returns true if the user hasn't entered a balance in >= STALE_DAYS or has
@@ -106,7 +119,7 @@ export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPric
   // 1. Price the delta in USD at the current TRX rate.
   const trxPrice =
     trxPriceOverride != null ? Number(trxPriceOverride) : await getTrxPrice();
-  if (!(trxPrice > 0)) throw new Error("Could not fetch TRX price — try again in a moment.");
+  if (!(trxPrice > 0)) throw new Error("TRX price unavailable — enter a manual price override or try again later.");
   const deltaUsd = Number((deltaTrx * trxPrice).toFixed(6));
 
   // 2. Locate (or create) the RollerCoin investment project.

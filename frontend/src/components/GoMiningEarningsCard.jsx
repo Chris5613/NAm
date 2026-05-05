@@ -3,6 +3,7 @@ import { localStorage as storage } from "@/lib/localStorage";
 import {
   applyGoMiningBalanceUpdate,
   getGoMiningPrices,
+  getGoMiningPriceCacheInfo,
   isGoMiningTokenStale,
 } from "@/lib/goMiningTokenSync";
 import { Card, CardContent } from "@/components/ui/card";
@@ -397,12 +398,16 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [livePrices, setLivePrices] = useState(prices);
   const [refetching, setRefetching] = useState(false);
+  const [manualGmtPrice, setManualGmtPrice] = useState("");
+  const [manualBtcPrice, setManualBtcPrice] = useState("");
 
   // On open, re-fetch prices if either is missing so the user isn't stuck
   // when the card's initial mount-time fetch hit a flaky CoinGecko reply.
   useEffect(() => {
     if (!open) return;
     setLivePrices(prices);
+    setManualGmtPrice("");
+    setManualBtcPrice("");
     if ((Number(prices?.gmt) || 0) > 0 && (Number(prices?.btc) || 0) > 0) return;
     let cancelled = false;
     setRefetching(true);
@@ -425,8 +430,18 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
   const btcTouched = newBtc !== "" && Number.isFinite(parsedBtc) && parsedBtc >= 0;
   const deltaGmt = gmtTouched ? parsedGmt - baselineGmt : 0;
   const deltaBtc = btcTouched ? parsedBtc - baselineBtc : 0;
-  const deltaGmtUsd = deltaGmt * (Number(livePrices?.gmt) || 0);
-  const deltaBtcUsd = deltaBtc * (Number(livePrices?.btc) || 0);
+
+  // Effective prices: live > manual > cached
+  const manualGmtNum = Number(manualGmtPrice) || 0;
+  const manualBtcNum = Number(manualBtcPrice) || 0;
+  const cachedInfo = getGoMiningPriceCacheInfo();
+  const effectiveGmtPrice = (Number(livePrices?.gmt) || 0) > 0 ? livePrices.gmt : manualGmtNum > 0 ? manualGmtNum : (cachedInfo?.gmt || 0);
+  const effectiveBtcPrice = (Number(livePrices?.btc) || 0) > 0 ? livePrices.btc : manualBtcNum > 0 ? manualBtcNum : (cachedInfo?.btc || 0);
+  const gmtPriceSource = (Number(livePrices?.gmt) || 0) > 0 ? "live" : manualGmtNum > 0 ? "manual" : cachedInfo?.gmt ? "cached" : "none";
+  const btcPriceSource = (Number(livePrices?.btc) || 0) > 0 ? "live" : manualBtcNum > 0 ? "manual" : cachedInfo?.btc ? "cached" : "none";
+
+  const deltaGmtUsd = deltaGmt * effectiveGmtPrice;
+  const deltaBtcUsd = deltaBtc * effectiveBtcPrice;
 
   // Auto-pick the most likely action as the user types each side.
   useEffect(() => {
@@ -458,6 +473,15 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
       toast.error("Enter at least one new balance");
       return;
     }
+    // Check if prices are available for the actions that need them
+    if (gmtTouched && (gmtAction === "earning" || gmtAction === "boost") && effectiveGmtPrice <= 0) {
+      toast.error("GMT price required — enter a manual price below to proceed");
+      return;
+    }
+    if (btcTouched && btcAction === "earning" && effectiveBtcPrice <= 0) {
+      toast.error("BTC price required — enter a manual price below to proceed");
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await applyGoMiningBalanceUpdate({
@@ -465,8 +489,8 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
         newBtcBalance: btcTouched ? parsedBtc : 0,
         gmtAction: gmtTouched ? gmtAction : "skip",
         btcAction: btcTouched ? btcAction : "skip",
-        gmtPriceOverride: livePrices?.gmt > 0 ? livePrices.gmt : null,
-        btcPriceOverride: livePrices?.btc > 0 ? livePrices.btc : null,
+        gmtPriceOverride: effectiveGmtPrice > 0 ? effectiveGmtPrice : null,
+        btcPriceOverride: effectiveBtcPrice > 0 ? effectiveBtcPrice : null,
       });
 
       // Compose a single toast that summarizes whichever sides moved.
@@ -518,6 +542,69 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
         </DialogHeader>
 
         <div className="space-y-4 py-2">
+          {/* Price indicators + manual overrides */}
+          <div className="p-3 rounded-md border border-border/30 bg-secondary/20 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Token Prices</p>
+              {refetching && <span className="text-[10px] text-muted-foreground font-mono">fetching…</span>}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <img src={GMT_ICON} alt="" className="w-3 h-3" /> GMT
+                  </span>
+                  {gmtPriceSource === "live" && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">live</span>}
+                  {gmtPriceSource === "cached" && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono">cached</span>}
+                  {gmtPriceSource === "manual" && <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono">manual</span>}
+                  {gmtPriceSource === "none" && <span className="text-[9px] px-1 py-0.5 rounded bg-rose-500/10 text-rose-400 font-mono">n/a</span>}
+                </div>
+                {effectiveGmtPrice > 0 ? (
+                  <p className="font-mono text-xs text-foreground">${effectiveGmtPrice.toFixed(4)}</p>
+                ) : (
+                  <Input
+                    type="number"
+                    step="0.0001"
+                    min="0"
+                    value={manualGmtPrice}
+                    onChange={(e) => setManualGmtPrice(e.target.value)}
+                    placeholder="Enter GMT price"
+                    className="bg-background border-border font-mono text-[11px] h-7"
+                    data-testid="gomining-manual-gmt-price"
+                  />
+                )}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                    <img src={BTC_ICON} alt="" className="w-3 h-3" /> BTC
+                  </span>
+                  {btcPriceSource === "live" && <span className="text-[9px] px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">live</span>}
+                  {btcPriceSource === "cached" && <span className="text-[9px] px-1 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono">cached</span>}
+                  {btcPriceSource === "manual" && <span className="text-[9px] px-1 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono">manual</span>}
+                  {btcPriceSource === "none" && <span className="text-[9px] px-1 py-0.5 rounded bg-rose-500/10 text-rose-400 font-mono">n/a</span>}
+                </div>
+                {effectiveBtcPrice > 0 ? (
+                  <p className="font-mono text-xs text-foreground">${effectiveBtcPrice.toLocaleString("en-US", { maximumFractionDigits: 0 })}</p>
+                ) : (
+                  <Input
+                    type="number"
+                    step="1"
+                    min="0"
+                    value={manualBtcPrice}
+                    onChange={(e) => setManualBtcPrice(e.target.value)}
+                    placeholder="Enter BTC price"
+                    className="bg-background border-border font-mono text-[11px] h-7"
+                    data-testid="gomining-manual-btc-price"
+                  />
+                )}
+              </div>
+            </div>
+            {(gmtPriceSource === "none" || btcPriceSource === "none") && (
+              <p className="text-[10px] text-rose-400">CoinGecko rate-limited. Enter prices manually above to proceed.</p>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <BalanceSide
               kind="gmt"
@@ -530,7 +617,7 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
               touched={gmtTouched}
               delta={deltaGmt}
               deltaUsd={deltaGmtUsd}
-              price={livePrices?.gmt}
+              price={effectiveGmtPrice}
               action={gmtAction}
               setAction={setGmtAction}
               deltaUnit="GMT"
@@ -554,7 +641,7 @@ function GoMiningUpdateDialog({ open, onOpenChange, config, prices, onDone }) {
               touched={btcTouched}
               delta={deltaBtc}
               deltaUsd={deltaBtcUsd}
-              price={livePrices?.btc}
+              price={effectiveBtcPrice}
               action={btcAction}
               setAction={setBtcAction}
               deltaUnit="BTC"
