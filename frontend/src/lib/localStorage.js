@@ -11,6 +11,8 @@ const STORAGE_KEYS = {
   LIVE_HISTORY: 'networth_live_history',
   GOMINING: 'networth_gomining',
   GOMINING_SYNCED: 'networth_gomining_synced',
+  NOSANA_CONFIG: 'networth_nosana_config',
+  NOSANA_SYNCED_DATES: 'networth_nosana_synced_dates',
 };
 
 export const localStorage = {
@@ -80,5 +82,18 @@ export const localStorage = {
   // GoMining investment project on save.
   getGoMiningSynced: () => localStorage.get(STORAGE_KEYS.GOMINING_SYNCED) || {},
   setGoMiningSynced: (snapshot) => localStorage.set(STORAGE_KEYS.GOMINING_SYNCED, snapshot),
+
+  // Nosana node configuration: { node_address, project_name, enabled, last_synced_at }.
+  // Used by the auto-sync scheduler (23:45 UTC daily) to fetch earnings from
+  // the Nosana dashboard API and post them to the Investment Overview.
+  getNosanaConfig: () => localStorage.get(STORAGE_KEYS.NOSANA_CONFIG) || null,
+  setNosanaConfig: (config) => localStorage.set(STORAGE_KEYS.NOSANA_CONFIG, config),
+
+  // Map of { 'YYYY-MM-DD': { amount: number, txn_id: string } } — tracks which
+  // calendar days have already been synced to the Nosana investment project so
+  // a re-sync is idempotent. Same-day amounts get updated (today's data grows
+  // throughout the day).
+  getNosanaSyncedDates: () => localStorage.get(STORAGE_KEYS.NOSANA_SYNCED_DATES) || {},
+  setNosanaSyncedDates: (map) => localStorage.set(STORAGE_KEYS.NOSANA_SYNCED_DATES, map),
 
 };

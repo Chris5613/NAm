@@ -10,10 +10,12 @@ import PhoneList from "@/pages/PhoneList";
 import { Toaster } from "@/components/ui/sonner";
 import { netWorthApi } from "@/lib/api";
 import { localStorage as storage } from "@/lib/localStorage";
+import { syncNosanaEarnings, msUntilNext2345Utc, shouldRunCatchupNow } from "@/lib/nosanaSync";
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
 // snapshot in dev. Survives the StrictMode remount; reset on full page reload.
 let dailySnapshotAttempted = false;
+let nosanaSchedulerStarted = false;
 
 function App() {
   // Daily auto-snapshot: on first mount each calendar day, append a net-worth
@@ -34,6 +36,47 @@ function App() {
       }
     };
     ensureDailySnapshot();
+  }, []);
+
+  // Nosana auto-sync scheduler — fires at 23:45 UTC daily. Also runs an
+  // immediate catch-up sync if the user opens the app after 23:45 UTC and
+  // today's sync was missed (e.g. browser was closed). Module-level flag
+  // guards against StrictMode double-mount.
+  useEffect(() => {
+    if (nosanaSchedulerStarted) return;
+    nosanaSchedulerStarted = true;
+
+    let timeoutId = null;
+
+    const runOnce = async () => {
+      try {
+        const config = storage.getNosanaConfig();
+        if (!config?.enabled || !config?.node_address) return;
+        await syncNosanaEarnings({ silent: true });
+      } catch (err) {
+        console.warn("Nosana scheduled sync failed:", err);
+      }
+    };
+
+    const scheduleNext = () => {
+      const delay = msUntilNext2345Utc();
+      timeoutId = setTimeout(async () => {
+        await runOnce();
+        scheduleNext();
+      }, delay);
+    };
+
+    // Catch-up: if the user opens the app after 23:45 UTC and we missed
+    // today's sync, fire one immediately. Then schedule the next 23:45 UTC.
+    if (shouldRunCatchupNow()) {
+      // Defer slightly so the rest of the app boots first.
+      setTimeout(runOnce, 4000);
+    }
+    scheduleNext();
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+    };
   }, []);
 
   return (

@@ -423,3 +423,49 @@ export const ebayApi = {
     }
   },
 };
+
+// Nosana dashboard API — official earning history for a node operator.
+// Public endpoint, returns per-day USD earnings grouped by month. We use it to
+// auto-populate the Investment Overview's Nosana project with rewards (no need
+// to track wallet NOS balance changes — this avoids the swap double-dip issue
+// since earnings come straight from Nosana's backend).
+const NOSANA_API_BASE = "https://dashboard.k8s.prd.nos.ci/api/stats/earning-history";
+
+export const nosanaApi = {
+  // Fetch earning history for `address`. `startDate` / `endDate` are ISO
+  // YYYY-MM-DD strings. `endDate` is optional (server defaults to today).
+  // Returns the raw API payload — see `flattenDailyEarnings` for parsing.
+  getEarningHistory: async (address, startDate, endDate, groupBy = "month") => {
+    if (!address) throw new Error("Nosana address required");
+    if (!startDate) throw new Error("start_date required");
+    const params = new URLSearchParams({
+      address,
+      start_date: startDate,
+      group_by: groupBy,
+    });
+    if (endDate) params.set("end_date", endDate);
+    const url = `${NOSANA_API_BASE}?${params.toString()}`;
+    const response = await withCorsProxy(url);
+    return response.data;
+  },
+
+  // Walks the API's `results[*].daily_breakdown` and returns a flat list of
+  // { date: 'YYYY-MM-DD', amount: number } entries (summed across markets).
+  // Sorted ascending by date.
+  flattenDailyEarnings: (apiResponse) => {
+    const out = [];
+    const results = Array.isArray(apiResponse?.results) ? apiResponse.results : [];
+    for (const r of results) {
+      const daily = r?.daily_breakdown || {};
+      for (const [date, marketMap] of Object.entries(daily)) {
+        const sum = Object.values(marketMap || {}).reduce(
+          (acc, v) => acc + (Number(v) || 0),
+          0,
+        );
+        if (sum > 0) out.push({ date, amount: sum });
+      }
+    }
+    out.sort((a, b) => a.date.localeCompare(b.date));
+    return out;
+  },
+};

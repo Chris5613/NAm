@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Trash2, Pencil, Check, X, Pickaxe } from "lucide-react";
+import { Trash2, Pencil, Check, X, Pickaxe, Cpu } from "lucide-react";
 
 function formatCurrency(value) {
   if (!value && value !== 0) return "$0.00";
@@ -219,6 +219,7 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
               {transactions.map((txn) => {
                 const isEditing = editingId === txn.id;
                 const isAutoSync = txn.source === "gomining";
+                const isNosanaSync = txn.source === "nosana";
                 if (isEditing) {
                   return (
                     <div
@@ -304,6 +305,16 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
                           >
                             <Pickaxe className="w-2.5 h-2.5" strokeWidth={2} />
                             auto
+                          </span>
+                        )}
+                        {isNosanaSync && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono"
+                            title="Auto-synced from Nosana dashboard API"
+                            data-testid={`nosana-sync-badge-${txn.id}`}
+                          >
+                            <Cpu className="w-2.5 h-2.5" strokeWidth={2} />
+                            nosana
                           </span>
                         )}
                       </div>

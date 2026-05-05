@@ -243,9 +243,22 @@ export const projectsApi = {
       snap[prev.source_row_id] = Math.max(0, cur + diff);
       storage.setGoMiningSynced(snap);
     }
+    // Mirror the same accounting for Nosana auto-synced txns — the
+    // synced-dates map needs to track the new amount so the next auto-sync
+    // doesn't re-apply a phantom delta.
+    if (prev?.source === 'nosana' && prev?.source_date) {
+      const snap = storage.getNosanaSyncedDates();
+      const cur = snap[prev.source_date] || {};
+      snap[prev.source_date] = {
+        ...cur,
+        amount: Number(updated.amount) || 0,
+        txn_id: cur.txn_id || updated.id,
+      };
+      storage.setNosanaSyncedDates(snap);
+    }
     // Keep project.earned in sync only for GoMining auto-synced txns
     // (manual transactions don't bump earned on insert, so we shouldn't on update either).
-    if (prev?.source === 'gomining' && parentId) {
+    if ((prev?.source === 'gomining' || prev?.source === 'nosana') && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;
@@ -276,9 +289,20 @@ export const projectsApi = {
       snap[removed.source_row_id] = Math.max(0, cur - (Number(removed.amount) || 0));
       storage.setGoMiningSynced(snap);
     }
-    // Decrement project.earned only for GoMining auto-synced earning txns
-    // (manual earnings don't bump earned on insert, so we shouldn't on delete either).
-    if (removed?.source === 'gomining' && removed?.type === 'earning' && parentId) {
+    // For Nosana, drop the date from the synced map entirely so the next
+    // auto-sync re-applies that day (matches the user's intent: "I deleted
+    // this so re-fetch it cleanly next run").
+    if (removed?.source === 'nosana' && removed?.source_date) {
+      const snap = storage.getNosanaSyncedDates();
+      if (snap[removed.source_date]) {
+        delete snap[removed.source_date];
+        storage.setNosanaSyncedDates(snap);
+      }
+    }
+    // Decrement project.earned only for GoMining/Nosana auto-synced earning
+    // txns (manual earnings don't bump earned on insert, so we shouldn't on
+    // delete either).
+    if ((removed?.source === 'gomining' || removed?.source === 'nosana') && removed?.type === 'earning' && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;
