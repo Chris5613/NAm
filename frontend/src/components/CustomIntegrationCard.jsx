@@ -254,6 +254,7 @@ function CustomUpdateDialog({ open, onOpenChange, integration, onDone }) {
   const [submitting, setSubmitting] = useState(false);
   const [manualPrice, setManualPrice] = useState("");
   const [livePrice, setLivePrice] = useState(0);
+  const [label, setLabel] = useState("");
 
   const baseline = Number(integration.baseline) || 0;
   const parsed = Number(newBalance);
@@ -277,6 +278,7 @@ function CustomUpdateDialog({ open, onOpenChange, integration, onDone }) {
       setAction("earning");
       setSubmitting(false);
       setManualPrice("");
+      setLabel("");
       // Fetch live price for token mode
       if (integration.mode === "token" && integration.coingecko_id) {
         customSync.getTokenPrice(integration.coingecko_id).then((p) => setLivePrice(p));
@@ -297,6 +299,7 @@ function CustomUpdateDialog({ open, onOpenChange, integration, onDone }) {
         newBalance: parsed,
         action,
         priceOverride: effectivePrice > 0 ? effectivePrice : null,
+        label: label.trim() || null,
       });
       if (result.action === "earning") {
         toast.success(`+${formatUsd(result.delta_usd)} earned — synced to ${integration.project_name}`);
@@ -401,6 +404,23 @@ function CustomUpdateDialog({ open, onOpenChange, integration, onDone }) {
                   </p>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Label / Sub-category for Investment Overview */}
+          {hasInput && delta > 0 && (
+            <div className="space-y-2">
+              <Label className="text-xs">Label (sub-category in Investment Overview)</Label>
+              <Input
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder={`e.g. Mining, Bonus, Referral (default: "${integration.name}")`}
+                className="bg-background border-border text-sm"
+                data-testid="custom-int-label"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                This becomes the sub-category name. Leave blank to use "{integration.name}".
+              </p>
             </div>
           )}
 

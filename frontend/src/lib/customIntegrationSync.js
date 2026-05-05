@@ -82,7 +82,7 @@ async function findOrCreateProject(name) {
 
 // ─── Apply balance update ──────────────────────────────────────────────────
 
-export async function applyBalanceUpdate({ integrationId, newBalance, action, priceOverride }) {
+export async function applyBalanceUpdate({ integrationId, newBalance, action, priceOverride, label }) {
   const integration = getById(integrationId);
   if (!integration?.enabled) throw new Error("Integration is disabled");
 
@@ -127,12 +127,15 @@ export async function applyBalanceUpdate({ integrationId, newBalance, action, pr
 
     const project = await findOrCreateProject(projectName);
 
+    // Use label for sub-category, fall back to integration name
+    const categoryName = label || integration.name;
+
     // Post the transaction
     await projectsApi.addTransaction(project.id, {
       type: "earning",
       amount: Math.abs(deltaUsd),
       source: `custom:${integration.name.toLowerCase().replace(/\s+/g, "_")}`,
-      category: integration.name,
+      category: categoryName,
       date: new Date().toISOString(),
       notes: integration.mode === "token"
         ? `+${delta.toFixed(4)} ${integration.symbol} @ $${price.toFixed(4)}`
@@ -143,8 +146,8 @@ export async function applyBalanceUpdate({ integrationId, newBalance, action, pr
     const nextEarned = Math.max(0, (Number(project.earned) || 0) + Math.abs(deltaUsd));
     await projectsApi.update(project.id, { earned: nextEarned });
 
-    // Auto-update sub-category
-    await projectsApi.addToCategory(project.id, integration.name, Math.abs(deltaUsd));
+    // Auto-update sub-category with the label
+    await projectsApi.addToCategory(project.id, categoryName, Math.abs(deltaUsd));
 
     // Update baseline
     update(integrationId, { baseline: nextBalance, last_updated_at: new Date().toISOString() });
@@ -157,6 +160,7 @@ export async function applyBalanceUpdate({ integrationId, newBalance, action, pr
       price,
       baseline_before: baselineBefore,
       baseline_after: nextBalance,
+      category: categoryName,
     };
   }
 
