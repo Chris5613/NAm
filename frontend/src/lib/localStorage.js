@@ -17,6 +17,7 @@ export const STORAGE_KEYS = {
   ACURAST_CONFIG: 'networth_acurast_config',
   UNITY_NETWORK_CONFIG: 'networth_unity_network_config',
   GOMINING_TOKEN_CONFIG: 'networth_gomining_token_config',
+  ACU_PRICE_CACHE: 'networth_acu_price_cache',
 };
 
 export const localStorage = {
@@ -133,5 +134,10 @@ export const localStorage = {
   // Posts to a "GoMining" investment project by default.
   getGoMiningTokenConfig: () => localStorage.get(STORAGE_KEYS.GOMINING_TOKEN_CONFIG) || null,
   setGoMiningTokenConfig: (config) => localStorage.set(STORAGE_KEYS.GOMINING_TOKEN_CONFIG, config),
+
+  // Cached ACU price from CoinGecko — used as fallback when rate-limited.
+  //   { price, fetched_at }
+  getAcuPriceCache: () => localStorage.get(STORAGE_KEYS.ACU_PRICE_CACHE) || null,
+  setAcuPriceCache: (cache) => localStorage.set(STORAGE_KEYS.ACU_PRICE_CACHE, cache),
 
 };

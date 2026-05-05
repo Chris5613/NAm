@@ -46,14 +46,33 @@ async function findOrCreateProject(name) {
   return created.data;
 }
 
-// Live ACU → USD price (with a graceful fallback if CoinGecko hiccups).
+// Live ACU → USD price with automatic caching and fallback.
+// When CoinGecko succeeds, the price is cached in localStorage.
+// When CoinGecko fails (e.g. rate-limited), returns the cached price
+// so the user isn't blocked from syncing earnings.
 export async function getAcuPrice() {
   try {
     const price = await coinGeckoApi.getPrice(ACU_COINGECKO_ID);
-    return Number(price) || 0;
+    const numPrice = Number(price) || 0;
+    if (numPrice > 0) {
+      // Cache the successful price
+      storage.setAcuPriceCache({ price: numPrice, fetched_at: new Date().toISOString() });
+      return numPrice;
+    }
+    // CoinGecko returned 0 — fall through to cached
   } catch {
-    return 0;
+    // Network/rate-limit error — fall through to cached
   }
+  // Fallback: use the last cached price
+  const cached = storage.getAcuPriceCache();
+  return Number(cached?.price) || 0;
+}
+
+// Returns metadata about the cached price (for UI staleness indicators).
+export function getAcuPriceCacheInfo() {
+  const cached = storage.getAcuPriceCache();
+  if (!cached?.price) return null;
+  return { price: Number(cached.price), fetched_at: cached.fetched_at };
 }
 
 // Returns true if the user hasn't entered a balance in >= STALE_DAYS or has
@@ -112,7 +131,7 @@ export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOv
   // 1. Price the delta in USD at the current ACU rate.
   const acuPrice =
     acuPriceOverride != null ? Number(acuPriceOverride) : await getAcuPrice();
-  if (!(acuPrice > 0)) throw new Error("Could not fetch ACU price — try again in a moment.");
+  if (!(acuPrice > 0)) throw new Error("ACU price unavailable — enter a manual price override or try again later.");
   const deltaUsd = Number((deltaAcu * acuPrice).toFixed(6));
 
   // 2. Locate (or create) the Phone Farm investment project.

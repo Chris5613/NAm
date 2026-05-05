@@ -26,6 +26,13 @@ frontend:
     stuck_count: 0
     priority: "high"
     needs_retesting: false
+  - task: "Acurast → Phone Farm sync fix (CoinGecko rate-limit resilience)"
+    implemented: true
+    working: true
+    file: "frontend/src/lib/acurastSync.js, frontend/src/components/AcurastEarningsCard.jsx, frontend/src/lib/localStorage.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: false
     status_history:
       - working: "NA"
         agent: "main"

@@ -3,6 +3,7 @@ import { localStorage as storage } from "@/lib/localStorage";
 import {
   applyAcurastBalanceUpdate,
   getAcuPrice,
+  getAcuPriceCacheInfo,
   isAcurastStale,
 } from "@/lib/acurastSync";
 import { Card, CardContent } from "@/components/ui/card";
@@ -341,12 +342,19 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
   const [newBalance, setNewBalance] = useState("");
   const [action, setAction] = useState("earning");
   const [submitting, setSubmitting] = useState(false);
+  const [manualPrice, setManualPrice] = useState("");
 
   const baseline = Number(config?.baseline_acu) || 0;
   const parsed = Number(newBalance);
   const hasInput = newBalance !== "" && Number.isFinite(parsed) && parsed >= 0;
   const delta = hasInput ? parsed - baseline : 0;
-  const deltaUsd = delta * (Number(acuPrice) || 0);
+
+  // Effective price: live > manual > cached
+  const manualPriceNum = Number(manualPrice) || 0;
+  const cachedInfo = getAcuPriceCacheInfo();
+  const effectivePrice = acuPrice > 0 ? acuPrice : manualPriceNum > 0 ? manualPriceNum : (cachedInfo?.price || 0);
+  const priceSource = acuPrice > 0 ? "live" : manualPriceNum > 0 ? "manual" : cachedInfo?.price ? "cached" : "none";
+  const deltaUsd = delta * effectivePrice;
 
   // Auto-pick the most likely action as the user types.
   useEffect(() => {
@@ -361,6 +369,7 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
       setNewBalance("");
       setAction("earning");
       setSubmitting(false);
+      setManualPrice("");
     }
   }, [open]);
 
@@ -369,12 +378,16 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
       toast.error("Enter your current Acurast ACU balance");
       return;
     }
+    if (action === "earning" && effectivePrice <= 0) {
+      toast.error("ACU price required — enter a manual price below to proceed");
+      return;
+    }
     setSubmitting(true);
     try {
       const result = await applyAcurastBalanceUpdate({
         newBalance: parsed,
         action,
-        acuPriceOverride: acuPrice > 0 ? acuPrice : null,
+        acuPriceOverride: effectivePrice > 0 ? effectivePrice : null,
       });
       if (result.action === "earning") {
         toast.success(
@@ -461,6 +474,52 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
             </div>
           </div>
 
+          {/* ACU Price indicator + manual override */}
+          <div className="p-3 rounded-md border border-border/30 bg-secondary/20 space-y-2">
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] uppercase tracking-wider text-muted-foreground">ACU Price</p>
+              {priceSource === "live" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">live</span>
+              )}
+              {priceSource === "cached" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono" title={`Cached from ${cachedInfo?.fetched_at ? new Date(cachedInfo.fetched_at).toLocaleString() : 'unknown'}`}>
+                  cached
+                </span>
+              )}
+              {priceSource === "manual" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 font-mono">manual</span>
+              )}
+              {priceSource === "none" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/10 text-rose-400 font-mono">unavailable</span>
+              )}
+            </div>
+            {effectivePrice > 0 ? (
+              <p className="font-mono text-sm text-foreground">${effectivePrice.toFixed(4)}</p>
+            ) : (
+              <p className="text-xs text-rose-400">CoinGecko rate-limited. Enter ACU price manually below.</p>
+            )}
+            {acuPrice <= 0 && (
+              <div className="space-y-1 pt-1">
+                <Label className="text-[10px] text-muted-foreground">Manual ACU price (USD)</Label>
+                <Input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                  placeholder={cachedInfo?.price ? cachedInfo.price.toFixed(4) : "0.0000"}
+                  className="bg-background border-border font-mono text-xs h-8"
+                  data-testid="acurast-manual-price-input"
+                />
+                {cachedInfo?.price > 0 && !manualPriceNum && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Using cached: ${cachedInfo.price.toFixed(4)} (from {formatRelativeTime(cachedInfo.fetched_at)})
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           {hasInput && (
             <div
               className={`p-3 rounded-md border ${
@@ -482,9 +541,9 @@ function AcurastUpdateDialog({ open, onOpenChange, config, acuPrice, onDone }) {
                   {delta >= 0 ? "+" : ""}{delta.toFixed(4)} ACU
                 </p>
                 <p className="font-mono text-sm text-muted-foreground">
-                  ({acuPrice > 0
+                  ({effectivePrice > 0
                     ? `${delta >= 0 ? "+" : ""}${formatUsd(deltaUsd)}`
-                    : "ACU price unavailable"})
+                    : "enter ACU price above"})
                 </p>
               </div>
             </div>
