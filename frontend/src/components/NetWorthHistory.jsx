@@ -158,29 +158,7 @@ time: formatDate(item.timestamp),
             </div>
           )}
         </div>
-        {(snapshotCounts.auto > 0 || snapshotCounts.manual > 0) && (
-          <div
-            className="flex items-center gap-3 mt-1 text-[10px] font-mono text-muted-foreground/80"
-            data-testid="snapshot-legend"
-          >
-            {snapshotCounts.auto > 0 && (
-              <span className="flex items-center gap-1.5" data-testid="legend-auto">
-                <svg width="10" height="10" viewBox="0 0 10 10">
-                  <circle cx="5" cy="5" r="4" fill="#34D399" stroke="#064E3B" strokeWidth="1" />
-                </svg>
-                <span>Auto · {snapshotCounts.auto}</span>
-              </span>
-            )}
-            {snapshotCounts.manual > 0 && (
-              <span className="flex items-center gap-1.5" data-testid="legend-manual">
-                <svg width="10" height="10" viewBox="0 0 10 10">
-                  <polygon points="5,0 10,5 5,10 0,5" fill="#FACC15" stroke="#713F12" strokeWidth="1" />
-                </svg>
-                <span>Manual · {snapshotCounts.manual}</span>
-              </span>
-            )}
-          </div>
-        )}
+    
       </CardHeader>
       <CardContent className="p-4">
         <ResponsiveContainer width="100%" height={220}>
@@ -218,15 +196,7 @@ time: formatDate(item.timestamp),
                 fontSize: "12px",
               }}
               labelStyle={{ color: "#A1A1AA" }}
-              formatter={(value, _name, ctx) => {
-                const p = ctx?.payload;
-                if (p?.kind === "snapshot") {
-                  const tag = p.source === "auto" ? "Auto snapshot" : "Manual snapshot";
-                  const date = p.timestamp ? formatDate(p.timestamp) : "";
-                  return [formatCurrency(value), `${tag}${date ? ` · ${date}` : ""}`];
-                }
-                return [formatCurrency(value), "Net Worth"];
-              }}
+formatter={(value) => [formatCurrency(value), "Net Worth"]}
             />
             <Area
               type="monotone"
