@@ -13,6 +13,7 @@ export const STORAGE_KEYS = {
   GOMINING_SYNCED: 'networth_gomining_synced',
   NOSANA_CONFIG: 'networth_nosana_config',
   NOSANA_SYNCED_DATES: 'networth_nosana_synced_dates',
+  ROLLERCOIN_CONFIG: 'networth_rollercoin_config',
 };
 
 export const localStorage = {
@@ -95,5 +96,14 @@ export const localStorage = {
   // throughout the day).
   getNosanaSyncedDates: () => localStorage.get(STORAGE_KEYS.NOSANA_SYNCED_DATES) || {},
   setNosanaSyncedDates: (map) => localStorage.set(STORAGE_KEYS.NOSANA_SYNCED_DATES, map),
+
+  // RollerCoin is manual — there's no public API, so the user types their
+  // current TRX balance in periodically. We track:
+  //   { baseline_trx, project_name, enabled, last_updated_at }
+  // Every time the user enters a new balance we compute delta and (on
+  // confirm) add an earning transaction for the positive delta × live TRX
+  // price. Negative deltas (withdrawals/swaps) silently lower the baseline.
+  getRollerCoinConfig: () => localStorage.get(STORAGE_KEYS.ROLLERCOIN_CONFIG) || null,
+  setRollerCoinConfig: (config) => localStorage.set(STORAGE_KEYS.ROLLERCOIN_CONFIG, config),
 
 };

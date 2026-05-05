@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Trash2, Pencil, Check, X, Pickaxe, Cpu } from "lucide-react";
+import { Trash2, Pencil, Check, X, Pickaxe, Cpu, Gamepad2 } from "lucide-react";
 
 function formatCurrency(value) {
   if (!value && value !== 0) return "$0.00";
@@ -220,6 +220,7 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
                 const isEditing = editingId === txn.id;
                 const isAutoSync = txn.source === "gomining";
                 const isNosanaSync = txn.source === "nosana";
+                const isRollerCoinSync = txn.source === "rollercoin";
                 if (isEditing) {
                   return (
                     <div
@@ -315,6 +316,16 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
                           >
                             <Cpu className="w-2.5 h-2.5" strokeWidth={2} />
                             nosana
+                          </span>
+                        )}
+                        {isRollerCoinSync && (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 font-mono"
+                            title={`RollerCoin balance update (${Number(txn.source_trx_delta || 0).toFixed(4)} TRX)`}
+                            data-testid={`rollercoin-sync-badge-${txn.id}`}
+                          >
+                            <Gamepad2 className="w-2.5 h-2.5" strokeWidth={2} />
+                            rollercoin
                           </span>
                         )}
                       </div>

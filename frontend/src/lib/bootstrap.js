@@ -9,6 +9,7 @@ import { syncNosanaEarnings } from "./nosanaSync";
 
 const DEMO_FLAG_KEY = "networth_demo_seeded";
 const DEMO_NODE_ADDRESS = "cLmiLWMpbWjUKZzuhmAq432Vaz8eFGHgyHXfxgL3As6";
+const DEMO_ROLLERCOIN_BASELINE = 68.5938;
 
 export async function bootstrapDemoData() {
   try {
@@ -17,6 +18,18 @@ export async function bootstrapDemoData() {
     const flagged = window.localStorage.getItem(DEMO_FLAG_KEY) === "true";
     const existingConfig = storage.getNosanaConfig();
     if (flagged || existingConfig?.node_address) {
+      // Even in the "already seeded" branch, make sure RollerCoin picks up
+      // a baseline if the user opened the app before the RollerCoin card
+      // existed — this is a no-op after the first successful seed.
+      if (!storage.getRollerCoinConfig()) {
+        storage.setRollerCoinConfig({
+          baseline_trx: DEMO_ROLLERCOIN_BASELINE,
+          project_name: "RollerCoin",
+          enabled: true,
+          last_updated_at: new Date().toISOString(),
+        });
+        try { window.dispatchEvent(new CustomEvent("rollercoin-sync-complete")); } catch { /* ignore */ }
+      }
       return { seeded: false, reason: flagged ? "already-seeded" : "user-config-exists" };
     }
 
@@ -27,6 +40,17 @@ export async function bootstrapDemoData() {
       enabled: true,
       last_synced_at: null,
     });
+
+    // Seed the RollerCoin baseline (no earnings transaction — just a
+    // reference point for future balance-update deltas).
+    storage.setRollerCoinConfig({
+      baseline_trx: DEMO_ROLLERCOIN_BASELINE,
+      project_name: "RollerCoin",
+      enabled: true,
+      last_updated_at: new Date().toISOString(),
+    });
+    // Notify any already-mounted RollerCoin card to pick up the fresh config.
+    try { window.dispatchEvent(new CustomEvent("rollercoin-sync-complete")); } catch { /* ignore */ }
 
     // Mark seeded *before* the network call so a flaky network doesn't
     // cause us to re-seed (and double up the project) on next load.
@@ -49,6 +73,7 @@ export function clearDemoData() {
     window.localStorage.removeItem(DEMO_FLAG_KEY);
     window.localStorage.removeItem(STORAGE_KEYS.NOSANA_CONFIG);
     window.localStorage.removeItem(STORAGE_KEYS.NOSANA_SYNCED_DATES);
+    window.localStorage.removeItem(STORAGE_KEYS.ROLLERCOIN_CONFIG);
   } catch (err) {
     console.warn("clearDemoData failed:", err);
   }

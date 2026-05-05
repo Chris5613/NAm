@@ -258,7 +258,7 @@ export const projectsApi = {
     }
     // Keep project.earned in sync only for GoMining auto-synced txns
     // (manual transactions don't bump earned on insert, so we shouldn't on update either).
-    if ((prev?.source === 'gomining' || prev?.source === 'nosana') && parentId) {
+    if ((prev?.source === 'gomining' || prev?.source === 'nosana' || prev?.source === 'rollercoin') && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;
@@ -299,10 +299,22 @@ export const projectsApi = {
         storage.setNosanaSyncedDates(snap);
       }
     }
-    // Decrement project.earned only for GoMining/Nosana auto-synced earning
+    // RollerCoin: the baseline IS the source of truth (no external API).
+    // Deleting a synced txn means "that earning never happened" — so we
+    // lower baseline_trx by the txn's TRX delta. The next balance update
+    // will re-detect the delta (with the up-to-date price) and re-sync.
+    if (removed?.source === 'rollercoin') {
+      const rc = storage.getRollerCoinConfig();
+      if (rc?.baseline_trx != null) {
+        const dec = Number(removed.source_trx_delta) || 0;
+        const nextBaseline = Math.max(0, (Number(rc.baseline_trx) || 0) - dec);
+        storage.setRollerCoinConfig({ ...rc, baseline_trx: nextBaseline });
+      }
+    }
+    // Decrement project.earned only for GoMining/Nosana/RollerCoin auto-synced earning
     // txns (manual earnings don't bump earned on insert, so we shouldn't on
     // delete either).
-    if ((removed?.source === 'gomining' || removed?.source === 'nosana') && removed?.type === 'earning' && parentId) {
+    if ((removed?.source === 'gomining' || removed?.source === 'nosana' || removed?.source === 'rollercoin') && removed?.type === 'earning' && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;
