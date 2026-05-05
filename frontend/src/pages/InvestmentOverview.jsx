@@ -40,6 +40,27 @@ export default function InvestmentOverview() {
     fetchProjects();
   }, [fetchProjects]);
 
+  // Live-refresh: re-fetch projects whenever an integration card posts a
+  // new earning (Acurast / Unity Network / RollerCoin / Nosana / GoMining),
+  // or when the tab regains focus or another tab updates localStorage.
+  // Without this, posting a balance update from the Integrations tab and
+  // navigating back to Investment Overview without a full remount would
+  // show stale earned/Net P&L numbers.
+  useEffect(() => {
+    const refresh = () => { fetchProjects(); };
+    const events = [
+      "focus",
+      "storage",
+      "acurast-sync-complete",
+      "unity-network-sync-complete",
+      "rollercoin-sync-complete",
+      "nosana-sync-complete",
+      "gomining-sync-complete",
+    ];
+    events.forEach((e) => window.addEventListener(e, refresh));
+    return () => events.forEach((e) => window.removeEventListener(e, refresh));
+  }, [fetchProjects]);
+
   const handleDelete = async (project) => {
     try {
       await projectsApi.delete(project.id);
