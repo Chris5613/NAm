@@ -209,7 +209,8 @@ export default function NetWorthHistory() {
               stroke="#FAFAFA"
               strokeWidth={2}
               fill="url(#netWorthGradient)"
-              activeDot={{ r: 4, fill: "#FAFAFA" }}
+              dot={{ r: 3.5, fill: "#FAFAFA", stroke: "#52525B", strokeWidth: 1.5 }}
+              activeDot={{ r: 5.5, fill: "#FAFAFA", stroke: "#FACC15", strokeWidth: 2 }}
               isAnimationActive={true}
               animationDuration={400}
               animationEasing="ease-out"
