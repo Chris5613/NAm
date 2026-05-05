@@ -101,25 +101,6 @@ export default function CryptoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wallets]);
 
-  // Auto-poll every hour
-  useEffect(() => {
-    if (wallets.length === 0) return;
-    const interval = setInterval(() => {
-      fetchWallets();
-      // Re-fetch balances for all wallets
-      wallets.forEach(async (w) => {
-        if (fetchingRef.current.has(w.id)) return;
-        fetchingRef.current.add(w.id);
-        try {
-          const res = await walletsApi.getBalances(w.id);
-          setBalances(prev => ({ ...prev, [w.id]: res.data }));
-        } catch { /* silent */ }
-        finally { fetchingRef.current.delete(w.id); }
-      });
-    }, 3600000); // 1 hour
-    return () => clearInterval(interval);
-  }, [wallets.length, fetchWallets, wallets]);
-
   const fetchBalance = async (wid) => {
     try {
       const res = await walletsApi.getBalances(wid);
