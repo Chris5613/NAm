@@ -17,6 +17,7 @@ import {
   shouldRunCatchupNow,
   runTodayOnlyMigrationIfNeeded,
 } from "@/lib/nosanaSync";
+import { runAcurastUsdToAcuMigrationIfNeeded } from "@/lib/acurastSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
@@ -59,6 +60,9 @@ function App() {
     (async () => {
       await bootstrapDemoData();
       await runTodayOnlyMigrationIfNeeded();
+      // Acurast switched data models (USD → ACU tokens). Wipes any earlier
+      // USD-based config + its synced txns so the user starts clean.
+      await runAcurastUsdToAcuMigrationIfNeeded();
     })();
   }, []);
 

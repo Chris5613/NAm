@@ -5,6 +5,7 @@
 // Add a new integration: drop another card component into the grid below.
 import NosanaEarningsCard from "@/components/NosanaEarningsCard";
 import RollerCoinEarningsCard from "@/components/RollerCoinEarningsCard";
+import AcurastEarningsCard from "@/components/AcurastEarningsCard";
 import { Zap } from "lucide-react";
 
 export default function IntegrationsPage() {
@@ -28,6 +29,7 @@ export default function IntegrationsPage() {
       <div className="space-y-4">
         <NosanaEarningsCard />
         <RollerCoinEarningsCard />
+        <AcurastEarningsCard />
         {/* Future integrations go here (e.g. Helium, Akash, Render Network). */}
       </div>
     </div>

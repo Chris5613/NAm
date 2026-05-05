@@ -258,7 +258,7 @@ export const projectsApi = {
     }
     // Keep project.earned in sync only for GoMining auto-synced txns
     // (manual transactions don't bump earned on insert, so we shouldn't on update either).
-    if ((prev?.source === 'gomining' || prev?.source === 'nosana' || prev?.source === 'rollercoin') && parentId) {
+    if ((prev?.source === 'gomining' || prev?.source === 'nosana' || prev?.source === 'rollercoin' || prev?.source === 'acurast') && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;
@@ -311,10 +311,22 @@ export const projectsApi = {
         storage.setRollerCoinConfig({ ...rc, baseline_trx: nextBaseline });
       }
     }
-    // Decrement project.earned only for GoMining/Nosana/RollerCoin auto-synced earning
+    // Acurast mirrors RollerCoin's baseline-as-source-of-truth pattern,
+    // tracking ACU tokens with live USD pricing. Deleting a synced txn
+    // lowers baseline_acu by the txn's ACU delta so the next "Update
+    // balance" re-detects (and re-prices) the same delta cleanly.
+    if (removed?.source === 'acurast') {
+      const ac = storage.getAcurastConfig();
+      if (ac?.baseline_acu != null) {
+        const dec = Number(removed.source_acu_delta) || 0;
+        const nextBaseline = Math.max(0, (Number(ac.baseline_acu) || 0) - dec);
+        storage.setAcurastConfig({ ...ac, baseline_acu: nextBaseline });
+      }
+    }
+    // Decrement project.earned only for GoMining/Nosana/RollerCoin/Acurast auto-synced earning
     // txns (manual earnings don't bump earned on insert, so we shouldn't on
     // delete either).
-    if ((removed?.source === 'gomining' || removed?.source === 'nosana' || removed?.source === 'rollercoin') && removed?.type === 'earning' && parentId) {
+    if ((removed?.source === 'gomining' || removed?.source === 'nosana' || removed?.source === 'rollercoin' || removed?.source === 'acurast') && removed?.type === 'earning' && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;

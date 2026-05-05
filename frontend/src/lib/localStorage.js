@@ -14,6 +14,7 @@ export const STORAGE_KEYS = {
   NOSANA_CONFIG: 'networth_nosana_config',
   NOSANA_SYNCED_DATES: 'networth_nosana_synced_dates',
   ROLLERCOIN_CONFIG: 'networth_rollercoin_config',
+  ACURAST_CONFIG: 'networth_acurast_config',
 };
 
 export const localStorage = {
@@ -105,5 +106,13 @@ export const localStorage = {
   // price. Negative deltas (withdrawals/swaps) silently lower the baseline.
   getRollerCoinConfig: () => localStorage.get(STORAGE_KEYS.ROLLERCOIN_CONFIG) || null,
   setRollerCoinConfig: (config) => localStorage.set(STORAGE_KEYS.ROLLERCOIN_CONFIG, config),
+
+  // Acurast Phone Farm — manual, ACU-token denominated. Mirrors the
+  // RollerCoin/TRX flow exactly (baseline + delta + earning/withdrawal
+  // classification) but with the Acurast (ACU) CoinGecko price feed.
+  //   { baseline_acu, project_name, enabled, last_updated_at }
+  // Earnings post to a "Phone Farm" investment project by default.
+  getAcurastConfig: () => localStorage.get(STORAGE_KEYS.ACURAST_CONFIG) || null,
+  setAcurastConfig: (config) => localStorage.set(STORAGE_KEYS.ACURAST_CONFIG, config),
 
 };
