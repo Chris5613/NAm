@@ -265,6 +265,17 @@ export async function applyGoMiningBalanceUpdate({
     await projectsApi.update(project.id, { earned: nextEarned, invested: nextInvested });
   }
 
+  // Auto-update sub-category breakdown for each side that moved.
+  if (results.gmt?.action === "earning" && results.gmt.delta_usd > 0) {
+    await projectsApi.addToCategory(project.id, "GoMining (GMT)", results.gmt.delta_usd);
+  }
+  if (results.gmt?.action === "boost" && investedDeltaUsd > 0) {
+    await projectsApi.addToCategory(project.id, "GoMining (Boost)", -investedDeltaUsd);
+  }
+  if (results.btc?.action === "earning" && results.btc.delta_usd > 0) {
+    await projectsApi.addToCategory(project.id, "GoMining (BTC)", results.btc.delta_usd);
+  }
+
   // Persist new baselines + last_updated_at.
   const nextConfig = {
     ...config,

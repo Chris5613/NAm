@@ -149,6 +149,9 @@ export async function applyRollerCoinBalanceUpdate({ newBalance, action, trxPric
   const nextEarned = Math.max(0, (Number(project.earned) || 0) + deltaUsd);
   await projectsApi.update(project.id, { earned: nextEarned });
 
+  // 4b. Auto-update sub-category breakdown.
+  await projectsApi.addToCategory(project.id, "RollerCoin", deltaUsd);
+
   // 5. Update baseline + last_updated_at.
   const nextConfig = {
     ...config,

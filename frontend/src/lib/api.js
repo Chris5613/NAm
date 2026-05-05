@@ -218,6 +218,28 @@ export const projectsApi = {
     storage.setProjects(next);
     return toResponse(next.find((item) => item.id === id)?.transactions || []);
   },
+
+  // Update (or create) a sub-category's earned amount for a project.
+  // Called by integrations after posting a transaction so the breakdown
+  // auto-populates without manual user input.
+  addToCategory: async (id, categoryName, deltaEarned) => {
+    const all = normalizeItems(storage.getProjects());
+    const next = all.map((project) => {
+      if (project.id !== id) return project;
+      const categories = [...(project.categories || [])];
+      const idx = categories.findIndex(
+        (c) => (c.name || "").toLowerCase() === (categoryName || "").toLowerCase(),
+      );
+      if (idx >= 0) {
+        categories[idx] = { ...categories[idx], earned: (Number(categories[idx].earned) || 0) + deltaEarned };
+      } else {
+        categories.push({ name: categoryName, earned: deltaEarned });
+      }
+      return { ...project, categories };
+    });
+    storage.setProjects(next);
+    return toResponse(next.find((item) => item.id === id) || null);
+  },
   updateTransaction: async (txnId, data) => {
     const all = normalizeItems(storage.getProjects());
     let updated = null;

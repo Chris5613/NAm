@@ -363,11 +363,10 @@ export default function GoMiningPage() {
         </div>
       </div>
 
-      {/* Summary cards — order: PR → Electricity → Service → GMT Earned → GMT Boosted → Reward */}
+      {/* Summary cards — order: Total PR → Reward → GMT Earned → GMT Boosted → Electricity → Service */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <SummaryStat label="Total PR"    value={`$${formatMoney(totals.pr)}`} />
-        <SummaryStat label="Electricity" value={`$${formatMoney(totals.electricity)}`} negative />
-        <SummaryStat label="Service"     value={`$${formatMoney(totals.service)}`} />
+        <SummaryStat label="Reward"      value={`$${formatMoney(totals.reward)}`} accent />
         <SummaryStat
           label="GMT Earned"
           value={`$${formatMoney(gmtUsd)}`}
@@ -380,7 +379,8 @@ export default function GoMiningPage() {
           subtitle={`${formatNumber(totals.gmt_boosted)} GMT (locked prices)`}
           negative
         />
-        <SummaryStat label="Reward"      value={`$${formatMoney(totals.reward)}`} accent />
+        <SummaryStat label="Electricity" value={`$${formatMoney(totals.electricity)}`} negative />
+        <SummaryStat label="Service"     value={`$${formatMoney(totals.service)}`} />
       </div>
 
       <Card className="border-border/40 bg-card overflow-hidden">

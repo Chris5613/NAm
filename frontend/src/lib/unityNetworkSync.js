@@ -117,6 +117,9 @@ export async function applyUnityNetworkBalanceUpdate({ newBalanceUsd, action }) 
   const nextEarned = Math.max(0, (Number(project.earned) || 0) + deltaUsd);
   await projectsApi.update(project.id, { earned: nextEarned });
 
+  // 3b. Auto-update sub-category breakdown.
+  await projectsApi.addToCategory(project.id, "Unity Network", deltaUsd);
+
   // 4. Update baseline + last_updated_at.
   const nextConfig = {
     ...config,

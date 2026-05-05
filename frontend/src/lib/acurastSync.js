@@ -161,6 +161,9 @@ export async function applyAcurastBalanceUpdate({ newBalance, action, acuPriceOv
   const nextEarned = Math.max(0, (Number(project.earned) || 0) + deltaUsd);
   await projectsApi.update(project.id, { earned: nextEarned });
 
+  // 4b. Auto-update sub-category breakdown.
+  await projectsApi.addToCategory(project.id, "Acurast", deltaUsd);
+
   // 5. Update baseline + last_updated_at.
   const nextConfig = {
     ...config,

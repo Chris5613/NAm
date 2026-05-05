@@ -174,6 +174,9 @@ export async function syncNosanaEarnings(opts = {}) {
   if (Math.abs(earnedDelta) > AMOUNT_EPSILON) {
     const nextEarned = Math.max(0, (Number(project.earned) || 0) + earnedDelta);
     await projectsApi.update(project.id, { earned: nextEarned });
+
+    // Auto-update sub-category breakdown.
+    await projectsApi.addToCategory(project.id, "Nosana", earnedDelta);
   }
 
   // 5. Stamp the config with the last-sync time.
