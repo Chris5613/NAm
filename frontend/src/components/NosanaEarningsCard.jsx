@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { localStorage as storage } from "@/lib/localStorage";
-import { syncNosanaEarnings } from "@/lib/nosanaSync";
+import { syncNosanaEarnings, resetNosanaSyncHistory } from "@/lib/nosanaSync";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -241,6 +241,8 @@ function NosanaConfigDialog({ open, onOpenChange, config, onSaved }) {
   const [projectName, setProjectName] = useState(config?.project_name || "Nosana");
   const [enabled, setEnabled] = useState(config?.enabled ?? true);
   const [submitting, setSubmitting] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   // Reset form when dialog re-opens with a different config snapshot.
   useEffect(() => {
@@ -248,6 +250,7 @@ function NosanaConfigDialog({ open, onOpenChange, config, onSaved }) {
       setAddress(config?.node_address || "");
       setProjectName(config?.project_name || "Nosana");
       setEnabled(config?.enabled ?? true);
+      setConfirmReset(false);
     }
   }, [open, config]);
 
@@ -278,6 +281,32 @@ function NosanaConfigDialog({ open, onOpenChange, config, onSaved }) {
     storage.setNosanaConfig(next);
     toast.success("Auto-sync disabled");
     onSaved(next);
+  };
+
+  const handleResetHistory = async () => {
+    if (!confirmReset) {
+      setConfirmReset(true);
+      return;
+    }
+    setResetting(true);
+    try {
+      const result = await resetNosanaSyncHistory();
+      const removed = result?.removed || 0;
+      toast.success(
+        removed > 0
+          ? `Cleared ${removed} synced day${removed === 1 ? "" : "s"} — tracking from today (UTC)`
+          : "Sync history was already empty — tracking from today (UTC)",
+      );
+      // Re-read config so the parent card refreshes its cursor display.
+      const fresh = storage.getNosanaConfig();
+      onSaved(fresh || config);
+    } catch (err) {
+      console.warn("Reset sync history failed:", err);
+      toast.error(err?.message || "Failed to reset sync history");
+    } finally {
+      setResetting(false);
+      setConfirmReset(false);
+    }
   };
 
   return (
@@ -332,6 +361,32 @@ function NosanaConfigDialog({ open, onOpenChange, config, onSaved }) {
             />
             <span>Enable auto-sync (runs daily at 23:45 UTC)</span>
           </label>
+
+          <div className="pt-3 mt-2 border-t border-border/30">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">
+              Sync history
+            </p>
+            <p className="text-xs text-muted-foreground mb-2">
+              Wipes all auto-synced Nosana transactions and starts tracking from today (UTC) only. Useful if your card was seeded with demo backfill data.
+            </p>
+            <Button
+              variant="outline"
+              onClick={handleResetHistory}
+              disabled={resetting}
+              className={
+                confirmReset
+                  ? "border-rose-500/60 bg-rose-500/10 text-rose-300 hover:bg-rose-500/20"
+                  : "border-rose-500/30 text-rose-400 hover:bg-rose-500/10 hover:text-rose-300"
+              }
+              data-testid="nosana-reset-history-btn"
+            >
+              {resetting
+                ? "Resetting…"
+                : confirmReset
+                ? "Click again to confirm reset"
+                : "Reset sync history"}
+            </Button>
+          </div>
         </div>
 
         <DialogFooter className="gap-2 sm:gap-2">

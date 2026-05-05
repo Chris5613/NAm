@@ -11,7 +11,12 @@ import PhoneList from "@/pages/PhoneList";
 import { Toaster } from "@/components/ui/sonner";
 import { netWorthApi } from "@/lib/api";
 import { localStorage as storage } from "@/lib/localStorage";
-import { syncNosanaEarnings, msUntilNext2345Utc, shouldRunCatchupNow } from "@/lib/nosanaSync";
+import {
+  syncNosanaEarnings,
+  msUntilNext2345Utc,
+  shouldRunCatchupNow,
+  runTodayOnlyMigrationIfNeeded,
+} from "@/lib/nosanaSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
@@ -44,10 +49,17 @@ function App() {
   // One-time demo bootstrap — pre-seeds the Nosana config + first sync so
   // the user can play with the app immediately. No-op if the user already
   // has Nosana configured or if we've seeded before.
+  //
+  // We chain the today-only migration *after* bootstrap so demo users who
+  // were seeded with the legacy 35-day backfill get auto-collapsed to a
+  // "today only" view (matches the latest product spec) on next app load.
   useEffect(() => {
     if (demoBootstrapAttempted) return;
     demoBootstrapAttempted = true;
-    bootstrapDemoData();
+    (async () => {
+      await bootstrapDemoData();
+      await runTodayOnlyMigrationIfNeeded();
+    })();
   }, []);
 
   // Nosana auto-sync scheduler — fires at 23:45 UTC daily. Also runs an
