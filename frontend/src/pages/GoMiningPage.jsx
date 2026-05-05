@@ -60,17 +60,20 @@ function newRow() {
     service: 0,
     gmt_earned: 0,
     gmt_boosted: 0,
+    gmt_price_locked: 0, // frozen at time of GMT entry — reward won't fluctuate
   };
 }
 
-// Per the user's formula: Reward = PR − Electricity − Service + (GMT_earned × GMT_price) − (GMT_boosted × GMT_price)
-function computeReward(row, gmtPrice = 0) {
+// Reward uses the row's locked price (set when GMT fields are edited), NOT the live price.
+// This ensures totals stay stable once data is entered.
+function computeReward(row) {
   const pr = Number(row.pr) || 0;
   const elec = Number(row.electricity) || 0;
   const svc = Number(row.service) || 0;
   const gmt = Number(row.gmt_earned) || 0;
   const boost = Number(row.gmt_boosted) || 0;
-  return pr - elec - svc + gmt * gmtPrice - boost * gmtPrice;
+  const price = Number(row.gmt_price_locked) || 0;
+  return pr - elec - svc + gmt * price - boost * price;
 }
 
 export default function GoMiningPage() {
@@ -131,18 +134,28 @@ export default function GoMiningPage() {
         acc.service += Number(r.service) || 0;
         acc.gmt_earned += Number(r.gmt_earned) || 0;
         acc.gmt_boosted += Number(r.gmt_boosted) || 0;
-        acc.reward += computeReward(r, gmtPrice);
+        acc.gmt_earned_usd += (Number(r.gmt_earned) || 0) * (Number(r.gmt_price_locked) || 0);
+        acc.gmt_boosted_usd += (Number(r.gmt_boosted) || 0) * (Number(r.gmt_price_locked) || 0);
+        acc.reward += computeReward(r);
         return acc;
       },
-      { pr: 0, electricity: 0, service: 0, reward: 0, gmt_earned: 0, gmt_boosted: 0 },
+      { pr: 0, electricity: 0, service: 0, reward: 0, gmt_earned: 0, gmt_boosted: 0, gmt_earned_usd: 0, gmt_boosted_usd: 0 },
     );
-  }, [rows, gmtPrice]);
+  }, [rows]);
 
-  const gmtUsd = totals.gmt_earned * gmtPrice;
-  const gmtBoostUsd = totals.gmt_boosted * gmtPrice;
+  const gmtUsd = totals.gmt_earned_usd;
+  const gmtBoostUsd = totals.gmt_boosted_usd;
 
   const updateRow = (id, key, value) => {
-    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [key]: value } : r)));
+    setRows((prev) => prev.map((r) => {
+      if (r.id !== id) return r;
+      const updated = { ...r, [key]: value };
+      // Lock the current live GMT price when GMT earned/boosted is edited
+      if ((key === "gmt_earned" || key === "gmt_boosted") && gmtPrice > 0) {
+        updated.gmt_price_locked = gmtPrice;
+      }
+      return updated;
+    }));
   };
 
   const addRow = () => {
@@ -160,7 +173,7 @@ export default function GoMiningPage() {
     const out = [];
     let total = 0;
     for (const r of rows) {
-      const current = computeReward(r, gmtPrice);
+      const current = computeReward(r);
       const previous = Number(syncedMap[r.id]) || 0;
       const delta = current - previous;
       if (delta > 0.005) {
@@ -170,7 +183,7 @@ export default function GoMiningPage() {
     }
     out.sort((a, b) => (a.date || "").localeCompare(b.date || ""));
     return { rows: out, total };
-  }, [rows, gmtPrice, syncedMap]);
+  }, [rows, syncedMap]);
 
   const openSyncDialog = () => {
     if (syncDiffs.rows.length === 0) {
@@ -227,7 +240,7 @@ export default function GoMiningPage() {
 
       // Persist the new synced snapshot keyed by current row rewards.
       const nextSynced = { ...syncedMap };
-      for (const r of rows) nextSynced[r.id] = computeReward(r, gmtPrice);
+      for (const r of rows) nextSynced[r.id] = computeReward(r);
       storage.setGoMiningSynced(nextSynced);
       setSyncedMap(nextSynced);
 
@@ -261,7 +274,7 @@ export default function GoMiningPage() {
         Number(r.service) || 0,
         Number(r.gmt_earned) || 0,
         Number(r.gmt_boosted) || 0,
-        computeReward(r, gmtPrice),
+        computeReward(r),
       ].join(","));
     });
     const blob = new Blob([lines.join("\n")], { type: "text/csv" });
@@ -338,21 +351,13 @@ export default function GoMiningPage() {
         <SummaryStat
           label="GMT Earned"
           value={`$${formatMoney(gmtUsd)}`}
-          subtitle={
-            priceLoading
-              ? "loading price…"
-              : `${formatNumber(totals.gmt_earned)} GMT @ $${formatNumber(gmtPrice, 6)}`
-          }
+          subtitle={`${formatNumber(totals.gmt_earned)} GMT (locked prices)`}
           accent
         />
         <SummaryStat
           label="GMT Boosted"
           value={`-$${formatMoney(gmtBoostUsd)}`}
-          subtitle={
-            priceLoading
-              ? "loading price…"
-              : `${formatNumber(totals.gmt_boosted)} GMT @ $${formatNumber(gmtPrice, 6)}`
-          }
+          subtitle={`${formatNumber(totals.gmt_boosted)} GMT (locked prices)`}
           negative
         />
         <SummaryStat label="Reward"      value={`$${formatMoney(totals.reward)}`} accent />
@@ -490,10 +495,11 @@ function SummaryStat({ label, value, subtitle, negative = false, accent = false 
 }
 
 function Row({ row, gmtPrice, onChange, onDelete }) {
-  const reward = computeReward(row, gmtPrice);
+  const rowPrice = Number(row.gmt_price_locked) || 0;
+  const reward = computeReward(row);
   const rewardPositive = reward >= 0;
-  const gmtUsdRow = (Number(row.gmt_earned) || 0) * gmtPrice;
-  const gmtBoostUsdRow = (Number(row.gmt_boosted) || 0) * gmtPrice;
+  const gmtUsdRow = (Number(row.gmt_earned) || 0) * rowPrice;
+  const gmtBoostUsdRow = (Number(row.gmt_boosted) || 0) * rowPrice;
   return (
     <tr className="border-b border-border/40 hover:bg-secondary/20 transition-colors" data-testid={`gomining-row-${row.id}`}>
       {COLS.map((c) => {
@@ -523,7 +529,7 @@ function Row({ row, gmtPrice, onChange, onDelete }) {
                   type={c.type}
                   onChange={onChange}
                 />
-                {gmtPrice > 0 && Number(row.gmt_earned) > 0 && (
+                {rowPrice > 0 && Number(row.gmt_earned) > 0 && (
                   <span className="text-[10px] text-muted-foreground/70 font-mono px-2 mt-0.5">
                     ≈ ${formatMoney(gmtUsdRow)}
                   </span>
@@ -542,7 +548,7 @@ function Row({ row, gmtPrice, onChange, onDelete }) {
                   type={c.type}
                   onChange={onChange}
                 />
-                {gmtPrice > 0 && Number(row.gmt_boosted) > 0 && (
+                {rowPrice > 0 && Number(row.gmt_boosted) > 0 && (
                   <span className="text-[10px] text-rose-400/70 font-mono px-2 mt-0.5">
                     -${formatMoney(gmtBoostUsdRow)}
                   </span>

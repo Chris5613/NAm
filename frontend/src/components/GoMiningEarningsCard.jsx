@@ -93,8 +93,8 @@ export default function GoMiningEarningsCard() {
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-md bg-yellow-500/10 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                <img src={GMT_ICON} alt="GoMining" className="w-7 h-7 object-contain" />
+              <div className="w-10 h-10 rounded-md bg-yellow-500/10 flex items-center justify-center flex-shrink-0">
+                <Pickaxe className="w-5 h-5 text-yellow-400" strokeWidth={1.5} />
               </div>
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
