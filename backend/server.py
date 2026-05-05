@@ -133,10 +133,15 @@ async def unity_inbox_latest(since: Optional[str] = None) -> JSONResponse:
 
     if since:
         synced_at = payload.get("synced_at") or received_at
+        # Parse both as datetimes for robust comparison; fall through (return
+        # the payload) on any parse error so a malformed `since` never
+        # accidentally hides a valid push.
         try:
-            if synced_at and since and synced_at <= since:
+            since_dt = datetime.fromisoformat(since.replace("Z", "+00:00"))
+            stored_dt = datetime.fromisoformat(str(synced_at).replace("Z", "+00:00"))
+            if stored_dt <= since_dt:
                 return JSONResponse({"empty": True, "no_new_data": True}, status_code=200)
-        except Exception:
+        except (ValueError, TypeError, AttributeError):
             pass  # fall through and return current payload
 
     return JSONResponse(
