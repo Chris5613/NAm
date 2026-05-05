@@ -1,11 +1,12 @@
 import { NavLink } from "react-router-dom";
-import { DollarSign, BarChart3, Bitcoin, Phone, Pickaxe } from "lucide-react";
+import { DollarSign, BarChart3, Bitcoin, Phone, Pickaxe, Zap } from "lucide-react";
 
 const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
   { path: "/investments", label: "Investment Overview", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
   { path: "/gomining", label: "GoMining", icon: Pickaxe },
+  { path: "/integrations", label: "Integrations", icon: Zap },
   { path: "/phone-list", label: "Phone List", icon: Phone },
 ];
 

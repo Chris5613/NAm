@@ -10,7 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins, Layers, Settings, EyeOff, Eye, Image, Pencil } from "lucide-react";
-import NosanaEarningsCard from "@/components/NosanaEarningsCard";
 
 function formatCurrency(v) {
   if (!v && v !== 0) return "$0.00";
@@ -331,11 +330,6 @@ export default function CryptoPage() {
         </div>
       </div>
 
-      {/* Nosana auto-sync card — pulls daily earnings from the Nosana
-          dashboard API and posts them to the Investment Overview's Nosana
-          project. Always visible on the Crypto tab (independent of wallets). */}
-      <NosanaEarningsCard />
-
       {wallets.length === 0 ? (
         <Card className="border-border/40 bg-card">
           <CardContent className="p-8 flex flex-col items-center justify-center text-center">
@@ -370,10 +364,6 @@ export default function CryptoPage() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Nosana auto-sync — daily earnings from the Nosana dashboard API
-              are posted to the Investment Overview project. Visible whenever
-              the user has wallets connected. */}
 
           {/* Network Chips */}
           <div className="flex items-center gap-3 flex-wrap" data-testid="network-chips">

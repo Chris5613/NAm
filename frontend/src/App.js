@@ -6,6 +6,7 @@ import Dashboard from "@/pages/Dashboard";
 import InvestmentOverview from "@/pages/InvestmentOverview";
 import CryptoPage from "@/pages/CryptoPage";
 import GoMiningPage from "@/pages/GoMiningPage";
+import IntegrationsPage from "@/pages/IntegrationsPage";
 import PhoneList from "@/pages/PhoneList";
 import { Toaster } from "@/components/ui/sonner";
 import { netWorthApi } from "@/lib/api";
@@ -101,6 +102,7 @@ function App() {
               <Route path="/investments" element={<InvestmentOverview />} />
               <Route path="/crypto" element={<CryptoPage />} />
               <Route path="/gomining" element={<GoMiningPage />} />
+              <Route path="/integrations" element={<IntegrationsPage />} />
               <Route path="/phone-list" element={<PhoneList />} />
             </Routes>
           </div>
