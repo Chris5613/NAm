@@ -56,13 +56,24 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
     }
     setSubmitting(true);
     try {
+      const amount = parseFloat(form.amount);
       await projectsApi.addTransaction(project.id, {
         type: form.type,
-        amount: parseFloat(form.amount),
+        amount,
         category: form.category || null,
         notes: form.notes || null,
         date: form.date || null,
       });
+      // Update project earned/invested to reflect the manual transaction
+      if (form.type === "earning") {
+        await projectsApi.update(project.id, {
+          earned: Math.max(0, (Number(project.earned) || 0) + amount),
+        });
+      } else if (form.type === "investment") {
+        await projectsApi.update(project.id, {
+          invested: Math.max(0, (Number(project.invested) || 0) + amount),
+        });
+      }
       toast.success(`${form.type === "earning" ? "Earning" : "Investment"} of $${form.amount} added`);
       setForm({ type: "earning", amount: "", category: "", notes: "", date: new Date().toISOString().split("T")[0] });
       loadTransactions();
@@ -76,7 +87,25 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
 
   const handleDelete = async (txnId) => {
     try {
+      // Find the transaction to know its type/amount for reversal
+      const txn = transactions.find((t) => t.id === txnId);
       await projectsApi.deleteTransaction(txnId);
+      // If it's a manual transaction (no source), reverse the earned/invested
+      if (txn && !txn.source) {
+        const freshProjects = (await projectsApi.getAll()).data || [];
+        const currentProject = freshProjects.find((p) => p.id === project.id);
+        if (currentProject) {
+          if (txn.type === "earning") {
+            await projectsApi.update(project.id, {
+              earned: Math.max(0, (Number(currentProject.earned) || 0) - (Number(txn.amount) || 0)),
+            });
+          } else if (txn.type === "investment") {
+            await projectsApi.update(project.id, {
+              invested: Math.max(0, (Number(currentProject.invested) || 0) - (Number(txn.amount) || 0)),
+            });
+          }
+        }
+      }
       toast.success("Transaction removed");
       loadTransactions();
       onUpdated();
@@ -104,12 +133,33 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
     const amt = parseFloat(editForm.amount);
     if (!isFinite(amt) || amt <= 0) { toast.error("Amount must be greater than 0"); return; }
     try {
+      // Find the original txn to compute the difference
+      const original = transactions.find((t) => t.id === txnId);
       await projectsApi.updateTransaction(txnId, {
         amount: amt,
         category: editForm.category || null,
         notes: editForm.notes || null,
         date: editForm.date || null,
       });
+      // If it's a manual transaction (no source), adjust earned/invested by the diff
+      if (original && !original.source) {
+        const diff = amt - (Number(original.amount) || 0);
+        if (diff !== 0) {
+          const freshProjects = (await projectsApi.getAll()).data || [];
+          const currentProject = freshProjects.find((p) => p.id === project.id);
+          if (currentProject) {
+            if (original.type === "earning") {
+              await projectsApi.update(project.id, {
+                earned: Math.max(0, (Number(currentProject.earned) || 0) + diff),
+              });
+            } else if (original.type === "investment") {
+              await projectsApi.update(project.id, {
+                invested: Math.max(0, (Number(currentProject.invested) || 0) + diff),
+              });
+            }
+          }
+        }
+      }
       toast.success("Transaction updated");
       cancelEdit();
       loadTransactions();
