@@ -1,5 +1,5 @@
 // Local storage utilities for caching data client-side
-const STORAGE_KEYS = {
+export const STORAGE_KEYS = {
   ASSETS: 'networth_assets',
   PHONES: 'networth_phones',
   WALLETS: 'networth_wallets',

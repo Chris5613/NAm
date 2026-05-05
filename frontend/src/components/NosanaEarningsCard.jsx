@@ -42,7 +42,9 @@ export default function NosanaEarningsCard() {
     return () => clearInterval(tickRef.current);
   }, []);
 
-  // Listen for changes from other tabs/components (e.g. txn delete).
+  // Listen for changes from other tabs/components (e.g. txn delete) and
+  // for the custom "nosana-sync-complete" event the sync function fires
+  // after auto/scheduled/bootstrap runs that didn't go through this card.
   useEffect(() => {
     const refresh = () => {
       setConfig(storage.getNosanaConfig());
@@ -50,9 +52,11 @@ export default function NosanaEarningsCard() {
     };
     window.addEventListener("focus", refresh);
     window.addEventListener("storage", refresh);
+    window.addEventListener("nosana-sync-complete", refresh);
     return () => {
       window.removeEventListener("focus", refresh);
       window.removeEventListener("storage", refresh);
+      window.removeEventListener("nosana-sync-complete", refresh);
     };
   }, []);
 

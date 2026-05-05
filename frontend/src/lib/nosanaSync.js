@@ -166,6 +166,13 @@ export async function syncNosanaEarnings(opts = {}) {
   const nextConfig = { ...config, last_synced_at: new Date().toISOString() };
   storage.setNosanaConfig(nextConfig);
 
+  // Notify any mounted UI (NosanaEarningsCard) that fresh data is available
+  // — covers the case where a sync runs outside the user's click handler
+  // (auto-scheduler, demo bootstrap) and the card needs to re-read state.
+  try {
+    window.dispatchEvent(new CustomEvent("nosana-sync-complete"));
+  } catch { /* SSR / older browsers — ignore */ }
+
   return {
     added,
     updated,

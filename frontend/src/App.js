@@ -11,11 +11,13 @@ import { Toaster } from "@/components/ui/sonner";
 import { netWorthApi } from "@/lib/api";
 import { localStorage as storage } from "@/lib/localStorage";
 import { syncNosanaEarnings, msUntilNext2345Utc, shouldRunCatchupNow } from "@/lib/nosanaSync";
+import { bootstrapDemoData } from "@/lib/bootstrap";
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
 // snapshot in dev. Survives the StrictMode remount; reset on full page reload.
 let dailySnapshotAttempted = false;
 let nosanaSchedulerStarted = false;
+let demoBootstrapAttempted = false;
 
 function App() {
   // Daily auto-snapshot: on first mount each calendar day, append a net-worth
@@ -36,6 +38,15 @@ function App() {
       }
     };
     ensureDailySnapshot();
+  }, []);
+
+  // One-time demo bootstrap — pre-seeds the Nosana config + first sync so
+  // the user can play with the app immediately. No-op if the user already
+  // has Nosana configured or if we've seeded before.
+  useEffect(() => {
+    if (demoBootstrapAttempted) return;
+    demoBootstrapAttempted = true;
+    bootstrapDemoData();
   }, []);
 
   // Nosana auto-sync scheduler — fires at 23:45 UTC daily. Also runs an
