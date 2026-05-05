@@ -16,6 +16,8 @@ import { RefreshCw, Plus, Camera, Radio } from "lucide-react";
 const LIVE_HISTORY_MAX_POINTS = 200;      // rolling window persisted to localStorage
 const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
 
+
+
 function calculateNetWorth(assets = [], cryptoTotal = 0) {
   const breakdown = {
     stocks: 0,
@@ -178,6 +180,26 @@ const fetchData = useCallback(async () => {
   }
 };
 
+const monthlyNetWorth = [
+  { month: "Jan 2025", value: 10782.51 },
+  { month: "Feb 2025", value: 10693.68 },
+  { month: "Mar 2025", value: 9528.58 },
+  { month: "Apr 2025", value: 8632.42 },
+  { month: "May 2025", value: 10896.34 },
+  { month: "Jun 2025", value: 8972.98 },
+  { month: "Jul 2025", value: 11405.74 },
+  { month: "Aug 2025", value: 12575.42 },
+  { month: "Sept 2025", value: 11304.91 },
+  { month: "Oct 2025", value: 13220.50 },
+  { month: "Nov 2025", value: 12834.66 },
+  { month: "Dec 2025", value: 11257.05 },
+  { month: "Jan 2026", value: 13684.99 },
+  { month: "Feb 2026", value: 15225.50 },
+  { month: "Mar 2026", value: 16233.31 },
+  { month: "Apr 2026", value: 17271.75 },
+  { month: "May 2026", value: 17491.19 },
+];
+
   return (
     <div className="space-y-6" data-testid="dashboard">
       {/* Header */}
@@ -237,7 +259,7 @@ const fetchData = useCallback(async () => {
       </div>
 
       {/* History Chart */}
-      <NetWorthHistory history={history} liveData={liveHistory} />
+  <NetWorthHistory history={monthlyNetWorth} />
 
       {/* Asset List with Tabs */}
       <div className="space-y-4">
