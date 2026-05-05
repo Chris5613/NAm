@@ -258,7 +258,7 @@ export const projectsApi = {
     }
     // Keep project.earned in sync only for GoMining auto-synced txns
     // (manual transactions don't bump earned on insert, so we shouldn't on update either).
-    if ((prev?.source === 'gomining' || prev?.source === 'nosana' || prev?.source === 'rollercoin' || prev?.source === 'acurast') && parentId) {
+    if ((prev?.source === 'gomining' || prev?.source === 'nosana' || prev?.source === 'rollercoin' || prev?.source === 'acurast' || prev?.source === 'unity_network') && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;
@@ -323,10 +323,21 @@ export const projectsApi = {
         storage.setAcurastConfig({ ...ac, baseline_acu: nextBaseline });
       }
     }
-    // Decrement project.earned only for GoMining/Nosana/RollerCoin/Acurast auto-synced earning
+    // Unity Network: same baseline-as-source-of-truth pattern but in plain
+    // USD. Deleting a synced txn lowers baseline_usd so the next "Update
+    // balance" re-arms the same delta.
+    if (removed?.source === 'unity_network') {
+      const un = storage.getUnityNetworkConfig();
+      if (un?.baseline_usd != null) {
+        const dec = Number(removed.source_usd_delta) || 0;
+        const nextBaseline = Math.max(0, (Number(un.baseline_usd) || 0) - dec);
+        storage.setUnityNetworkConfig({ ...un, baseline_usd: nextBaseline });
+      }
+    }
+    // Decrement project.earned only for GoMining/Nosana/RollerCoin/Acurast/Unity Network auto-synced earning
     // txns (manual earnings don't bump earned on insert, so we shouldn't on
     // delete either).
-    if ((removed?.source === 'gomining' || removed?.source === 'nosana' || removed?.source === 'rollercoin' || removed?.source === 'acurast') && removed?.type === 'earning' && parentId) {
+    if ((removed?.source === 'gomining' || removed?.source === 'nosana' || removed?.source === 'rollercoin' || removed?.source === 'acurast' || removed?.source === 'unity_network') && removed?.type === 'earning' && parentId) {
       const projects = storage.getProjects();
       const adjusted = projects.map((p) => {
         if (p.id !== parentId) return p;

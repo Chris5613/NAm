@@ -15,6 +15,7 @@ export const STORAGE_KEYS = {
   NOSANA_SYNCED_DATES: 'networth_nosana_synced_dates',
   ROLLERCOIN_CONFIG: 'networth_rollercoin_config',
   ACURAST_CONFIG: 'networth_acurast_config',
+  UNITY_NETWORK_CONFIG: 'networth_unity_network_config',
 };
 
 export const localStorage = {
@@ -114,5 +115,13 @@ export const localStorage = {
   // Earnings post to a "Phone Farm" investment project by default.
   getAcurastConfig: () => localStorage.get(STORAGE_KEYS.ACURAST_CONFIG) || null,
   setAcurastConfig: (config) => localStorage.set(STORAGE_KEYS.ACURAST_CONFIG, config),
+
+  // Unity Network — manual, USD-denominated. Like Acurast but skips the
+  // token-price hop because Unity Network surfaces a single USD figure
+  // directly. Earnings post to the same "Phone Farm" investment project
+  // as Acurast for a consolidated phone-farm P&L line.
+  //   { baseline_usd, project_name, enabled, last_updated_at }
+  getUnityNetworkConfig: () => localStorage.get(STORAGE_KEYS.UNITY_NETWORK_CONFIG) || null,
+  setUnityNetworkConfig: (config) => localStorage.set(STORAGE_KEYS.UNITY_NETWORK_CONFIG, config),
 
 };
