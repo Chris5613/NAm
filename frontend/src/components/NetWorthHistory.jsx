@@ -187,17 +187,34 @@ time: formatDate(item.timestamp),
               tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
               domain={["dataMin - 100", "dataMax + 100"]}
             />
-            <Tooltip
-              contentStyle={{
-                background: "#121214",
-                border: "1px solid #27272A",
-                borderRadius: "6px",
-                fontFamily: "'Space Mono', monospace",
-                fontSize: "12px",
-              }}
-              labelStyle={{ color: "#A1A1AA" }}
-formatter={(value) => [formatCurrency(value), "Net Worth"]}
-            />
+<Tooltip
+  content={({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+
+    const point = payload[0]?.payload;
+    const value = point?.value ?? payload[0]?.value;
+
+    return (
+      <div
+        style={{
+          background: "#121214",
+          border: "1px solid #27272A",
+          borderRadius: "6px",
+          padding: "8px 10px",
+          fontFamily: "'Space Mono', monospace",
+          fontSize: "12px",
+        }}
+      >
+        <div style={{ color: "#A1A1AA", marginBottom: 4 }}>
+          {label}
+        </div>
+        <div style={{ color: "#FAFAFA" }}>
+          Net Worth: {formatCurrency(value)}
+        </div>
+      </div>
+    );
+  }}
+/>
             <Area
               type="monotone"
               dataKey="value"

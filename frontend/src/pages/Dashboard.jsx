@@ -257,7 +257,6 @@ const monthlyNetWorth = [
         </div>
       </div>
 
-      {/* History Chart */}
 <NetWorthHistory history={monthlyNetWorth} liveData={[]} />
 
       {/* Asset List with Tabs */}
