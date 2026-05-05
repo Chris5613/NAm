@@ -13,6 +13,7 @@ import {
   listAccounts,
   removeAccount,
   clearAllAccounts,
+  setAccountLabel,
 } from "@/lib/unityNetworkExtensionSync";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 import {
   RefreshCw, Settings, Network, CheckCircle2, AlertCircle, Clock,
   TrendingUp, ArrowDown, MinusCircle, Plug, Zap, Trash2, Mail, Users,
+  Pencil, Check, X,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -82,7 +84,18 @@ export default function UnityNetworkEarningsCard() {
       if (!result?.applied) return;
       if (result.action === "earning") {
         const projectName = (storage.getUnityNetworkConfig()?.project_name) || "Phone Farm";
-        const who = result.account_email ? ` (${result.account_email})` : "";
+        // Prefer the user-set label over the raw email so the toast reads
+        // naturally ("+$2.62 from My main farm" instead of an obfuscated
+        // address).
+        let who = "";
+        if (result.account_email) {
+          const acctList = listAccounts();
+          const matched = acctList.find(
+            (a) => a.email && a.email.toLowerCase() === result.account_email.toLowerCase(),
+          );
+          const display = matched?.label || result.account_email;
+          who = ` (${display})`;
+        }
         toast.success(
           `+${formatUsd(result.delta_usd)} from extension${who} → ${projectName}`,
         );
@@ -125,6 +138,32 @@ export default function UnityNetworkEarningsCard() {
     } else {
       toast.error("Could not remove account.");
     }
+  };
+
+  // Inline label editing — `editingKey` holds the account key currently in
+  // edit mode (null = none), `editingValue` is the in-flight input. Saves
+  // on Enter / Save-button / blur; cancels on Escape / X-button.
+  const [editingKey, setEditingKey] = useState(null);
+  const [editingValue, setEditingValue] = useState("");
+
+  const startEditLabel = (acct) => {
+    setEditingKey(acct.key);
+    setEditingValue(acct.label || "");
+  };
+
+  const cancelEditLabel = () => {
+    setEditingKey(null);
+    setEditingValue("");
+  };
+
+  const commitEditLabel = (key) => {
+    const result = setAccountLabel(key, editingValue);
+    if (result?.ok) {
+      setExtState(getExtensionState());
+      toast.success(result.label ? `Renamed to "${result.label}"` : "Label cleared");
+    }
+    setEditingKey(null);
+    setEditingValue("");
   };
 
   const handleManualExtensionSync = async () => {
@@ -374,6 +413,8 @@ export default function UnityNetworkEarningsCard() {
                   const hasTodayForAcct = acct.last_today_date === todayUtc;
                   const acctTodayUsd = hasTodayForAcct ? Number(acct.last_today_usd) || 0 : 0;
                   const isLegacyKey = acct.key === "_legacy";
+                  const isEditing = editingKey === acct.key;
+                  const displayLabel = acct.label || acct.email || "(unknown — legacy)";
                   return (
                     <div
                       key={acct.key}
@@ -382,14 +423,85 @@ export default function UnityNetworkEarningsCard() {
                     >
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         <Mail className="w-3 h-3 text-violet-400 flex-shrink-0" strokeWidth={1.8} />
-                        <span
-                          className={`text-xs font-mono truncate ${
-                            isLegacyKey ? "text-amber-400 italic" : "text-foreground"
-                          }`}
-                          title={acct.email || "Legacy migration entry — sign into one of your accounts and sync to assign."}
-                        >
-                          {acct.email || "(unknown — legacy)"}
-                        </span>
+                        {isEditing ? (
+                          // Inline edit mode — input + save/cancel buttons.
+                          // Auto-focus, Enter commits, Escape cancels.
+                          <div className="flex items-center gap-1 flex-1 min-w-0">
+                            <input
+                              type="text"
+                              value={editingValue}
+                              onChange={(e) => setEditingValue(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") { e.preventDefault(); commitEditLabel(acct.key); }
+                                else if (e.key === "Escape") { e.preventDefault(); cancelEditLabel(); }
+                              }}
+                              onBlur={() => {
+                                // Defer so click on save/cancel button still
+                                // registers (blur fires before click).
+                                setTimeout(() => {
+                                  if (editingKey === acct.key) commitEditLabel(acct.key);
+                                }, 150);
+                              }}
+                              autoFocus
+                              maxLength={40}
+                              placeholder={acct.email || "Account label"}
+                              className="text-xs font-mono bg-background/70 border border-violet-500/40 rounded px-2 py-0.5 flex-1 min-w-0 text-foreground focus:outline-none focus:border-violet-400"
+                              data-testid={`unity-network-account-label-input-${acct.key}`}
+                            />
+                            <button
+                              onMouseDown={(e) => e.preventDefault() /* keep input focused */}
+                              onClick={() => commitEditLabel(acct.key)}
+                              className="p-1 rounded hover:bg-emerald-500/10 text-emerald-400 transition flex-shrink-0"
+                              title="Save"
+                              data-testid={`unity-network-account-label-save-${acct.key}`}
+                            >
+                              <Check className="w-3 h-3" strokeWidth={2} />
+                            </button>
+                            <button
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={cancelEditLabel}
+                              className="p-1 rounded hover:bg-rose-500/10 text-rose-400 transition flex-shrink-0"
+                              title="Cancel"
+                              data-testid={`unity-network-account-label-cancel-${acct.key}`}
+                            >
+                              <X className="w-3 h-3" strokeWidth={2} />
+                            </button>
+                          </div>
+                        ) : (
+                          // Display mode — label is the primary line, email
+                          // is shown small and subdued underneath when a
+                          // custom label is set so it stays discoverable.
+                          <div className="flex flex-col min-w-0 flex-1">
+                            <button
+                              onClick={() => startEditLabel(acct)}
+                              className={`text-xs font-mono truncate text-left hover:text-violet-300 transition ${
+                                isLegacyKey ? "text-amber-400 italic" : "text-foreground"
+                              }`}
+                              title={acct.label ? `${acct.label} (${acct.email || "unknown"}) — click to rename` : "Click to add a label"}
+                              data-testid={`unity-network-account-label-${acct.key}`}
+                            >
+                              {displayLabel}
+                            </button>
+                            {acct.label && acct.email && (
+                              <span
+                                className="text-[9px] font-mono text-muted-foreground truncate"
+                                title={acct.email}
+                              >
+                                {acct.email}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {!isEditing && (
+                          <button
+                            onClick={() => startEditLabel(acct)}
+                            className="p-1 rounded hover:bg-violet-500/10 text-muted-foreground hover:text-violet-400 transition flex-shrink-0"
+                            title="Rename this account"
+                            data-testid={`unity-network-account-edit-${acct.key}`}
+                          >
+                            <Pencil className="w-3 h-3" strokeWidth={1.8} />
+                          </button>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 text-[11px] font-mono flex-shrink-0">
                         <div className="text-right">
@@ -407,7 +519,7 @@ export default function UnityNetworkEarningsCard() {
                           <p className="text-muted-foreground">{formatRelativeTime(acct.last_seen_at)}</p>
                         </div>
                         <button
-                          onClick={() => handleRemoveAccount(acct.key, acct.email)}
+                          onClick={() => handleRemoveAccount(acct.key, acct.label || acct.email)}
                           className="p-1 rounded hover:bg-rose-500/10 text-muted-foreground hover:text-rose-400 transition"
                           title="Remove this account"
                           data-testid={`unity-network-remove-account-${acct.key}`}

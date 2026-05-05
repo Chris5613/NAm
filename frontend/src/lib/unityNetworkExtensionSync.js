@@ -245,6 +245,23 @@ export function clearAllAccounts() {
   });
 }
 
+// Set / clear a custom display label for an account (e.g. "Personal phone",
+// "Work farm 1"). Pass `null` or empty string to clear. Labels never replace
+// the email key — they're purely cosmetic — so renaming is safe and the
+// extension's per-email idempotency is unaffected.
+export function setAccountLabel(emailKey, label) {
+  const state = getExtensionState();
+  const accounts = { ...(state.accounts || {}) };
+  if (!accounts[emailKey]) return { ok: false, reason: "not_found" };
+  const trimmed = (label || "").trim();
+  accounts[emailKey] = {
+    ...accounts[emailKey],
+    label: trimmed || null,
+  };
+  setExtensionState({ accounts });
+  return { ok: true, label: trimmed || null };
+}
+
 // Apply an extension payload to the Unity Network / Phone Farm tracking.
 //
 // Strategy:
@@ -283,9 +300,11 @@ async function applyPayload(payload, { allowAutoConfigure = false } = {}) {
     return { applied: false, reason: "already_applied" };
   }
 
-  // Update this account's snapshot fields.
+  // Update this account's snapshot fields. `label` is preserved across
+  // syncs since it's a user-set cosmetic name, not part of the payload.
   accounts[emailKey] = {
     email: payload.email || prev?.email || null,
+    label: prev?.label ?? null,
     last_today_date: payload.date || null,
     last_today_usd: pickNumber(payload.total_usd),
     last_balance_usd: pickNumber(payload.balance_usd),
