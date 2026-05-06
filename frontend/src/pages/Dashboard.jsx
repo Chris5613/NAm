@@ -384,16 +384,29 @@ useEffect(() => {
             {activeTab === "all" && (
               <div className="space-y-4">
                 {sortedAllSections.map((section) => {
-if (section.kind === "crypto") {
-  return (
-    <CryptoBreakdown
-      key="crypto"
-      defaultOpen={true}
-      dailyChange={dailyCategoryChanges?.crypto || 0}
-    />
-  );
-}
-                  
+switch (section.kind) {
+  case "crypto":
+    return (
+      <CryptoBreakdown
+        key="crypto"
+        defaultOpen={false}
+        dailyChange={dailyCategoryChanges?.crypto || 0}
+      />
+    );
+
+  default:
+    return (
+      <AssetBreakdown
+        key={`all-${section.kind}`}
+        category={section.kind}
+        assets={assets}
+        onUpdate={handleAssetUpdated}
+        onDelete={handleAssetDeleted}
+        defaultOpen={false}
+        dailyChange={dailyCategoryChanges?.[section.kind] || 0}
+      />
+    );
+}               
                   return (
                     <AssetBreakdown
                       key={`all-${section.kind}`}
