@@ -11,6 +11,45 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins, Layers, Settings, EyeOff, Eye, Image, Pencil } from "lucide-react";
 
+const DAILY_CRYPTO_BASELINE_KEY = "daily_crypto_net_worth_baseline_pst";
+
+function getPstDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function getDailyCryptoChange(currentValue) {
+  const todayKey = getPstDateKey();
+  const saved = JSON.parse(localStorage.getItem(DAILY_CRYPTO_BASELINE_KEY) || "null");
+
+  if (!saved || saved.dateKey !== todayKey) {
+    localStorage.setItem(
+      DAILY_CRYPTO_BASELINE_KEY,
+      JSON.stringify({
+        dateKey: todayKey,
+        baseline: Number(currentValue) || 0,
+      })
+    );
+
+    return {
+      change: 0,
+      percentChange: 0,
+    };
+  }
+
+  const baseline = Number(saved.baseline) || 0;
+  const change = (Number(currentValue) || 0) - baseline;
+
+  return {
+    change,
+    percentChange: baseline !== 0 ? (change / baseline) * 100 : 0,
+  };
+}
+
 function formatCurrency(v) {
   if (!v && v !== 0) return "$0.00";
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(v);
@@ -187,6 +226,9 @@ export default function CryptoPage() {
   const defiTotalValue = defiPositions.reduce((s, p) => s + p.total_value, 0);
   const grandTotal = visibleTotal + defiTotalValue;
 
+  const dailyCryptoChange = getDailyCryptoChange(grandTotal);
+const cryptoDailyPositive = dailyCryptoChange.change >= 0;
+
   const chainBreakdown = {};
   wallets.forEach(w => {
     const tokens = balances[w.id]?.tokens || [];
@@ -355,6 +397,16 @@ export default function CryptoPage() {
               <CardContent className="p-6">
                 <p className="text-sm text-muted-foreground mb-1">Net Worth</p>
                 <p className="font-mono text-4xl font-bold text-foreground">{formatCurrency(grandTotal)}</p>
+                <p
+  className={`text-sm font-mono mt-2 ${
+    cryptoDailyPositive ? "text-emerald-500" : "text-rose-500"
+  }`}
+>
+  {cryptoDailyPositive ? "+" : "-"}
+  {formatCurrency(Math.abs(dailyCryptoChange.change))} today (
+  {cryptoDailyPositive ? "+" : "-"}
+  {Math.abs(dailyCryptoChange.percentChange).toFixed(2)}%)
+</p>
                 <p className="text-xs text-muted-foreground mt-1">from {customTokens.length} custom token{customTokens.length > 1 ? "s" : ""}</p>
               </CardContent>
             </Card>
