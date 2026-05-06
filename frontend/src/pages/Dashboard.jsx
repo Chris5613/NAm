@@ -383,47 +383,31 @@ useEffect(() => {
             )}
             {activeTab === "all" && (
               <div className="space-y-4">
-                {sortedAllSections.map((section) => {
-switch (section.kind) {
-  case "crypto":
-    return (
-      <CryptoBreakdown
-        key="crypto"
-        defaultOpen={false}
-        dailyChange={dailyCategoryChanges?.crypto || 0}
-      />
-    );
+ {sortedAllSections.map((section) => {
+  switch (section.kind) {
+    case "crypto":
+      return (
+        <CryptoBreakdown
+          key="crypto"
+          defaultOpen={false}
+          dailyChange={dailyCategoryChanges?.crypto || 0}
+        />
+      );
 
-  default:
-    return (
-      <AssetBreakdown
-        key={`all-${section.kind}`}
-        category={section.kind}
-        assets={assets}
-        onUpdate={handleAssetUpdated}
-        onDelete={handleAssetDeleted}
-        defaultOpen={false}
-        dailyChange={dailyCategoryChanges?.[section.kind] || 0}
-      />
-    );
-}               
-                  return (
-                    <AssetBreakdown
-                      key={`all-${section.kind}`}
-                      category={section.kind}
-                      assets={assets}
-                      onUpdate={handleAssetUpdated}
-                      onDelete={handleAssetDeleted}
-                      defaultOpen={false}
-                      dailyChange={dailyCategoryChanges?.[section.kind] || 0}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
-      </div>
+    default:
+      return (
+        <AssetBreakdown
+          key={`all-${section.kind}`}
+          category={section.kind}
+          assets={assets}
+          onUpdate={handleAssetUpdated}
+          onDelete={handleAssetDeleted}
+          defaultOpen={false}
+          dailyChange={dailyCategoryChanges?.[section.kind] || 0}
+        />
+      );
+  }
+})}
 
       <AddAssetDialog
         open={addDialogOpen}
@@ -431,6 +415,11 @@ switch (section.kind) {
         onCreated={handleAssetCreated}
         defaultCategory={SUPPORTED_TABS.has(activeTab) && activeTab !== "all" ? activeTab : "stocks"}
       />
+    </div>
+          )}
+          </TabsContent>
+        </Tabs>
+      </div>
     </div>
   );
 }
