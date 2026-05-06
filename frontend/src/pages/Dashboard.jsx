@@ -332,7 +332,7 @@ useEffect(() => {
             <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
             Add Asset
           </Button>
-        </div>fetchData
+        </div>
       </div>
 
       {/* Net Worth Hero + Charts */}
@@ -384,13 +384,16 @@ useEffect(() => {
             {activeTab === "all" && (
               <div className="space-y-4">
                 {sortedAllSections.map((section) => {
-                  if (section.kind === "crypto") {
-<CryptoBreakdown
-  key="crypto"
-  defaultOpen={true}
-  dailyChange={dailyCategoryChanges?.crypto || 0}
-/>
-                  }
+if (section.kind === "crypto") {
+  return (
+    <CryptoBreakdown
+      key="crypto"
+      defaultOpen={true}
+      dailyChange={dailyCategoryChanges?.crypto || 0}
+    />
+  );
+}
+                  
                   return (
                     <AssetBreakdown
                       key={`all-${section.kind}`}
