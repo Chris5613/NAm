@@ -12,6 +12,51 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Plus, Camera, Radio } from "lucide-react";
 
+const DAILY_BASELINE_KEY = "daily_net_worth_baseline_pst";
+
+function getPstDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function getDailyNetWorthChange(currentNetWorth) {
+  const todayKey = getPstDateKey();
+  const saved = JSON.parse(localStorage.getItem(DAILY_BASELINE_KEY) || "null");
+
+  if (!saved || saved.dateKey !== todayKey) {
+    const baseline = Number(currentNetWorth) || 0;
+
+    localStorage.setItem(
+      DAILY_BASELINE_KEY,
+      JSON.stringify({
+        dateKey: todayKey,
+        baseline,
+      })
+    );
+
+    return {
+      baseline,
+      change: 0,
+      percentChange: 0,
+      dateKey: todayKey,
+    };
+  }
+
+  const baseline = Number(saved.baseline) || 0;
+  const change = (Number(currentNetWorth) || 0) - baseline;
+  const percentChange = baseline !== 0 ? (change / baseline) * 100 : 0;
+
+  return {
+    baseline,
+    change,
+    percentChange,
+    dateKey: todayKey,
+  };
+}
 
 const LIVE_HISTORY_MAX_POINTS = 200;      // rolling window persisted to localStorage
 const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
@@ -68,6 +113,7 @@ export default function Dashboard() {
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [lastUpdated, setLastUpdated] = useState(null);
+  const [dailyNetWorthChange, setDailyNetWorthChange] = useState(null);
  
   // Persist liveHistory whenever it changes (capped to last N points).
   useEffect(() => {
@@ -86,8 +132,15 @@ const fetchData = useCallback(async () => {
 
     const calculatedNetWorth = calculateNetWorth(assets, cryptoTotal);
 
+    const dailyChange = getDailyNetWorthChange(
+  calculatedNetWorth.total_net_worth
+);
+
+
+
     setAssets(assets);
     setNetWorth(calculatedNetWorth);
+    setDailyNetWorthChange(dailyChange);
     setHistory(history);
     setLastUpdated(new Date());
 
@@ -231,7 +284,10 @@ const fetchData = useCallback(async () => {
       {/* Net Worth Hero + Charts */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <div className="md:col-span-2 lg:col-span-2">
-          <NetWorthHero netWorth={netWorth} />
+<NetWorthHero
+  netWorth={netWorth}
+  dailyNetWorthChange={dailyNetWorthChange}
+/>
         </div>
         <div className="md:col-span-1 lg:col-span-2">
           <PortfolioChart netWorth={netWorth} />
