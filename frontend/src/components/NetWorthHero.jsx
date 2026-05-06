@@ -1,3 +1,6 @@
+import { Card, CardContent } from "@/components/ui/card";
+import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
+
 export default function NetWorthHero({ netWorth, dailyNetWorthChange }) {
   if (!netWorth) return null;
 
