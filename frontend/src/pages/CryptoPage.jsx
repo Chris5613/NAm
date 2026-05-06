@@ -440,12 +440,34 @@ const cryptoDailyPositive = dailyCryptoChange.change >= 0;
         <>
           {/* Net Worth + Chart */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Card className="border-border/40 bg-card" data-testid="crypto-net-worth">
-              <CardContent className="p-6">
-                <p className="text-sm text-muted-foreground mb-1">Net Worth</p>
-                <p className="font-mono text-4xl font-bold text-foreground">{formatCurrency(grandTotal)}</p>
-              </CardContent>
-            </Card>
+<Card className="border-border/40 bg-card" data-testid="crypto-net-worth">
+  <CardContent className="p-6">
+    <p className="text-sm text-muted-foreground mb-1">
+      Net Worth
+    </p>
+
+    <p className="font-mono text-4xl font-bold text-foreground">
+      {formatCurrency(grandTotal)}
+    </p>
+
+    <p
+      className={`text-sm font-mono mt-2 ${
+        cryptoDailyPositive
+          ? "text-emerald-500"
+          : "text-rose-500"
+      }`}
+    >
+      {cryptoDailyPositive ? "+" : "-"}
+      {formatCurrency(Math.abs(dailyCryptoChange.change))}
+      {" "}today (
+      {cryptoDailyPositive ? "+" : "-"}
+      {Math.abs(
+        dailyCryptoChange.percentChange
+      ).toFixed(2)}
+      %)
+    </p>
+  </CardContent>
+</Card>
             <Card className="border-border/40 bg-card">
               <CardContent className="p-4">
                 {liveHistory.length > 1 ? (
