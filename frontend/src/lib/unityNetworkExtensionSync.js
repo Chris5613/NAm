@@ -262,6 +262,61 @@ export function setAccountLabel(emailKey, label) {
   return { ok: true, label: trimmed || null };
 }
 
+// Consolidate any historical per-account Unity-Nodes sub-categories
+// (created by previous builds that labeled each account separately) into a
+// single "Unity Network" bucket on the Phone Farm project. Idempotent —
+// no-ops when there's nothing to merge.
+//
+// Matches: "Unity Network", "Unity Nodes", "Unity Nodes (any-email)" — all
+// case-insensitive. Their earned amounts are summed and rewritten as a
+// single { name: "Unity Network", earned: total } entry.
+export function consolidateUnityCategories() {
+  const config = storage.getUnityNetworkConfig();
+  const projectName = (config?.project_name || "Phone Farm").trim().toLowerCase();
+  const all = storage.getProjects() || [];
+  const project = all.find(
+    (p) => (p?.name || "").trim().toLowerCase() === projectName,
+  );
+  if (!project) return { ok: false, reason: "no_project" };
+
+  const categories = Array.isArray(project.categories) ? project.categories : [];
+  const isUnity = (name) => {
+    const n = (name || "").trim().toLowerCase();
+    return (
+      n === "unity network" ||
+      n === "unity nodes" ||
+      n.startsWith("unity nodes (") ||
+      n.startsWith("unity network (")
+    );
+  };
+  const unityCats = categories.filter((c) => isUnity(c?.name));
+  if (unityCats.length === 0) return { ok: true, merged: 0 };
+  // Already consolidated: exactly one entry, named "Unity Network".
+  if (
+    unityCats.length === 1 &&
+    (unityCats[0].name || "").trim() === "Unity Network"
+  ) {
+    return { ok: true, merged: 0 };
+  }
+
+  const totalEarned = unityCats.reduce(
+    (sum, c) => sum + (Number(c?.earned) || 0),
+    0,
+  );
+  const otherCats = categories.filter((c) => !isUnity(c?.name));
+  const merged = [
+    ...otherCats,
+    { name: "Unity Network", earned: Number(totalEarned.toFixed(6)) },
+  ];
+
+  const next = all.map((p) =>
+    p.id === project.id ? { ...p, categories: merged } : p,
+  );
+  storage.setProjects(next);
+  window.dispatchEvent(new CustomEvent("unity-network-sync-complete"));
+  return { ok: true, merged: unityCats.length, total: totalEarned };
+}
+
 // Apply an extension payload to the Unity Network / Phone Farm tracking.
 //
 // Strategy:
@@ -391,16 +446,20 @@ async function applyPayload(payload, { allowAutoConfigure = false } = {}) {
     return { applied: true, action: "withdrawal", delta_usd: delta, txn: null };
   }
 
-  // delta > 0 → credit it. The label includes the email so sub-category
-  // breakdowns split per account.
-  const accountLabel = payload.email
-    ? `Unity Nodes (${payload.email})`
-    : "Unity Nodes";
+  // delta > 0 → credit it. We always tag the txn with a single "Unity
+  // Network" sub-category label so the Phone Farm breakdown shows ONE
+  // consolidated line ("Unity Network · $X") rather than one entry per
+  // account email. Per-account attribution still lives on the card itself.
   const result = await applyUnityNetworkBalanceUpdate({
     newBalanceUsd: aggregatedLifetime,
     action: "earning",
-    label: accountLabel,
+    label: "Unity Network",
   });
+
+  // Best-effort: clean up any historical per-account category buckets
+  // ("Unity Nodes (foo@bar)") that older builds wrote to the Phone Farm
+  // project. Idempotent — only does work when something needs merging.
+  try { consolidateUnityCategories(); } catch (e) { /* non-fatal */ }
 
   accounts[emailKey] = {
     ...accounts[emailKey],

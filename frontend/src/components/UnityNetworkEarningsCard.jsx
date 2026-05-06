@@ -14,6 +14,7 @@ import {
   removeAccount,
   clearAllAccounts,
   setAccountLabel,
+  consolidateUnityCategories,
 } from "@/lib/unityNetworkExtensionSync";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -106,6 +107,20 @@ export default function UnityNetworkEarningsCard() {
       }
     });
     return unsub;
+  }, []);
+
+  // One-shot historical-categories consolidation on mount. Older builds
+  // wrote a separate `Unity Nodes ([email protected])` sub-category per Unity Nodes
+  // account on the Phone Farm project. This rolls them all up into a single
+  // `Unity Network` line. Idempotent — does nothing once consolidated.
+  useEffect(() => {
+    try {
+      const result = consolidateUnityCategories();
+      if (result?.ok && result.merged > 1) {
+        // Trigger a refresh of any project-list views that are listening.
+        window.dispatchEvent(new CustomEvent("unity-network-sync-complete"));
+      }
+    } catch { /* non-fatal */ }
   }, []);
 
   const isConfigured = !!(config?.enabled);
