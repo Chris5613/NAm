@@ -363,7 +363,11 @@ useEffect(() => {
           </TabsList>
           <TabsContent value={activeTab}>
             {activeTab === "crypto" && (
-              <CryptoBreakdown key="crypto" defaultOpen={true} />
+<CryptoBreakdown
+  key="all-crypto"
+  defaultOpen={false}
+  dailyChange={dailyCategoryChanges?.crypto || 0}
+/>
             )}
             {activeTab === "stocks" && (
               <AssetBreakdown category="stocks" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
@@ -381,7 +385,11 @@ useEffect(() => {
               <div className="space-y-4">
                 {sortedAllSections.map((section) => {
                   if (section.kind === "crypto") {
-                    return <CryptoBreakdown key="all-crypto" defaultOpen={false} />;
+<CryptoBreakdown
+  key="crypto"
+  defaultOpen={true}
+  dailyChange={dailyCategoryChanges?.crypto || 0}
+/>
                   }
                   return (
                     <AssetBreakdown

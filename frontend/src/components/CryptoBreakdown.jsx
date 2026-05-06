@@ -23,7 +23,7 @@ function formatCurrency(v) {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(v);
 }
 
-export default function CryptoBreakdown({ defaultOpen = false }) {
+export default function CryptoBreakdown({ defaultOpen = false, dailyChange = 0 }) {
   const [cache, setCache] = useState(null);
   const [loading, setLoading] = useState(true);
   const [cryptoOpen, setCryptoOpen] = useState(defaultOpen);
@@ -92,10 +92,22 @@ export default function CryptoBreakdown({ defaultOpen = false }) {
                 <p className="text-xs text-muted-foreground mt-0.5">{chains.length} network{chains.length === 1 ? "" : "s"}</p>
               </div>
             </div>
-            <div className="text-right min-w-[120px]">
-              <p className="text-xs text-muted-foreground">Total</p>
-              <p className="font-mono text-base font-bold text-foreground">{formatCurrency(total)}</p>
-            </div>
+<div className="text-right min-w-[120px]">
+  <p className="text-xs text-muted-foreground">Total</p>
+
+  <p className="font-mono text-base font-bold text-foreground">
+    {formatCurrency(total)}
+  </p>
+
+  <p
+    className={`text-xs font-mono mt-1 ${
+      dailyChange >= 0 ? "text-emerald-500" : "text-rose-500"
+    }`}
+  >
+    {dailyChange >= 0 ? "+" : "-"}
+    {formatCurrency(Math.abs(dailyChange))} today
+  </p>
+</div>
           </div>
         </CardContent>
       </Card>
