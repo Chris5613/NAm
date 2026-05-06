@@ -1,6 +1,15 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, Wallet } from "lucide-react";
 
+function formatCurrency(value) {
+  if (value === undefined || value === null) return "$0.00";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(value);
+}
+
 export default function NetWorthHero({ netWorth, dailyNetWorthChange }) {
   if (!netWorth) return null;
 
