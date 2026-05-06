@@ -44,6 +44,7 @@ export default function AssetBreakdown({
   onUpdate,
   onDelete,
   defaultOpen = false,
+  dailyChange,
   emptyMessage,
 }) {
   const meta = CATEGORY_META[category] || CATEGORY_META.cash;
@@ -89,10 +90,22 @@ export default function AssetBreakdown({
                 <p className="text-xs text-muted-foreground mt-0.5">No entries yet</p>
               </div>
             </div>
-            <div className="text-right min-w-[120px]">
-              <p className="text-xs text-muted-foreground">Total</p>
-              <p className="font-mono text-base font-bold text-foreground">{formatCurrency(0)}</p>
-            </div>
+<div className="text-right min-w-[120px]">
+  <p className="text-xs text-muted-foreground">Total</p>
+
+  <p className="font-mono text-base font-bold text-foreground">
+    {formatCurrency(0)}
+  </p>
+
+  <p
+    className={`text-xs font-mono mt-1 ${
+      dailyChange >= 0 ? "text-emerald-500" : "text-rose-500"
+    }`}
+  >
+    {dailyChange >= 0 ? "+" : "-"}
+    {formatCurrency(Math.abs(dailyChange))} today
+  </p>
+</div>
           </div>
         </CardContent>
       </Card>

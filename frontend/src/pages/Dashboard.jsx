@@ -13,6 +13,49 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RefreshCw, Plus, Camera, Radio } from "lucide-react";
 
 const DAILY_BASELINE_KEY = "daily_net_worth_baseline_pst";
+const DAILY_CATEGORY_BASELINE_KEY = "daily_category_baseline_pst";
+
+function getCategoryDailyChanges(breakdown) {
+  const todayKey = getPstDateKey();
+
+  const saved = JSON.parse(
+    localStorage.getItem(DAILY_CATEGORY_BASELINE_KEY) || "null"
+  );
+
+  if (!saved || saved.dateKey !== todayKey) {
+    const baseline = {
+      stocks: breakdown?.stocks || 0,
+      crypto: breakdown?.crypto || 0,
+      cash: breakdown?.cash || 0,
+      other: breakdown?.other || 0,
+      debts: breakdown?.debts || 0,
+    };
+
+    localStorage.setItem(
+      DAILY_CATEGORY_BASELINE_KEY,
+      JSON.stringify({
+        dateKey: todayKey,
+        baseline,
+      })
+    );
+
+    return {
+      stocks: 0,
+      crypto: 0,
+      cash: 0,
+      other: 0,
+      debts: 0,
+    };
+  }
+
+  return {
+    stocks: (breakdown?.stocks || 0) - (saved.baseline.stocks || 0),
+    crypto: (breakdown?.crypto || 0) - (saved.baseline.crypto || 0),
+    cash: (breakdown?.cash || 0) - (saved.baseline.cash || 0),
+    other: (breakdown?.other || 0) - (saved.baseline.other || 0),
+    debts: (breakdown?.debts || 0) - (saved.baseline.debts || 0),
+  };
+}
 
 function getPstDateKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -114,6 +157,7 @@ export default function Dashboard() {
   const [activeTab, setActiveTab] = useState("all");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [dailyNetWorthChange, setDailyNetWorthChange] = useState(null);
+  const [dailyCategoryChanges, setDailyCategoryChanges] = useState(null);
  
   // Persist liveHistory whenever it changes (capped to last N points).
   useEffect(() => {
@@ -131,6 +175,9 @@ const fetchData = useCallback(async () => {
     const cryptoTotal = Number(cryptoCache.total) || 0;
 
     const calculatedNetWorth = calculateNetWorth(assets, cryptoTotal);
+    const categoryChanges = getCategoryDailyChanges(
+  calculatedNetWorth.breakdown
+);
 
     const dailyChange = getDailyNetWorthChange(
   calculatedNetWorth.total_net_worth
@@ -141,6 +188,7 @@ const fetchData = useCallback(async () => {
     setAssets(assets);
     setNetWorth(calculatedNetWorth);
     setDailyNetWorthChange(dailyChange);
+    setDailyCategoryChanges(categoryChanges);
     setHistory(history);
     setLastUpdated(new Date());
 
@@ -343,6 +391,7 @@ useEffect(() => {
                       onUpdate={handleAssetUpdated}
                       onDelete={handleAssetDeleted}
                       defaultOpen={false}
+                      dailyChange={dailyCategoryChanges?.[section.kind] || 0}
                     />
                   );
                 })}
