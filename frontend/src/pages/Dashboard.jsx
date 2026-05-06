@@ -162,9 +162,15 @@ const fetchData = useCallback(async () => {
   }
 }, []);
 
-  useEffect(() => {
+useEffect(() => {
+  fetchData();
+
+  const interval = setInterval(() => {
     fetchData();
-  }, [fetchData]);
+  }, 10 * 60 * 1000); // 10 minutes
+
+  return () => clearInterval(interval);
+}, [fetchData]);
 
 
   const handleSnapshot = async () => {
@@ -278,7 +284,7 @@ const fetchData = useCallback(async () => {
             <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
             Add Asset
           </Button>
-        </div>
+        </div>fetchData
       </div>
 
       {/* Net Worth Hero + Charts */}
