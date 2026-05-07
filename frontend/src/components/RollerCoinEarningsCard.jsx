@@ -36,7 +36,6 @@ import {
   installRollerCoinExtensionListener,
   getRollerCoinExtensionState,
   syncRollerCoinFromExtensionNow,
-  onRollerCoinExtensionApply,
 } from "@/lib/rollercoinExtensionSync";
 
 const ROLLERCOIN_ICON = "https://rollercoin.com/static/img/logo-icon.svg";
@@ -234,7 +233,7 @@ const handleManualExtensionSync = async () => {
                       {hasExtensionData && (
                         <>
                           <span className="mx-2">·</span>
-                          extension: {formatRelativeTime(extPayload.syncedAt)}
+                          extension: {formatRelativeTime(extPayload.synced_at)}
                         </>
                       )}
                     </>
@@ -304,7 +303,7 @@ const handleManualExtensionSync = async () => {
                   Lifetime
                 </p>
                 <p className="font-mono text-base font-medium text-foreground">
-                  {formatTrx(extPayload.totalTrx)}
+                  {formatTrx(extPayload.total_trx)}
                 </p>
               </div>
 
@@ -322,7 +321,7 @@ const handleManualExtensionSync = async () => {
                   Last push
                 </p>
                 <p className="font-mono text-sm font-medium text-foreground">
-                  {formatRelativeTime(extPayload.syncedAt)}
+                  formatRelativeTime(extPayload.synced_at)
                 </p>
               </div>
             </div>

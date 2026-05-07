@@ -1,7 +1,6 @@
 // RollerCoin Chrome-extension → Dashboard bridge.
 //
 // Protocol:
-//
 //   ext → app: { source: "rollercoin-ext", type: "ROLLERCOIN_PUSH", payload: {...} }
 //   ext → app: { source: "rollercoin-ext", type: "READY" }
 //   app → ext: { source: "rollercoin-app", type: "REQUEST_LATEST" }
@@ -16,6 +15,7 @@ const MSG_READY = "READY";
 const MSG_REQUEST = "REQUEST_LATEST";
 
 const STORAGE_KEY = "rollercoin:extension-state";
+const AMOUNT_EPSILON = 0.00001;
 
 function defaultState() {
   return {
@@ -75,26 +75,24 @@ function normalizePayload(payload) {
   if (!payload || typeof payload !== "object") return null;
 
   return {
+    ...payload,
     total_trx: pickNumber(
       payload.total_trx ??
         payload.totalTrx ??
         payload.total_income_trx ??
         payload.totalIncomeTrx
     ),
-
     today_trx: pickNumber(
       payload.today_trx ??
         payload.todayTrx ??
         payload.today_income_trx ??
         payload.todayIncomeTrx
     ),
-
     balance_trx: pickNumber(
       payload.balance_trx ??
         payload.balanceTrx ??
         payload.balance
     ),
-
     synced_at:
       payload.synced_at ||
       payload.syncedAt ||
@@ -116,33 +114,28 @@ async function applyPayload(payload) {
   const nowIso = new Date().toISOString();
   const incomingSyncedAt = normalized.synced_at;
 
-  // Idempotency check — prevent double-applying the same payload
+  // Always update UI snapshot first, even if this payload was already applied.
+  setRollerCoinExtensionState({
+    extension_detected: true,
+    last_seen_at: nowIso,
+    last_synced_at: incomingSyncedAt,
+    last_payload: normalized,
+    total_trx: normalized.total_trx,
+    today_trx: normalized.today_trx,
+    balance_trx: normalized.balance_trx,
+  });
+
+  // Prevent double-adding the same extension payload as earnings.
   if (
     state.last_applied_synced_at &&
     incomingSyncedAt <= state.last_applied_synced_at
   ) {
-    // Refresh seen_at but don't apply again
-    setRollerCoinExtensionState({
-      last_seen_at: nowIso,
-    });
     return {
       applied: false,
       reason: "already_applied",
       payload: normalized,
     };
   }
-
-  // Always update the snapshot fields
-  setRollerCoinExtensionState({
-    extension_detected: true,
-    last_seen_at: nowIso,
-    last_synced_at: normalized.synced_at,
-    last_payload: normalized,
-
-    total_trx: normalized.total_trx,
-    today_trx: normalized.today_trx,
-    balance_trx: normalized.balance_trx,
-  });
 
   const config = storage.getRollerCoinConfig?.();
 
@@ -160,7 +153,7 @@ async function applyPayload(payload) {
 
   let action = "no_change";
 
-  if (Math.abs(delta) < 0.00001) {
+  if (Math.abs(delta) < AMOUNT_EPSILON) {
     action = "no_change";
   } else if (delta > 0) {
     action = "earning";
@@ -174,7 +167,6 @@ async function applyPayload(payload) {
     label: "RollerCoin",
   });
 
-  // Mark as applied
   setRollerCoinExtensionState({
     last_applied_synced_at: incomingSyncedAt,
     last_applied_received_at: nowIso,
@@ -210,12 +202,13 @@ export function requestLatestRollerCoinFromExtension() {
 let listenerInstalled = false;
 const subscribers = new Set();
 
-// Serialization queue — prevents concurrent applies from interleaving
 let applyChain = Promise.resolve();
+
 function enqueueApply(payload) {
   applyChain = applyChain
     .catch(() => null)
     .then(() => applyPayload(payload));
+
   return applyChain;
 }
 
@@ -272,7 +265,6 @@ export function installRollerCoinExtensionListener() {
         }
 
         const result = await enqueueApply(data.payload);
-
         notifySubscribers(result, data.payload);
       } catch (err) {
         console.warn("Failed to apply RollerCoin extension push:", err);
@@ -351,7 +343,6 @@ export function syncRollerCoinFromExtensionNow({ timeoutMs = 4000 } = {}) {
     );
 
     window.addEventListener("message", handler);
-
     requestLatestRollerCoinFromExtension();
   });
 }
