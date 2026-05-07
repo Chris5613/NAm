@@ -25,7 +25,6 @@ function defaultState() {
     last_applied_synced_at: null,
     last_applied_received_at: null,
     last_payload: null,
-
     total_trx: 0,
     today_trx: 0,
     balance_trx: 0,
@@ -101,7 +100,11 @@ function normalizePayload(payload) {
 }
 
 async function applyPayload(payload) {
+  console.log("[RC APP] applyPayload raw payload", payload);
+
   const normalized = normalizePayload(payload);
+
+  console.log("[RC APP] applyPayload normalized", normalized);
 
   if (!normalized) {
     return {
@@ -114,7 +117,6 @@ async function applyPayload(payload) {
   const nowIso = new Date().toISOString();
   const incomingSyncedAt = normalized.synced_at;
 
-  // Always update UI snapshot first, even if this payload was already applied.
   setRollerCoinExtensionState({
     extension_detected: true,
     last_seen_at: nowIso,
@@ -125,11 +127,15 @@ async function applyPayload(payload) {
     balance_trx: normalized.balance_trx,
   });
 
-  // Prevent double-adding the same extension payload as earnings.
   if (
     state.last_applied_synced_at &&
     incomingSyncedAt <= state.last_applied_synced_at
   ) {
+    console.warn("[RC APP] already applied payload", {
+      incomingSyncedAt,
+      last_applied_synced_at: state.last_applied_synced_at,
+    });
+
     return {
       applied: false,
       reason: "already_applied",
@@ -139,7 +145,11 @@ async function applyPayload(payload) {
 
   const config = storage.getRollerCoinConfig?.();
 
+  console.log("[RC APP] RollerCoin config", config);
+
   if (!config?.enabled) {
+    console.warn("[RC APP] tracking disabled");
+
     return {
       applied: false,
       reason: "tracking_disabled",
@@ -161,11 +171,20 @@ async function applyPayload(payload) {
     action = "withdrawal";
   }
 
+  console.log("[RC APP] applying balance update", {
+    baseline,
+    nextBalance,
+    delta,
+    action,
+  });
+
   const result = await applyRollerCoinBalanceUpdate({
     newBalance: nextBalance,
     action,
     label: "RollerCoin",
   });
+
+  console.log("[RC APP] applyRollerCoinBalanceUpdate result", result);
 
   setRollerCoinExtensionState({
     last_applied_synced_at: incomingSyncedAt,
@@ -184,6 +203,8 @@ async function applyPayload(payload) {
 
 export function requestLatestRollerCoinFromExtension() {
   try {
+    console.log("[RC APP] Sending REQUEST_LATEST");
+
     window.postMessage(
       {
         source: APP_SOURCE,
@@ -194,7 +215,7 @@ export function requestLatestRollerCoinFromExtension() {
 
     return true;
   } catch (err) {
-    console.warn("requestLatestRollerCoinFromExtension failed:", err);
+    console.warn("[RC APP] requestLatestRollerCoinFromExtension failed:", err);
     return false;
   }
 }
@@ -205,8 +226,13 @@ const subscribers = new Set();
 let applyChain = Promise.resolve();
 
 function enqueueApply(payload) {
+  console.log("[RC APP] enqueueApply", payload);
+
   applyChain = applyChain
-    .catch(() => null)
+    .catch((err) => {
+      console.warn("[RC APP] previous apply failed", err);
+      return null;
+    })
     .then(() => applyPayload(payload));
 
   return applyChain;
@@ -218,28 +244,42 @@ export function onRollerCoinExtensionApply(cb) {
 }
 
 function notifySubscribers(result, payload) {
+  console.log("[RC APP] notifySubscribers", { result, payload });
+
   for (const cb of subscribers) {
     try {
       cb(result, payload);
     } catch (err) {
-      console.warn("RollerCoin subscriber threw:", err);
+      console.warn("[RC APP] RollerCoin subscriber threw:", err);
     }
   }
 }
 
 export function installRollerCoinExtensionListener() {
-  if (listenerInstalled) return;
+  if (listenerInstalled) {
+    console.log("[RC APP] listener already installed");
+    return;
+  }
+
   listenerInstalled = true;
+  console.log("[RC APP] installing RollerCoin extension listener");
 
   const onMessage = async (event) => {
-    if (event.origin !== window.location.origin) return;
-
     const data = event?.data;
 
+    console.log("[RC APP] message received", {
+      origin: event.origin,
+      sameOrigin: event.origin === window.location.origin,
+      data,
+    });
+
+    if (event.origin !== window.location.origin) return;
     if (!data || typeof data !== "object") return;
     if (data.source !== EXT_SOURCE) return;
 
     if (data.type === MSG_READY) {
+      console.log("[RC APP] READY received");
+
       setRollerCoinExtensionState({
         extension_detected: true,
         last_seen_at: new Date().toISOString(),
@@ -250,10 +290,14 @@ export function installRollerCoinExtensionListener() {
     }
 
     if (data.type === MSG_PUSH) {
+      console.log("[RC APP] PUSH received", data.payload);
+
       try {
         const state = getRollerCoinExtensionState();
 
         if (state.auto_sync_enabled === false) {
+          console.warn("[RC APP] auto sync off");
+
           notifySubscribers(
             {
               applied: false,
@@ -267,7 +311,7 @@ export function installRollerCoinExtensionListener() {
         const result = await enqueueApply(data.payload);
         notifySubscribers(result, data.payload);
       } catch (err) {
-        console.warn("Failed to apply RollerCoin extension push:", err);
+        console.warn("[RC APP] Failed to apply RollerCoin extension push:", err);
 
         notifySubscribers(
           {
@@ -285,6 +329,8 @@ export function installRollerCoinExtensionListener() {
 }
 
 export function syncRollerCoinFromExtensionNow({ timeoutMs = 4000 } = {}) {
+  console.log("[RC APP] syncRollerCoinFromExtensionNow start");
+
   return new Promise((resolve) => {
     let settled = false;
 
@@ -294,13 +340,22 @@ export function syncRollerCoinFromExtensionNow({ timeoutMs = 4000 } = {}) {
       settled = true;
       window.removeEventListener("message", handler);
       clearTimeout(timer);
+
+      console.log("[RC APP] syncRollerCoinFromExtensionNow finish", result);
+
       resolve(result);
     };
 
     const handler = async (event) => {
-      if (event.origin !== window.location.origin) return;
-
       const data = event?.data;
+
+      console.log("[RC APP] sync handler received", {
+        origin: event.origin,
+        sameOrigin: event.origin === window.location.origin,
+        data,
+      });
+
+      if (event.origin !== window.location.origin) return;
 
       if (!data || data.source !== EXT_SOURCE || data.type !== MSG_PUSH) {
         return;
@@ -333,14 +388,14 @@ export function syncRollerCoinFromExtensionNow({ timeoutMs = 4000 } = {}) {
       }
     };
 
-    const timer = setTimeout(
-      () =>
-        finish({
-          ok: false,
-          reason: "timeout",
-        }),
-      Math.max(500, timeoutMs)
-    );
+    const timer = setTimeout(() => {
+      console.warn("[RC APP] sync timed out");
+
+      finish({
+        ok: false,
+        reason: "timeout",
+      });
+    }, Math.max(500, timeoutMs));
 
     window.addEventListener("message", handler);
     requestLatestRollerCoinFromExtension();
