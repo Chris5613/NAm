@@ -135,8 +135,19 @@ const handleManualExtensionSync = async () => {
     const result =
       await syncRollerCoinFromExtensionNow();
 
+    console.log("[RC CARD] sync result", result);
+
     if (!result.ok) {
-      toast.error("Extension sync failed");
+      toast.error(
+        `Extension sync failed: ${
+          result.reason || result.error || "unknown"
+        }`
+      );
+      return;
+    }
+
+    if (result.reason === "already_applied") {
+      toast.success("RollerCoin already synced");
       return;
     }
 
@@ -285,18 +296,6 @@ const handleManualExtensionSync = async () => {
 
           {hasExtensionData && (
             <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                  <Zap className="w-2.5 h-2.5 text-violet-400" strokeWidth={2} />
-                  Today's earnings
-                </p>
-                <p className="font-mono text-lg font-medium text-emerald-400">
-                  {formatTrx(todayTrx)}
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
-                  {extPayload.to}
-                </p>
-              </div>
 
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -321,7 +320,7 @@ const handleManualExtensionSync = async () => {
                   Last push
                 </p>
                 <p className="font-mono text-sm font-medium text-foreground">
-                  formatRelativeTime(extPayload.synced_at)
+                  {formatRelativeTime(extPayload.synced_at)}
                 </p>
               </div>
             </div>

@@ -355,23 +355,7 @@ export default function UnityNetworkEarningsCard() {
               className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-4 gap-3"
               data-testid="unity-network-extension-panel"
             >
-              <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
-                  <Zap className="w-2.5 h-2.5 text-violet-400" strokeWidth={2} />
-                  Today's earnings
-                </p>
-                <p
-                  className={`font-mono text-lg font-medium ${showTodayTile ? "text-emerald-400" : "text-muted-foreground"}`}
-                  data-testid="unity-network-today-usd"
-                >
-                  {showTodayTile ? formatUsd(todayUsd) : "—"}
-                </p>
-                {extState?.last_today_date && (
-                  <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
-                    {extState.last_today_date}
-                  </p>
-                )}
-              </div>
+              
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Lifetime</p>
                 <p className="font-mono text-base font-medium text-foreground">
