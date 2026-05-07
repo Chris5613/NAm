@@ -32,6 +32,12 @@ import {
   Zap,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  installRollerCoinExtensionListener,
+  getRollerCoinExtensionState,
+  syncRollerCoinFromExtensionNow,
+  onRollerCoinExtensionApply,
+} from "@/lib/rollercoinExtensionSync";
 
 const ROLLERCOIN_ICON = "https://rollercoin.com/static/img/logo-icon.svg";
 
@@ -71,6 +77,14 @@ export default function RollerCoinEarningsCard() {
   const [extPayload, setExtPayload] = useState(null);
   const [extSyncing, setExtSyncing] = useState(false);
   const tickRef = useRef(null);
+  
+  const [extState, setExtState] = useState(() =>
+  getRollerCoinExtensionState()
+);
+
+useEffect(() => {
+  installRollerCoinExtensionListener();
+}, []);
 
   useEffect(() => {
     tickRef.current = setInterval(() => setTickKey((k) => k + 1), 60_000);
@@ -92,41 +106,50 @@ export default function RollerCoinEarningsCard() {
     };
   }, []);
 
-  useEffect(() => {
-    const refresh = () => setConfig(storage.getRollerCoinConfig());
+useEffect(() => {
+  const refresh = () => {
+    const next = getRollerCoinExtensionState();
 
-    window.addEventListener("focus", refresh);
-    window.addEventListener("storage", refresh);
-    window.addEventListener("rollercoin-sync-complete", refresh);
+    setExtState(next);
+    setExtPayload(next.last_payload || null);
+  };
 
-    return () => {
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("storage", refresh);
-      window.removeEventListener("rollercoin-sync-complete", refresh);
-    };
-  }, []);
+  refresh();
 
-  useEffect(() => {
-    const handleRollerCoinExtensionSync = async (event) => {
-      const data = event.data;
+  window.addEventListener(
+    "rollercoin-extension-update",
+    refresh
+  );
 
-      if (
-        !data ||
-        data.source !== "rollercoin-extension" ||
-        data.type !== "ROLLERCOIN_SYNC"
-      ) {
-        return;
-      }
+  return () => {
+    window.removeEventListener(
+      "rollercoin-extension-update",
+      refresh
+    );
+  };
+}, []);
 
-      setExtPayload(data.payload);
-    };
+const handleManualExtensionSync = async () => {
+  setExtSyncing(true);
 
-    window.addEventListener("message", handleRollerCoinExtensionSync);
+  try {
+    const result =
+      await syncRollerCoinFromExtensionNow();
 
-    return () => {
-      window.removeEventListener("message", handleRollerCoinExtensionSync);
-    };
-  }, []);
+    if (!result.ok) {
+      toast.error("Extension sync failed");
+      return;
+    }
+
+    toast.success("RollerCoin synced from extension");
+  } catch (err) {
+    toast.error(
+      err?.message || "RollerCoin extension sync failed"
+    );
+  } finally {
+    setExtSyncing(false);
+  }
+};
 
   const isConfigured = !!config?.enabled;
   const stale = useMemo(() => isRollerCoinStale(config), [config, tickKey]);
@@ -136,25 +159,6 @@ export default function RollerCoinEarningsCard() {
   const todayTrx =
     extPayload?.rows?.find((r) => r.date === extPayload?.to)?.trx || 0;
 
-  const handleManualExtensionSync = async () => {
-    setExtSyncing(true);
-
-    try {
-      window.postMessage(
-        {
-          source: "rollercoin-dashboard",
-          type: "REQUEST_ROLLERCOIN_SYNC",
-        },
-        window.location.origin
-      );
-
-      toast.success("Requested RollerCoin sync from extension");
-    } catch (err) {
-      toast.error(err?.message || "RollerCoin extension sync failed");
-    } finally {
-      setTimeout(() => setExtSyncing(false), 1000);
-    }
-  };
 
   return (
     <>
