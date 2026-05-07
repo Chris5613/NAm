@@ -114,13 +114,6 @@ const [extSyncing, setExtSyncing] = useState(false);
   const isConfigured = !!(config?.enabled);
   const stale = useMemo(() => isAcurastStale(config), [config, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const baselineUsd = (Number(config?.baseline_acu) || 0) * (Number(acuPrice) || 0);
-  const next = {
-  baseline_acu: Number(bn.toFixed(6)),
-  project_name: (projectName || "Phone Farm").trim() || "Phone Farm",
-  enabled,
-  created_at: config?.created_at || new Date().toISOString(),
-  last_updated_at: config?.last_updated_at || new Date().toISOString(),
-};
 
   const handleManualExtensionSync = async () => {
   setExtSyncing(true);
@@ -373,12 +366,13 @@ function AcurastConfigDialog({ open, onOpenChange, config, onSaved }) {
       toast.error("Baseline must be a non-negative number");
       return;
     }
-    const next = {
-      baseline_acu: Number(bn.toFixed(6)),
-      project_name: (projectName || "Phone Farm").trim() || "Phone Farm",
-      enabled,
-      last_updated_at: config?.last_updated_at || new Date().toISOString(),
-    };
+  const next = {
+  baseline_acu: Number(bn.toFixed(6)),
+  project_name: (projectName || "Phone Farm").trim() || "Phone Farm",
+  enabled,
+  created_at: config?.created_at || new Date().toISOString(),
+  last_updated_at: config?.last_updated_at || new Date().toISOString(),
+};
     storage.setAcurastConfig(next);
     toast.success("Acurast configuration saved");
     onSaved(next);
