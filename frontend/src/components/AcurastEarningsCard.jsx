@@ -160,6 +160,9 @@ const extPayload = extState?.last_payload;
                 <Smartphone className="w-5 h-5 text-cyan-400" strokeWidth={1.5} />
               </div>
               <div>
+                <h3 className="text-sm font-medium text-foreground">
+  Acurast ACU Earnings
+</h3>
 <div className="flex items-center gap-2 flex-wrap">
   {isConfigured ? (
     <span
@@ -257,7 +260,7 @@ const extPayload = extState?.last_payload;
   <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-2 gap-3">
     <div>
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-        Extension balance
+        Lifetime balance
       </p>
       <p className="font-mono text-base font-medium text-foreground">
         {formatAcu(extPayload.balance_acu)}
