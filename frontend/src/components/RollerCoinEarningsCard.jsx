@@ -78,6 +78,50 @@ export default function RollerCoinEarningsCard() {
     };
   }, []);
 
+  useEffect(() => {
+  const handleRollerCoinExtensionSync = async (event) => {
+    const data = event.data;
+
+    if (
+      !data ||
+      data.source !== "rollercoin-extension" ||
+      data.type !== "ROLLERCOIN_SYNC"
+    ) {
+      return;
+    }
+
+    const payload = data.payload;
+    const totalTrx = Number(payload?.totalTrx) || 0;
+
+    if (totalTrx <= 0) return;
+
+    try {
+      const result = await applyRollerCoinBalanceUpdate({
+        newBalance: totalTrx,
+        action: "earning",
+        trxPriceOverride: trxPrice > 0 ? trxPrice : null,
+        label: "RollerCoin API Sync",
+      });
+
+      setConfig(storage.getRollerCoinConfig());
+
+      if (result?.action === "earning") {
+        toast.success(
+          `RollerCoin synced: +${result.delta_trx.toFixed(4)} TRX`
+        );
+      }
+    } catch (err) {
+      toast.error(err?.message || "RollerCoin extension sync failed");
+    }
+  };
+
+  window.addEventListener("message", handleRollerCoinExtensionSync);
+
+  return () => {
+    window.removeEventListener("message", handleRollerCoinExtensionSync);
+  };
+}, [trxPrice]);
+
   const isConfigured = !!(config?.enabled);
   const stale = useMemo(() => isRollerCoinStale(config), [config, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const baselineUsd = (Number(config?.baseline_trx) || 0) * (Number(trxPrice) || 0);
