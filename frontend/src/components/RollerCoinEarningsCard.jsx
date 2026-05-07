@@ -11,10 +11,25 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 import {
-  RefreshCw, Settings, Gamepad2, CheckCircle2, AlertCircle, Clock, TrendingUp, ArrowDown, MinusCircle,
+  RefreshCw,
+  Settings,
+  Gamepad2,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  TrendingUp,
+  ArrowDown,
+  MinusCircle,
+  Plug,
+  Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -22,12 +37,19 @@ const ROLLERCOIN_ICON = "https://rollercoin.com/static/img/logo-icon.svg";
 
 function formatUsd(v) {
   const n = Number(v) || 0;
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  });
 }
 
 function formatTrx(v, digits = 4) {
   const n = Number(v) || 0;
-  return `${n.toLocaleString("en-US", { maximumFractionDigits: digits, minimumFractionDigits: Math.min(digits, 2) })} TRX`;
+  return `${n.toLocaleString("en-US", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: Math.min(digits, 2),
+  })} TRX`;
 }
 
 function formatRelativeTime(iso) {
@@ -46,31 +68,37 @@ export default function RollerCoinEarningsCard() {
   const [configOpen, setConfigOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
   const [tickKey, setTickKey] = useState(0);
+  const [extPayload, setExtPayload] = useState(null);
+  const [extSyncing, setExtSyncing] = useState(false);
   const tickRef = useRef(null);
 
-  // Minute ticker so "Last update: 4m ago" stays fresh and stale badge flips in real time.
   useEffect(() => {
     tickRef.current = setInterval(() => setTickKey((k) => k + 1), 60_000);
     return () => clearInterval(tickRef.current);
   }, []);
 
-  // Fetch TRX price once on mount and whenever the card gets focus.
   useEffect(() => {
     let cancelled = false;
+
     const pull = async () => {
       const p = await getTrxPrice();
       if (!cancelled) setTrxPrice(p);
     };
+
     pull();
-    return () => { cancelled = true; };
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Listen for state changes (other components, balance updates).
   useEffect(() => {
     const refresh = () => setConfig(storage.getRollerCoinConfig());
+
     window.addEventListener("focus", refresh);
     window.addEventListener("storage", refresh);
     window.addEventListener("rollercoin-sync-complete", refresh);
+
     return () => {
       window.removeEventListener("focus", refresh);
       window.removeEventListener("storage", refresh);
@@ -79,52 +107,54 @@ export default function RollerCoinEarningsCard() {
   }, []);
 
   useEffect(() => {
-  const handleRollerCoinExtensionSync = async (event) => {
-    const data = event.data;
+    const handleRollerCoinExtensionSync = async (event) => {
+      const data = event.data;
 
-    if (
-      !data ||
-      data.source !== "rollercoin-extension" ||
-      data.type !== "ROLLERCOIN_SYNC"
-    ) {
-      return;
-    }
+      if (
+        !data ||
+        data.source !== "rollercoin-extension" ||
+        data.type !== "ROLLERCOIN_SYNC"
+      ) {
+        return;
+      }
 
-    const payload = data.payload;
-    const totalTrx = Number(payload?.totalTrx) || 0;
+      setExtPayload(data.payload);
+    };
 
-    if (totalTrx <= 0) return;
+    window.addEventListener("message", handleRollerCoinExtensionSync);
+
+    return () => {
+      window.removeEventListener("message", handleRollerCoinExtensionSync);
+    };
+  }, []);
+
+  const isConfigured = !!config?.enabled;
+  const stale = useMemo(() => isRollerCoinStale(config), [config, tickKey]);
+  const hasExtensionData = !!extPayload;
+  const baselineUsd = (Number(config?.baseline_trx) || 0) * (Number(trxPrice) || 0);
+
+  const todayTrx =
+    extPayload?.rows?.find((r) => r.date === extPayload?.to)?.trx || 0;
+
+  const handleManualExtensionSync = async () => {
+    setExtSyncing(true);
 
     try {
-      const result = await applyRollerCoinBalanceUpdate({
-        newBalance: totalTrx,
-        action: "earning",
-        trxPriceOverride: trxPrice > 0 ? trxPrice : null,
-        label: "RollerCoin API Sync",
-      });
+      window.postMessage(
+        {
+          source: "rollercoin-dashboard",
+          type: "REQUEST_ROLLERCOIN_SYNC",
+        },
+        window.location.origin
+      );
 
-      setConfig(storage.getRollerCoinConfig());
-
-      if (result?.action === "earning") {
-        toast.success(
-          `RollerCoin synced: +${result.delta_trx.toFixed(4)} TRX`
-        );
-      }
+      toast.success("Requested RollerCoin sync from extension");
     } catch (err) {
       toast.error(err?.message || "RollerCoin extension sync failed");
+    } finally {
+      setTimeout(() => setExtSyncing(false), 1000);
     }
   };
-
-  window.addEventListener("message", handleRollerCoinExtensionSync);
-
-  return () => {
-    window.removeEventListener("message", handleRollerCoinExtensionSync);
-  };
-}, [trxPrice]);
-
-  const isConfigured = !!(config?.enabled);
-  const stale = useMemo(() => isRollerCoinStale(config), [config, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
-  const baselineUsd = (Number(config?.baseline_trx) || 0) * (Number(trxPrice) || 0);
 
   return (
     <>
@@ -144,16 +174,20 @@ export default function RollerCoinEarningsCard() {
                 />
                 <Gamepad2 className="w-5 h-5 text-orange-400 hidden" strokeWidth={1.5} />
               </div>
+
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-foreground">RollerCoin TRX Earnings</p>
+                  <p className="text-sm font-medium text-foreground">
+                    RollerCoin TRX Earnings
+                  </p>
+
                   {isConfigured ? (
                     <span
                       className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono"
-                      title="Manual balance-delta tracking"
+                      title={hasExtensionData ? "Earnings auto-fetched by Chrome extension" : "Manual balance-delta tracking"}
                     >
                       <CheckCircle2 className="w-2.5 h-2.5" strokeWidth={2} />
-                      manual
+                      {hasExtensionData ? "auto-sync" : "manual"}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono">
@@ -161,10 +195,21 @@ export default function RollerCoinEarningsCard() {
                       not configured
                     </span>
                   )}
+
+                  {hasExtensionData && (
+                    <span
+                      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-mono"
+                      title="Chrome extension is the data source"
+                    >
+                      <Plug className="w-2.5 h-2.5" strokeWidth={2} />
+                      extension
+                    </span>
+                  )}
+
                   {isConfigured && stale && (
                     <span
                       className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 font-mono"
-                      title="Balance hasn't been updated in over 7 days — pop into RollerCoin and log your latest TRX"
+                      title="Balance hasn't been updated in over 7 days"
                       data-testid="rollercoin-stale-badge"
                     >
                       <Clock className="w-2.5 h-2.5" strokeWidth={2} />
@@ -172,21 +217,31 @@ export default function RollerCoinEarningsCard() {
                     </span>
                   )}
                 </div>
+
                 <p className="text-xs text-muted-foreground mt-0.5">
                   {isConfigured ? (
                     <>
-                      Project: <span className="font-mono text-foreground">{config.project_name || "RollerCoin"}</span>
+                      Project:{" "}
+                      <span className="font-mono text-foreground">
+                        {config.project_name || "RollerCoin"}
+                      </span>
                       <span className="mx-2">·</span>
                       last update: {formatRelativeTime(config.last_updated_at)}
+                      {hasExtensionData && (
+                        <>
+                          <span className="mx-2">·</span>
+                          extension: {formatRelativeTime(extPayload.syncedAt)}
+                        </>
+                      )}
                     </>
                   ) : (
-                    "Track TRX earned on RollerCoin. No API exists — enter your current balance periodically and we'll convert the delta into earnings."
+                    "Track TRX earned on RollerCoin. Configure manual tracking or sync from the extension."
                   )}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
@@ -197,6 +252,19 @@ export default function RollerCoinEarningsCard() {
                 <Settings className="w-4 h-4 mr-2" strokeWidth={1.5} />
                 {isConfigured ? "Edit" : "Configure"}
               </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleManualExtensionSync}
+                disabled={extSyncing}
+                className="border-violet-500/40 text-violet-300 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
+                data-testid="rollercoin-extension-sync-btn"
+              >
+                <Zap className={`w-4 h-4 mr-2 ${extSyncing ? "animate-pulse" : ""}`} strokeWidth={1.5} />
+                {extSyncing ? "Syncing…" : "Sync from extension"}
+              </Button>
+
               <Button
                 size="sm"
                 onClick={() => setUpdateOpen(true)}
@@ -212,22 +280,77 @@ export default function RollerCoinEarningsCard() {
             </div>
           </div>
 
+          {hasExtensionData && (
+            <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1">
+                  <Zap className="w-2.5 h-2.5 text-violet-400" strokeWidth={2} />
+                  Today's earnings
+                </p>
+                <p className="font-mono text-lg font-medium text-emerald-400">
+                  {formatTrx(todayTrx)}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-0.5 font-mono">
+                  {extPayload.to}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Lifetime
+                </p>
+                <p className="font-mono text-base font-medium text-foreground">
+                  {formatTrx(extPayload.totalTrx)}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Days loaded
+                </p>
+                <p className="font-mono text-base font-medium text-foreground">
+                  {extPayload.rows?.length || 0}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Last push
+                </p>
+                <p className="font-mono text-sm font-medium text-foreground">
+                  {formatRelativeTime(extPayload.syncedAt)}
+                </p>
+              </div>
+            </div>
+          )}
+
           {isConfigured && (
             <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Current balance</p>
-                <p className="font-mono text-base font-medium text-foreground" data-testid="rollercoin-baseline">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Current balance
+                </p>
+                <p
+                  className="font-mono text-base font-medium text-foreground"
+                  data-testid="rollercoin-baseline"
+                >
                   {formatTrx(config?.baseline_trx)}
                 </p>
               </div>
+
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">USD value (live)</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  USD value live
+                </p>
                 <p className="font-mono text-base font-medium text-emerald-400">
                   {trxPrice > 0 ? formatUsd(baselineUsd) : "—"}
                 </p>
               </div>
+
               <div>
-                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">TRX price</p>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  TRX price
+                </p>
                 <p className="font-mono text-base font-medium text-foreground">
                   {trxPrice > 0 ? `$${trxPrice.toFixed(4)}` : "—"}
                 </p>
