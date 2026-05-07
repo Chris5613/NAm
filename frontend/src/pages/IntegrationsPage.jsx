@@ -46,27 +46,29 @@ export default function IntegrationsPage() {
 
       {/* Integration cards. Each card is self-contained — config, status,
           manual sync, and (where relevant) a daily-history grid. */}
-      <div className="space-y-4">
-        <NosanaEarningsCard />
-        <RollerCoinEarningsCard />
-        <AcurastEarningsCard />
-        <UnityNetworkEarningsCard />
-        <GoMiningEarningsCard />
+<div className="space-y-4">
+  <NosanaEarningsCard />
+  <UnityNetworkEarningsCard />
+  <RollerCoinEarningsCard />
+  <AcurastEarningsCard />
+  {/* <GoMiningEarningsCard /> */}
 
-        {/* Custom integrations */}
-        {customIntegrations.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider pt-2">Custom Integrations</h2>
-            {customIntegrations.map((integration) => (
-              <CustomIntegrationCard
-                key={integration.id}
-                integration={integration}
-                onUpdated={refresh}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+  {/* Custom integrations */}
+  {customIntegrations.length > 0 && (
+    <div className="space-y-4">
+      <h2 className="text-sm font-medium text-muted-foreground uppercase tracking-wider pt-2">
+        Custom Integrations
+      </h2>
+      {customIntegrations.map((integration) => (
+        <CustomIntegrationCard
+          key={integration.id}
+          integration={integration}
+          onUpdated={refresh}
+        />
+      ))}
+    </div>
+  )}
+</div>
 
       <AddIntegrationDialog open={addOpen} onOpenChange={setAddOpen} onCreated={refresh} />
     </div>
