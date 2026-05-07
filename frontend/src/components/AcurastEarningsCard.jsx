@@ -114,6 +114,13 @@ const [extSyncing, setExtSyncing] = useState(false);
   const isConfigured = !!(config?.enabled);
   const stale = useMemo(() => isAcurastStale(config), [config, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const baselineUsd = (Number(config?.baseline_acu) || 0) * (Number(acuPrice) || 0);
+  const next = {
+  baseline_acu: Number(bn.toFixed(6)),
+  project_name: (projectName || "Phone Farm").trim() || "Phone Farm",
+  enabled,
+  created_at: config?.created_at || new Date().toISOString(),
+  last_updated_at: config?.last_updated_at || new Date().toISOString(),
+};
 
   const handleManualExtensionSync = async () => {
   setExtSyncing(true);
@@ -159,13 +166,6 @@ function getDaysTracked(startIso) {
 }
 
 const daysTracked = getDaysTracked(config?.created_at || config?.last_updated_at);
-const next = {
-  baseline_acu: Number(bn.toFixed(6)),
-  project_name: (projectName || "Phone Farm").trim() || "Phone Farm",
-  enabled,
-  created_at: config?.created_at || new Date().toISOString(),
-  last_updated_at: config?.last_updated_at || new Date().toISOString(),
-};
 const extPayload = extState?.last_payload;
 
   return (
@@ -390,6 +390,8 @@ function AcurastConfigDialog({ open, onOpenChange, config, onSaved }) {
     toast.success("Acurast tracking disabled");
     onSaved(next);
   };
+
+
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
