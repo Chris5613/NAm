@@ -18,6 +18,12 @@ import {
   TrendingUp, ArrowDown, MinusCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  installAcurastExtensionListener,
+  syncAcurastFromExtensionNow,
+  getAcurastExtensionState,
+} from "@/lib/acurastExtensionSync";
+import { Plug, Zap } from "lucide-react";
 
 function formatUsd(v) {
   const n = Number(v) || 0;
@@ -46,6 +52,11 @@ export default function AcurastEarningsCard() {
   const [updateOpen, setUpdateOpen] = useState(false);
   const [tickKey, setTickKey] = useState(0);
   const tickRef = useRef(null);
+  const [extState, setExtState] = useState(() =>
+  getAcurastExtensionState()
+);
+
+const [extSyncing, setExtSyncing] = useState(false);
 
   // Minute ticker so "Last update: 4m ago" stays fresh and the stale badge
   // flips in real time without needing a page reload.
@@ -53,6 +64,28 @@ export default function AcurastEarningsCard() {
     tickRef.current = setInterval(() => setTickKey((k) => k + 1), 60_000);
     return () => clearInterval(tickRef.current);
   }, []);
+
+  useEffect(() => {
+  installAcurastExtensionListener();
+
+  const refresh = () => {
+    setExtState(getAcurastExtensionState());
+  };
+
+  refresh();
+
+  window.addEventListener(
+    "acurast-extension-update",
+    refresh
+  );
+
+  return () => {
+    window.removeEventListener(
+      "acurast-extension-update",
+      refresh
+    );
+  };
+}, []);
 
   // Fetch ACU price once on mount.
   useEffect(() => {
@@ -82,6 +115,41 @@ export default function AcurastEarningsCard() {
   const stale = useMemo(() => isAcurastStale(config), [config, tickKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const baselineUsd = (Number(config?.baseline_acu) || 0) * (Number(acuPrice) || 0);
 
+  const handleManualExtensionSync = async () => {
+  setExtSyncing(true);
+
+  try {
+    const result =
+      await syncAcurastFromExtensionNow();
+
+    console.log("[ACU CARD] sync result", result);
+
+    if (!result.ok) {
+      toast.error(
+        `Extension sync failed: ${
+          result.reason || result.error || "unknown"
+        }`
+      );
+      return;
+    }
+
+    if (result.reason === "already_applied") {
+      toast.success("Acurast already synced");
+      return;
+    }
+
+    toast.success("Acurast synced from extension");
+  } catch (err) {
+    toast.error(
+      err?.message || "Acurast extension sync failed"
+    );
+  } finally {
+    setExtSyncing(false);
+  }
+};
+
+const extPayload = extState?.last_payload;
+
   return (
     <>
       <Card className="border-border/40 bg-card" data-testid="acurast-earnings-card">
@@ -92,23 +160,33 @@ export default function AcurastEarningsCard() {
                 <Smartphone className="w-5 h-5 text-cyan-400" strokeWidth={1.5} />
               </div>
               <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <p className="text-sm font-medium text-foreground">Acurast Phone Farm</p>
-                  {isConfigured ? (
-                    <span
-                      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono"
-                      title="Manual ACU balance-delta tracking"
-                    >
-                      <CheckCircle2 className="w-2.5 h-2.5" strokeWidth={2} />
-                      manual
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono">
-                      <AlertCircle className="w-2.5 h-2.5" strokeWidth={2} />
-                      not configured
-                    </span>
-                  )}
-                  {isConfigured && stale && (
+<div className="flex items-center gap-2 flex-wrap">
+  {isConfigured ? (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono"
+      title={extPayload ? "Balance auto-fetched by Chrome extension" : "Manual ACU balance-delta tracking"}
+    >
+      <CheckCircle2 className="w-2.5 h-2.5" strokeWidth={2} />
+      {extPayload ? "auto-sync" : "manual"}
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono">
+      <AlertCircle className="w-2.5 h-2.5" strokeWidth={2} />
+      not configured
+    </span>
+  )}
+
+  {extPayload && (
+    <span
+      className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 font-mono"
+      title="Chrome extension is the data source"
+    >
+      <Plug className="w-2.5 h-2.5" strokeWidth={2} />
+      extension
+    </span>
+  )}
+
+  {isConfigured && stale && (
                     <span
                       className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-orange-500/15 text-orange-400 font-mono"
                       title="Balance hasn't been updated in over 7 days — pop into Acurast and log your latest ACU"
@@ -125,6 +203,12 @@ export default function AcurastEarningsCard() {
                       Project: <span className="font-mono text-foreground">{config.project_name || "Phone Farm"}</span>
                       <span className="mx-2">·</span>
                       last update: {formatRelativeTime(config.last_updated_at)}
+{extPayload && (
+  <>
+    <span className="mx-2">·</span>
+    extension: {formatRelativeTime(extPayload.synced_at)}
+  </>
+)}
                     </>
                   ) : (
                     "Track ACU earned from Acurast Phone Farm. No public earnings API — enter your ACU balance periodically and we'll convert the delta into earnings at the live ACU price."
@@ -145,6 +229,17 @@ export default function AcurastEarningsCard() {
                 {isConfigured ? "Edit" : "Configure"}
               </Button>
               <Button
+  variant="outline"
+  size="sm"
+  onClick={handleManualExtensionSync}
+  disabled={extSyncing}
+  className="border-violet-500/40 text-violet-300 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
+  data-testid="acurast-extension-sync-btn"
+>
+  <Zap className={`w-4 h-4 mr-2 ${extSyncing ? "animate-pulse" : ""}`} strokeWidth={1.5} />
+  {extSyncing ? "Syncing…" : "Sync from extension"}
+</Button>
+              <Button
                 size="sm"
                 onClick={() => setUpdateOpen(true)}
                 disabled={!isConfigured}
@@ -158,6 +253,27 @@ export default function AcurastEarningsCard() {
               </Button>
             </div>
           </div>
+          {extPayload && (
+  <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-2 gap-3">
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        Extension balance
+      </p>
+      <p className="font-mono text-base font-medium text-foreground">
+        {formatAcu(extPayload.balance_acu)}
+      </p>
+    </div>
+
+    <div>
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        Last push
+      </p>
+      <p className="font-mono text-sm font-medium text-foreground">
+        {formatRelativeTime(extPayload.synced_at)}
+      </p>
+    </div>
+  </div>
+)}
 
           {isConfigured && (
             <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-3 gap-3">
