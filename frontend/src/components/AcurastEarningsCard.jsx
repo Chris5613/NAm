@@ -148,6 +148,24 @@ const [extSyncing, setExtSyncing] = useState(false);
   }
 };
 
+function getDaysTracked(startIso) {
+  if (!startIso) return 0;
+
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return 0;
+
+  const diffMs = Date.now() - start.getTime();
+  return Math.max(1, Math.floor(diffMs / 86_400_000) + 1);
+}
+
+const daysTracked = getDaysTracked(config?.created_at || config?.last_updated_at);
+const next = {
+  baseline_acu: Number(bn.toFixed(6)),
+  project_name: (projectName || "Phone Farm").trim() || "Phone Farm",
+  enabled,
+  created_at: config?.created_at || new Date().toISOString(),
+  last_updated_at: config?.last_updated_at || new Date().toISOString(),
+};
 const extPayload = extState?.last_payload;
 
   return (
@@ -161,7 +179,7 @@ const extPayload = extState?.last_payload;
               </div>
               <div>
                 <h3 className="text-sm font-medium text-foreground">
-  Acurast ACU Earnings
+  Acurast
 </h3>
 <div className="flex items-center gap-2 flex-wrap">
   {isConfigured ? (
@@ -257,7 +275,7 @@ const extPayload = extState?.last_payload;
             </div>
           </div>
           {extPayload && (
-  <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-2 gap-3">
+  <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-3 gap-3">
     <div>
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
         Lifetime balance
@@ -266,6 +284,14 @@ const extPayload = extState?.last_payload;
         {formatAcu(extPayload.balance_acu)}
       </p>
     </div>
+    <div>
+  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+    Days tracked
+  </p>
+  <p className="font-mono text-base font-medium text-foreground">
+    {daysTracked}
+  </p>
+</div>
 
     <div>
       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">

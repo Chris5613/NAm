@@ -192,7 +192,7 @@ const handleManualExtensionSync = async () => {
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <p className="text-sm font-medium text-foreground">
-                    RollerCoin TRX Earnings
+                    RollerCoin
                   </p>
 
                   {isConfigured ? (

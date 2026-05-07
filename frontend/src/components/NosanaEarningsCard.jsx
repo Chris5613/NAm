@@ -122,7 +122,7 @@ export default function NosanaEarningsCard() {
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-foreground">Nosana Node Earnings</p>
+                  <p className="text-sm font-medium text-foreground">Nosana </p>
                   {isConfigured ? (
                     <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 font-mono">
                       <CheckCircle2 className="w-2.5 h-2.5" strokeWidth={2} />
