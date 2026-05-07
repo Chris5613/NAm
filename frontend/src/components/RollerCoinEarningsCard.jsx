@@ -295,7 +295,7 @@ const handleManualExtensionSync = async () => {
           </div>
 
           {hasExtensionData && (
-            <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-3 gap-3">
 
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">

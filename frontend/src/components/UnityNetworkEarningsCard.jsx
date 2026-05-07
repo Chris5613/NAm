@@ -352,7 +352,7 @@ export default function UnityNetworkEarningsCard() {
               extension data yet so the card stays clean for manual-only users. */}
           {hasAnyExtensionData && (
             <div
-              className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-4 gap-3"
+              className="mt-4 pt-4 border-t border-border/30 grid grid-cols-2 sm:grid-cols-3 gap-3"
               data-testid="unity-network-extension-panel"
             >
               
