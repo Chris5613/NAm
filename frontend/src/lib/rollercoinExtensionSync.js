@@ -267,11 +267,12 @@ export function installRollerCoinExtensionListener() {
   const onMessage = async (event) => {
     const data = event?.data;
 
-    console.log("[RC APP] message received", {
-      origin: event.origin,
-      sameOrigin: event.origin === window.location.origin,
-      data,
-    });
+if (data?.source === EXT_SOURCE || data?.source === APP_SOURCE) {
+  console.log("[RC APP] message received", {
+    origin: event.origin,
+    data,
+  });
+}
 
     if (event.origin !== window.location.origin) return;
     if (!data || typeof data !== "object") return;
