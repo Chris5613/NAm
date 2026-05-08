@@ -39,9 +39,9 @@ function getMonthLabel(date = new Date()) {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
     month: "short",
+    year: "numeric",
   }).format(date);
 }
-
 function getCategoryDailyChanges(breakdown) {
   const todayKey = getPstDateKey();
 
@@ -140,22 +140,22 @@ function getMonthlyNetWorthHistory(currentNetWorth) {
   const monthLabel = getMonthLabel();
 
   const fallback = [
-    { monthKey: "2025-01", month: "Jan", value: 10800 },
-    { monthKey: "2025-02", month: "Feb", value: 10700 },
-    { monthKey: "2025-03", month: "Mar", value: 9900 },
-    { monthKey: "2025-04", month: "Apr", value: 9200 },
-    { monthKey: "2025-05", month: "May", value: 10900 },
-    { monthKey: "2025-06", month: "Jun", value: 9500 },
-    { monthKey: "2025-07", month: "Jul", value: 11600 },
-    { monthKey: "2025-08", month: "Aug", value: 13100 },
-    { monthKey: "2025-09", month: "Sep", value: 11300 },
-    { monthKey: "2025-10", month: "Oct", value: 13700 },
-    { monthKey: "2025-11", month: "Nov", value: 13400 },
-    { monthKey: "2025-12", month: "Dec", value: 11300 },
-    { monthKey: "2026-01", month: "Jan", value: 14200 },
-    { monthKey: "2026-02", month: "Feb", value: 15300 },
-    { monthKey: "2026-03", month: "Mar", value: 16400 },
-    { monthKey: "2026-04", month: "Apr", value: 17900 },
+    { monthKey: "2025-01", month: "Jan 2025", value: 10800 },
+    { monthKey: "2025-02", month: "Feb 2025", value: 10700 },
+    { monthKey: "2025-03", month: "Mar 2025", value: 9900 },
+    { monthKey: "2025-04", month: "Apr 2025", value: 9200 },
+    { monthKey: "2025-05", month: "May 2025", value: 10900 },
+    { monthKey: "2025-06", month: "Jun 2025", value: 9500 },
+    { monthKey: "2025-07", month: "Jul 2025", value: 11600 },
+    { monthKey: "2025-08", month: "Aug 2025", value: 13100 },
+    { monthKey: "2025-09", month: "Sep 2025", value: 11300 },
+    { monthKey: "2025-10", month: "Oct 2025", value: 13700 },
+    { monthKey: "2025-11", month: "Nov 2025", value: 13400 },
+    { monthKey: "2025-12", month: "Dec 2025", value: 11300 },
+    { monthKey: "2026-01", month: "Jan 2026", value: 14200 },
+    { monthKey: "2026-02", month: "Feb 2026", value: 15300 },
+    { monthKey: "2026-03", month: "Mar 2026", value: 16400 },
+    { monthKey: "2026-04", month: "Apr 2026", value: 17900 },
   ];
 
   let saved = null;
