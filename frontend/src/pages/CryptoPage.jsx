@@ -23,15 +23,33 @@ function getPstDateKey(date = new Date()) {
 }
 
 function getDailyCryptoChange(currentValue) {
-  const todayKey = getPstDateKey();
-  const saved = JSON.parse(localStorage.getItem(DAILY_CRYPTO_BASELINE_KEY) || "null");
+  const value = Number(currentValue) || 0;
 
-  if (!saved || saved.dateKey !== todayKey) {
+  if (value <= 0) {
+    return {
+      change: 0,
+      percentChange: 0,
+    };
+  }
+
+  const todayKey = getPstDateKey();
+
+  let saved = null;
+
+  try {
+    saved = JSON.parse(
+      localStorage.getItem(DAILY_CRYPTO_BASELINE_KEY) || "null"
+    );
+  } catch {
+    saved = null;
+  }
+
+  if (!saved || saved.dateKey !== todayKey || Number(saved.baseline) <= 0) {
     localStorage.setItem(
       DAILY_CRYPTO_BASELINE_KEY,
       JSON.stringify({
         dateKey: todayKey,
-        baseline: Number(currentValue) || 0,
+        baseline: value,
       })
     );
 
@@ -42,11 +60,11 @@ function getDailyCryptoChange(currentValue) {
   }
 
   const baseline = Number(saved.baseline) || 0;
-  const change = (Number(currentValue) || 0) - baseline;
+  const change = value - baseline;
 
   return {
     change,
-    percentChange: baseline !== 0 ? (change / baseline) * 100 : 0,
+    percentChange: baseline > 0 ? (change / baseline) * 100 : 0,
   };
 }
 
