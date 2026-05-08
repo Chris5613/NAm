@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { assetsApi, netWorthApi, pricesApi, walletSyncApi } from "@/lib/api";
+import { netWorthApi, pricesApi } from "@/lib/api";
 import { localStorage as storage } from "@/lib/localStorage";
 import { toast } from "sonner";
 import NetWorthHero from "@/components/NetWorthHero";
@@ -10,10 +10,37 @@ import AssetBreakdown from "@/components/AssetBreakdown";
 import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Plus, Camera, Radio } from "lucide-react";
+import { RefreshCw, Plus, Camera } from "lucide-react";
 
 const DAILY_BASELINE_KEY = "daily_net_worth_baseline_pst";
 const DAILY_CATEGORY_BASELINE_KEY = "daily_category_baseline_pst";
+const MONTHLY_NET_WORTH_HISTORY_KEY = "monthly_net_worth_history_v1";
+const LIVE_HISTORY_MAX_POINTS = 200;
+const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
+
+function getPstDateKey(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function getMonthKey(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+  }).format(date);
+}
+
+function getMonthLabel(date = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "short",
+  }).format(date);
+}
 
 function getCategoryDailyChanges(breakdown) {
   const todayKey = getPstDateKey();
@@ -57,56 +84,58 @@ function getCategoryDailyChanges(breakdown) {
   };
 }
 
-function getPstDateKey(date = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(date);
-}
-
-
-
 function getDailyNetWorthChange(currentNetWorth) {
   const todayKey = getPstDateKey();
-  const saved = JSON.parse(localStorage.getItem(DAILY_BASELINE_KEY) || "null");
+  const value = Number(currentNetWorth) || 0;
 
-  if (!saved || saved.dateKey !== todayKey) {
-    const baseline = Number(currentNetWorth) || 0;
-
-    localStorage.setItem(
-      DAILY_BASELINE_KEY,
-      JSON.stringify({
-        dateKey: todayKey,
-        baseline,
-      })
-    );
-
+  if (value <= 0) {
     return {
-      baseline,
+      baseline: 0,
       change: 0,
       percentChange: 0,
       dateKey: todayKey,
     };
   }
 
-  function getMonthKey(date = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-  }).format(date);
-}
+  let saved = null;
 
-function getMonthLabel(date = new Date()) {
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    month: "short",
-  }).format(date);
+  try {
+    saved = JSON.parse(localStorage.getItem(DAILY_BASELINE_KEY) || "null");
+  } catch {
+    saved = null;
+  }
+
+  if (!saved || saved.dateKey !== todayKey || Number(saved.baseline) <= 0) {
+    localStorage.setItem(
+      DAILY_BASELINE_KEY,
+      JSON.stringify({
+        dateKey: todayKey,
+        baseline: value,
+      })
+    );
+
+    return {
+      baseline: value,
+      change: 0,
+      percentChange: 0,
+      dateKey: todayKey,
+    };
+  }
+
+  const baseline = Number(saved.baseline) || 0;
+  const change = value - baseline;
+  const percentChange = baseline !== 0 ? (change / baseline) * 100 : 0;
+
+  return {
+    baseline,
+    change,
+    percentChange,
+    dateKey: todayKey,
+  };
 }
 
 function getMonthlyNetWorthHistory(currentNetWorth) {
+  const value = Number(currentNetWorth) || 0;
   const monthKey = getMonthKey();
   const monthLabel = getMonthLabel();
 
@@ -129,7 +158,7 @@ function getMonthlyNetWorthHistory(currentNetWorth) {
     { monthKey: "2026-04", month: "Apr", value: 17900 },
   ];
 
-  let saved = [];
+  let saved = null;
 
   try {
     saved = JSON.parse(
@@ -144,21 +173,19 @@ function getMonthlyNetWorthHistory(currentNetWorth) {
       ? saved
       : fallback;
 
-  const currentIndex = history.findIndex(
-    (m) => m.monthKey === monthKey
-  );
+  const currentIndex = history.findIndex((m) => m.monthKey === monthKey);
 
   if (currentIndex >= 0) {
     history[currentIndex] = {
       ...history[currentIndex],
-      value: currentNetWorth,
+      value,
       live: true,
     };
   } else {
     history.push({
       monthKey,
       month: monthLabel,
-      value: currentNetWorth,
+      value,
       live: true,
     });
   }
@@ -170,25 +197,6 @@ function getMonthlyNetWorthHistory(currentNetWorth) {
 
   return history;
 }
-
-  const baseline = Number(saved.baseline) || 0;
-  const change = (Number(currentNetWorth) || 0) - baseline;
-  const percentChange = baseline !== 0 ? (change / baseline) * 100 : 0;
-  const MONTHLY_NET_WORTH_HISTORY_KEY =
-  "monthly_net_worth_history_v1";
-
-  return {
-    baseline,
-    change,
-    percentChange,
-    dateKey: todayKey,
-  };
-}
-
-const LIVE_HISTORY_MAX_POINTS = 200;      // rolling window persisted to localStorage
-const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
-
-
 
 function calculateNetWorth(assets = [], cryptoTotal = 0) {
   const breakdown = {
@@ -230,7 +238,6 @@ export default function Dashboard() {
   const [assets, setAssets] = useState([]);
   const [netWorth, setNetWorth] = useState(null);
   const [history, setHistory] = useState([]);
-  // Hydrate live history from localStorage so the chart isn't blank on reload.
   const [liveHistory, setLiveHistory] = useState(() => {
     const persisted = storage.getLiveHistory();
     return Array.isArray(persisted) ? persisted : [];
@@ -242,70 +249,70 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [dailyNetWorthChange, setDailyNetWorthChange] = useState(null);
   const [dailyCategoryChanges, setDailyCategoryChanges] = useState(null);
- 
-  // Persist liveHistory whenever it changes (capped to last N points).
+
   useEffect(() => {
     if (!Array.isArray(liveHistory)) return;
     const trimmed = liveHistory.slice(-LIVE_HISTORY_MAX_POINTS);
     storage.setLiveHistory(trimmed);
   }, [liveHistory]);
 
-const fetchData = useCallback(async () => {
-  try {
-    const assets = storage.getAssets?.() || [];
-    const history = storage.getNetWorthHistory?.() || [];
+  const fetchData = useCallback(async () => {
+    try {
+      const assets = storage.getAssets?.() || [];
 
-    const cryptoCache = storage.getCryptoCache?.() || {};
-    const cryptoTotal = Number(cryptoCache.total) || 0;
+      const cryptoCache = storage.getCryptoCache?.() || {};
+      const cryptoTotal = Number(cryptoCache.total) || 0;
 
-    const calculatedNetWorth = calculateNetWorth(assets, cryptoTotal);
-    const categoryChanges = getCategoryDailyChanges(
-  calculatedNetWorth.breakdown
-);
-const monthlyHistory = getMonthlyNetWorthHistory(
-  calculatedNetWorth.total_net_worth
-);
-    const dailyChange = getDailyNetWorthChange(
-  calculatedNetWorth.total_net_worth
-);
+      const calculatedNetWorth = calculateNetWorth(assets, cryptoTotal);
 
+      const categoryChanges = getCategoryDailyChanges(
+        calculatedNetWorth.breakdown
+      );
 
+      const monthlyHistory = getMonthlyNetWorthHistory(
+        calculatedNetWorth.total_net_worth
+      );
 
-    setAssets(assets);
-    setNetWorth(calculatedNetWorth);
-    setDailyNetWorthChange(dailyChange);
-    setDailyCategoryChanges(categoryChanges);
-setHistory(monthlyHistory);
-    setLastUpdated(new Date());
+      const dailyChange = getDailyNetWorthChange(
+        calculatedNetWorth.total_net_worth
+      );
 
-    setLiveHistory((prev) => {
-      if (prev.length === 0) {
-        return [
-          {
-            timestamp: new Date().toISOString(),
-            value: calculatedNetWorth.total_net_worth,
-          },
-        ];
-      }
-      return prev;
-    });
-  } catch (err) {
-    toast.error("Failed to load data");
-  } finally {
-    setLoading(false);
-  }
-}, []);
+      setAssets(assets);
+      setNetWorth(calculatedNetWorth);
+      setDailyNetWorthChange(dailyChange);
+      setDailyCategoryChanges(categoryChanges);
+      setHistory(monthlyHistory);
+      setLastUpdated(new Date());
 
-useEffect(() => {
-  fetchData();
+      setLiveHistory((prev) => {
+        if (prev.length === 0) {
+          return [
+            {
+              timestamp: new Date().toISOString(),
+              value: calculatedNetWorth.total_net_worth,
+            },
+          ];
+        }
 
-  const interval = setInterval(() => {
+        return prev;
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to load data");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
     fetchData();
-  }, 10 * 60 * 1000); // 10 minutes
 
-  return () => clearInterval(interval);
-}, [fetchData]);
+    const interval = setInterval(() => {
+      fetchData();
+    }, 10 * 60 * 1000);
 
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   const handleSnapshot = async () => {
     try {
@@ -326,67 +333,82 @@ useEffect(() => {
   const handleAssetUpdated = () => fetchData();
   const handleAssetDeleted = () => fetchData();
 
-  // For the "All" tab — render the category cards sorted by value descending.
-  // Crypto comes from netWorth.breakdown.crypto (which already includes wallets).
   const sortedAllSections = useMemo(() => {
     const stocksTotal = (assets || [])
       .filter((a) => a.category === "stocks")
       .reduce((s, a) => s + (a.quantity || 0) * (a.current_price || 0), 0);
+
     const cashTotal = (assets || [])
       .filter((a) => a.category === "cash")
       .reduce((s, a) => s + (a.quantity || 0) * (a.current_price || 0), 0);
+
     const debtsTotal = (assets || [])
       .filter((a) => a.category === "debts")
       .reduce((s, a) => s + (a.quantity || 0) * (a.current_price || 0), 0);
+
     const otherTotal = (assets || [])
       .filter((a) => a.category === "other")
       .reduce((s, a) => s + (a.quantity || 0) * (a.current_price || 0), 0);
+
     const cryptoTotal = netWorth?.breakdown?.crypto || 0;
 
     return [
       { kind: "stocks", total: stocksTotal },
       { kind: "crypto", total: cryptoTotal },
-      { kind: "cash",   total: cashTotal },
-      { kind: "other",  total: otherTotal },
-      { kind: "debts",  total: debtsTotal },
+      { kind: "cash", total: cashTotal },
+      { kind: "other", total: otherTotal },
+      { kind: "debts", total: debtsTotal },
     ].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
   }, [assets, netWorth]);
 
+  const handleRefreshPrices = async () => {
+    setRefreshing(true);
+
+    try {
+      await pricesApi.refreshAll?.();
+      await fetchData();
+      toast.success("Refreshed");
+    } catch {
+      toast.error("Failed to refresh");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen" data-testid="loading-spinner">
-        <div className="animate-pulse text-muted-foreground font-mono">Loading...</div>
+      <div
+        className="flex items-center justify-center min-h-screen"
+        data-testid="loading-spinner"
+      >
+        <div className="animate-pulse text-muted-foreground font-mono">
+          Loading...
+        </div>
       </div>
     );
   }
 
-  const handleRefreshPrices = async () => {
-  setRefreshing(true);
-  try {
-    await pricesApi.refreshAll?.(); // optional if you still use it
-    await fetchData();
-    toast.success("Refreshed");
-  } catch {
-    toast.error("Failed to refresh");
-  } finally {
-    setRefreshing(false);
-  }
-};
-
   return (
     <div className="space-y-6" data-testid="dashboard">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-4xl font-medium tracking-tight" data-testid="page-title">
+          <h1
+            className="text-4xl font-medium tracking-tight"
+            data-testid="page-title"
+          >
             Net Worth
           </h1>
+
           {lastUpdated && (
-            <span className="text-xs text-muted-foreground font-mono" data-testid="last-updated">
+            <span
+              className="text-xs text-muted-foreground font-mono"
+              data-testid="last-updated"
+            >
               {lastUpdated.toLocaleTimeString()}
             </span>
           )}
         </div>
+
         <div className="flex items-center gap-3">
           <Button
             variant="outline"
@@ -398,6 +420,7 @@ useEffect(() => {
             <Camera className="w-4 h-4 mr-2" strokeWidth={1.5} />
             Snapshot
           </Button>
+
           <Button
             variant="outline"
             size="sm"
@@ -406,9 +429,13 @@ useEffect(() => {
             data-testid="refresh-prices-btn"
             className="border-border/40 hover:bg-secondary"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`} strokeWidth={1.5} />
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
+              strokeWidth={1.5}
+            />
             Refresh Prices
           </Button>
+
           <Button
             size="sm"
             onClick={() => setAddDialogOpen(true)}
@@ -421,22 +448,21 @@ useEffect(() => {
         </div>
       </div>
 
-      {/* Net Worth Hero + Charts */}
       <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
         <div className="md:col-span-2 lg:col-span-2">
-<NetWorthHero
-  netWorth={netWorth}
-  dailyNetWorthChange={dailyNetWorthChange}
-/>
+          <NetWorthHero
+            netWorth={netWorth}
+            dailyNetWorthChange={dailyNetWorthChange}
+          />
         </div>
+
         <div className="md:col-span-1 lg:col-span-2">
           <PortfolioChart netWorth={netWorth} />
         </div>
       </div>
 
-<NetWorthHistory />
+      <NetWorthHistory history={history} />
 
-      {/* Asset List with Tabs */}
       <div className="space-y-4">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="bg-secondary" data-testid="category-tabs">
@@ -447,65 +473,99 @@ useEffect(() => {
             <TabsTrigger value="other" data-testid="tab-other">Other</TabsTrigger>
             <TabsTrigger value="debts" data-testid="tab-debts">Debts</TabsTrigger>
           </TabsList>
+
           <TabsContent value={activeTab}>
             {activeTab === "crypto" && (
-<CryptoBreakdown
-  key="all-crypto"
-  defaultOpen={false}
-  dailyChange={dailyCategoryChanges?.crypto || 0}
-/>
+              <CryptoBreakdown
+                key="all-crypto"
+                defaultOpen={false}
+                dailyChange={dailyCategoryChanges?.crypto || 0}
+              />
             )}
+
             {activeTab === "stocks" && (
-              <AssetBreakdown category="stocks" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
+              <AssetBreakdown
+                category="stocks"
+                assets={assets}
+                onUpdate={handleAssetUpdated}
+                onDelete={handleAssetDeleted}
+                defaultOpen={true}
+              />
             )}
+
             {activeTab === "cash" && (
-              <AssetBreakdown category="cash" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
+              <AssetBreakdown
+                category="cash"
+                assets={assets}
+                onUpdate={handleAssetUpdated}
+                onDelete={handleAssetDeleted}
+                defaultOpen={true}
+              />
             )}
+
             {activeTab === "debts" && (
-              <AssetBreakdown category="debts" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
+              <AssetBreakdown
+                category="debts"
+                assets={assets}
+                onUpdate={handleAssetUpdated}
+                onDelete={handleAssetDeleted}
+                defaultOpen={true}
+              />
             )}
+
             {activeTab === "other" && (
-              <AssetBreakdown category="other" assets={assets} onUpdate={handleAssetUpdated} onDelete={handleAssetDeleted} defaultOpen={true} />
+              <AssetBreakdown
+                category="other"
+                assets={assets}
+                onUpdate={handleAssetUpdated}
+                onDelete={handleAssetDeleted}
+                defaultOpen={true}
+              />
             )}
+
             {activeTab === "all" && (
               <div className="space-y-4">
- {sortedAllSections.map((section) => {
-  switch (section.kind) {
-    case "crypto":
-      return (
-        <CryptoBreakdown
-          key="crypto"
-          defaultOpen={false}
-          dailyChange={dailyCategoryChanges?.crypto || 0}
-        />
-      );
+                {sortedAllSections.map((section) => {
+                  switch (section.kind) {
+                    case "crypto":
+                      return (
+                        <CryptoBreakdown
+                          key="crypto"
+                          defaultOpen={false}
+                          dailyChange={dailyCategoryChanges?.crypto || 0}
+                        />
+                      );
 
-    default:
-      return (
-        <AssetBreakdown
-          key={`all-${section.kind}`}
-          category={section.kind}
-          assets={assets}
-          onUpdate={handleAssetUpdated}
-          onDelete={handleAssetDeleted}
-          defaultOpen={false}
-          dailyChange={dailyCategoryChanges?.[section.kind] || 0}
-        />
-      );
-  }
-})}
+                    default:
+                      return (
+                        <AssetBreakdown
+                          key={`all-${section.kind}`}
+                          category={section.kind}
+                          assets={assets}
+                          onUpdate={handleAssetUpdated}
+                          onDelete={handleAssetDeleted}
+                          defaultOpen={false}
+                          dailyChange={dailyCategoryChanges?.[section.kind] || 0}
+                        />
+                      );
+                  }
+                })}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
 
       <AddAssetDialog
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         onCreated={handleAssetCreated}
-        defaultCategory={SUPPORTED_TABS.has(activeTab) && activeTab !== "all" ? activeTab : "stocks"}
+        defaultCategory={
+          SUPPORTED_TABS.has(activeTab) && activeTab !== "all"
+            ? activeTab
+            : "stocks"
+        }
       />
-    </div>
-          )}
-          </TabsContent>
-        </Tabs>
-      </div>
     </div>
   );
 }
