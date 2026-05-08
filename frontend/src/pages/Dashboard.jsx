@@ -66,6 +66,8 @@ function getPstDateKey(date = new Date()) {
   }).format(date);
 }
 
+
+
 function getDailyNetWorthChange(currentNetWorth) {
   const todayKey = getPstDateKey();
   const saved = JSON.parse(localStorage.getItem(DAILY_BASELINE_KEY) || "null");
@@ -89,9 +91,91 @@ function getDailyNetWorthChange(currentNetWorth) {
     };
   }
 
+  function getMonthKey(date = new Date()) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+  }).format(date);
+}
+
+function getMonthLabel(date = new Date()) {
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    month: "short",
+  }).format(date);
+}
+
+function getMonthlyNetWorthHistory(currentNetWorth) {
+  const monthKey = getMonthKey();
+  const monthLabel = getMonthLabel();
+
+  const fallback = [
+    { monthKey: "2025-01", month: "Jan", value: 10800 },
+    { monthKey: "2025-02", month: "Feb", value: 10700 },
+    { monthKey: "2025-03", month: "Mar", value: 9900 },
+    { monthKey: "2025-04", month: "Apr", value: 9200 },
+    { monthKey: "2025-05", month: "May", value: 10900 },
+    { monthKey: "2025-06", month: "Jun", value: 9500 },
+    { monthKey: "2025-07", month: "Jul", value: 11600 },
+    { monthKey: "2025-08", month: "Aug", value: 13100 },
+    { monthKey: "2025-09", month: "Sep", value: 11300 },
+    { monthKey: "2025-10", month: "Oct", value: 13700 },
+    { monthKey: "2025-11", month: "Nov", value: 13400 },
+    { monthKey: "2025-12", month: "Dec", value: 11300 },
+    { monthKey: "2026-01", month: "Jan", value: 14200 },
+    { monthKey: "2026-02", month: "Feb", value: 15300 },
+    { monthKey: "2026-03", month: "Mar", value: 16400 },
+    { monthKey: "2026-04", month: "Apr", value: 17900 },
+  ];
+
+  let saved = [];
+
+  try {
+    saved = JSON.parse(
+      localStorage.getItem(MONTHLY_NET_WORTH_HISTORY_KEY) || "null"
+    );
+  } catch {
+    saved = null;
+  }
+
+  let history =
+    Array.isArray(saved) && saved.length > 0
+      ? saved
+      : fallback;
+
+  const currentIndex = history.findIndex(
+    (m) => m.monthKey === monthKey
+  );
+
+  if (currentIndex >= 0) {
+    history[currentIndex] = {
+      ...history[currentIndex],
+      value: currentNetWorth,
+      live: true,
+    };
+  } else {
+    history.push({
+      monthKey,
+      month: monthLabel,
+      value: currentNetWorth,
+      live: true,
+    });
+  }
+
+  localStorage.setItem(
+    MONTHLY_NET_WORTH_HISTORY_KEY,
+    JSON.stringify(history)
+  );
+
+  return history;
+}
+
   const baseline = Number(saved.baseline) || 0;
   const change = (Number(currentNetWorth) || 0) - baseline;
   const percentChange = baseline !== 0 ? (change / baseline) * 100 : 0;
+  const MONTHLY_NET_WORTH_HISTORY_KEY =
+  "monthly_net_worth_history_v1";
 
   return {
     baseline,
@@ -178,7 +262,9 @@ const fetchData = useCallback(async () => {
     const categoryChanges = getCategoryDailyChanges(
   calculatedNetWorth.breakdown
 );
-
+const monthlyHistory = getMonthlyNetWorthHistory(
+  calculatedNetWorth.total_net_worth
+);
     const dailyChange = getDailyNetWorthChange(
   calculatedNetWorth.total_net_worth
 );
@@ -189,7 +275,7 @@ const fetchData = useCallback(async () => {
     setNetWorth(calculatedNetWorth);
     setDailyNetWorthChange(dailyChange);
     setDailyCategoryChanges(categoryChanges);
-    setHistory(history);
+setHistory(monthlyHistory);
     setLastUpdated(new Date());
 
     setLiveHistory((prev) => {
