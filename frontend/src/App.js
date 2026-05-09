@@ -8,6 +8,7 @@ import CryptoPage from "@/pages/CryptoPage";
 import GoMiningPage from "@/pages/GoMiningPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 import PhoneList from "@/pages/PhoneList";
+import UnityDevicesPage from "@/pages/UnityDevicesPage";
 import { Toaster } from "@/components/ui/sonner";
 import { netWorthApi } from "@/lib/api";
 import { localStorage as storage } from "@/lib/localStorage";
@@ -133,6 +134,7 @@ function App() {
               <Route path="/gomining" element={<GoMiningPage />} />
               <Route path="/integrations" element={<IntegrationsPage />} />
               <Route path="/phone-list" element={<PhoneList />} />
+              <Route path="/unity-devices" element={<UnityDevicesPage />} />
             </Routes>
           </div>
         </main>
