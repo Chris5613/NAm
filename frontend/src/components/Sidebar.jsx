@@ -1,44 +1,82 @@
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { DollarSign, BarChart3, Bitcoin, Phone, Pickaxe, Zap } from "lucide-react";
+import {
+  DollarSign,
+  BarChart3,
+  Bitcoin,
+  Phone,
+  Pickaxe,
+  Zap,
+  Smartphone,
+  Cable,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 
 const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
   { path: "/investments", label: "Investment Overview", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
   { path: "/gomining", label: "GoMining", icon: Pickaxe },
-    { path: "/integrations", label: "Integrations", icon: Zap },
-
-  // NEW PAGE
-  { path: "/unity-devices", label: "Unity Devices", icon: Phone},
-  { path: "/phone-list", label: "Phone List", icon: Phone },
+  { path: "/integrations", label: "Integrations", icon: Zap },
+  { path: "/unity-devices", label: "Unity Devices", icon: Cable },
+  { path: "/phone-list", label: "Phone List", icon: Smartphone },
 ];
 
 export default function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+
   return (
     <aside
-      className="fixed top-0 left-0 h-screen w-56 bg-card border-r border-border/40 flex flex-col z-40"
+      className={`fixed left-0 top-0 z-40 flex h-screen flex-col border-r border-border/40 bg-card transition-all duration-300 ${
+        collapsed ? "w-16" : "w-56"
+      }`}
       data-testid="sidebar"
     >
-      <div className="p-5 border-b border-border/40">
-        <h2 className="text-lg font-semibold tracking-tight text-foreground">Wealth</h2>
+      <div className="flex items-center justify-between border-b border-border/40 p-4">
+        {!collapsed && (
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
+            Wealth
+          </h2>
+        )}
+
+        <button
+          onClick={() => setCollapsed((value) => !value)}
+          className="flex h-8 w-8 items-center justify-center rounded-md border border-border/40 text-muted-foreground hover:bg-white/5 hover:text-foreground"
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? (
+            <ChevronRight className="h-4 w-4" strokeWidth={1.5} />
+          ) : (
+            <ChevronLeft className="h-4 w-4" strokeWidth={1.5} />
+          )}
+        </button>
       </div>
-      <nav className="flex-1 py-4 px-3 space-y-1" data-testid="sidebar-nav">
+
+      <nav
+        className="flex-1 space-y-1 px-3 py-4"
+        data-testid="sidebar-nav"
+      >
         {NAV_ITEMS.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             end={item.path === "/"}
+            title={collapsed ? item.label : undefined}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-3 py-2.5 rounded-md text-sm font-medium transition-colors ${
+              `flex items-center rounded-md py-2.5 text-sm font-medium transition-colors ${
+                collapsed ? "justify-center px-2" : "gap-3 px-3"
+              } ${
                 isActive
                   ? "bg-white/10 text-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                  : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
               }`
             }
             data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
           >
-            <item.icon className="w-4 h-4 flex-shrink-0" strokeWidth={1.5} />
-            <span>{item.label}</span>
+            <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
+
+            {!collapsed && <span>{item.label}</span>}
           </NavLink>
         ))}
       </nav>
