@@ -17,15 +17,32 @@ import {
   TrendingUp,
   Calendar,
   BarChart3,
-  RefreshCw,
   Search,
   Zap,
+  Eye,
+  EyeOff,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import {
-  syncFromExtensionNow,
-} from "@/lib/unityNetworkExtensionSync";
+import { syncFromExtensionNow } from "@/lib/unityNetworkExtensionSync";
+
+const DEVICE_LABELS_KEY = "unity_device_labels";
+const HIDDEN_DEVICES_KEY = "unity_hidden_devices";
+
+function getStoredJson(key, fallback) {
+  try {
+    return JSON.parse(localStorage.getItem(key)) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function setStoredJson(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
 
 export default function UnityDevicesPage() {
   const [devices, setDevices] = useState([]);
@@ -35,6 +52,18 @@ export default function UnityDevicesPage() {
   const [chartType, setChartType] = useState("bar");
   const [search, setSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
+  const [showHidden, setShowHidden] = useState(false);
+
+  const [deviceLabels, setDeviceLabels] = useState(() =>
+    getStoredJson(DEVICE_LABELS_KEY, {})
+  );
+
+  const [hiddenDevices, setHiddenDevices] = useState(() =>
+    getStoredJson(HIDDEN_DEVICES_KEY, {})
+  );
+
+  const [editingDeviceId, setEditingDeviceId] = useState(null);
+  const [editingLabel, setEditingLabel] = useState("");
 
   const normalizePayload = (payload = {}) => {
     const accountList = Array.isArray(payload.accounts) ? payload.accounts : [];
@@ -82,10 +111,7 @@ export default function UnityDevicesPage() {
       const data = event.data;
       if (!data || data.source !== "unity-nodes-tracker-ext") return;
 
-      if (
-        data.type === "EARNINGS_PUSH_MULTI" ||
-        data.type === "EARNINGS_PUSH"
-      ) {
+      if (data.type === "EARNINGS_PUSH_MULTI" || data.type === "EARNINGS_PUSH") {
         applyPayload(data.payload || {});
       }
     };
@@ -121,11 +147,7 @@ export default function UnityDevicesPage() {
       );
 
       if (!result?.ok) {
-        if (result?.reason === "timeout") {
-          toast.error("No response from extension. Make sure it is installed and active.");
-        } else {
-          toast.error(result?.error || "Extension sync failed.");
-        }
+        toast.error(result?.error || "Extension sync failed.");
       } else {
         toast.success("Synced from extension.");
       }
@@ -154,12 +176,65 @@ export default function UnityDevicesPage() {
     return `${str.slice(0, 6)}...${str.slice(-4)}`;
   };
 
+  const getDeviceId = (device) =>
+    String(device.license_id || device.device_id || device.id || "unknown");
+
+  const saveDeviceLabel = (deviceId) => {
+    const next = {
+      ...deviceLabels,
+      [deviceId]: editingLabel.trim(),
+    };
+
+    if (!editingLabel.trim()) {
+      delete next[deviceId];
+    }
+
+    setDeviceLabels(next);
+    setStoredJson(DEVICE_LABELS_KEY, next);
+    setEditingDeviceId(null);
+    setEditingLabel("");
+  };
+
+  const startEditLabel = (device) => {
+    const deviceId = getDeviceId(device);
+    setEditingDeviceId(deviceId);
+    setEditingLabel(deviceLabels[deviceId] || "");
+  };
+
+  const cancelEditLabel = () => {
+    setEditingDeviceId(null);
+    setEditingLabel("");
+  };
+
+  const toggleHideDevice = (device) => {
+    const deviceId = getDeviceId(device);
+
+    const next = {
+      ...hiddenDevices,
+      [deviceId]: !hiddenDevices[deviceId],
+    };
+
+    if (!next[deviceId]) {
+      delete next[deviceId];
+    }
+
+    setHiddenDevices(next);
+    setStoredJson(HIDDEN_DEVICES_KEY, next);
+  };
+
+  const visibleDevices = useMemo(() => {
+    return devices.filter((device) => {
+      const deviceId = getDeviceId(device);
+      return showHidden || !hiddenDevices[deviceId];
+    });
+  }, [devices, hiddenDevices, showHidden]);
+
   const filteredDevices = useMemo(() => {
-    return devices
+    return visibleDevices
       .filter((device) => {
-        const id = String(
-          device.license_id || device.device_id || device.id || ""
-        );
+        const deviceId = getDeviceId(device);
+
+        const label = String(deviceLabels[deviceId] || "");
 
         const account = String(
           device.account_email ||
@@ -172,23 +247,24 @@ export default function UnityDevicesPage() {
         const query = search.toLowerCase();
 
         return (
-          id.toLowerCase().includes(query) ||
+          deviceId.toLowerCase().includes(query) ||
+          label.toLowerCase().includes(query) ||
           account.toLowerCase().includes(query)
         );
       })
       .sort((a, b) => Number(b.amount_usd || 0) - Number(a.amount_usd || 0));
-  }, [devices, search]);
+  }, [visibleDevices, search, deviceLabels]);
 
   const balanceUsd = Number(summary?.balance_usd || 0);
   const lifetimeUsd = Number(summary?.lifetime_usd || 0);
   const recentUsd = Number(summary?.total_usd || 0);
 
   const totalAllocations = useMemo(() => {
-    return devices.reduce(
+    return visibleDevices.reduce(
       (sum, device) => sum + Number(device.allocation_count || 0),
       0
     );
-  }, [devices]);
+  }, [visibleDevices]);
 
   const chartData = useMemo(() => {
     const allocationList = [];
@@ -197,17 +273,51 @@ export default function UnityDevicesPage() {
       allocationList.push(...summary.allocations);
     }
 
+    if (Array.isArray(summary?.combined_payload?.allocations)) {
+      allocationList.push(...summary.combined_payload.allocations);
+    }
+
     accounts.forEach((account) => {
       if (Array.isArray(account.allocations)) {
         allocationList.push(...account.allocations);
       }
     });
 
+    devices.forEach((device) => {
+      const deviceId = getDeviceId(device);
+      if (hiddenDevices[deviceId] && !showHidden) return;
+
+      const deviceHistory =
+        device.allocations ||
+        device.history ||
+        device.daily_earnings ||
+        device.earnings_by_day ||
+        device.daily ||
+        [];
+
+      if (Array.isArray(deviceHistory)) {
+        allocationList.push(...deviceHistory);
+      }
+    });
+
     const dailyMap = new Map();
 
     allocationList.forEach((item) => {
-      const rawDate = item.completed_at || item.completedAt || item.date;
-      const amount = Number(item.amount_usd || item.amount || 0);
+      const rawDate =
+        item.completed_at ||
+        item.completedAt ||
+        item.created_at ||
+        item.timestamp ||
+        item.date ||
+        item.day;
+
+      const amount = Number(
+        item.amount_usd ||
+          item.earnings_usd ||
+          item.usd ||
+          item.amount ||
+          0
+      );
 
       if (!rawDate || Number.isNaN(amount)) return;
 
@@ -215,6 +325,7 @@ export default function UnityDevicesPage() {
       if (Number.isNaN(dateObj.getTime())) return;
 
       const dateKey = dateObj.toISOString().slice(0, 10);
+
       const label = dateObj.toLocaleDateString("en-US", {
         month: "numeric",
         day: "numeric",
@@ -235,20 +346,18 @@ export default function UnityDevicesPage() {
 
     return Array.from(dailyMap.values())
       .sort((a, b) => new Date(a.dateKey) - new Date(b.dateKey))
-      .slice(-7)
+      .slice(-14)
       .map((row) => ({
         date: row.date,
         earnings: Number(row.earnings.toFixed(2)),
       }));
-  }, [summary, accounts]);
+  }, [summary, accounts, devices, hiddenDevices, showHidden]);
 
-  const sevenDayTotal = chartData.reduce(
-    (sum, row) => sum + Number(row.earnings || 0),
-    0
-  );
+  const sevenDayTotal = chartData
+    .slice(-7)
+    .reduce((sum, row) => sum + Number(row.earnings || 0), 0);
 
-  const sevenDayAverage =
-    chartData.length > 0 ? sevenDayTotal / chartData.length : 0;
+  const sevenDayAverage = chartData.length > 0 ? sevenDayTotal / 7 : 0;
 
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
@@ -376,7 +485,6 @@ export default function UnityDevicesPage() {
             onClick={syncExtension}
             disabled={syncing}
             className="border-violet-500/40 text-violet-300 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
-            title="Pull the latest payload pushed by the Chrome extension"
           >
             <Zap className={`mr-2 h-4 w-4 ${syncing ? "animate-pulse" : ""}`} />
             {syncing ? "Syncing…" : "Sync from extension"}
@@ -441,12 +549,18 @@ export default function UnityDevicesPage() {
                 ))}
               </div>
             </div>
+
+            <div className="text-xs text-gray-500">
+              {chartData.length > 0
+                ? "Using day-by-day extension allocation data"
+                : "Waiting for dated allocation history"}
+            </div>
           </div>
 
           <div className="h-[320px]">
             {chartData.length === 0 ? (
               <div className="flex h-full items-center justify-center text-sm text-gray-500">
-                Waiting for earnings history from extension...
+                No day-by-day earnings history found yet.
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
@@ -458,9 +572,19 @@ export default function UnityDevicesPage() {
 
         <section className="overflow-hidden rounded-xl border border-[#1f2937] bg-[#0b111c] shadow-xl">
           <div className="flex flex-col gap-3 border-b border-[#1f2937] p-4 sm:flex-row sm:items-center sm:justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-300">
-              Devices ({filteredDevices.length})
-            </h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-300">
+                Devices ({filteredDevices.length})
+              </h2>
+
+              <button
+                onClick={() => setShowHidden((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-300 hover:bg-[#131c2b]"
+              >
+                {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
+                {showHidden ? "Hide hidden" : "Show hidden"}
+              </button>
+            </div>
 
             <div className="relative">
               <Search
@@ -483,21 +607,23 @@ export default function UnityDevicesPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
+              <table className="w-full min-w-[1000px] text-sm">
                 <thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
                   <tr>
                     <th className="px-4 py-3 text-left">#</th>
+                    <th className="px-4 py-3 text-left">Label</th>
                     <th className="px-4 py-3 text-left">Device ID</th>
                     <th className="px-4 py-3 text-left">Account</th>
                     <th className="px-4 py-3 text-left">Recent</th>
                     <th className="px-4 py-3 text-left">Allocations</th>
+                    <th className="px-4 py-3 text-left">Actions</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {filteredDevices.map((device, index) => {
-                    const id =
-                      device.license_id || device.device_id || device.id;
+                    const deviceId = getDeviceId(device);
+                    const hidden = !!hiddenDevices[deviceId];
 
                     const account =
                       device.account_label ||
@@ -508,16 +634,57 @@ export default function UnityDevicesPage() {
 
                     return (
                       <tr
-                        key={`${id || index}`}
-                        className="border-t border-[#1f2937] text-gray-300 hover:bg-[#111827]"
+                        key={`${deviceId || index}`}
+                        className={`border-t border-[#1f2937] text-gray-300 hover:bg-[#111827] ${
+                          hidden ? "opacity-45" : ""
+                        }`}
                       >
                         <td className="px-4 py-3 text-gray-400">{index + 1}</td>
 
+                        <td className="px-4 py-3">
+                          {editingDeviceId === deviceId ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                value={editingLabel}
+                                onChange={(e) => setEditingLabel(e.target.value)}
+                                placeholder="Device label"
+                                className="w-40 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
+                                autoFocus
+                              />
+
+                              <button
+                                onClick={() => saveDeviceLabel(deviceId)}
+                                className="text-emerald-400 hover:text-emerald-300"
+                              >
+                                <Save size={15} />
+                              </button>
+
+                              <button
+                                onClick={cancelEditLabel}
+                                className="text-gray-500 hover:text-gray-300"
+                              >
+                                <X size={15} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-white">
+                                {deviceLabels[deviceId] || "Unlabeled"}
+                              </span>
+
+                              <button
+                                onClick={() => startEditLabel(device)}
+                                className="text-gray-500 hover:text-violet-300"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
+
                         <td className="px-4 py-3 font-mono">
-                          <div>{shortId(id)}</div>
-                          <div className="text-xs text-gray-600">
-                            {id || "No ID"}
-                          </div>
+                          <div>{shortId(deviceId)}</div>
+                          <div className="text-xs text-gray-600">{deviceId}</div>
                         </td>
 
                         <td className="px-4 py-3 font-mono text-gray-400">
@@ -530,6 +697,20 @@ export default function UnityDevicesPage() {
 
                         <td className="px-4 py-3">
                           {device.allocation_count ?? 0}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => toggleHideDevice(device)}
+                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
+                              hidden
+                                ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                                : "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                            }`}
+                          >
+                            {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                            {hidden ? "Unhide" : "Hide"}
+                          </button>
                         </td>
                       </tr>
                     );
@@ -585,9 +766,7 @@ function StatCard({
           <p className={`mt-4 text-3xl font-bold ${color.text}`}>{value}</p>
         </div>
 
-        <div
-          className={`rounded-lg border ${color.border} ${color.bg} p-3 ${color.text}`}
-        >
+        <div className={`rounded-lg border ${color.border} ${color.bg} p-3 ${color.text}`}>
           {icon}
         </div>
       </div>
