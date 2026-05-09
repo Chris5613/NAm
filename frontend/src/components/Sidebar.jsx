@@ -6,11 +6,10 @@ const NAV_ITEMS = [
   { path: "/investments", label: "Investment Overview", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
   { path: "/gomining", label: "GoMining", icon: Pickaxe },
+    { path: "/integrations", label: "Integrations", icon: Zap },
 
   // NEW PAGE
   { path: "/unity-devices", label: "Unity Devices", icon: Phone},
-
-  { path: "/integrations", label: "Integrations", icon: Zap },
   { path: "/phone-list", label: "Phone List", icon: Phone },
 ];
 
