@@ -620,102 +620,117 @@ export default function UnityDevicesPage() {
                   </tr>
                 </thead>
 
-                <tbody>
-                  {filteredDevices.map((device, index) => {
-                    const deviceId = getDeviceId(device);
-                    const hidden = !!hiddenDevices[deviceId];
+<thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
+  <tr>
+    <th className="px-4 py-3 text-left">#</th>
+    <th className="px-4 py-3 text-left">Label</th>
+    <th className="px-4 py-3 text-left">Device ID</th>
+    <th className="px-4 py-3 text-left">Account</th>
+    <th className="px-4 py-3 text-left">Recent</th>
+    <th className="px-4 py-3 text-left">Actions</th>
+  </tr>
+</thead>
 
-                    const account =
-                      device.account_label ||
-                      device.account_email ||
-                      device.account ||
-                      device.wallet ||
-                      "Unknown";
+<tbody>
+  {filteredDevices.map((device, index) => {
+    const deviceId = getDeviceId(device);
+    const hidden = !!hiddenDevices[deviceId];
 
-                    return (
-                      <tr
-                        key={`${deviceId || index}`}
-                        className={`border-t border-[#1f2937] text-gray-300 hover:bg-[#111827] ${
-                          hidden ? "opacity-45" : ""
-                        }`}
-                      >
-                        <td className="px-4 py-3 text-gray-400">{index + 1}</td>
+    const rawAccount =
+      device.account_label ||
+      device.account_email ||
+      device.account ||
+      device.wallet ||
+      "Unknown";
 
-                        <td className="px-4 py-3">
-                          {editingDeviceId === deviceId ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                value={editingLabel}
-                                onChange={(e) => setEditingLabel(e.target.value)}
-                                placeholder="Device label"
-                                className="w-40 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
-                                autoFocus
-                              />
+    const accountLower = String(rawAccount).toLowerCase();
 
-                              <button
-                                onClick={() => saveDeviceLabel(deviceId)}
-                                className="text-emerald-400 hover:text-emerald-300"
-                              >
-                                <Save size={15} />
-                              </button>
+    const account =
+      accountLower.startsWith("christian")
+        ? "Androids"
+        : accountLower.startsWith("cloud")
+          ? "iPhones"
+          : rawAccount;
 
-                              <button
-                                onClick={cancelEditLabel}
-                                className="text-gray-500 hover:text-gray-300"
-                              >
-                                <X size={15} />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-white">
-                                {deviceLabels[deviceId] || "Unlabeled"}
-                              </span>
+    return (
+      <tr
+        key={`${deviceId || index}`}
+        className={`border-t border-[#1f2937] text-gray-300 hover:bg-[#111827] ${
+          hidden ? "opacity-45" : ""
+        }`}
+      >
+        <td className="px-4 py-3 text-gray-400">{index + 1}</td>
 
-                              <button
-                                onClick={() => startEditLabel(device)}
-                                className="text-gray-500 hover:text-violet-300"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                            </div>
-                          )}
-                        </td>
+        <td className="px-4 py-3">
+          {editingDeviceId === deviceId ? (
+            <div className="flex items-center gap-2">
+              <input
+                value={editingLabel}
+                onChange={(e) => setEditingLabel(e.target.value)}
+                placeholder="Device label"
+                className="w-40 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
+                autoFocus
+              />
 
-                        <td className="px-4 py-3 font-mono">
-                          <div>{shortId(deviceId)}</div>
-                          <div className="text-xs text-gray-600">{deviceId}</div>
-                        </td>
+              <button
+                onClick={() => saveDeviceLabel(deviceId)}
+                className="text-emerald-400 hover:text-emerald-300"
+              >
+                <Save size={15} />
+              </button>
 
-                        <td className="px-4 py-3 font-mono text-gray-400">
-                          {shortId(account)}
-                        </td>
+              <button
+                onClick={cancelEditLabel}
+                className="text-gray-500 hover:text-gray-300"
+              >
+                <X size={15} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-white">
+                {deviceLabels[deviceId] || "Unlabeled"}
+              </span>
 
-                        <td className="px-4 py-3 font-semibold text-white">
-                          {formatUsd(device.amount_usd)}
-                        </td>
+              <button
+                onClick={() => startEditLabel(device)}
+                className="text-gray-500 hover:text-violet-300"
+              >
+                <Pencil size={14} />
+              </button>
+            </div>
+          )}
+        </td>
 
-                        <td className="px-4 py-3">
-                          {device.allocation_count ?? 0}
-                        </td>
+        <td className="px-4 py-3 font-mono">
+          {shortId(deviceId)}
+        </td>
 
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => toggleHideDevice(device)}
-                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
-                              hidden
-                                ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-                                : "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
-                            }`}
-                          >
-                            {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                            {hidden ? "Unhide" : "Hide"}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
+        <td className="px-4 py-3 font-medium text-gray-300">
+          {account}
+        </td>
+
+        <td className="px-4 py-3 font-semibold text-white">
+          {formatUsd(device.amount_usd)}
+        </td>
+
+        <td className="px-4 py-3">
+          <button
+            onClick={() => toggleHideDevice(device)}
+            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
+              hidden
+                ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                : "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+            }`}
+          >
+            {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+            {hidden ? "Unhide" : "Hide"}
+          </button>
+        </td>
+      </tr>
+    );
+  })}
+</tbody>
               </table>
             </div>
           )}
