@@ -12,7 +12,6 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
-
 import {
   Wallet,
   TrendingUp,
@@ -20,33 +19,74 @@ import {
   BarChart3,
   RefreshCw,
   Search,
+  Zap,
 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import {
+  syncFromExtensionNow,
+} from "@/lib/unityNetworkExtensionSync";
 
 export default function UnityDevicesPage() {
   const [devices, setDevices] = useState([]);
   const [accounts, setAccounts] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [lastSync, setLastSync] = useState(null);
-
   const [chartType, setChartType] = useState("bar");
   const [search, setSearch] = useState("");
   const [syncing, setSyncing] = useState(false);
+
+  const normalizePayload = (payload = {}) => {
+    const accountList = Array.isArray(payload.accounts) ? payload.accounts : [];
+
+    let deviceList = [];
+
+    if (Array.isArray(payload.devices)) {
+      deviceList = payload.devices;
+    } else if (Array.isArray(payload.combined_payload?.devices)) {
+      deviceList = payload.combined_payload.devices;
+    } else if (accountList.length > 0) {
+      deviceList = accountList.flatMap((account) =>
+        Array.isArray(account.devices)
+          ? account.devices.map((device) => ({
+              ...device,
+              account_id: account.account_id,
+              account_label: account.account_label,
+              account_email: account.email,
+            }))
+          : []
+      );
+    }
+
+    return {
+      devices: deviceList,
+      accounts: accountList,
+      summary: payload.combined_payload || payload,
+    };
+  };
+
+  const applyPayload = (payload) => {
+    const normalized = normalizePayload(payload);
+
+    setDevices(normalized.devices);
+    setAccounts(normalized.accounts);
+    setSummary(normalized.summary);
+    setLastSync(new Date());
+    setSyncing(false);
+  };
 
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.origin !== window.location.origin) return;
 
       const data = event.data;
-
       if (!data || data.source !== "unity-nodes-tracker-ext") return;
 
-      if (data.type === "EARNINGS_PUSH_MULTI") {
-        const payload = data.payload || {};
-
-        setDevices(Array.isArray(payload.devices) ? payload.devices : []);
-        setAccounts(Array.isArray(payload.accounts) ? payload.accounts : []);
-
-        setLastSync(new Date());
-        setSyncing(false);
+      if (
+        data.type === "EARNINGS_PUSH_MULTI" ||
+        data.type === "EARNINGS_PUSH"
+      ) {
+        applyPayload(data.payload || {});
       }
     };
 
@@ -60,14 +100,17 @@ export default function UnityDevicesPage() {
       window.location.origin
     );
 
-    return () => {
-      window.removeEventListener("message", handleMessage);
-    };
+    return () => window.removeEventListener("message", handleMessage);
   }, []);
 
   const syncExtension = async () => {
+    setSyncing(true);
+
     try {
-      setSyncing(true);
+      const result = await syncFromExtensionNow({
+        allowAutoConfigure: true,
+        timeoutMs: 5000,
+      });
 
       window.postMessage(
         {
@@ -77,12 +120,19 @@ export default function UnityDevicesPage() {
         window.location.origin
       );
 
-      setTimeout(() => {
-        setSyncing(false);
-      }, 2500);
+      if (!result?.ok) {
+        if (result?.reason === "timeout") {
+          toast.error("No response from extension. Make sure it is installed and active.");
+        } else {
+          toast.error(result?.error || "Extension sync failed.");
+        }
+      } else {
+        toast.success("Synced from extension.");
+      }
     } catch (err) {
-      console.error(err);
-      setSyncing(false);
+      toast.error(err?.message || "Extension sync failed.");
+    } finally {
+      setTimeout(() => setSyncing(false), 1000);
     }
   };
 
@@ -99,11 +149,8 @@ export default function UnityDevicesPage() {
 
   const shortId = (id) => {
     if (!id) return "Unknown";
-
     const str = String(id);
-
     if (str.length <= 14) return str;
-
     return `${str.slice(0, 6)}...${str.slice(-4)}`;
   };
 
@@ -115,7 +162,11 @@ export default function UnityDevicesPage() {
         );
 
         const account = String(
-          device.account || device.account_name || device.wallet || ""
+          device.account_email ||
+            device.account_label ||
+            device.account ||
+            device.wallet ||
+            ""
         );
 
         const query = search.toLowerCase();
@@ -128,27 +179,9 @@ export default function UnityDevicesPage() {
       .sort((a, b) => Number(b.amount_usd || 0) - Number(a.amount_usd || 0));
   }, [devices, search]);
 
-  const totalRecent = useMemo(() => {
-    return devices.reduce(
-      (sum, device) => sum + Number(device.amount_usd || 0),
-      0
-    );
-  }, [devices]);
-
-  const lifetimeTotal = useMemo(() => {
-    return devices.reduce((sum, device) => {
-      return (
-        sum +
-        Number(
-          device.lifetime_usd ||
-            device.total_usd ||
-            device.lifetime_earnings_usd ||
-            device.amount_usd ||
-            0
-        )
-      );
-    }, 0);
-  }, [devices]);
+  const balanceUsd = Number(summary?.balance_usd || 0);
+  const lifetimeUsd = Number(summary?.lifetime_usd || 0);
+  const recentUsd = Number(summary?.total_usd || 0);
 
   const totalAllocations = useMemo(() => {
     return devices.reduce(
@@ -158,55 +191,46 @@ export default function UnityDevicesPage() {
   }, [devices]);
 
   const chartData = useMemo(() => {
+    const allocationList = [];
+
+    if (Array.isArray(summary?.allocations)) {
+      allocationList.push(...summary.allocations);
+    }
+
+    accounts.forEach((account) => {
+      if (Array.isArray(account.allocations)) {
+        allocationList.push(...account.allocations);
+      }
+    });
+
     const dailyMap = new Map();
 
-    devices.forEach((device) => {
-      const history =
-        device.history ||
-        device.daily_earnings ||
-        device.earnings_by_day ||
-        device.daily ||
-        [];
+    allocationList.forEach((item) => {
+      const rawDate = item.completed_at || item.completedAt || item.date;
+      const amount = Number(item.amount_usd || item.amount || 0);
 
-      if (!Array.isArray(history)) return;
+      if (!rawDate || Number.isNaN(amount)) return;
 
-      history.forEach((item) => {
-        const rawDate =
-          item.date || item.day || item.created_at || item.timestamp;
+      const dateObj = new Date(rawDate);
+      if (Number.isNaN(dateObj.getTime())) return;
 
-        const amount = Number(
-          item.amount_usd ||
-            item.earnings_usd ||
-            item.usd ||
-            item.amount ||
-            0
-        );
-
-        if (!rawDate || Number.isNaN(amount)) return;
-
-        const dateObj = new Date(rawDate);
-
-        if (Number.isNaN(dateObj.getTime())) return;
-
-        const dateKey = dateObj.toISOString().slice(0, 10);
-
-        const label = dateObj.toLocaleDateString("en-US", {
-          month: "numeric",
-          day: "numeric",
-        });
-
-        const existing = dailyMap.get(dateKey);
-
-        if (existing) {
-          existing.earnings += amount;
-        } else {
-          dailyMap.set(dateKey, {
-            dateKey,
-            date: label,
-            earnings: amount,
-          });
-        }
+      const dateKey = dateObj.toISOString().slice(0, 10);
+      const label = dateObj.toLocaleDateString("en-US", {
+        month: "numeric",
+        day: "numeric",
       });
+
+      const existing = dailyMap.get(dateKey);
+
+      if (existing) {
+        existing.earnings += amount;
+      } else {
+        dailyMap.set(dateKey, {
+          dateKey,
+          date: label,
+          earnings: amount,
+        });
+      }
     });
 
     return Array.from(dailyMap.values())
@@ -216,14 +240,12 @@ export default function UnityDevicesPage() {
         date: row.date,
         earnings: Number(row.earnings.toFixed(2)),
       }));
-  }, [devices]);
+  }, [summary, accounts]);
 
-  const sevenDayTotal = useMemo(() => {
-    return chartData.reduce(
-      (sum, row) => sum + Number(row.earnings || 0),
-      0
-    );
-  }, [chartData]);
+  const sevenDayTotal = chartData.reduce(
+    (sum, row) => sum + Number(row.earnings || 0),
+    0
+  );
 
   const sevenDayAverage =
     chartData.length > 0 ? sevenDayTotal / chartData.length : 0;
@@ -234,7 +256,6 @@ export default function UnityDevicesPage() {
     return (
       <div className="rounded-lg border border-[#333] bg-[#111] px-3 py-2 shadow-xl">
         <p className="text-xs text-gray-400">{label}</p>
-
         <p className="text-sm font-semibold text-orange-400">
           {formatUsd(payload[0].value)}
         </p>
@@ -252,17 +273,13 @@ export default function UnityDevicesPage() {
       return (
         <LineChart {...commonProps}>
           <CartesianGrid stroke="#1f2937" vertical={false} />
-
           <XAxis dataKey="date" stroke="#6b7280" fontSize={12} />
-
           <YAxis
             stroke="#6b7280"
             fontSize={12}
             tickFormatter={(value) => `$${value}`}
           />
-
           <Tooltip content={<CustomTooltip />} />
-
           <Line
             type="monotone"
             dataKey="earnings"
@@ -283,19 +300,14 @@ export default function UnityDevicesPage() {
               <stop offset="95%" stopColor="#f97316" stopOpacity={0.05} />
             </linearGradient>
           </defs>
-
           <CartesianGrid stroke="#1f2937" vertical={false} />
-
           <XAxis dataKey="date" stroke="#6b7280" fontSize={12} />
-
           <YAxis
             stroke="#6b7280"
             fontSize={12}
             tickFormatter={(value) => `$${value}`}
           />
-
           <Tooltip content={<CustomTooltip />} />
-
           <Area
             type="monotone"
             dataKey="earnings"
@@ -315,19 +327,14 @@ export default function UnityDevicesPage() {
             <stop offset="100%" stopColor="#7c2d12" stopOpacity={0.25} />
           </linearGradient>
         </defs>
-
         <CartesianGrid stroke="#1f2937" vertical={false} />
-
         <XAxis dataKey="date" stroke="#6b7280" fontSize={12} />
-
         <YAxis
           stroke="#6b7280"
           fontSize={12}
           tickFormatter={(value) => `$${value}`}
         />
-
         <Tooltip content={<CustomTooltip />} />
-
         <Bar
           dataKey="earnings"
           fill="url(#unityBar)"
@@ -341,11 +348,9 @@ export default function UnityDevicesPage() {
   return (
     <div className="min-h-screen bg-[#070b12] p-6 text-white">
       <div className="mx-auto max-w-7xl space-y-5">
-
-        {/* HEADER */}
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex flex-wrap items-center gap-2">
               <h1 className="text-2xl font-bold">Unity Devices</h1>
 
               <span className="inline-flex items-center gap-1 rounded bg-violet-500/10 px-2 py-1 text-[10px] font-mono text-violet-400">
@@ -365,27 +370,23 @@ export default function UnityDevicesPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={syncExtension}
-              disabled={syncing}
-              className="inline-flex items-center gap-2 rounded-lg border border-violet-500/40 bg-violet-500/10 px-4 py-2 text-sm font-medium text-violet-300 transition hover:bg-violet-500/20 hover:text-violet-200 disabled:opacity-50"
-            >
-              <RefreshCw
-                size={16}
-                className={syncing ? "animate-spin" : ""}
-              />
-
-              {syncing ? "Syncing..." : "Sync from extension"}
-            </button>
-          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={syncExtension}
+            disabled={syncing}
+            className="border-violet-500/40 text-violet-300 hover:bg-violet-500/10 hover:text-violet-200 disabled:opacity-50"
+            title="Pull the latest payload pushed by the Chrome extension"
+          >
+            <Zap className={`mr-2 h-4 w-4 ${syncing ? "animate-pulse" : ""}`} />
+            {syncing ? "Syncing…" : "Sync from extension"}
+          </Button>
         </div>
 
-        {/* TOP CARDS */}
         <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
           <StatCard
             title="Balance"
-            value={formatUsd(totalRecent)}
+            value={formatUsd(balanceUsd)}
             subText="Current synced balance"
             icon={<Wallet size={22} />}
             accent="orange"
@@ -394,7 +395,7 @@ export default function UnityDevicesPage() {
 
           <StatCard
             title="Lifetime"
-            value={formatUsd(lifetimeTotal)}
+            value={formatUsd(lifetimeUsd)}
             subText="Total earnings"
             icon={<TrendingUp size={22} />}
             accent="yellow"
@@ -402,7 +403,7 @@ export default function UnityDevicesPage() {
 
           <StatCard
             title="Recent"
-            value={formatUsd(totalRecent)}
+            value={formatUsd(recentUsd)}
             subText={`${totalAllocations} payouts`}
             icon={<Calendar size={22} />}
             accent="green"
@@ -411,13 +412,12 @@ export default function UnityDevicesPage() {
           <StatCard
             title="7-Day Avg"
             value={`${formatUsd(sevenDayAverage)}/d`}
-            subText="From extension history"
+            subText="From extension allocations"
             icon={<BarChart3 size={22} />}
             accent="orange"
           />
         </div>
 
-        {/* CHART */}
         <section className="rounded-xl border border-[#1f2937] bg-[#0b111c] p-4 shadow-xl">
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -456,7 +456,6 @@ export default function UnityDevicesPage() {
           </div>
         </section>
 
-        {/* DEVICE TABLE */}
         <section className="overflow-hidden rounded-xl border border-[#1f2937] bg-[#0b111c] shadow-xl">
           <div className="flex flex-col gap-3 border-b border-[#1f2937] p-4 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-300">
@@ -491,7 +490,6 @@ export default function UnityDevicesPage() {
                     <th className="px-4 py-3 text-left">Device ID</th>
                     <th className="px-4 py-3 text-left">Account</th>
                     <th className="px-4 py-3 text-left">Recent</th>
-                    <th className="px-4 py-3 text-left">Lifetime</th>
                     <th className="px-4 py-3 text-left">Allocations</th>
                   </tr>
                 </thead>
@@ -502,31 +500,21 @@ export default function UnityDevicesPage() {
                       device.license_id || device.device_id || device.id;
 
                     const account =
+                      device.account_label ||
+                      device.account_email ||
                       device.account ||
-                      device.account_name ||
                       device.wallet ||
-                      accounts[index]?.wallet ||
                       "Unknown";
-
-                    const lifetime =
-                      device.lifetime_usd ||
-                      device.total_usd ||
-                      device.lifetime_earnings_usd ||
-                      device.amount_usd ||
-                      0;
 
                     return (
                       <tr
                         key={`${id || index}`}
                         className="border-t border-[#1f2937] text-gray-300 hover:bg-[#111827]"
                       >
-                        <td className="px-4 py-3 text-gray-400">
-                          {index + 1}
-                        </td>
+                        <td className="px-4 py-3 text-gray-400">{index + 1}</td>
 
                         <td className="px-4 py-3 font-mono">
                           <div>{shortId(id)}</div>
-
                           <div className="text-xs text-gray-600">
                             {id || "No ID"}
                           </div>
@@ -538,10 +526,6 @@ export default function UnityDevicesPage() {
 
                         <td className="px-4 py-3 font-semibold text-white">
                           {formatUsd(device.amount_usd)}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          {formatUsd(lifetime)}
                         </td>
 
                         <td className="px-4 py-3">
@@ -575,14 +559,12 @@ function StatCard({
       bg: "bg-orange-500/10",
       bar: "bg-orange-500",
     },
-
     yellow: {
       border: "border-yellow-500/50",
       text: "text-yellow-400",
       bg: "bg-yellow-500/10",
       bar: "bg-yellow-500",
     },
-
     green: {
       border: "border-green-500/50",
       text: "text-green-400",
@@ -594,18 +576,13 @@ function StatCard({
   const color = colors[accent] || colors.orange;
 
   return (
-    <div
-      className={`rounded-xl border ${color.border} bg-[#0b111c] p-5 shadow-xl`}
-    >
+    <div className={`rounded-xl border ${color.border} bg-[#0b111c] p-5 shadow-xl`}>
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-gray-400">
             {title}
           </p>
-
-          <p className={`mt-4 text-3xl font-bold ${color.text}`}>
-            {value}
-          </p>
+          <p className={`mt-4 text-3xl font-bold ${color.text}`}>{value}</p>
         </div>
 
         <div
