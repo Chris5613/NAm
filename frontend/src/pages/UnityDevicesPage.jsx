@@ -266,22 +266,58 @@ export default function UnityDevicesPage() {
     );
   }, [visibleDevices]);
 
-  const chartData = useMemo(() => {
-    const allocationList = [];
+const chartData = useMemo(() => {
+  const dailyMap = new Map();
 
-    if (Array.isArray(summary?.allocations)) {
-      allocationList.push(...summary.allocations);
-    }
+  const addRows = (rows = []) => {
+    if (!Array.isArray(rows)) return;
 
-    if (Array.isArray(summary?.combined_payload?.allocations)) {
-      allocationList.push(...summary.combined_payload.allocations);
-    }
+    rows.forEach((row) => {
+      const dateKey = row.date || row.day;
+      const amount = Number(row.earnings_usd || row.amount_usd || 0);
 
-    accounts.forEach((account) => {
-      if (Array.isArray(account.allocations)) {
-        allocationList.push(...account.allocations);
+      if (!dateKey || Number.isNaN(amount)) return;
+
+      const dateObj = new Date(`${dateKey}T00:00:00`);
+
+      const label = dateObj.toLocaleDateString("en-US", {
+        month: "numeric",
+        day: "numeric",
+      });
+
+      const existing = dailyMap.get(dateKey);
+
+      if (existing) {
+        existing.earnings += amount;
+      } else {
+        dailyMap.set(dateKey, {
+          dateKey,
+          date: label,
+          earnings: amount,
+        });
       }
     });
+  };
+
+  // Combined daily earnings from extension
+  addRows(summary?.daily_earnings);
+
+  // Backup if payload still has combined_payload nested
+  addRows(summary?.combined_payload?.daily_earnings);
+
+  // Backup if each account has its own daily earnings
+  accounts.forEach((account) => {
+    addRows(account.daily_earnings);
+  });
+
+  return Array.from(dailyMap.values())
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    .slice(-14)
+    .map((row) => ({
+      date: row.date,
+      earnings: Number(row.earnings.toFixed(2)),
+    }));
+}, [summary, accounts]);
 
     devices.forEach((device) => {
       const deviceId = getDeviceId(device);
