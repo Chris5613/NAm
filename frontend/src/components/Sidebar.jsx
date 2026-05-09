@@ -8,7 +8,7 @@ const NAV_ITEMS = [
   { path: "/gomining", label: "GoMining", icon: Pickaxe },
 
   // NEW PAGE
-  { path: "/unity-devices", label: "Unity Devices", icon: Cpu },
+  { path: "/unity-devices", label: "Unity Devices", icon: Phone},
 
   { path: "/integrations", label: "Integrations", icon: Zap },
   { path: "/phone-list", label: "Phone List", icon: Phone },
