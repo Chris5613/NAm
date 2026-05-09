@@ -575,17 +575,6 @@ const chartData = useMemo(() => {
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[1000px] text-sm">
-                <thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
-                  <tr>
-                    <th className="px-4 py-3 text-left">#</th>
-                    <th className="px-4 py-3 text-left">Label</th>
-                    <th className="px-4 py-3 text-left">Device ID</th>
-                    <th className="px-4 py-3 text-left">Account</th>
-                    <th className="px-4 py-3 text-left">Recent</th>
-                    <th className="px-4 py-3 text-left">Allocations</th>
-                    <th className="px-4 py-3 text-left">Actions</th>
-                  </tr>
-                </thead>
 
 <thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
   <tr>
