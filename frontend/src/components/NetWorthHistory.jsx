@@ -53,11 +53,53 @@ function normalizeHistoryPoint(item) {
 }
 
 export default function NetWorthHistory({ history = [] }) {
-  const chartData = useMemo(() => {
-    return Array.isArray(history)
-      ? history.map(normalizeHistoryPoint).filter((p) => p.value > 0)
-      : [];
-  }, [history]);
+const chartData = useMemo(() => {
+  const dailyMap = new Map();
+
+  const addRows = (rows = []) => {
+    if (!Array.isArray(rows)) return;
+
+    rows.forEach((row) => {
+      const dateKey = row.date || row.day;
+
+      const amount = Number(
+        row.earnings_usd ||
+        row.amount_usd ||
+        row.usd ||
+        row.amount ||
+        0
+      );
+
+      if (!dateKey || Number.isNaN(amount)) return;
+
+      const dateObj = new Date(`${dateKey}T00:00:00`);
+
+      if (Number.isNaN(dateObj.getTime())) return;
+
+      const label = dateObj.toLocaleDateString("en-US", {
+        month: "numeric",
+        day: "numeric",
+      });
+
+      dailyMap.set(dateKey, {
+        dateKey,
+        date: label,
+        earnings: amount,
+      });
+    });
+  };
+
+  // ONLY use combined daily earnings
+  addRows(summary?.daily_earnings);
+
+  return Array.from(dailyMap.values())
+    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+    .slice(-14)
+    .map((row) => ({
+      date: row.date,
+      earnings: Number(row.earnings.toFixed(2)),
+    }));
+}, [summary]);
 
   if (chartData.length === 0) {
     return (
@@ -105,7 +147,7 @@ export default function NetWorthHistory({ history = [] }) {
             </defs>
 
             <XAxis
-              dataKey="time"
+              dataKey="date"
               stroke="#52525B"
               fontSize={11}
               fontFamily="'Space Mono', monospace"
@@ -121,7 +163,7 @@ export default function NetWorthHistory({ history = [] }) {
               fontFamily="'Space Mono', monospace"
               tickLine={false}
               axisLine={false}
-              tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+              tickFormatter={(v) => `$${v}`}
               domain={Y_AXIS_DOMAIN}
             />
 
@@ -131,8 +173,8 @@ export default function NetWorthHistory({ history = [] }) {
                 if (!active || !payload?.length) return null;
 
                 const point = payload[0]?.payload;
-                const value = point?.value ?? payload[0]?.value;
-                const itemLabel = formatAxisLabel(point?.time ?? label);
+                const value = point?.earnings ?? payload[0]?.value;
+                const itemLabel = point?.date ?? label;
 
                 return (
                   <div style={TOOLTIP_BOX_STYLE}>
@@ -150,7 +192,7 @@ export default function NetWorthHistory({ history = [] }) {
 
             <Area
               type="monotone"
-              dataKey="value"
+              dataKey="earnings"
               stroke="#FAFAFA"
               strokeWidth={2}
               fill="url(#netWorthGradient)"
