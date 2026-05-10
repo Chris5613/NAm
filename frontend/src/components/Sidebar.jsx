@@ -20,7 +20,6 @@ const NAV_ITEMS = [
   { path: "/gomining", label: "GoMining", icon: Pickaxe },
   { path: "/integrations", label: "Integrations", icon: Zap },
   { path: "/unity-devices", label: "Unity Devices", icon: Cable },
-  { path: "/phone-list", label: "Phone List", icon: Smartphone },
 ];
 
 export default function Sidebar() {
