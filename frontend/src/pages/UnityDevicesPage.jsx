@@ -65,6 +65,9 @@ export default function UnityDevicesPage() {
   const [editingDeviceId, setEditingDeviceId] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
 
+  const getDeviceId = (device) =>
+    String(device.license_id || device.device_id || device.id || "unknown");
+
   const normalizePayload = (payload = {}) => {
     const accountList = Array.isArray(payload.accounts) ? payload.accounts : [];
 
@@ -176,9 +179,6 @@ export default function UnityDevicesPage() {
     return `${str.slice(0, 6)}...${str.slice(-4)}`;
   };
 
-  const getDeviceId = (device) =>
-    String(device.license_id || device.device_id || device.id || "unknown");
-
   const saveDeviceLabel = (deviceId) => {
     const next = {
       ...deviceLabels,
@@ -233,7 +233,6 @@ export default function UnityDevicesPage() {
     return visibleDevices
       .filter((device) => {
         const deviceId = getDeviceId(device);
-
         const label = String(deviceLabels[deviceId] || "");
 
         const account = String(
@@ -259,66 +258,64 @@ export default function UnityDevicesPage() {
   const lifetimeUsd = Number(summary?.lifetime_usd || 0);
   const recentUsd = Number(summary?.total_usd || 0);
 
-  const totalAllocations = useMemo(() => {
-    return visibleDevices.reduce(
-      (sum, device) => sum + Number(device.allocation_count || 0),
-      0
-    );
-  }, [visibleDevices]);
+  const chartData = useMemo(() => {
+    let rows = [];
 
-const chartData = useMemo(() => {
-  const dailyMap = new Map();
+    if (Array.isArray(summary?.daily_earnings) && summary.daily_earnings.length > 0) {
+      rows = summary.daily_earnings;
+    } else if (
+      Array.isArray(summary?.combined_payload?.daily_earnings) &&
+      summary.combined_payload.daily_earnings.length > 0
+    ) {
+      rows = summary.combined_payload.daily_earnings;
+    } else {
+      const accountMap = new Map();
 
-  const addRows = (rows = []) => {
-    if (!Array.isArray(rows)) return;
+      accounts.forEach((account) => {
+        (account.daily_earnings || []).forEach((row) => {
+          const date = row.date || row.day;
+          if (!date) return;
 
-    rows.forEach((row) => {
-      const dateKey = row.date || row.day;
-      const amount = Number(row.earnings_usd || row.amount_usd || 0);
+          const amount = Number(row.earnings_usd || row.amount_usd || 0);
 
-      if (!dateKey || Number.isNaN(amount)) return;
+          if (!accountMap.has(date)) {
+            accountMap.set(date, {
+              date,
+              earnings_usd: 0,
+            });
+          }
 
-      const dateObj = new Date(`${dateKey}T00:00:00`);
-
-      const label = dateObj.toLocaleDateString("en-US", {
-        month: "numeric",
-        day: "numeric",
+          accountMap.get(date).earnings_usd += amount;
+        });
       });
 
-      const existing = dailyMap.get(dateKey);
+      rows = Array.from(accountMap.values());
+    }
 
-      if (existing) {
-        existing.earnings += amount;
-      } else {
-        dailyMap.set(dateKey, {
+    return rows
+      .map((row) => {
+        const dateKey = row.date || row.day;
+        const amount = Number(row.earnings_usd || row.amount_usd || 0);
+
+        if (!dateKey || Number.isNaN(amount)) return null;
+
+        const dateObj = new Date(`${dateKey}T00:00:00`);
+
+        if (Number.isNaN(dateObj.getTime())) return null;
+
+        return {
           dateKey,
-          date: label,
-          earnings: amount,
-        });
-      }
-    });
-  };
-
-  // Combined daily earnings from extension
-  addRows(summary?.daily_earnings);
-
-  // Backup if payload still has combined_payload nested
-  addRows(summary?.combined_payload?.daily_earnings);
-
-  // Backup if each account has its own daily earnings
-  accounts.forEach((account) => {
-    addRows(account.daily_earnings);
-  });
-
-  return Array.from(dailyMap.values())
-    .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
-    .slice(-14)
-    .map((row) => ({
-      date: row.date,
-      earnings: Number(row.earnings.toFixed(2)),
-    }));
-}, [summary, accounts]);
-
+          date: dateObj.toLocaleDateString("en-US", {
+            month: "numeric",
+            day: "numeric",
+          }),
+          earnings: Number(amount.toFixed(2)),
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.dateKey.localeCompare(b.dateKey))
+      .slice(-14);
+  }, [summary, accounts]);
 
   const sevenDayTotal = chartData
     .slice(-7)
@@ -479,7 +476,7 @@ const chartData = useMemo(() => {
           <StatCard
             title="Recent"
             value={formatUsd(recentUsd)}
-            subText={`${totalAllocations} payouts`}
+            subText="Latest synced earnings"
             icon={<Calendar size={22} />}
             accent="green"
           />
@@ -487,7 +484,7 @@ const chartData = useMemo(() => {
           <StatCard
             title="7-Day Avg"
             value={`${formatUsd(sevenDayAverage)}/d`}
-            subText="From extension allocations"
+            subText="From daily earnings"
             icon={<BarChart3 size={22} />}
             accent="orange"
           />
@@ -519,8 +516,8 @@ const chartData = useMemo(() => {
 
             <div className="text-xs text-gray-500">
               {chartData.length > 0
-                ? "Using day-by-day extension allocation data"
-                : "Waiting for dated allocation history"}
+                ? "Using one daily source only"
+                : "Waiting for daily earnings history"}
             </div>
           </div>
 
@@ -545,7 +542,7 @@ const chartData = useMemo(() => {
               </h2>
 
               <button
-                onClick={() => setShowHidden((v) => !v)}
+                onClick={() => setShowHidden((value) => !value)}
                 className="inline-flex items-center gap-1 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-300 hover:bg-[#131c2b]"
               >
                 {showHidden ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -574,119 +571,119 @@ const chartData = useMemo(() => {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1000px] text-sm">
+              <table className="w-full min-w-[900px] text-sm">
+                <thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
+                  <tr>
+                    <th className="px-4 py-3 text-left">#</th>
+                    <th className="px-4 py-3 text-left">Label</th>
+                    <th className="px-4 py-3 text-left">Device ID</th>
+                    <th className="px-4 py-3 text-left">Account</th>
+                    <th className="px-4 py-3 text-left">Recent</th>
+                    <th className="px-4 py-3 text-left">Actions</th>
+                  </tr>
+                </thead>
 
-<thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
-  <tr>
-    <th className="px-4 py-3 text-left">#</th>
-    <th className="px-4 py-3 text-left">Label</th>
-    <th className="px-4 py-3 text-left">Device ID</th>
-    <th className="px-4 py-3 text-left">Account</th>
-    <th className="px-4 py-3 text-left">Recent</th>
-    <th className="px-4 py-3 text-left">Actions</th>
-  </tr>
-</thead>
+                <tbody>
+                  {filteredDevices.map((device, index) => {
+                    const deviceId = getDeviceId(device);
+                    const hidden = !!hiddenDevices[deviceId];
 
-<tbody>
-  {filteredDevices.map((device, index) => {
-    const deviceId = getDeviceId(device);
-    const hidden = !!hiddenDevices[deviceId];
+                    const rawAccount =
+                      device.account_label ||
+                      device.account_email ||
+                      device.account ||
+                      device.wallet ||
+                      "Unknown";
 
-    const rawAccount =
-      device.account_label ||
-      device.account_email ||
-      device.account ||
-      device.wallet ||
-      "Unknown";
+                    const accountLower = String(rawAccount).toLowerCase();
 
-    const accountLower = String(rawAccount).toLowerCase();
+                    const account = accountLower.startsWith("christian")
+                      ? "Androids"
+                      : accountLower.startsWith("cloud")
+                        ? "iPhones"
+                        : rawAccount;
 
-    const account =
-      accountLower.startsWith("christian")
-        ? "Androids"
-        : accountLower.startsWith("cloud")
-          ? "iPhones"
-          : rawAccount;
+                    return (
+                      <tr
+                        key={`${deviceId || index}`}
+                        className={`border-t border-[#1f2937] text-gray-300 hover:bg-[#111827] ${
+                          hidden ? "opacity-45" : ""
+                        }`}
+                      >
+                        <td className="px-4 py-3 text-gray-400">{index + 1}</td>
 
-    return (
-      <tr
-        key={`${deviceId || index}`}
-        className={`border-t border-[#1f2937] text-gray-300 hover:bg-[#111827] ${
-          hidden ? "opacity-45" : ""
-        }`}
-      >
-        <td className="px-4 py-3 text-gray-400">{index + 1}</td>
+                        <td className="px-4 py-3">
+                          {editingDeviceId === deviceId ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                value={editingLabel}
+                                onChange={(event) =>
+                                  setEditingLabel(event.target.value)
+                                }
+                                placeholder="Device label"
+                                className="w-40 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
+                                autoFocus
+                              />
 
-        <td className="px-4 py-3">
-          {editingDeviceId === deviceId ? (
-            <div className="flex items-center gap-2">
-              <input
-                value={editingLabel}
-                onChange={(e) => setEditingLabel(e.target.value)}
-                placeholder="Device label"
-                className="w-40 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
-                autoFocus
-              />
+                              <button
+                                onClick={() => saveDeviceLabel(deviceId)}
+                                className="text-emerald-400 hover:text-emerald-300"
+                              >
+                                <Save size={15} />
+                              </button>
 
-              <button
-                onClick={() => saveDeviceLabel(deviceId)}
-                className="text-emerald-400 hover:text-emerald-300"
-              >
-                <Save size={15} />
-              </button>
+                              <button
+                                onClick={cancelEditLabel}
+                                className="text-gray-500 hover:text-gray-300"
+                              >
+                                <X size={15} />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-white">
+                                {deviceLabels[deviceId] || "Unlabeled"}
+                              </span>
 
-              <button
-                onClick={cancelEditLabel}
-                className="text-gray-500 hover:text-gray-300"
-              >
-                <X size={15} />
-              </button>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-white">
-                {deviceLabels[deviceId] || "Unlabeled"}
-              </span>
+                              <button
+                                onClick={() => startEditLabel(device)}
+                                className="text-gray-500 hover:text-violet-300"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                            </div>
+                          )}
+                        </td>
 
-              <button
-                onClick={() => startEditLabel(device)}
-                className="text-gray-500 hover:text-violet-300"
-              >
-                <Pencil size={14} />
-              </button>
-            </div>
-          )}
-        </td>
+                        <td className="px-4 py-3 font-mono">
+                          {shortId(deviceId)}
+                        </td>
 
-        <td className="px-4 py-3 font-mono">
-          {shortId(deviceId)}
-        </td>
+                        <td className="px-4 py-3 font-medium text-gray-300">
+                          {account}
+                        </td>
 
-        <td className="px-4 py-3 font-medium text-gray-300">
-          {account}
-        </td>
+                        <td className="px-4 py-3 font-semibold text-white">
+                          {formatUsd(device.amount_usd)}
+                        </td>
 
-        <td className="px-4 py-3 font-semibold text-white">
-          {formatUsd(device.amount_usd)}
-        </td>
-
-        <td className="px-4 py-3">
-          <button
-            onClick={() => toggleHideDevice(device)}
-            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
-              hidden
-                ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-                : "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
-            }`}
-          >
-            {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-            {hidden ? "Unhide" : "Hide"}
-          </button>
-        </td>
-      </tr>
-    );
-  })}
-</tbody>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => toggleHideDevice(device)}
+                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
+                              hidden
+                                ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                                : "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                            }`}
+                          >
+                            {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                            {hidden ? "Unhide" : "Hide"}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
               </table>
             </div>
           )}
@@ -728,7 +725,9 @@ function StatCard({
   const color = colors[accent] || colors.orange;
 
   return (
-    <div className={`rounded-xl border ${color.border} bg-[#0b111c] p-5 shadow-xl`}>
+    <div
+      className={`rounded-xl border ${color.border} bg-[#0b111c] p-5 shadow-xl`}
+    >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.25em] text-gray-400">
@@ -737,7 +736,9 @@ function StatCard({
           <p className={`mt-4 text-3xl font-bold ${color.text}`}>{value}</p>
         </div>
 
-        <div className={`rounded-lg border ${color.border} ${color.bg} p-3 ${color.text}`}>
+        <div
+          className={`rounded-lg border ${color.border} ${color.bg} p-3 ${color.text}`}
+        >
           {icon}
         </div>
       </div>
