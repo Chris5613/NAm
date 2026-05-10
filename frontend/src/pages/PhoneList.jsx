@@ -31,7 +31,7 @@ function formatCurrency(v) {
 }
 
 function dynamicDeviceId(index) {
-  return `D-${String(index + 1).padStart(3, "0")}`;
+  return index + 1;
 }
 
 function parseTags(value) {
