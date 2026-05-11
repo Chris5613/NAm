@@ -193,15 +193,15 @@ export default function TelloDashboard() {
                 </div>
               </div>
 
-<div className="flex w-full flex-col gap-4">
+<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
   {(account.lines || []).map((line) => {
     const percent = getDataPercent(line);
 
     return (
-<div
-  key={line.phone}
-  className="w-full rounded-2xl border border-border/40 bg-background/40 p-5"
->
+      <div
+        key={line.phone}
+        className="rounded-2xl border border-border/40 bg-background/40 p-4"
+      >
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="text-lg font-black text-foreground">
@@ -214,7 +214,7 @@ export default function TelloDashboard() {
                         </div>
                       </div>
 
-<div className="mt-5 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+<div className="mt-5 flex items-end justify-between gap-3">
                         <div>
                           <div className="text-3xl font-black text-foreground">
                             {line.dataRemaining || "Unknown"}
