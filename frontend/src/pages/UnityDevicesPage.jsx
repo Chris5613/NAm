@@ -323,6 +323,153 @@ export default function UnityDevicesPage() {
 
   const sevenDayAverage = chartData.length > 0 ? sevenDayTotal / 7 : 0;
 
+  const getDeviceGroup = (device) => {
+    const rawAccount =
+      device.account_label ||
+      device.account_email ||
+      device.account ||
+      device.wallet ||
+      "Unknown";
+
+    const accountLower = String(rawAccount).toLowerCase();
+
+    if (accountLower.startsWith("christian")) return "Androids";
+    if (accountLower.startsWith("cloud")) return "iPhones";
+
+    return "Other";
+  };
+
+  const androidDevices = filteredDevices.filter(
+    (device) => getDeviceGroup(device) === "Androids"
+  );
+
+  const iphoneDevices = filteredDevices.filter(
+    (device) => getDeviceGroup(device) === "iPhones"
+  );
+
+  const otherDevices = filteredDevices.filter(
+    (device) => getDeviceGroup(device) === "Other"
+  );
+
+  const renderDeviceTable = (title, deviceList) => (
+    <section className="overflow-hidden rounded-xl border border-[#1f2937] bg-[#0b111c] shadow-xl">
+      <div className="flex items-center justify-between border-b border-[#1f2937] p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.2em] text-gray-300">
+          {title} ({deviceList.length})
+        </h2>
+      </div>
+
+      {deviceList.length === 0 ? (
+        <div className="p-6 text-sm text-gray-400">
+          No {title.toLowerCase()} found.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] text-sm">
+            <thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
+              <tr>
+                <th className="px-4 py-3 text-left">#</th>
+                <th className="px-4 py-3 text-left">Label</th>
+                <th className="px-4 py-3 text-left">Device ID</th>
+                <th className="px-4 py-3 text-left">Account</th>
+                <th className="px-4 py-3 text-left">Recent</th>
+                <th className="px-4 py-3 text-left">Actions</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {deviceList.map((device, index) => {
+                const deviceId = getDeviceId(device);
+                const hidden = !!hiddenDevices[deviceId];
+                const account = getDeviceGroup(device);
+
+                return (
+                  <tr
+                    key={`${title}-${deviceId || index}`}
+                    className={`border-t border-[#1f2937] text-gray-300 hover:bg-[#111827] ${
+                      hidden ? "opacity-45" : ""
+                    }`}
+                  >
+                    <td className="px-4 py-3 text-gray-400">{index + 1}</td>
+
+                    <td className="px-4 py-3">
+                      {editingDeviceId === deviceId ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={editingLabel}
+                            onChange={(event) =>
+                              setEditingLabel(event.target.value)
+                            }
+                            placeholder="Device label"
+                            className="w-40 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
+                            autoFocus
+                          />
+
+                          <button
+                            onClick={() => saveDeviceLabel(deviceId)}
+                            className="text-emerald-400 hover:text-emerald-300"
+                          >
+                            <Save size={15} />
+                          </button>
+
+                          <button
+                            onClick={cancelEditLabel}
+                            className="text-gray-500 hover:text-gray-300"
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-white">
+                            {deviceLabels[deviceId] || "Unlabeled"}
+                          </span>
+
+                          <button
+                            onClick={() => startEditLabel(device)}
+                            className="text-gray-500 hover:text-violet-300"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+
+                    <td className="px-4 py-3 font-mono">
+                      {shortId(deviceId)}
+                    </td>
+
+                    <td className="px-4 py-3 font-medium text-gray-300">
+                      {account}
+                    </td>
+
+                    <td className="px-4 py-3 font-semibold text-white">
+                      {formatUsd(device.amount_usd)}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={() => toggleHideDevice(device)}
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
+                          hidden
+                            ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
+                            : "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
+                        }`}
+                      >
+                        {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
+                        {hidden ? "Unhide" : "Hide"}
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
 
@@ -565,129 +712,18 @@ export default function UnityDevicesPage() {
             </div>
           </div>
 
-          {filteredDevices.length === 0 ? (
+          {filteredDevices.length === 0 && (
             <div className="p-6 text-sm text-gray-400">
               No device data found yet. Click Sync from extension.
             </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[900px] text-sm">
-                <thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
-                  <tr>
-                    <th className="px-4 py-3 text-left">#</th>
-                    <th className="px-4 py-3 text-left">Label</th>
-                    <th className="px-4 py-3 text-left">Device ID</th>
-                    <th className="px-4 py-3 text-left">Account</th>
-                    <th className="px-4 py-3 text-left">Recent</th>
-                    <th className="px-4 py-3 text-left">Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  {filteredDevices.map((device, index) => {
-                    const deviceId = getDeviceId(device);
-                    const hidden = !!hiddenDevices[deviceId];
-
-                    const rawAccount =
-                      device.account_label ||
-                      device.account_email ||
-                      device.account ||
-                      device.wallet ||
-                      "Unknown";
-
-                    const accountLower = String(rawAccount).toLowerCase();
-
-                    const account = accountLower.startsWith("christian")
-                      ? "Androids"
-                      : accountLower.startsWith("cloud")
-                        ? "iPhones"
-                        : rawAccount;
-
-                    return (
-                      <tr
-                        key={`${deviceId || index}`}
-                        className={`border-t border-[#1f2937] text-gray-300 hover:bg-[#111827] ${
-                          hidden ? "opacity-45" : ""
-                        }`}
-                      >
-                        <td className="px-4 py-3 text-gray-400">{index + 1}</td>
-
-                        <td className="px-4 py-3">
-                          {editingDeviceId === deviceId ? (
-                            <div className="flex items-center gap-2">
-                              <input
-                                value={editingLabel}
-                                onChange={(event) =>
-                                  setEditingLabel(event.target.value)
-                                }
-                                placeholder="Device label"
-                                className="w-40 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
-                                autoFocus
-                              />
-
-                              <button
-                                onClick={() => saveDeviceLabel(deviceId)}
-                                className="text-emerald-400 hover:text-emerald-300"
-                              >
-                                <Save size={15} />
-                              </button>
-
-                              <button
-                                onClick={cancelEditLabel}
-                                className="text-gray-500 hover:text-gray-300"
-                              >
-                                <X size={15} />
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-white">
-                                {deviceLabels[deviceId] || "Unlabeled"}
-                              </span>
-
-                              <button
-                                onClick={() => startEditLabel(device)}
-                                className="text-gray-500 hover:text-violet-300"
-                              >
-                                <Pencil size={14} />
-                              </button>
-                            </div>
-                          )}
-                        </td>
-
-                        <td className="px-4 py-3 font-mono">
-                          {shortId(deviceId)}
-                        </td>
-
-                        <td className="px-4 py-3 font-medium text-gray-300">
-                          {account}
-                        </td>
-
-                        <td className="px-4 py-3 font-semibold text-white">
-                          {formatUsd(device.amount_usd)}
-                        </td>
-
-                        <td className="px-4 py-3">
-                          <button
-                            onClick={() => toggleHideDevice(device)}
-                            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs ${
-                              hidden
-                                ? "border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/10"
-                                : "border-rose-500/40 text-rose-300 hover:bg-rose-500/10"
-                            }`}
-                          >
-                            {hidden ? <Eye size={14} /> : <EyeOff size={14} />}
-                            {hidden ? "Unhide" : "Hide"}
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
           )}
         </section>
+
+        <div className="space-y-5">
+          {renderDeviceTable("Androids", androidDevices)}
+          {renderDeviceTable("iPhones", iphoneDevices)}
+          {otherDevices.length > 0 && renderDeviceTable("Other", otherDevices)}
+        </div>
       </div>
     </div>
   );
