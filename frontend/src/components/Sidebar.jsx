@@ -20,6 +20,7 @@ const NAV_ITEMS = [
   { path: "/gomining", label: "GoMining", icon: Pickaxe },
   { path: "/integrations", label: "Integrations", icon: Zap },
   { path: "/unity-devices", label: "Unity Devices", icon: Cable },
+  { path: "/tello-dashboard", label: "Tello Dashboard", icon: Smartphone },
 ];
 
 export default function Sidebar() {

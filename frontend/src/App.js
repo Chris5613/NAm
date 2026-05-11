@@ -21,6 +21,8 @@ import {
 import { runAcurastUsdToAcuMigrationIfNeeded } from "@/lib/acurastSync";
 import { installExtensionListener } from "@/lib/unityNetworkExtensionSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
+import TelloDashboard from "./pages/TelloDashboard";
+
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
 // snapshot in dev. Survives the StrictMode remount; reset on full page reload.
@@ -135,6 +137,7 @@ function App() {
               <Route path="/integrations" element={<IntegrationsPage />} />
               <Route path="/phone-list" element={<PhoneList />} />
               <Route path="/unity-devices" element={<UnityDevicesPage />} />
+              <Route path="/tello-dashboard" element={<TelloDashboard />} />
             </Routes>
           </div>
         </main>
