@@ -752,11 +752,11 @@ export default function UnityDevicesPage() {
           )}
         </section>
 
-        <div className="space-y-5">
-          {renderDeviceTable("Androids", androidDevices)}
-          {renderDeviceTable("iPhones", iphoneDevices)}
-          {otherDevices.length > 0 && renderDeviceTable("Other", otherDevices)}
-        </div>
+<div className="space-y-5">
+  {renderDeviceTable("iPhones", iphoneDevices)}
+  {renderDeviceTable("Androids", androidDevices)}
+  {otherDevices.length > 0 && renderDeviceTable("Other", otherDevices)}
+</div>
       </div>
     </div>
   );
