@@ -31,6 +31,7 @@ import { syncFromExtensionNow } from "@/lib/unityNetworkExtensionSync";
 
 const DEVICE_LABELS_KEY = "unity_device_labels";
 const HIDDEN_DEVICES_KEY = "unity_hidden_devices";
+const DEVICE_LEASES_KEY = "unity_device_leases";
 
 function getStoredJson(key, fallback) {
   try {
@@ -60,6 +61,10 @@ export default function UnityDevicesPage() {
 
   const [hiddenDevices, setHiddenDevices] = useState(() =>
     getStoredJson(HIDDEN_DEVICES_KEY, {})
+  );
+
+  const [deviceLeases, setDeviceLeases] = useState(() =>
+    getStoredJson(DEVICE_LEASES_KEY, {})
   );
 
   const [editingDeviceId, setEditingDeviceId] = useState(null);
@@ -195,6 +200,20 @@ export default function UnityDevicesPage() {
     setEditingLabel("");
   };
 
+  const saveDeviceLease = (deviceId, value) => {
+    const next = {
+      ...deviceLeases,
+      [deviceId]: value.trim(),
+    };
+
+    if (!value.trim()) {
+      delete next[deviceId];
+    }
+
+    setDeviceLeases(next);
+    setStoredJson(DEVICE_LEASES_KEY, next);
+  };
+
   const startEditLabel = (device) => {
     const deviceId = getDeviceId(device);
     setEditingDeviceId(deviceId);
@@ -234,6 +253,7 @@ export default function UnityDevicesPage() {
       .filter((device) => {
         const deviceId = getDeviceId(device);
         const label = String(deviceLabels[deviceId] || "");
+        const lease = String(deviceLeases[deviceId] || "");
 
         const account = String(
           device.account_email ||
@@ -248,11 +268,12 @@ export default function UnityDevicesPage() {
         return (
           deviceId.toLowerCase().includes(query) ||
           label.toLowerCase().includes(query) ||
+          lease.toLowerCase().includes(query) ||
           account.toLowerCase().includes(query)
         );
       })
       .sort((a, b) => Number(b.amount_usd || 0) - Number(a.amount_usd || 0));
-  }, [visibleDevices, search, deviceLabels]);
+  }, [visibleDevices, search, deviceLabels, deviceLeases]);
 
   const balanceUsd = Number(summary?.balance_usd || 0);
   const lifetimeUsd = Number(summary?.lifetime_usd || 0);
@@ -365,12 +386,13 @@ export default function UnityDevicesPage() {
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-sm">
+          <table className="w-full min-w-[1050px] text-sm">
             <thead className="bg-[#111827] text-xs uppercase tracking-wider text-gray-400">
               <tr>
                 <th className="px-4 py-3 text-left">#</th>
                 <th className="px-4 py-3 text-left">Label</th>
                 <th className="px-4 py-3 text-left">Device ID</th>
+                <th className="px-4 py-3 text-left">Lease</th>
                 <th className="px-4 py-3 text-left">Account</th>
                 <th className="px-4 py-3 text-left">Recent</th>
                 <th className="px-4 py-3 text-left">Actions</th>
@@ -437,6 +459,17 @@ export default function UnityDevicesPage() {
 
                     <td className="px-4 py-3 font-mono">
                       {shortId(deviceId)}
+                    </td>
+
+                    <td className="px-4 py-3">
+                      <input
+                        value={deviceLeases[deviceId] || ""}
+                        onChange={(event) =>
+                          saveDeviceLease(deviceId, event.target.value)
+                        }
+                        placeholder="Add lease"
+                        className="w-44 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none placeholder:text-gray-500"
+                      />
                     </td>
 
                     <td className="px-4 py-3 font-medium text-gray-300">
@@ -706,7 +739,7 @@ export default function UnityDevicesPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search devices..."
+                placeholder="Search devices, labels, leases..."
                 className="w-full rounded-lg border border-[#263041] bg-[#0d1420] px-3 py-2 pr-9 text-sm text-gray-200 outline-none placeholder:text-gray-500 sm:w-64"
               />
             </div>
