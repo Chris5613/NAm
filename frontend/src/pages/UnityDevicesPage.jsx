@@ -462,14 +462,14 @@ export default function UnityDevicesPage() {
                     </td>
 
                     <td className="px-4 py-3">
-                      <input
-                        value={deviceLeases[deviceId] || ""}
-                        onChange={(event) =>
-                          saveDeviceLease(deviceId, event.target.value)
-                        }
-                        placeholder="Add lease"
-                        className="w-44 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none placeholder:text-gray-500"
-                      />
+<input
+  value={deviceLeases[deviceId] || ""}
+  onChange={(event) =>
+    saveDeviceLease(deviceId, event.target.value)
+  }
+  placeholder="Add lease"
+  className="w-32 border-0 border-b border-transparent bg-transparent px-0 py-1 text-sm text-gray-200 outline-none placeholder:text-gray-600 hover:border-gray-600 focus:border-violet-400"
+/>
                     </td>
 
                     <td className="px-4 py-3 font-medium text-gray-300">
