@@ -51,17 +51,46 @@ function cleanNumberInput(value) {
     .replace(/(\..*)\./g, "$1");
 }
 
+function rawGhTo(value, unit) {
+  const n = Number(value) || 0;
+
+  if (unit === "Gh/s") return n;
+  if (unit === "Th/s") return n / 1_000;
+  if (unit === "Ph/s") return n / 1_000_000;
+  if (unit === "Eh/s") return n / 1_000_000_000;
+  if (unit === "Zh/s") return n / 1_000_000_000_000;
+
+  return n;
+}
+
+function formatFieldNumber(value) {
+  const n = Number(value) || 0;
+  return Number(n.toFixed(3)).toString();
+}
+
 function applyPowerToFields(power, setters) {
   if (!power) return;
 
-  setters.setMinersPower(parsePowerNumber(power.miners));
-  setters.setMinersUnit(parsePowerUnit(power.miners, "Eh/s"));
-  setters.setGamesPower(parsePowerNumber(power.games));
-  setters.setGamesUnit(parsePowerUnit(power.games, "Th/s"));
-  setters.setRackPower(parsePowerNumber(power.rackBonus));
-  setters.setRackUnit(parsePowerUnit(power.rackBonus, "Eh/s"));
-  setters.setNormalBonus(String(power.bonusPercent ?? ""));
-  setters.setHamsterBonus(String(power.hamsterBonusPercent ?? ""));
+  setters.setMinersPower(formatFieldNumber(rawGhTo(power.miners, "Eh/s")));
+  setters.setMinersUnit("Eh/s");
+
+  setters.setGamesPower(formatFieldNumber(rawGhTo(power.games, "Th/s")));
+  setters.setGamesUnit("Th/s");
+
+  setters.setRackPower(formatFieldNumber(rawGhTo(power.racks, "Eh/s")));
+  setters.setRackUnit("Eh/s");
+
+  setters.setNormalBonus(
+    power.bonus_percent != null
+      ? String(Number(power.bonus_percent) / 100)
+      : ""
+  );
+
+  setters.setHamsterBonus(
+    power.hamster_bonus_percent != null
+      ? String(Number(power.hamster_bonus_percent) / 100)
+      : "0"
+  );
 }
 
 function formatEh(value) {
