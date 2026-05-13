@@ -13,6 +13,7 @@ const APP_SOURCE = "rollercoin-app";
 const MSG_PUSH = "ROLLERCOIN_PUSH";
 const MSG_READY = "READY";
 const MSG_REQUEST = "REQUEST_LATEST";
+const MSG_POWER_PUSH = "ROLLERCOIN_POWER_PUSH";
 
 const STORAGE_KEY = "rollercoin:extension-state";
 const AMOUNT_EPSILON = 0.00001;
@@ -292,6 +293,26 @@ if (data?.source === EXT_SOURCE || data?.source === APP_SOURCE) {
 
     if (data.type === MSG_PUSH) {
       console.log("[RC APP] PUSH received", data.payload);
+
+      if (data.type === MSG_POWER_PUSH) {
+  console.log("[RC APP] POWER PUSH received", data.payload);
+
+  const current = getRollerCoinExtensionState();
+
+  setRollerCoinExtensionState({
+    ...current,
+    power_payload: data.payload,
+    power_last_seen_at: new Date().toISOString(),
+  });
+
+  window.dispatchEvent(
+    new CustomEvent("rollercoin-power-update", {
+      detail: data.payload,
+    })
+  );
+
+  return;
+}
 
       try {
         const state = getRollerCoinExtensionState();
