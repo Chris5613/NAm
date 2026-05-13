@@ -262,7 +262,7 @@ export default function RollercoinCalculator() {
   ]);
 
   return (
-    <main className="min-h-screen bg-[#0B0F19] px-4 py-8 text-white sm:px-6 lg:px-10">
+    <main className="min-h-screen bg-[#05070D] px-4 py-8 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 text-center">
           <h1 className="mt-3 text-4xl font-black uppercase tracking-wide text-slate-100 sm:text-6xl">
