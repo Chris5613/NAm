@@ -233,11 +233,17 @@ export default function RollercoinCalculator() {
     const currentMinerPowerWithBonus = currentMinersEh * multiplier;
     const currentPower = currentMinerPowerWithBonus + gamesEh + rackEh;
 
-    const addedMinerBaseEh = toEh(minerToAddPower, minerToAddUnit);
-    const addedMinerBonusPercent = bonusPercent + (Number(minerToAddBonus) || 0);
-    const addedMinerMultiplier = 1 + addedMinerBonusPercent / 100;
-    const addedPower = addedMinerBaseEh * addedMinerMultiplier;
-    const afterPower = currentPower + addedPower;
+const addedMinerBaseEh = toEh(minerToAddPower, minerToAddUnit);
+
+const addedMinerBonusPercent =
+  bonusPercent + (Number(minerToAddBonus) || 0);
+
+const addedMinerMultiplier = 1 + addedMinerBonusPercent / 100;
+
+const addedBasePower = addedMinerBaseEh;
+const addedPowerWithBonus = addedMinerBaseEh * addedMinerMultiplier;
+
+const afterPower = currentPower + addedPowerWithBonus;
 
     return {
       multiplier,
@@ -246,6 +252,9 @@ export default function RollercoinCalculator() {
       afterPower,
       currentLeague: getLeague(currentPower),
       afterLeague: getLeague(afterPower),
+      addedPower,
+      addedBasePower,
+      addedPowerWithBonus,
     };
   }, [
     minersPower,
@@ -259,6 +268,7 @@ export default function RollercoinCalculator() {
     minerToAddPower,
     minerToAddUnit,
     minerToAddBonus,
+    
   ]);
 
   return (
@@ -307,18 +317,19 @@ export default function RollercoinCalculator() {
               <div className="bg-cyan-900/70 px-4 py-3 text-center text-lg font-black uppercase tracking-widest text-cyan-50">
                 Power Difference
               </div>
-              <div className="grid grid-cols-2 border-b border-white/10 px-4 py-3 text-sm">
-                <span className="font-semibold text-slate-200">No extras</span>
-                <span className="text-right font-black text-white">
-                  {formatEh(result.addedPower)}
-                </span>
-              </div>
-              <div className="grid grid-cols-2 px-4 py-3 text-sm">
-                <span className="font-semibold text-slate-200">With extras</span>
-                <span className="text-right font-black text-white">
-                  {formatEh(result.addedPower)}
-                </span>
-              </div>
+<div className="grid grid-cols-2 border-b border-white/10 px-4 py-3 text-sm">
+  <span className="font-semibold text-slate-200">Base miner power</span>
+  <span className="text-right font-black text-white">
+    {formatEh(result.addedBasePower)}
+  </span>
+</div>
+
+<div className="grid grid-cols-2 px-4 py-3 text-sm">
+  <span className="font-semibold text-slate-200">With account + miner bonus</span>
+  <span className="text-right font-black text-white">
+    {formatEh(result.addedPowerWithBonus)}
+  </span>
+</div>
             </div>
           </div>
 
