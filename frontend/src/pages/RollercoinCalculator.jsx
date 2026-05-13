@@ -135,38 +135,31 @@ export default function RollercoinCalculator() {
     };
   }, [username]);
 
-  const loadExtensionPowerData = () => {
-    setUserError("");
-    setIsLoadingUser(true);
+const loadExtensionPowerData = () => {
+  setUserError("");
 
-    try {
-      const raw = window.localStorage.getItem("rollercoin:extension-state");
-      const state = raw ? JSON.parse(raw) : null;
-      const power = state?.power_payload || latestExtensionPower;
+  const cleanUsername = username.trim();
 
-      if (!power) {
-        throw new Error("No RollerCoin power data found yet. Open RollerCoin first so the extension can sync it.");
-      }
+  if (!cleanUsername) {
+    setUserError("Enter a RollerCoin username first.");
+    return;
+  }
 
-      setLatestExtensionPower(power);
-      setLoadedUser({ profile: { name: username || "RollerCoin User" }, power });
+  setIsLoadingUser(true);
 
-      applyPowerToFields(power, {
-        setMinersPower,
-        setMinersUnit,
-        setGamesPower,
-        setGamesUnit,
-        setRackPower,
-        setRackUnit,
-        setNormalBonus,
-        setHamsterBonus,
-      });
-    } catch (error) {
-      setUserError(error.message || "Something went wrong loading extension data.");
-    } finally {
-      setIsLoadingUser(false);
-    }
-  };
+  window.postMessage(
+    {
+      source: "rollercoin-app",
+      type: "REQUEST_POWER_BY_USERNAME",
+      username: cleanUsername,
+    },
+    window.location.origin
+  );
+
+  setTimeout(() => {
+    setIsLoadingUser(false);
+  }, 1500);
+};
 
   const result = useMemo(() => {
     const currentMinersEh = toEh(minersPower, minersUnit);
