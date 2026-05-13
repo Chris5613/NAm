@@ -27,6 +27,23 @@ function toEh(value, unit) {
   return num;
 }
 
+function parsePowerNumber(value) {
+  if (value === null || value === undefined) return "0";
+  const match = String(value).replace(/,/g, "").match(/([+-]?[0-9]+(?:[.][0-9]+)?)/);
+  return match ? match[1] : "0";
+}
+
+function parsePowerUnit(value, fallback = "Eh/s") {
+  if (!value) return fallback;
+  const text = String(value).toLowerCase();
+  if (text.includes("gh/s")) return "Gh/s";
+  if (text.includes("th/s")) return "Th/s";
+  if (text.includes("ph/s")) return "Ph/s";
+  if (text.includes("eh/s")) return "Eh/s";
+  if (text.includes("zh/s")) return "Zh/s";
+  return fallback;
+}
+
 function formatEh(value) {
   if (!Number.isFinite(value)) return "0 EH/s";
   if (value >= 1000) return `${(value / 1000).toFixed(3)} Zh/s`;
@@ -59,46 +76,35 @@ export default function RollercoinCalculator() {
   const [minerToAddUnit, setMinerToAddUnit] = useState("Eh/s");
   const [minerToAddBonus, setMinerToAddBonus] = useState("0");
 
-  const loadRollercoinUser = async () => {
-    const cleanUsername = username.trim();
+  const loadExtensionPowerData = async () => {
+    setUserError("");
 
-    if (!cleanUsername) {
-      setUserError("Enter a RollerCoin username first.");
+    if (!window.chrome?.storage?.local) {
+      setUserError("Extension storage is not available on this page yet.");
       return;
     }
 
     setIsLoadingUser(true);
-    setUserError("");
-    setLoadedUser(null);
 
     try {
-      const response = await fetch(
-        `https://api.rollercoincalculator.app/api/RollercoinUser?userName=${encodeURIComponent(cleanUsername)}`
-      );
-
-      if (!response.ok) {
-        throw new Error("Could not load that RollerCoin user.");
-      }
-
-      const data = await response.json();
-      const profile = data?.userProfileResponseDto;
-      const power = data?.userPowerResponseDto;
+      const result = await window.chrome.storage.local.get(["rcPowerPayload"]);
+      const power = result?.rcPowerPayload;
 
       if (!power) {
-        throw new Error("Power data was not found for that username.");
+        throw new Error("No RollerCoin power data found yet. Open RollerCoin first so the extension can sync it.");
       }
 
-      setLoadedUser({ profile, power });
-      setMinersPower(String(power.miners ?? 0));
-      setMinersUnit("Eh/s");
-      setGamesPower(String(power.games ?? 0));
-      setGamesUnit("Th/s");
-      setRackPower(String(power.racks ?? 0));
-      setRackUnit("Eh/s");
-      setNormalBonus(String(power.bonus_percent ?? 0));
-      setHamsterBonus("0");
+      setLoadedUser({ profile: { name: username || "RollerCoin User" }, power });
+      setMinersPower(parsePowerNumber(power.miners));
+      setMinersUnit(parsePowerUnit(power.miners, "Eh/s"));
+      setGamesPower(parsePowerNumber(power.games));
+      setGamesUnit(parsePowerUnit(power.games, "Th/s"));
+      setRackPower(parsePowerNumber(power.rackBonus));
+      setRackUnit(parsePowerUnit(power.rackBonus, "Eh/s"));
+      setNormalBonus(String(power.bonusPercent ?? 0));
+      setHamsterBonus(String(power.hamsterBonusPercent ?? 0));
     } catch (error) {
-      setUserError(error.message || "Something went wrong loading the user.");
+      setUserError(error.message || "Something went wrong loading extension data.");
     } finally {
       setIsLoadingUser(false);
     }
@@ -173,7 +179,7 @@ export default function RollercoinCalculator() {
             Rollercoin Calculator
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-300 sm:text-base">
-            Enter a RollerCoin username to auto-fill power stats, then add a miner to see your power after acquisition.
+            Load your saved RollerCoin power stats from the extension, then add a miner to see your power after acquisition.
           </p>
         </div>
 
@@ -183,18 +189,18 @@ export default function RollercoinCalculator() {
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") loadRollercoinUser();
+                if (e.key === "Enter") loadExtensionPowerData();
               }}
-              placeholder="Enter RollerCoin username"
+              placeholder="Optional label / username"
               className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-300"
             />
             <button
               type="button"
-              onClick={loadRollercoinUser}
+              onClick={loadExtensionPowerData}
               disabled={isLoadingUser}
               className="rounded-xl bg-cyan-300 px-6 py-3 text-sm font-black uppercase tracking-widest text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isLoadingUser ? "Loading..." : "Load Stats"}
+              {isLoadingUser ? "Loading..." : "Load Extension Stats"}
             </button>
           </div>
 
