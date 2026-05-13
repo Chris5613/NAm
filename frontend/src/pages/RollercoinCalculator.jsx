@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-
 const leagueThresholds = [
   { name: "Bronze I", min: 0, max: 0.004999, unit: "Ph/s" },
   { name: "Bronze II", min: 0.005, max: 0.029999, unit: "Ph/s" },
@@ -45,6 +44,26 @@ function parsePowerUnit(value, fallback = "Eh/s") {
   return fallback;
 }
 
+function cleanNumberInput(value) {
+  return String(value)
+    .replace(/,/g, "")
+    .replace(/[^0-9.]/g, "")
+    .replace(/(\..*)\./g, "$1");
+}
+
+function applyPowerToFields(power, setters) {
+  if (!power) return;
+
+  setters.setMinersPower(parsePowerNumber(power.miners));
+  setters.setMinersUnit(parsePowerUnit(power.miners, "Eh/s"));
+  setters.setGamesPower(parsePowerNumber(power.games));
+  setters.setGamesUnit(parsePowerUnit(power.games, "Th/s"));
+  setters.setRackPower(parsePowerNumber(power.rackBonus));
+  setters.setRackUnit(parsePowerUnit(power.rackBonus, "Eh/s"));
+  setters.setNormalBonus(String(power.bonusPercent ?? ""));
+  setters.setHamsterBonus(String(power.hamsterBonusPercent ?? ""));
+}
+
 function formatEh(value) {
   if (!Number.isFinite(value)) return "0 EH/s";
   if (value >= 1000) return `${(value / 1000).toFixed(3)} Zh/s`;
@@ -64,73 +83,84 @@ export default function RollercoinCalculator() {
   const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [userError, setUserError] = useState("");
   const [loadedUser, setLoadedUser] = useState(null);
+  const [latestExtensionPower, setLatestExtensionPower] = useState(null);
 
-  const [minersPower, setMinersPower] = useState("4.724");
+  const [minersPower, setMinersPower] = useState("");
   const [minersUnit, setMinersUnit] = useState("Eh/s");
-  const [gamesPower, setGamesPower] = useState("357.072");
+  const [gamesPower, setGamesPower] = useState("");
   const [gamesUnit, setGamesUnit] = useState("Th/s");
-  const [rackPower, setRackPower] = useState("1.636");
+  const [rackPower, setRackPower] = useState("");
   const [rackUnit, setRackUnit] = useState("Eh/s");
-  const [normalBonus, setNormalBonus] = useState("1235.21");
-  const [hamsterBonus, setHamsterBonus] = useState("0");
-  const [minerToAddPower, setMinerToAddPower] = useState("1");
+  const [normalBonus, setNormalBonus] = useState("");
+  const [hamsterBonus, setHamsterBonus] = useState("");
+  const [minerToAddPower, setMinerToAddPower] = useState("");
   const [minerToAddUnit, setMinerToAddUnit] = useState("Eh/s");
-  const [minerToAddBonus, setMinerToAddBonus] = useState("0");
+  const [minerToAddBonus, setMinerToAddBonus] = useState("");
 
+  useEffect(() => {
+    const handlePowerUpdate = (event) => {
+      const power = event.detail;
+      if (!power) return;
 
-useEffect(() => {
-  const handler = (event) => {
-    const power = event.detail;
+      setLatestExtensionPower(power);
+      setLoadedUser({ profile: { name: username || "RollerCoin User" }, power });
+      setUserError("");
 
-    if (!power) return;
+      applyPowerToFields(power, {
+        setMinersPower,
+        setMinersUnit,
+        setGamesPower,
+        setGamesUnit,
+        setRackPower,
+        setRackUnit,
+        setNormalBonus,
+        setHamsterBonus,
+      });
+    };
 
-    setMinersPower(parsePowerNumber(power.miners));
-    setMinersUnit(parsePowerUnit(power.miners, "Eh/s"));
+    window.addEventListener("rollercoin-power-update", handlePowerUpdate);
 
-    setGamesPower(parsePowerNumber(power.games));
-    setGamesUnit(parsePowerUnit(power.games, "Th/s"));
+    try {
+      const raw = window.localStorage.getItem("rollercoin:extension-state");
+      const state = raw ? JSON.parse(raw) : null;
+      const power = state?.power_payload;
 
-    setRackPower(parsePowerNumber(power.rackBonus));
-    setRackUnit(parsePowerUnit(power.rackBonus, "Eh/s"));
+      if (power) {
+        handlePowerUpdate({ detail: power });
+      }
+    } catch {}
 
-    setNormalBonus(String(power.bonusPercent ?? 0));
-    setHamsterBonus(String(power.hamsterBonusPercent ?? 0));
-  };
+    return () => {
+      window.removeEventListener("rollercoin-power-update", handlePowerUpdate);
+    };
+  }, [username]);
 
-  window.addEventListener("rollercoin-power-update", handler);
-
-  return () => {
-    window.removeEventListener("rollercoin-power-update", handler);
-  };
-}, []);
-
-  const loadExtensionPowerData = async () => {
+  const loadExtensionPowerData = () => {
     setUserError("");
-
-    if (!window.chrome?.storage?.local) {
-      setUserError("Extension storage is not available on this page yet.");
-      return;
-    }
-
     setIsLoadingUser(true);
 
     try {
-      const result = await window.chrome.storage.local.get(["rcPowerPayload"]);
-      const power = result?.rcPowerPayload;
+      const raw = window.localStorage.getItem("rollercoin:extension-state");
+      const state = raw ? JSON.parse(raw) : null;
+      const power = state?.power_payload || latestExtensionPower;
 
       if (!power) {
         throw new Error("No RollerCoin power data found yet. Open RollerCoin first so the extension can sync it.");
       }
 
+      setLatestExtensionPower(power);
       setLoadedUser({ profile: { name: username || "RollerCoin User" }, power });
-      setMinersPower(parsePowerNumber(power.miners));
-      setMinersUnit(parsePowerUnit(power.miners, "Eh/s"));
-      setGamesPower(parsePowerNumber(power.games));
-      setGamesUnit(parsePowerUnit(power.games, "Th/s"));
-      setRackPower(parsePowerNumber(power.rackBonus));
-      setRackUnit(parsePowerUnit(power.rackBonus, "Eh/s"));
-      setNormalBonus(String(power.bonusPercent ?? 0));
-      setHamsterBonus(String(power.hamsterBonusPercent ?? 0));
+
+      applyPowerToFields(power, {
+        setMinersPower,
+        setMinersUnit,
+        setGamesPower,
+        setGamesUnit,
+        setRackPower,
+        setRackUnit,
+        setNormalBonus,
+        setHamsterBonus,
+      });
     } catch (error) {
       setUserError(error.message || "Something went wrong loading extension data.");
     } finally {
@@ -171,7 +201,7 @@ useEffect(() => {
       <label className="px-4 py-3 text-sm font-semibold text-slate-200">{label}</label>
       <input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onChange(cleanNumberInput(e.target.value))}
         className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-right text-sm font-bold text-white outline-none focus:border-cyan-300"
       />
       {unit ? (
@@ -192,6 +222,7 @@ useEffect(() => {
 
   const StatBox = ({ title, value, subtitle }) => (
     <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-5 shadow-xl">
+      <p className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-200/80">{title}</p>
       <p className="mt-3 text-3xl font-black text-white">{value}</p>
       {subtitle && <p className="mt-2 text-sm text-slate-300">{subtitle}</p>}
     </div>
@@ -201,9 +232,13 @@ useEffect(() => {
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 text-center">
+          <p className="text-xs font-bold uppercase tracking-[0.45em] text-cyan-200">Mine and Earn</p>
           <h1 className="mt-3 text-4xl font-black uppercase tracking-wide text-slate-100 sm:text-6xl">
             Rollercoin Calculator
           </h1>
+          <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-300 sm:text-base">
+            Load your saved RollerCoin power stats from the extension, then add a miner to see your power after acquisition.
+          </p>
         </div>
 
         <section className="mb-6 rounded-2xl border border-cyan-300/20 bg-slate-900/80 p-4 shadow-xl">
