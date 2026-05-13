@@ -146,10 +146,8 @@ const inputRow = (label, value, onChange, unit, setUnit) => (
 
 export default function RollercoinCalculator() {
   const [username, setUsername] = useState("");
-  const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [userError, setUserError] = useState("");
   const [loadedUser, setLoadedUser] = useState(null);
-  const [latestExtensionPower, setLatestExtensionPower] = useState(null);
 
   const [minersPower, setMinersPower] = useState("");
   const [minersUnit, setMinersUnit] = useState("Eh/s");
@@ -261,19 +259,7 @@ const loadExtensionPowerData = () => {
             Rollercoin Calculator
           </h1>
         </div>
-
-        <section className="mb-6 rounded-2xl border border-cyan-300/20 bg-slate-900/80 p-4 shadow-xl">
-
-          {userError && <p className="mt-3 text-sm font-semibold text-red-300">{userError}</p>}
-
-          {loadedUser?.profile?.name && (
-            <p className="mt-3 text-sm font-semibold text-cyan-100">
-              Loaded stats for {loadedUser.profile.name}
-            </p>
-          )}
-        </section>
-
-        <section className="mb-6 grid gap-4 md:grid-cols-3">
+      <section className="mb-6 grid gap-4 md:grid-cols-3">
           <StatBox title="Current Power" value={formatEh(result.currentPower)} subtitle={result.currentLeague} />
           <StatBox title="Miner Adds" value={formatEh(result.addedPower)} subtitle={`Bonus multiplier: ${result.multiplier.toFixed(4)}x`} />
           <StatBox title="After Acquisition" value={formatEh(result.afterPower)} subtitle={result.afterLeague} />
