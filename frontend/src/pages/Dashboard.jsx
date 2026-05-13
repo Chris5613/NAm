@@ -18,6 +18,48 @@ const MONTHLY_NET_WORTH_HISTORY_KEY = "monthly_net_worth_history_v1";
 const LIVE_HISTORY_MAX_POINTS = 200;
 const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
 
+
+  const exportAllLocalStorage = () => {
+  const backup = {};
+
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    backup[key] = localStorage.getItem(key);
+  }
+
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {
+    type: "application/json",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = "dashboard-backup.json";
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+
+const importAllLocalStorage = (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+
+  reader.onload = (e) => {
+    const backup = JSON.parse(e.target.result);
+
+    Object.entries(backup).forEach(([key, value]) => {
+      localStorage.setItem(key, value);
+    });
+
+    window.location.reload();
+  };
+
+  reader.readAsText(file);
+};
+
 function getPstDateKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
@@ -408,6 +450,26 @@ export default function Dashboard() {
             </span>
           )}
         </div>
+
+        <div className="mb-4 flex flex-wrap gap-3">
+  <button
+    type="button"
+    onClick={exportAllLocalStorage}
+    className="rounded-lg bg-cyan-500 px-4 py-2 text-sm font-bold text-black hover:bg-cyan-400"
+  >
+    Export JSON
+  </button>
+
+  <label className="cursor-pointer rounded-lg bg-violet-500 px-4 py-2 text-sm font-bold text-white hover:bg-violet-400">
+    Import JSON
+    <input
+      type="file"
+      accept=".json,application/json"
+      onChange={importAllLocalStorage}
+      className="hidden"
+    />
+  </label>
+</div>
 
         <div className="flex items-center gap-3">
           <Button
