@@ -257,35 +257,12 @@ const loadExtensionPowerData = () => {
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 text-center">
-          <p className="text-xs font-bold uppercase tracking-[0.45em] text-cyan-200">Mine and Earn</p>
           <h1 className="mt-3 text-4xl font-black uppercase tracking-wide text-slate-100 sm:text-6xl">
             Rollercoin Calculator
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-300 sm:text-base">
-            Load your saved RollerCoin power stats from the extension, then add a miner to see your power after acquisition.
-          </p>
         </div>
 
         <section className="mb-6 rounded-2xl border border-cyan-300/20 bg-slate-900/80 p-4 shadow-xl">
-          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-            <input
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") loadExtensionPowerData();
-              }}
-              placeholder="Optional label / username"
-              className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-300"
-            />
-            <button
-              type="button"
-              onClick={loadExtensionPowerData}
-              disabled={isLoadingUser}
-              className="rounded-xl bg-cyan-300 px-6 py-3 text-sm font-black uppercase tracking-widest text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {isLoadingUser ? "Loading..." : "Load Extension Stats"}
-            </button>
-          </div>
 
           {userError && <p className="mt-3 text-sm font-semibold text-red-300">{userError}</p>}
 
