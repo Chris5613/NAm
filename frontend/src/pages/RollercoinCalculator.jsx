@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import React, { useEffect } from "react";
 
 const leagueThresholds = [
   { name: "Bronze I", min: 0, max: 0.004999, unit: "Ph/s" },
@@ -191,7 +192,6 @@ useEffect(() => {
 
   const StatBox = ({ title, value, subtitle }) => (
     <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-5 shadow-xl">
-      <p className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-200/80">{title}</p>
       <p className="mt-3 text-3xl font-black text-white">{value}</p>
       {subtitle && <p className="mt-2 text-sm text-slate-300">{subtitle}</p>}
     </div>
@@ -201,13 +201,9 @@ useEffect(() => {
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
         <div className="mb-8 text-center">
-          <p className="text-xs font-bold uppercase tracking-[0.45em] text-cyan-200">Mine and Earn</p>
           <h1 className="mt-3 text-4xl font-black uppercase tracking-wide text-slate-100 sm:text-6xl">
             Rollercoin Calculator
           </h1>
-          <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-300 sm:text-base">
-            Load your saved RollerCoin power stats from the extension, then add a miner to see your power after acquisition.
-          </p>
         </div>
 
         <section className="mb-6 rounded-2xl border border-cyan-300/20 bg-slate-900/80 p-4 shadow-xl">
