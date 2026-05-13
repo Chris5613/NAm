@@ -11,6 +11,7 @@ import {
   Cable,
   ChevronLeft,
   ChevronRight,
+  Squirrel,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -21,7 +22,10 @@ const NAV_ITEMS = [
   { path: "/integrations", label: "Integrations", icon: Zap },
   { path: "/unity-devices", label: "Unity Devices", icon: Cable },
   { path: "/tello-dashboard", label: "Tello Dashboard", icon: Smartphone },
+  { path: "/rollercoin-calculator", label: "Rollercoin Calculator", icon: Squirrel },
 ];
+
+
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);

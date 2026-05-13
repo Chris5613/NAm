@@ -22,6 +22,7 @@ import { runAcurastUsdToAcuMigrationIfNeeded } from "@/lib/acurastSync";
 import { installExtensionListener } from "@/lib/unityNetworkExtensionSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
 import TelloDashboard from "./pages/TelloDashboard";
+import RollercoinCalculator from "./pages/RollercoinCalculator";
 
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
@@ -138,6 +139,7 @@ function App() {
               <Route path="/phone-list" element={<PhoneList />} />
               <Route path="/unity-devices" element={<UnityDevicesPage />} />
               <Route path="/tello-dashboard" element={<TelloDashboard />} />
+              <Route path="/rollercoin-calculator" element={<RollercoinCalculator />} />
             </Routes>
           </div>
         </main>
