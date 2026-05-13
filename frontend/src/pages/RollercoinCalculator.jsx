@@ -51,17 +51,6 @@ function cleanNumberInput(value) {
     .replace(/(\..*)\./g, "$1");
 }
 
-function rawGhTo(value, unit) {
-  const n = Number(value) || 0;
-
-  if (unit === "Gh/s") return n;
-  if (unit === "Th/s") return n / 1_000;
-  if (unit === "Ph/s") return n / 1_000_000;
-  if (unit === "Eh/s") return n / 1_000_000_000;
-  if (unit === "Zh/s") return n / 1_000_000_000_000;
-
-  return n;
-}
 
 function formatFieldNumber(value) {
   const n = Number(value) || 0;
@@ -78,11 +67,6 @@ function rawGhTo(value, unit) {
   if (unit === "Zh/s") return n / 1_000_000_000_000;
 
   return n;
-}
-
-function formatFieldNumber(value) {
-  const n = Number(value) || 0;
-  return Number(n.toFixed(3)).toString();
 }
 
 function applyPowerToFields(power, setters) {
