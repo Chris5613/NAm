@@ -217,7 +217,7 @@ const loadExtensionPowerData = () => {
 
   const units = ["Gh/s", "Th/s", "Ph/s", "Eh/s", "Zh/s"];
 
-  const InputRow = ({ label, value, onChange, unit, setUnit }) => (
+const inputRow = (label, value, onChange, unit, setUnit) => (
     <div className="grid grid-cols-[1fr_110px_90px] items-center border-b border-white/10 last:border-b-0">
       <label className="px-4 py-3 text-sm font-semibold text-slate-200">{label}</label>
 <input
@@ -305,11 +305,11 @@ const loadExtensionPowerData = () => {
             <div className="bg-red-900/70 px-4 py-3 text-center text-lg font-black uppercase tracking-widest text-red-50">
               Your Information
             </div>
-            <InputRow label="Miners power" value={minersPower} onChange={setMinersPower} unit={minersUnit} setUnit={setMinersUnit} />
-            <InputRow label="Games" value={gamesPower} onChange={setGamesPower} unit={gamesUnit} setUnit={setGamesUnit} />
-            <InputRow label="Rack power" value={rackPower} onChange={setRackPower} unit={rackUnit} setUnit={setRackUnit} />
-            <InputRow label="Normal Bonus" value={normalBonus} onChange={setNormalBonus} />
-            <InputRow label="Hamster Bonus" value={hamsterBonus} onChange={setHamsterBonus} />
+{inputRow("Miners power", minersPower, setMinersPower, minersUnit, setMinersUnit)}
+{inputRow("Games", gamesPower, setGamesPower, gamesUnit, setGamesUnit)}
+{inputRow("Rack power", rackPower, setRackPower, rackUnit, setRackUnit)}
+{inputRow("Normal Bonus", normalBonus, setNormalBonus)}
+{inputRow("Hamster Bonus", hamsterBonus, setHamsterBonus)}
           </div>
 
           <div className="space-y-6">
@@ -317,8 +317,8 @@ const loadExtensionPowerData = () => {
               <div className="bg-violet-900/70 px-4 py-3 text-center text-lg font-black uppercase tracking-widest text-violet-50">
                 Miner To Add
               </div>
-              <InputRow label="Power" value={minerToAddPower} onChange={setMinerToAddPower} unit={minerToAddUnit} setUnit={setMinerToAddUnit} />
-              <InputRow label="Miner Bonus" value={minerToAddBonus} onChange={setMinerToAddBonus} />
+{inputRow("Power", minerToAddPower, setMinerToAddPower, minerToAddUnit, setMinerToAddUnit)}
+{inputRow("Miner Bonus", minerToAddBonus, setMinerToAddBonus)}
             </div>
 
             <div className="overflow-hidden rounded-2xl border border-cyan-300/20 bg-cyan-950/40 shadow-xl">
