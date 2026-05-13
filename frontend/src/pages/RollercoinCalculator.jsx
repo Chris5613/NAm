@@ -288,7 +288,11 @@ const afterPower = currentPower + addedPowerWithBonus;
 
         <section className="mb-6 grid gap-4 md:grid-cols-3">
           <StatBox title="Current Power" value={formatEh(result.currentPower)} subtitle={result.currentLeague} />
-          <StatBox title="Miner Adds" value={formatEh(result.addedPower)} subtitle={`Bonus multiplier: ${result.multiplier.toFixed(4)}x`} />
+          <StatBox
+            title="Miner Adds"
+            value={formatEh(result.addedPowerWithBonus)}
+            subtitle={`Bonus multiplier: ${result.multiplier.toFixed(4)}x`}
+          />
           <StatBox title="After Acquisition" value={formatEh(result.afterPower)} subtitle={result.afterLeague} />
         </section>
 
