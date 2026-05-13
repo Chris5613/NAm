@@ -17,33 +17,6 @@ const leagueThresholds = [
   { name: "Diamond II", min: 400, max: 10000, unit: "Eh/s" },
 ];
 
-
-useEffect(() => {
-  const handler = (event) => {
-    const power = event.detail;
-
-    if (!power) return;
-
-    setMinersPower(parsePowerNumber(power.miners));
-    setMinersUnit(parsePowerUnit(power.miners, "Eh/s"));
-
-    setGamesPower(parsePowerNumber(power.games));
-    setGamesUnit(parsePowerUnit(power.games, "Th/s"));
-
-    setRackPower(parsePowerNumber(power.rackBonus));
-    setRackUnit(parsePowerUnit(power.rackBonus, "Eh/s"));
-
-    setNormalBonus(String(power.bonusPercent ?? 0));
-    setHamsterBonus(String(power.hamsterBonusPercent ?? 0));
-  };
-
-  window.addEventListener("rollercoin-power-update", handler);
-
-  return () => {
-    window.removeEventListener("rollercoin-power-update", handler);
-  };
-}, []);
-
 function toEh(value, unit) {
   const num = Number(value) || 0;
   if (unit === "Gh/s") return num / 1_000_000_000;
@@ -102,6 +75,33 @@ export default function RollercoinCalculator() {
   const [minerToAddPower, setMinerToAddPower] = useState("1");
   const [minerToAddUnit, setMinerToAddUnit] = useState("Eh/s");
   const [minerToAddBonus, setMinerToAddBonus] = useState("0");
+
+
+useEffect(() => {
+  const handler = (event) => {
+    const power = event.detail;
+
+    if (!power) return;
+
+    setMinersPower(parsePowerNumber(power.miners));
+    setMinersUnit(parsePowerUnit(power.miners, "Eh/s"));
+
+    setGamesPower(parsePowerNumber(power.games));
+    setGamesUnit(parsePowerUnit(power.games, "Th/s"));
+
+    setRackPower(parsePowerNumber(power.rackBonus));
+    setRackUnit(parsePowerUnit(power.rackBonus, "Eh/s"));
+
+    setNormalBonus(String(power.bonusPercent ?? 0));
+    setHamsterBonus(String(power.hamsterBonusPercent ?? 0));
+  };
+
+  window.addEventListener("rollercoin-power-update", handler);
+
+  return () => {
+    window.removeEventListener("rollercoin-power-update", handler);
+  };
+}, []);
 
   const loadExtensionPowerData = async () => {
     setUserError("");
