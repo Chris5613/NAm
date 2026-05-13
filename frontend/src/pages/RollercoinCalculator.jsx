@@ -92,6 +92,8 @@ function applyPowerToFields(power, setters) {
   );
 }
 
+    const units = ["Gh/s", "Th/s", "Ph/s", "Eh/s", "Zh/s"];
+
 function formatEh(value) {
   if (!Number.isFinite(value)) return "0 EH/s";
   if (value >= 1000) return `${(value / 1000).toFixed(3)} Zh/s`;
@@ -105,6 +107,42 @@ function getLeague(totalEh) {
   const match = leagueThresholds.find((league) => totalEh >= league.min && totalEh <= league.max);
   return match?.name || "Diamond III";
 }
+
+const inputRow = (label, value, onChange, unit, setUnit) => (
+    <div className="grid grid-cols-[1fr_110px_90px] items-center border-b border-white/10 last:border-b-0">
+      <label className="px-4 py-3 text-sm font-semibold text-slate-200">{label}</label>
+<input
+  type="text"
+  inputMode="decimal"
+  value={value}
+  onChange={(e) => onChange(cleanNumberInput(e.target.value))}
+  className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-right text-sm font-bold text-white outline-none focus:border-cyan-300"
+/>
+      {unit ? (
+        <select
+          value={unit}
+          onChange={(e) => setUnit(e.target.value)}
+          className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-2 py-2 text-sm font-bold text-white outline-none focus:border-cyan-300"
+        >
+          {units.map((item) => (
+            <option key={item} value={item}>{item}</option>
+          ))}
+        </select>
+      ) : (
+        <div className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-2 py-2 text-center text-sm font-bold text-white">%</div>
+      )}
+    </div>
+  );
+
+    const StatBox = ({ title, value, subtitle }) => (
+    <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-5 shadow-xl">
+      <p className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-200/80">{title}</p>
+      <p className="mt-3 text-3xl font-black text-white">{value}</p>
+      {subtitle && <p className="mt-2 text-sm text-slate-300">{subtitle}</p>}
+    </div>
+  );
+
+
 
 export default function RollercoinCalculator() {
   const [username, setUsername] = useState("");
@@ -214,42 +252,6 @@ const loadExtensionPowerData = () => {
       afterLeague: getLeague(afterPower),
     };
   }, [minersPower, minersUnit, gamesPower, gamesUnit, rackPower, rackUnit, normalBonus, hamsterBonus, minerToAddPower, minerToAddUnit, minerToAddBonus]);
-
-  const units = ["Gh/s", "Th/s", "Ph/s", "Eh/s", "Zh/s"];
-
-const inputRow = (label, value, onChange, unit, setUnit) => (
-    <div className="grid grid-cols-[1fr_110px_90px] items-center border-b border-white/10 last:border-b-0">
-      <label className="px-4 py-3 text-sm font-semibold text-slate-200">{label}</label>
-<input
-  type="text"
-  inputMode="decimal"
-  value={value}
-  onChange={(e) => onChange(cleanNumberInput(e.target.value))}
-  className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-right text-sm font-bold text-white outline-none focus:border-cyan-300"
-/>
-      {unit ? (
-        <select
-          value={unit}
-          onChange={(e) => setUnit(e.target.value)}
-          className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-2 py-2 text-sm font-bold text-white outline-none focus:border-cyan-300"
-        >
-          {units.map((item) => (
-            <option key={item} value={item}>{item}</option>
-          ))}
-        </select>
-      ) : (
-        <div className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-2 py-2 text-center text-sm font-bold text-white">%</div>
-      )}
-    </div>
-  );
-
-  const StatBox = ({ title, value, subtitle }) => (
-    <div className="rounded-2xl border border-white/10 bg-slate-900/80 p-5 shadow-xl">
-      <p className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-200/80">{title}</p>
-      <p className="mt-3 text-3xl font-black text-white">{value}</p>
-      {subtitle && <p className="mt-2 text-sm text-slate-300">{subtitle}</p>}
-    </div>
-  );
 
   return (
     <main className="min-h-screen bg-slate-950 px-4 py-8 text-white sm:px-6 lg:px-10">
