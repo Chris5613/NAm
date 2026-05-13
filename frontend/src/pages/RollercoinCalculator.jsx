@@ -245,17 +245,15 @@ const addedPowerWithBonus = addedMinerBaseEh * addedMinerMultiplier;
 
 const afterPower = currentPower + addedPowerWithBonus;
 
-    return {
-      multiplier,
-      currentPower,
-      addedPower,
-      afterPower,
-      currentLeague: getLeague(currentPower),
-      afterLeague: getLeague(afterPower),
-      addedPower,
-      addedBasePower,
-      addedPowerWithBonus,
-    };
+return {
+  multiplier,
+  currentPower,
+  afterPower,
+  currentLeague: getLeague(currentPower),
+  afterLeague: getLeague(afterPower),
+  addedBasePower,
+  addedPowerWithBonus,
+};
   }, [
     minersPower,
     minersUnit,
