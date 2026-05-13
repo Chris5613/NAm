@@ -47,10 +47,8 @@ function parsePowerUnit(value, fallback = "Eh/s") {
 function cleanNumberInput(value) {
   return String(value)
     .replace(/,/g, "")
-    .replace(/[^0-9.]/g, "")
-    .replace(/(\..*)\./g, "$1");
+    .replace(/[^\d.]/g, "");
 }
-
 
 function formatFieldNumber(value) {
   const n = Number(value) || 0;
@@ -222,11 +220,13 @@ const loadExtensionPowerData = () => {
   const InputRow = ({ label, value, onChange, unit, setUnit }) => (
     <div className="grid grid-cols-[1fr_110px_90px] items-center border-b border-white/10 last:border-b-0">
       <label className="px-4 py-3 text-sm font-semibold text-slate-200">{label}</label>
-      <input
-        value={value}
-        onChange={(e) => onChange(cleanNumberInput(e.target.value))}
-        className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-right text-sm font-bold text-white outline-none focus:border-cyan-300"
-      />
+<input
+  type="text"
+  inputMode="decimal"
+  value={value}
+  onChange={(e) => onChange(cleanNumberInput(e.target.value))}
+  className="m-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-2 text-right text-sm font-bold text-white outline-none focus:border-cyan-300"
+/>
       {unit ? (
         <select
           value={unit}
