@@ -42,6 +42,11 @@ function getLeague(totalEh) {
 }
 
 export default function RollercoinCalculator() {
+  const [username, setUsername] = useState("");
+  const [isLoadingUser, setIsLoadingUser] = useState(false);
+  const [userError, setUserError] = useState("");
+  const [loadedUser, setLoadedUser] = useState(null);
+
   const [minersPower, setMinersPower] = useState("4.724");
   const [minersUnit, setMinersUnit] = useState("Eh/s");
   const [gamesPower, setGamesPower] = useState("357.072");
@@ -53,6 +58,51 @@ export default function RollercoinCalculator() {
   const [minerToAddPower, setMinerToAddPower] = useState("1");
   const [minerToAddUnit, setMinerToAddUnit] = useState("Eh/s");
   const [minerToAddBonus, setMinerToAddBonus] = useState("0");
+
+  const loadRollercoinUser = async () => {
+    const cleanUsername = username.trim();
+
+    if (!cleanUsername) {
+      setUserError("Enter a RollerCoin username first.");
+      return;
+    }
+
+    setIsLoadingUser(true);
+    setUserError("");
+    setLoadedUser(null);
+
+    try {
+      const response = await fetch(
+        `https://api.rollercoincalculator.app/api/RollercoinUser?userName=${encodeURIComponent(cleanUsername)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Could not load that RollerCoin user.");
+      }
+
+      const data = await response.json();
+      const profile = data?.userProfileResponseDto;
+      const power = data?.userPowerResponseDto;
+
+      if (!power) {
+        throw new Error("Power data was not found for that username.");
+      }
+
+      setLoadedUser({ profile, power });
+      setMinersPower(String(power.miners ?? 0));
+      setMinersUnit("Eh/s");
+      setGamesPower(String(power.games ?? 0));
+      setGamesUnit("Th/s");
+      setRackPower(String(power.racks ?? 0));
+      setRackUnit("Eh/s");
+      setNormalBonus(String(power.bonus_percent ?? 0));
+      setHamsterBonus("0");
+    } catch (error) {
+      setUserError(error.message || "Something went wrong loading the user.");
+    } finally {
+      setIsLoadingUser(false);
+    }
+  };
 
   const result = useMemo(() => {
     const currentMinersEh = toEh(minersPower, minersUnit);
@@ -123,9 +173,39 @@ export default function RollercoinCalculator() {
             Rollercoin Calculator
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-sm text-slate-300 sm:text-base">
-            Add your current power, bonus percentage, and a miner you want to buy to see your power after acquisition.
+            Enter a RollerCoin username to auto-fill power stats, then add a miner to see your power after acquisition.
           </p>
         </div>
+
+        <section className="mb-6 rounded-2xl border border-cyan-300/20 bg-slate-900/80 p-4 shadow-xl">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+            <input
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") loadRollercoinUser();
+              }}
+              placeholder="Enter RollerCoin username"
+              className="rounded-xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm font-bold text-white outline-none focus:border-cyan-300"
+            />
+            <button
+              type="button"
+              onClick={loadRollercoinUser}
+              disabled={isLoadingUser}
+              className="rounded-xl bg-cyan-300 px-6 py-3 text-sm font-black uppercase tracking-widest text-slate-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isLoadingUser ? "Loading..." : "Load Stats"}
+            </button>
+          </div>
+
+          {userError && <p className="mt-3 text-sm font-semibold text-red-300">{userError}</p>}
+
+          {loadedUser?.profile?.name && (
+            <p className="mt-3 text-sm font-semibold text-cyan-100">
+              Loaded stats for {loadedUser.profile.name}
+            </p>
+          )}
+        </section>
 
         <section className="mb-6 grid gap-4 md:grid-cols-3">
           <StatBox title="Current Power" value={formatEh(result.currentPower)} subtitle={result.currentLeague} />
@@ -197,3 +277,4 @@ export default function RollercoinCalculator() {
     </main>
   );
 }
+gfdghdh
