@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from "react";
-import React, { useEffect } from "react";
+import React, { useMemo, useState, useEffect } from "react";
+
 
 const leagueThresholds = [
   { name: "Bronze I", min: 0, max: 0.004999, unit: "Ph/s" },
