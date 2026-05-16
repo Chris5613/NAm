@@ -7,6 +7,7 @@ import { Plus, ChevronDown, ChevronRight, Trash2, Pencil, Timer, Receipt } from 
 import AddProjectDialog from "@/components/AddProjectDialog";
 import EditProjectDialog from "@/components/EditProjectDialog";
 import TransactionsDialog from "@/components/TransactionsDialog";
+import EarningsTable from "./EarningsTable";
 
 function formatCurrency(value) {
   if (!value && value !== 0) return "$0.00";
@@ -258,14 +259,6 @@ export default function InvestmentOverview() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Earnings breakdown - always visible below */}
-                    <div className="flex items-center gap-6 mt-3 pt-3 border-t border-border/30">
-                      <EarningsChip label="Per Day" value={project.per_day} />
-                      <EarningsChip label="Per Week" value={project.per_week} />
-                      <EarningsChip label="Per Month" value={project.per_month} />
-                      <EarningsChip label="Per Year" value={project.per_year} />
-                    </div>
                   </CardContent>
                 </Card>
 
@@ -323,9 +316,12 @@ export default function InvestmentOverview() {
           onUpdated={fetchProjects}
         />
       )}
+
+      <EarningsTable />
     </div>
   );
 }
+
 
 function EarningsChip({ label, value }) {
   return (
