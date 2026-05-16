@@ -46,7 +46,9 @@ function EarningsTable() {
             </thead>
 
           <tbody>
-            {Object.entries(dailyReturns).map(([project, daily]) => {
+            {Object.entries(dailyReturns)
+  .sort((a, b) => b[1] - a[1])
+  .map(([project, daily]) => {
               const weekly = daily * 7;
               const monthly = daily * 30;
               const yearly = daily * 365;
