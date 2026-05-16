@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { localStorage as storage } from "@/lib/localStorage";
 import {
   applyRollerCoinBalanceUpdate,
-  getSolPrice,
-  getSolPriceCacheInfo,
+  getTrxPrice as getSolPrice,
+  getTrxPriceCacheInfo as getSolPriceCacheInfo,
   isRollerCoinStale,
 } from "@/lib/rollercoinSync";
 
@@ -12,14 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 
 import {
   RefreshCw,
