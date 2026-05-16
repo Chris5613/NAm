@@ -26,6 +26,11 @@ export default function InvestmentOverview() {
   const [editingProject, setEditingProject] = useState(null);
   const [txnProject, setTxnProject] = useState(null);
 
+  const [dailyReturns, setDailyReturns] = useState(() => {
+  const saved = localStorage.getItem("projectDailyReturns");
+  return saved ? JSON.parse(saved) : {};
+});
+
   const fetchProjects = useCallback(async () => {
     try {
       const res = await projectsApi.getAll();
@@ -73,6 +78,21 @@ export default function InvestmentOverview() {
     }
   };
 
+  useEffect(() => {
+  const refreshDailyReturns = () => {
+    const saved = localStorage.getItem("projectDailyReturns");
+    setDailyReturns(saved ? JSON.parse(saved) : {});
+  };
+
+  window.addEventListener("project-daily-returns-updated", refreshDailyReturns);
+  window.addEventListener("storage", refreshDailyReturns);
+
+  return () => {
+    window.removeEventListener("project-daily-returns-updated", refreshDailyReturns);
+    window.removeEventListener("storage", refreshDailyReturns);
+  };
+}, []);
+
   const toggleExpand = (id) => {
     setExpandedId(expandedId === id ? null : id);
   };
@@ -91,15 +111,19 @@ export default function InvestmentOverview() {
   );
   const totalPnl = totals.earned - totals.invested;
 
-  // Calculate days until ROI (remaining amount / daily earnings)
-  function getRoiDays(project) {
-    const remaining = (project.invested || 0) - (project.earned || 0);
-    const daily = project.per_day || 0;
-    if (daily <= 0) return null; // Can't calculate without daily earnings
-    if (remaining <= 0) return 0; // Already hit ROI
-    return Math.ceil(remaining / daily);
-  }
+function getRoiDays(project) {
+  const remaining = (project.invested || 0) - (project.earned || 0);
 
+  const tableDaily = Number(dailyReturns?.[project.name]);
+  const daily = Number.isFinite(tableDaily) && tableDaily > 0
+    ? tableDaily
+    : project.per_day || 0;
+
+  if (daily <= 0) return null;
+  if (remaining <= 0) return 0;
+
+  return Math.ceil(remaining / daily);
+}
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[300px]">
@@ -318,16 +342,6 @@ export default function InvestmentOverview() {
       )}
 
       <EarningsTable />
-    </div>
-  );
-}
-
-
-function EarningsChip({ label, value }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <span className="font-mono text-xs text-foreground">{formatCurrency(value)}</span>
     </div>
   );
 }

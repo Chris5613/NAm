@@ -18,9 +18,6 @@ function EarningsTable() {
     return saved ? JSON.parse(saved) : DEFAULT_RETURNS;
   });
 
-  useEffect(() => {
-    localStorage.setItem("projectDailyReturns", JSON.stringify(dailyReturns));
-  }, [dailyReturns]);
 
   const updateDaily = (project, value) => {
     setDailyReturns((prev) => ({
@@ -28,6 +25,12 @@ function EarningsTable() {
       [project]: Number(value) || 0,
     }));
   };
+
+  useEffect(() => {
+  localStorage.setItem("projectDailyReturns", JSON.stringify(dailyReturns));
+
+  window.dispatchEvent(new Event("project-daily-returns-updated"));
+}, [dailyReturns]);
 
   return (
     <div className="mt-6 rounded-xl border border-white/10 bg-[#111] p-5">
