@@ -1,26 +1,16 @@
 // RollerCoin manual sync — there's no public RollerCoin API, so the user
-// periodically types their current TRX balance. We compute the delta vs.
+// periodically types their current SOL balance. We compute the delta vs.
 // the last stored baseline and, on confirm, push that delta as an earning
 // transaction into a "RollerCoin" investment project.
-//
-// Anti-double-dip: withdrawals/swaps are distinguished from earnings by the
-// user's explicit choice in the "Update balance" dialog. Withdrawals only
-// lower the baseline; they never create earning transactions.
-//
-// Edit/delete reversal: synced transactions carry `source: 'rollercoin'` +
-// `source_trx_delta` (the TRX amount that was credited). Deleting a txn in
-// Investment Overview decrements project.earned AND lowers the baseline by
-// that TRX delta, so the next "Update balance" re-arms correctly.
 
 import { coinGeckoApi } from "./external-apis";
 import { projectsApi, customTokensApi } from "./api";
 import { localStorage as storage } from "./localStorage";
 
 const ROLLERCOIN_PROJECT_NAME_DEFAULT = "RollerCoin";
-const TRX_COINGECKO_ID = "tron";
+const SOL_COINGECKO_ID = "solana";
 const STALE_DAYS = 7;
 const AMOUNT_EPSILON = 0.00001;
-
 
 async function findOrCreateProject(name) {
   console.log("[RC SYNC] findOrCreateProject", name);
@@ -58,12 +48,12 @@ async function findOrCreateProject(name) {
   return created.data;
 }
 
-// Live TRX → USD price with caching and fallback
+// Live SOL → USD price with caching and fallback
 export async function getTrxPrice() {
   console.log("[RC SYNC] getTrxPrice start");
 
   try {
-    const price = await coinGeckoApi.getPrice(TRX_COINGECKO_ID);
+    const price = await coinGeckoApi.getPrice(SOL_COINGECKO_ID);
 
     console.log("[RC SYNC] CoinGecko price response", price);
 
@@ -75,7 +65,7 @@ export async function getTrxPrice() {
         fetched_at: new Date().toISOString(),
       });
 
-      console.log("[RC SYNC] using live TRX price", numPrice);
+      console.log("[RC SYNC] using live SOL price", numPrice);
 
       return numPrice;
     }
@@ -163,8 +153,6 @@ export async function applyRollerCoinBalanceUpdate({
 
     storage.setRollerCoinConfig(next);
 
-    console.log("[RC SYNC] updated config", next);
-
     await syncCryptoHolding(
       baselineBefore,
       trxPriceOverride || 0
@@ -195,8 +183,6 @@ export async function applyRollerCoinBalanceUpdate({
 
     storage.setRollerCoinConfig(next);
 
-    console.log("[RC SYNC] updated withdrawal baseline", next);
-
     await syncCryptoHolding(
       nextBalance,
       trxPriceOverride || 0
@@ -217,35 +203,24 @@ export async function applyRollerCoinBalanceUpdate({
   }
 
   if (action === "earning" && deltaTrx <= 0) {
-    console.error("[RC SYNC] invalid earning delta", deltaTrx);
-
     throw new Error(
       "Cannot record an earning when the new balance is lower than the baseline."
     );
   }
-
-  console.log("[RC SYNC] fetching TRX price");
 
   const trxPrice =
     trxPriceOverride != null
       ? Number(trxPriceOverride)
       : await getTrxPrice();
 
-  console.log("[RC SYNC] trxPrice resolved", trxPrice);
-
   if (!(trxPrice > 0)) {
     throw new Error(
-      "TRX price unavailable — enter a manual price override or try again later."
+      "SOL price unavailable — enter a manual price override or try again later."
     );
   }
 
   const deltaUsd =
     Number((deltaTrx * trxPrice).toFixed(6));
-
-  console.log("[RC SYNC] pricing result", {
-    trxPrice,
-    deltaUsd,
-  });
 
   const projectName =
     config.project_name ||
@@ -254,20 +229,11 @@ export async function applyRollerCoinBalanceUpdate({
   const project =
     await findOrCreateProject(projectName);
 
-  console.log("[RC SYNC] project resolved", project);
-
   const categoryName =
     label || "RollerCoin";
 
   const today =
     new Date().toISOString().split("T")[0];
-
-  console.log("[RC SYNC] creating earning transaction", {
-    projectId: project.id,
-    deltaTrx,
-    deltaUsd,
-    categoryName,
-  });
 
   const txnsRes =
     await projectsApi.addTransaction(project.id, {
@@ -276,7 +242,7 @@ export async function applyRollerCoinBalanceUpdate({
       category: categoryName,
       notes: `RollerCoin balance update: +${deltaTrx.toFixed(
         4
-      )} TRX @ $${trxPrice.toFixed(4)}`,
+      )} SOL @ $${trxPrice.toFixed(4)}`,
       date: today,
       source: "rollercoin",
       source_trx_delta: Number(
@@ -284,8 +250,6 @@ export async function applyRollerCoinBalanceUpdate({
       ),
       source_trx_price: trxPrice,
     });
-
-  console.log("[RC SYNC] addTransaction response", txnsRes);
 
   const txns = txnsRes.data || [];
 
@@ -298,8 +262,6 @@ export async function applyRollerCoinBalanceUpdate({
           Number(deltaTrx.toFixed(6))
     );
 
-  console.log("[RC SYNC] matched created txn", created);
-
   const nextEarned =
     Math.max(
       0,
@@ -310,17 +272,11 @@ export async function applyRollerCoinBalanceUpdate({
     earned: nextEarned,
   });
 
-  console.log("[RC SYNC] updated project earned", {
-    nextEarned,
-  });
-
   await projectsApi.addToCategory(
     project.id,
     categoryName,
     deltaUsd
   );
-
-  console.log("[RC SYNC] updated category totals");
 
   const nextConfig = {
     ...config,
@@ -330,13 +286,6 @@ export async function applyRollerCoinBalanceUpdate({
 
   storage.setRollerCoinConfig(nextConfig);
 
-  console.log("[RC SYNC] updated baseline config", nextConfig);
-
-  console.log("[RC SYNC] syncing crypto holding", {
-    nextBalance,
-    trxPrice,
-  });
-
   await syncCryptoHolding(
     nextBalance,
     trxPrice
@@ -345,11 +294,6 @@ export async function applyRollerCoinBalanceUpdate({
   window.dispatchEvent(
     new CustomEvent("rollercoin-sync-complete")
   );
-
-  console.log("[RC SYNC] earning sync complete", {
-    delta_trx: Number(deltaTrx.toFixed(6)),
-    delta_usd: deltaUsd,
-  });
 
   return {
     txn: created || null,
@@ -381,11 +325,11 @@ async function syncCryptoHolding(
 
     const existing = all.find(
       (t) =>
-        (t.symbol || "").toUpperCase() === "TRX"
+        (t.symbol || "").toUpperCase() === "SOL"
     );
 
     if (existing) {
-      console.log("[RC SYNC] updating existing TRX token", existing);
+      console.log("[RC SYNC] updating existing SOL token", existing);
 
       await customTokensApi.update(existing.id, {
         amount: newBalance,
@@ -395,20 +339,21 @@ async function syncCryptoHolding(
             : existing.price || 0,
         coingecko_id:
           existing.coingecko_id ||
-          TRX_COINGECKO_ID,
+          SOL_COINGECKO_ID,
       });
+
     } else {
-      console.log("[RC SYNC] creating TRX token");
+      console.log("[RC SYNC] creating SOL token");
 
       await customTokensApi.create({
-        symbol: "TRX",
-        name: "Tron",
+        symbol: "SOL",
+        name: "Solana",
         amount: newBalance,
         price: trxPrice > 0 ? trxPrice : 0,
         icon_url:
-          "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png",
-        chain: "tron",
-        coingecko_id: TRX_COINGECKO_ID,
+          "https://assets.coingecko.com/coins/images/4128/small/solana.png",
+        chain: "solana",
+        coingecko_id: SOL_COINGECKO_ID,
       });
     }
 
@@ -417,10 +362,11 @@ async function syncCryptoHolding(
     );
 
     console.log("[RC SYNC] crypto holding sync complete");
+
   } catch (err) {
     console.warn(
       "[RC SYNC] failed to sync crypto holding",
       err
-    );
+    )
   }
 }
