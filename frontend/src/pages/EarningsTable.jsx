@@ -34,16 +34,16 @@ function EarningsTable() {
       <h2 className="text-lg font-semibold mb-4">Project Earnings</h2>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full table-fixed text-sm">
           <thead className="text-gray-400 border-b border-white/10">
             <tr>
-              <th className="text-left py-3">Project</th>
-              <th className="text-left py-3">Daily Return</th>
-              <th className="text-left py-3">Weekly</th>
-              <th className="text-left py-3">Monthly</th>
-              <th className="text-left py-3">Yearly</th>
+                <th className="text-left py-3 w-[22%]">Project</th>
+                <th className="text-left py-3 w-[18%]">Daily Return</th>
+                <th className="text-left py-3 w-[20%]">Weekly</th>
+                <th className="text-left py-3 w-[20%]">Monthly</th>
+                <th className="text-left py-3 w-[20%]">Yearly</th>
             </tr>
-          </thead>
+            </thead>
 
           <tbody>
             {Object.entries(dailyReturns).map(([project, daily]) => {
@@ -52,16 +52,30 @@ function EarningsTable() {
               const yearly = daily * 365;
 
               return (
-                <tr key={project} className="border-b border-white/5">
+                <tr key={project} className="border-b border-white/5 h-[72px]">
                   <td className="py-3 font-medium">{project}</td>
 
                   <td className="py-3">
                     <input
-                      type="number"
-                      step="0.01"
-                      value={daily}
-                      onChange={(e) => updateDaily(project, e.target.value)}
-                      className="w-24 rounded-md bg-black border border-white/10 px-2 py-1 text-white"
+                    type="number"
+                    step="0.01"
+                    value={daily}
+                    onChange={(e) => updateDaily(project, e.target.value)}
+                    className="
+                        w-full
+                        max-w-[120px]
+                        rounded-md
+                        border
+                        border-white/10
+                        bg-[#0d0d0d]
+                        px-3
+                        py-2
+                        text-sm
+                        text-white
+                        outline-none
+                        transition-colors
+                        focus:border-cyan-400/50
+                    "
                     />
                   </td>
 
