@@ -57,8 +57,13 @@ function EarningsTable() {
                 <tr key={project} className="border-b border-white/5 h-[72px]">
                   <td className="py-3 font-medium">{project}</td>
 
-                  <td className="py-3">
-                    <input
+<td className="py-3">
+  <div className="relative max-w-[140px]">
+    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+      $
+    </span>
+
+    <input
                     type="number"
                     step="0.01"
                     value={daily}
@@ -81,8 +86,10 @@ className="
   focus:border-0
   focus:bg-[#151515]
 "
-                    />
-                  </td>
+                    
+    />
+    </div>
+              </td>
 
                   <td className="py-3 font-mono">{formatUsd(weekly)}</td>
                   <td className="py-3 font-mono">{formatUsd(monthly)}</td>
