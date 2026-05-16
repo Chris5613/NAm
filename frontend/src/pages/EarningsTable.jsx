@@ -65,8 +65,6 @@ className="
   w-full
   max-w-[140px]
   rounded-md
-  border
-  border-white/10
   bg-[#111]
   px-3
   py-2
@@ -74,8 +72,11 @@ className="
   text-white
   shadow-none
   outline-none
-  transition-all
-  focus:border-cyan-400/40
+  ring-0
+  border-0
+  focus:outline-none
+  focus:ring-0
+  focus:border-0
   focus:bg-[#151515]
 "
                     />
