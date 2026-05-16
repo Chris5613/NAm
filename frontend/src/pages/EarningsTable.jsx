@@ -61,21 +61,23 @@ function EarningsTable() {
                     step="0.01"
                     value={daily}
                     onChange={(e) => updateDaily(project, e.target.value)}
-                    className="
-                        w-full
-                        max-w-[120px]
-                        rounded-md
-                        border
-                        border-white/10
-                        bg-[#0d0d0d]
-                        px-3
-                        py-2
-                        text-sm
-                        text-white
-                        outline-none
-                        transition-colors
-                        focus:border-cyan-400/50
-                    "
+className="
+  w-full
+  max-w-[140px]
+  rounded-md
+  border
+  border-white/10
+  bg-[#111]
+  px-3
+  py-2
+  text-sm
+  text-white
+  shadow-none
+  outline-none
+  transition-all
+  focus:border-cyan-400/40
+  focus:bg-[#151515]
+"
                     />
                   </td>
 
