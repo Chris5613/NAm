@@ -358,16 +358,32 @@ function removeHotspotLabel(lineKey, indexToRemove) {
                               />
                             )}
 
-                            <div className="min-w-0">
-                              <div className="truncate text-lg font-black text-foreground">
-                                {line.phone}
-                              </div>
+<div className="flex min-w-0 flex-1 flex-col gap-3 md:flex-row md:items-center md:justify-between">
+  <div className="min-w-0">
+    <div className="truncate text-lg font-black text-foreground">
+      {line.phone}
+    </div>
 
-                              <div className="text-xs text-muted-foreground">
-                                {line.dataRemaining || "Unknown"} remaining /{" "}
-                                {line.dataTotal || "Unknown"}
-                              </div>
-                            </div>
+    <div className="text-xs text-muted-foreground">
+      {line.dataRemaining || "Unknown"} remaining /{" "}
+      {line.dataTotal || "Unknown"}
+    </div>
+  </div>
+
+  <div className="w-full md:w-64">
+    <div className="mb-1 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+      <span>Renewal: {line.renewalDate || "Unknown"}</span>
+      <span>{Math.round(percent)}%</span>
+    </div>
+
+    <div className="h-2 overflow-hidden rounded-full bg-white/10">
+      <div
+        className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-300"
+        style={{ width: `${percent}%` }}
+      />
+    </div>
+  </div>
+</div>
                           </button>
 
                           <div className="flex items-center gap-2">
