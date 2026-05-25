@@ -1,7 +1,18 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { RefreshCw, Smartphone, CheckCircle2, AlertCircle } from "lucide-react";
+import {
+  RefreshCw,
+  Smartphone,
+  CheckCircle2,
+  AlertCircle,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 const SITE_STORAGE_KEY = "nam_tello_dashboard_data";
+const HIDDEN_LINES_KEY = "nam_tello_dashboard_hidden_lines";
+const COLLAPSED_LINES_KEY = "nam_tello_dashboard_collapsed_lines";
 
 function formatUpdated(value) {
   if (!value) return "Unknown";
@@ -21,11 +32,15 @@ function getDataPercent(line) {
     return 0;
   }
 
-  const remainingUnit = String(line.dataRemaining || "").toUpperCase().includes("GB")
+  const remainingUnit = String(line.dataRemaining || "")
+    .toUpperCase()
+    .includes("GB")
     ? "GB"
     : "MB";
 
-  const totalUnit = String(line.dataTotal || "").toUpperCase().includes("GB")
+  const totalUnit = String(line.dataTotal || "")
+    .toUpperCase()
+    .includes("GB")
     ? "GB"
     : "MB";
 
@@ -33,6 +48,18 @@ function getDataPercent(line) {
   const totalMb = totalUnit === "GB" ? total * 1024 : total;
 
   return Math.max(0, Math.min(100, (remainingMb / totalMb) * 100));
+}
+
+function readStoredArray(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function makeLineKey(account, line) {
+  return `${account.accountId || account.label || "account"}:${line.phone || "unknown"}`;
 }
 
 export default function TelloDashboard() {
@@ -44,9 +71,44 @@ export default function TelloDashboard() {
     }
   });
 
+  const [hiddenLines, setHiddenLines] = useState(() =>
+    readStoredArray(HIDDEN_LINES_KEY)
+  );
+
+  const [collapsedLines, setCollapsedLines] = useState(() =>
+    readStoredArray(COLLAPSED_LINES_KEY)
+  );
+
+  const [showHidden, setShowHidden] = useState(false);
   const [lastSync, setLastSync] = useState(null);
   const [syncStatus, setSyncStatus] = useState("Waiting for extension");
   const [isSyncing, setIsSyncing] = useState(false);
+
+  function saveHiddenLines(next) {
+    setHiddenLines(next);
+    localStorage.setItem(HIDDEN_LINES_KEY, JSON.stringify(next));
+  }
+
+  function saveCollapsedLines(next) {
+    setCollapsedLines(next);
+    localStorage.setItem(COLLAPSED_LINES_KEY, JSON.stringify(next));
+  }
+
+  function toggleHidden(lineKey) {
+    const next = hiddenLines.includes(lineKey)
+      ? hiddenLines.filter((key) => key !== lineKey)
+      : [...hiddenLines, lineKey];
+
+    saveHiddenLines(next);
+  }
+
+  function toggleCollapsed(lineKey) {
+    const next = collapsedLines.includes(lineKey)
+      ? collapsedLines.filter((key) => key !== lineKey)
+      : [...collapsedLines, lineKey];
+
+    saveCollapsedLines(next);
+  }
 
   function syncFromExtension() {
     console.log("[NAmTelloDashboard] Requesting sync from extension...");
@@ -103,6 +165,18 @@ export default function TelloDashboard() {
     }, 0);
   }, [accounts]);
 
+  const visibleLinesCount = useMemo(() => {
+    return accounts.reduce((sum, account) => {
+      return (
+        sum +
+        (account.lines || []).filter((line) => {
+          const key = makeLineKey(account, line);
+          return !hiddenLines.includes(key);
+        }).length
+      );
+    }, 0);
+  }, [accounts, hiddenLines]);
+
   return (
     <div className="min-h-screen text-white">
       <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -125,17 +199,31 @@ export default function TelloDashboard() {
           </div>
         </div>
 
-        <button
-          onClick={syncFromExtension}
-          disabled={isSyncing}
-          className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-bold text-sky-300 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`}
-            strokeWidth={1.8}
-          />
-          {isSyncing ? "Syncing..." : "Sync from Extension"}
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => setShowHidden((v) => !v)}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-bold text-muted-foreground transition hover:bg-white/10"
+          >
+            {showHidden ? (
+              <EyeOff className="h-4 w-4" strokeWidth={1.8} />
+            ) : (
+              <Eye className="h-4 w-4" strokeWidth={1.8} />
+            )}
+            {showHidden ? "Hide hidden phones" : "Show hidden phones"}
+          </button>
+
+          <button
+            onClick={syncFromExtension}
+            disabled={isSyncing}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-2 text-sm font-bold text-sky-300 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            <RefreshCw
+              className={`h-4 w-4 ${isSyncing ? "animate-spin" : ""}`}
+              strokeWidth={1.8}
+            />
+            {isSyncing ? "Syncing..." : "Sync from Extension"}
+          </button>
+        </div>
       </div>
 
       <div className="mb-6 grid gap-3 md:grid-cols-3">
@@ -145,8 +233,10 @@ export default function TelloDashboard() {
         </div>
 
         <div className="rounded-2xl border border-border/40 bg-card p-4">
-          <div className="text-xs text-muted-foreground">Saved lines</div>
-          <div className="mt-1 text-2xl font-black">{totalLines}</div>
+          <div className="text-xs text-muted-foreground">Visible lines</div>
+          <div className="mt-1 text-2xl font-black">
+            {visibleLinesCount}/{totalLines}
+          </div>
         </div>
 
         <div className="rounded-2xl border border-border/40 bg-card p-4">
@@ -172,76 +262,152 @@ export default function TelloDashboard() {
         </div>
       ) : (
         <div className="space-y-6">
-          {accounts.map((account) => (
-            <section
-              key={account.accountId || account.label}
-              className="rounded-3xl border border-border/40 bg-card p-4 shadow-2xl shadow-black/20"
-            >
-              <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                <div>
-                  <h2 className="text-xl font-black text-sky-300">
-                    {account.label || "Tello Account"}
-                  </h2>
+          {accounts.map((account) => {
+            const lines = account.lines || [];
 
-                  <p className="text-xs text-muted-foreground">
-                    Last scanned: {formatUpdated(account.lastScanned)}
-                  </p>
+            const visibleLines = lines.filter((line) => {
+              const key = makeLineKey(account, line);
+              return showHidden || !hiddenLines.includes(key);
+            });
+
+            return (
+              <section
+                key={account.accountId || account.label}
+                className="rounded-3xl border border-border/40 bg-card p-4 shadow-2xl shadow-black/20"
+              >
+                <div className="mb-4 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h2 className="text-xl font-black text-sky-300">
+                      {account.label || "Tello Account"}
+                    </h2>
+
+                    <p className="text-xs text-muted-foreground">
+                      Last scanned: {formatUpdated(account.lastScanned)}
+                    </p>
+                  </div>
+
+                  <div className="text-sm font-bold text-muted-foreground">
+                    {visibleLines.length}/{lines.length} visible line(s)
+                  </div>
                 </div>
 
-                <div className="text-sm font-bold text-muted-foreground">
-                  {account.lines?.length || 0} line(s)
-                </div>
-              </div>
+                <div className="space-y-3">
+                  {visibleLines.map((line) => {
+                    const percent = getDataPercent(line);
+                    const lineKey = makeLineKey(account, line);
+                    const isHidden = hiddenLines.includes(lineKey);
+                    const isCollapsed = collapsedLines.includes(lineKey);
 
-<div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-  {(account.lines || []).map((line) => {
-    const percent = getDataPercent(line);
+                    return (
+                      <div
+                        key={lineKey}
+                        className={`rounded-2xl border p-4 transition ${
+                          isHidden
+                            ? "border-red-400/30 bg-red-500/5 opacity-60"
+                            : "border-border/40 bg-background/40"
+                        }`}
+                      >
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <button
+                            type="button"
+                            onClick={() => toggleCollapsed(lineKey)}
+                            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                          >
+                            {isCollapsed ? (
+                              <ChevronRight
+                                className="h-5 w-5 shrink-0 text-muted-foreground"
+                                strokeWidth={1.8}
+                              />
+                            ) : (
+                              <ChevronDown
+                                className="h-5 w-5 shrink-0 text-muted-foreground"
+                                strokeWidth={1.8}
+                              />
+                            )}
 
-    return (
-      <div
-        key={line.phone}
-        className="rounded-2xl border border-border/40 bg-background/40 p-4"
-      >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="text-lg font-black text-foreground">
-                            {line.phone}
+                            <div className="min-w-0">
+                              <div className="truncate text-lg font-black text-foreground">
+                                {line.phone}
+                              </div>
+
+                              <div className="text-xs text-muted-foreground">
+                                {line.dataRemaining || "Unknown"} remaining /{" "}
+                                {line.dataTotal || "Unknown"}
+                              </div>
+                            </div>
+                          </button>
+
+                          <div className="flex items-center gap-2">
+                            <div className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
+                              {line.price || "Unknown"}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => toggleHidden(lineKey)}
+                              className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-bold transition ${
+                                isHidden
+                                  ? "border-emerald-400/30 bg-emerald-500/10 text-emerald-300"
+                                  : "border-red-400/30 bg-red-500/10 text-red-300"
+                              }`}
+                            >
+                              {isHidden ? (
+                                <>
+                                  <Eye className="h-3.5 w-3.5" />
+                                  Show
+                                </>
+                              ) : (
+                                <>
+                                  <EyeOff className="h-3.5 w-3.5" />
+                                  Hide
+                                </>
+                              )}
+                            </button>
                           </div>
                         </div>
 
-                        <div className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-300">
-                          {line.price || "Unknown"}
-                        </div>
-                      </div>
+                        {!isCollapsed && (
+                          <div className="mt-4 border-t border-border/30 pt-4">
+                            <div className="flex items-end justify-between gap-3">
+                              <div>
+                                <div className="text-3xl font-black text-foreground">
+                                  {line.dataRemaining || "Unknown"}
+                                </div>
 
-<div className="mt-5 flex items-end justify-between gap-3">
-                        <div>
-                          <div className="text-3xl font-black text-foreground">
-                            {line.dataRemaining || "Unknown"}
+                                <div className="text-xs text-muted-foreground">
+                                  remaining / {line.dataTotal || "Unknown"}
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
+                              <div
+                                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-300"
+                                style={{ width: `${percent}%` }}
+                              />
+                            </div>
+
+                            <div className="mt-4 flex flex-col gap-1 text-xs text-muted-foreground">
+                              <span>
+                                Renewal: {line.renewalDate || "Unknown"}
+                              </span>
+                            </div>
                           </div>
-
-                          <div className="text-xs text-muted-foreground">
-                            remaining / {line.dataTotal || "Unknown"}
-                          </div>
-                        </div>
+                        )}
                       </div>
+                    );
+                  })}
 
-                      <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-300"
-                          style={{ width: `${percent}%` }}
-                        />
-                      </div>
-
-                      <div className="mt-4 flex flex-col gap-1 text-xs text-muted-foreground">
-                        <span>Renewal: {line.renewalDate || "Unknown"}</span>
-                      </div>
+                  {!visibleLines.length && (
+                    <div className="rounded-2xl border border-dashed border-border/50 bg-background/30 p-6 text-center text-sm text-muted-foreground">
+                      All phones in this account are hidden. Click{" "}
+                      <b>Show hidden phones</b> above to bring one back.
                     </div>
-                  );
-                })}
-              </div>
-            </section>
-          ))}
+                  )}
+                </div>
+              </section>
+            );
+          })}
         </div>
       )}
     </div>
