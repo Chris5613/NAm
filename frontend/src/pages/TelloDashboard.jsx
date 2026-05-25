@@ -13,6 +13,7 @@ import {
 const SITE_STORAGE_KEY = "nam_tello_dashboard_data";
 const HIDDEN_LINES_KEY = "nam_tello_dashboard_hidden_lines";
 const COLLAPSED_LINES_KEY = "nam_tello_dashboard_collapsed_lines";
+const HOTSPOT_LABELS_KEY = "nam_tello_dashboard_hotspot_labels";
 
 function formatUpdated(value) {
   if (!value) return "Unknown";
@@ -83,6 +84,38 @@ export default function TelloDashboard() {
   const [lastSync, setLastSync] = useState(null);
   const [syncStatus, setSyncStatus] = useState("Waiting for extension");
   const [isSyncing, setIsSyncing] = useState(false);
+  const [hotspotLabels, setHotspotLabels] = useState(() => {
+  try {
+    return JSON.parse(localStorage.getItem(HOTSPOT_LABELS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+});
+function saveHotspotLabels(next) {
+  setHotspotLabels(next);
+  localStorage.setItem(HOTSPOT_LABELS_KEY, JSON.stringify(next));
+}
+
+function addHotspotLabel(lineKey, label) {
+  const clean = label.trim();
+  if (!clean) return;
+
+  const current = hotspotLabels[lineKey] || [];
+
+  saveHotspotLabels({
+    ...hotspotLabels,
+    [lineKey]: [...current, clean],
+  });
+}
+
+function removeHotspotLabel(lineKey, indexToRemove) {
+  const current = hotspotLabels[lineKey] || [];
+
+  saveHotspotLabels({
+    ...hotspotLabels,
+    [lineKey]: current.filter((_, index) => index !== indexToRemove),
+  });
+}
 
   function saveHiddenLines(next) {
     setHiddenLines(next);
@@ -366,34 +399,64 @@ export default function TelloDashboard() {
                           </div>
                         </div>
 
-                        {!isCollapsed && (
-                          <div className="mt-4 border-t border-border/30 pt-4">
-                            <div className="flex items-end justify-between gap-3">
-                              <div>
-                                <div className="text-3xl font-black text-foreground">
-                                  {line.dataRemaining || "Unknown"}
-                                </div>
+{!isCollapsed && (
+  <div className="mt-4 border-t border-border/30 pt-4">
+    <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted-foreground">
+      Connected hotspot phones
+    </p>
 
-                                <div className="text-xs text-muted-foreground">
-                                  remaining / {line.dataTotal || "Unknown"}
-                                </div>
-                              </div>
-                            </div>
+    <div className="flex flex-col gap-2">
+      {(hotspotLabels[lineKey] || []).length ? (
+        hotspotLabels[lineKey].map((label, index) => (
+          <div
+            key={`${label}-${index}`}
+            className="flex items-center justify-between rounded-xl bg-black/20 px-4 py-3"
+          >
+            <span className="text-sm font-medium text-foreground">
+              {label}
+            </span>
 
-                            <div className="mt-4 h-3 overflow-hidden rounded-full bg-white/10">
-                              <div
-                                className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-lime-300"
-                                style={{ width: `${percent}%` }}
-                              />
-                            </div>
+            <button
+              type="button"
+              onClick={() => removeHotspotLabel(lineKey, index)}
+              className="text-xs font-bold text-red-300 hover:text-red-200"
+            >
+              Remove
+            </button>
+          </div>
+        ))
+      ) : (
+        <div className="rounded-xl bg-black/20 px-4 py-3 text-sm text-muted-foreground">
+          No hotspot phones added yet
+        </div>
+      )}
+    </div>
 
-                            <div className="mt-4 flex flex-col gap-1 text-xs text-muted-foreground">
-                              <span>
-                                Renewal: {line.renewalDate || "Unknown"}
-                              </span>
-                            </div>
-                          </div>
-                        )}
+    <form
+      className="mt-3 flex gap-2"
+      onSubmit={(e) => {
+        e.preventDefault();
+
+        const input = e.currentTarget.elements.hotspotLabel;
+        addHotspotLabel(lineKey, input.value);
+        input.value = "";
+      }}
+    >
+      <input
+        name="hotspotLabel"
+        placeholder="Add label, ex: iPhone 15 Pro"
+        className="flex-1 rounded-xl border border-border/40 bg-background/60 px-3 py-2 text-sm text-foreground outline-none"
+      />
+
+      <button
+        type="submit"
+        className="rounded-xl bg-sky-500/20 px-4 py-2 text-sm font-bold text-sky-300 hover:bg-sky-500/30"
+      >
+        Add
+      </button>
+    </form>
+  </div>
+)}
                       </div>
                     );
                   })}
