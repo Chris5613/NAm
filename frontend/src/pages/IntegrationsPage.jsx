@@ -50,7 +50,7 @@ export default function IntegrationsPage() {
   <NosanaEarningsCard />
   <UnityNetworkEarningsCard />
   <RollerCoinEarningsCard />
-  <AcurastEarningsCard />
+   {/*<AcurastEarningsCard /> */}
   {/* <GoMiningEarningsCard /> */}
 
   {/* Custom integrations */}
