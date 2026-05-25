@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { localStorage as storage } from "@/lib/localStorage";
 import {
   applyRollerCoinBalanceUpdate,
-  getTrxPrice as getSolPrice,
-  getTrxPriceCacheInfo as getSolPriceCacheInfo,
+  getTrxPrice,
+  getTrxPriceCacheInfo,
   isRollerCoinStale,
 } from "@/lib/rollercoinSync";
 
@@ -56,13 +56,13 @@ function formatUsd(v) {
   });
 }
 
-function formatSol(v, digits = 4) {
+function formatTrx(v, digits = 4) {
   const n = Number(v) || 0;
 
   return `${n.toLocaleString("en-US", {
     maximumFractionDigits: digits,
     minimumFractionDigits: Math.min(digits, 2),
-  })} SOL`;
+  })} TRX`;
 }
 
 function formatRelativeTime(iso) {
@@ -85,7 +85,7 @@ export default function RollerCoinEarningsCard() {
     storage.getRollerCoinConfig()
   );
 
-  const [solPrice, setSolPrice] = useState(0);
+const [trxPrice, setTrxPrice] = useState(0);  
 
   const [configOpen, setConfigOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
@@ -121,9 +121,9 @@ export default function RollerCoinEarningsCard() {
     let cancelled = false;
 
     const pull = async () => {
-      const p = await getSolPrice();
+const p = await getTrxPrice();
 
-      if (!cancelled) setSolPrice(p);
+if (!cancelled) setTrxPrice(p);
     };
 
     pull();
@@ -209,9 +209,9 @@ export default function RollerCoinEarningsCard() {
 
   const hasExtensionData = !!extPayload;
 
-  const baselineUsd =
-    (Number(config?.baseline_sol) || 0) *
-    (Number(solPrice) || 0);
+const baselineUsd =
+  (Number(config?.baseline_trx) || 0) *
+  (Number(trxPrice) || 0);
 
   return (
     <>
@@ -325,8 +325,8 @@ export default function RollerCoinEarningsCard() {
                 </p>
 
                 <p className="font-mono text-base font-medium text-foreground">
-                  {formatSol(
-                    extPayload.total_sol
+                  {formatTrx(
+                    extPayload.total_trx
                   )}
                 </p>
               </div>
@@ -366,8 +366,8 @@ export default function RollerCoinEarningsCard() {
                 </p>
 
                 <p className="font-mono text-base font-medium text-foreground">
-                  {formatSol(
-                    config?.baseline_sol
+                  {formatTrx(
+                    config?.baseline_trx
                   )}
                 </p>
               </div>
@@ -378,7 +378,7 @@ export default function RollerCoinEarningsCard() {
                 </p>
 
                 <p className="font-mono text-base font-medium text-emerald-400">
-                  {solPrice > 0
+                  {trxPrice > 0
                     ? formatUsd(
                         baselineUsd
                       )
@@ -388,13 +388,13 @@ export default function RollerCoinEarningsCard() {
 
               <div>
                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  SOL price
+                  TRX price
                 </p>
 
                 <p className="font-mono text-base font-medium text-foreground">
-                  {solPrice > 0
-                    ? `$${solPrice.toFixed(
-                        2
+                  {trxPrice > 0
+                    ? `$${trxPrice.toFixed(
+                        4
                       )}`
                     : "—"}
                 </p>

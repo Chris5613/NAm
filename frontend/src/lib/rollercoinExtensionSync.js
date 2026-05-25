@@ -291,10 +291,7 @@ if (data?.source === EXT_SOURCE || data?.source === APP_SOURCE) {
       return;
     }
 
-    if (data.type === MSG_PUSH) {
-      console.log("[RC APP] PUSH received", data.payload);
-
-      if (data.type === MSG_POWER_PUSH) {
+if (data.type === MSG_POWER_PUSH) {
   console.log("[RC APP] POWER PUSH received", data.payload);
 
   const current = getRollerCoinExtensionState();
@@ -314,37 +311,40 @@ if (data?.source === EXT_SOURCE || data?.source === APP_SOURCE) {
   return;
 }
 
-      try {
-        const state = getRollerCoinExtensionState();
+if (data.type === MSG_PUSH) {
+  console.log("[RC APP] PUSH received", data.payload);
 
-        if (state.auto_sync_enabled === false) {
-          console.warn("[RC APP] auto sync off");
+  try {
+    const state = getRollerCoinExtensionState();
 
-          notifySubscribers(
-            {
-              applied: false,
-              reason: "auto_sync_off",
-            },
-            data.payload
-          );
-          return;
-        }
+    if (state.auto_sync_enabled === false) {
+      console.warn("[RC APP] auto sync off");
 
-        const result = await enqueueApply(data.payload);
-        notifySubscribers(result, data.payload);
-      } catch (err) {
-        console.warn("[RC APP] Failed to apply RollerCoin extension push:", err);
-
-        notifySubscribers(
-          {
-            applied: false,
-            reason: "exception",
-            error: err?.message,
-          },
-          data.payload
-        );
-      }
+      notifySubscribers(
+        {
+          applied: false,
+          reason: "auto_sync_off",
+        },
+        data.payload
+      );
+      return;
     }
+
+    const result = await enqueueApply(data.payload);
+    notifySubscribers(result, data.payload);
+  } catch (err) {
+    console.warn("[RC APP] Failed to apply RollerCoin extension push:", err);
+
+    notifySubscribers(
+      {
+        applied: false,
+        reason: "exception",
+        error: err?.message,
+      },
+      data.payload
+    );
+  }
+}
   };
 
   window.addEventListener("message", onMessage);

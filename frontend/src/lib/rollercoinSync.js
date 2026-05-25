@@ -8,7 +8,7 @@ import { projectsApi, customTokensApi } from "./api";
 import { localStorage as storage } from "./localStorage";
 
 const ROLLERCOIN_PROJECT_NAME_DEFAULT = "RollerCoin";
-const SOL_COINGECKO_ID = "solana";
+const TRX_COINGECKO_ID = "tron";
 const STALE_DAYS = 7;
 const AMOUNT_EPSILON = 0.00001;
 
@@ -53,7 +53,7 @@ export async function getTrxPrice() {
   console.log("[RC SYNC] getTrxPrice start");
 
   try {
-    const price = await coinGeckoApi.getPrice(SOL_COINGECKO_ID);
+    const price = await coinGeckoApi.getPrice(TRX_COINGECKO_ID);
 
     console.log("[RC SYNC] CoinGecko price response", price);
 
@@ -240,9 +240,9 @@ export async function applyRollerCoinBalanceUpdate({
       type: "earning",
       amount: deltaUsd,
       category: categoryName,
-      notes: `RollerCoin balance update: +${deltaTrx.toFixed(
-        4
-      )} SOL @ $${trxPrice.toFixed(4)}`,
+notes: `RollerCoin balance update: +${deltaTrx.toFixed(
+  4
+)} TRX @ $${trxPrice.toFixed(4)}`,
       date: today,
       source: "rollercoin",
       source_trx_delta: Number(
@@ -323,39 +323,39 @@ async function syncCryptoHolding(
 
     console.log("[RC SYNC] current crypto tokens", all);
 
-    const existing = all.find(
-      (t) =>
-        (t.symbol || "").toUpperCase() === "SOL"
-    );
+const existing = all.find(
+  (t) =>
+    (t.symbol || "").toUpperCase() === "TRX"
+);
 
-    if (existing) {
-      console.log("[RC SYNC] updating existing SOL token", existing);
+if (existing) {
+  console.log("[RC SYNC] updating existing TRX token", existing);
 
-      await customTokensApi.update(existing.id, {
-        amount: newBalance,
-        price:
-          trxPrice > 0
-            ? trxPrice
-            : existing.price || 0,
-        coingecko_id:
-          existing.coingecko_id ||
-          SOL_COINGECKO_ID,
-      });
+  await customTokensApi.update(existing.id, {
+    amount: newBalance,
+    price:
+      trxPrice > 0
+        ? trxPrice
+        : existing.price || 0,
+    coingecko_id:
+      existing.coingecko_id ||
+      TRX_COINGECKO_ID,
+  });
 
-    } else {
-      console.log("[RC SYNC] creating SOL token");
+} else {
+  console.log("[RC SYNC] creating TRX token");
 
-      await customTokensApi.create({
-        symbol: "SOL",
-        name: "Solana",
-        amount: newBalance,
-        price: trxPrice > 0 ? trxPrice : 0,
-        icon_url:
-          "https://assets.coingecko.com/coins/images/4128/small/solana.png",
-        chain: "solana",
-        coingecko_id: SOL_COINGECKO_ID,
-      });
-    }
+  await customTokensApi.create({
+    symbol: "TRX",
+    name: "TRON",
+    amount: newBalance,
+    price: trxPrice > 0 ? trxPrice : 0,
+    icon_url:
+      "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png",
+    chain: "tron",
+    coingecko_id: TRX_COINGECKO_ID,
+  });
+}
 
     window.dispatchEvent(
       new CustomEvent("crypto-holding-updated")
