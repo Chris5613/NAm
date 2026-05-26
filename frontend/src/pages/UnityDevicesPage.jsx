@@ -185,12 +185,14 @@ export default function UnityDevicesPage() {
   };
 
   const saveDeviceLabel = (deviceId) => {
+    const cleanLabel = editingLabel.trim();
+
     const next = {
       ...deviceLabels,
-      [deviceId]: editingLabel.trim(),
+      [deviceId]: cleanLabel,
     };
 
-    if (!editingLabel.trim()) {
+    if (!cleanLabel) {
       delete next[deviceId];
     }
 
@@ -241,6 +243,21 @@ export default function UnityDevicesPage() {
     setStoredJson(HIDDEN_DEVICES_KEY, next);
   };
 
+  const getDeviceLabel = (device) => {
+    const deviceId = getDeviceId(device);
+    return String(deviceLabels[deviceId] || "").trim();
+  };
+
+  const getDeviceGroup = (device) => {
+    const label = getDeviceLabel(device);
+    const lowerLabel = label.toLowerCase();
+
+    if (!label) return "Other";
+    if (lowerLabel.includes("iphone")) return "iPhones";
+
+    return "Androids";
+  };
+
   const visibleDevices = useMemo(() => {
     return devices.filter((device) => {
       const deviceId = getDeviceId(device);
@@ -263,13 +280,15 @@ export default function UnityDevicesPage() {
             ""
         );
 
+        const group = getDeviceGroup(device);
         const query = search.toLowerCase();
 
         return (
           deviceId.toLowerCase().includes(query) ||
           label.toLowerCase().includes(query) ||
           lease.toLowerCase().includes(query) ||
-          account.toLowerCase().includes(query)
+          account.toLowerCase().includes(query) ||
+          group.toLowerCase().includes(query)
         );
       })
       .sort((a, b) => Number(b.amount_usd || 0) - Number(a.amount_usd || 0));
@@ -344,28 +363,12 @@ export default function UnityDevicesPage() {
 
   const sevenDayAverage = chartData.length > 0 ? sevenDayTotal / 7 : 0;
 
-  const getDeviceGroup = (device) => {
-    const rawAccount =
-      device.account_label ||
-      device.account_email ||
-      device.account ||
-      device.wallet ||
-      "Unknown";
-
-    const accountLower = String(rawAccount).toLowerCase();
-
-    if (accountLower.startsWith("christian")) return "Androids";
-    if (accountLower.startsWith("cloud")) return "iPhones";
-
-    return "Other";
-  };
+  const iphoneDevices = filteredDevices.filter(
+    (device) => getDeviceGroup(device) === "iPhones"
+  );
 
   const androidDevices = filteredDevices.filter(
     (device) => getDeviceGroup(device) === "Androids"
-  );
-
-  const iphoneDevices = filteredDevices.filter(
-    (device) => getDeviceGroup(device) === "iPhones"
   );
 
   const otherDevices = filteredDevices.filter(
@@ -393,7 +396,7 @@ export default function UnityDevicesPage() {
                 <th className="px-4 py-3 text-left">Label</th>
                 <th className="px-4 py-3 text-left">Device ID</th>
                 <th className="px-4 py-3 text-left">Lease</th>
-                <th className="px-4 py-3 text-left">Account</th>
+                <th className="px-4 py-3 text-left">Section</th>
                 <th className="px-4 py-3 text-left">Recent</th>
                 <th className="px-4 py-3 text-left">Actions</th>
               </tr>
@@ -403,7 +406,7 @@ export default function UnityDevicesPage() {
               {deviceList.map((device, index) => {
                 const deviceId = getDeviceId(device);
                 const hidden = !!hiddenDevices[deviceId];
-                const account = getDeviceGroup(device);
+                const section = getDeviceGroup(device);
 
                 return (
                   <tr
@@ -422,14 +425,15 @@ export default function UnityDevicesPage() {
                             onChange={(event) =>
                               setEditingLabel(event.target.value)
                             }
-                            placeholder="Device label"
-                            className="w-40 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
+                            placeholder="ex: iPhone 15 or Android 1"
+                            className="w-44 rounded-md border border-[#263041] bg-[#0d1420] px-2 py-1 text-xs text-gray-200 outline-none"
                             autoFocus
                           />
 
                           <button
                             onClick={() => saveDeviceLabel(deviceId)}
                             className="text-emerald-400 hover:text-emerald-300"
+                            title="Save label"
                           >
                             <Save size={15} />
                           </button>
@@ -437,6 +441,7 @@ export default function UnityDevicesPage() {
                           <button
                             onClick={cancelEditLabel}
                             className="text-gray-500 hover:text-gray-300"
+                            title="Cancel"
                           >
                             <X size={15} />
                           </button>
@@ -450,6 +455,7 @@ export default function UnityDevicesPage() {
                           <button
                             onClick={() => startEditLabel(device)}
                             className="text-gray-500 hover:text-violet-300"
+                            title="Edit label"
                           >
                             <Pencil size={14} />
                           </button>
@@ -462,18 +468,18 @@ export default function UnityDevicesPage() {
                     </td>
 
                     <td className="px-4 py-3">
-<input
-  value={deviceLeases[deviceId] || ""}
-  onChange={(event) =>
-    saveDeviceLease(deviceId, event.target.value)
-  }
-  placeholder="Add lease"
-  className="w-32 border-0 border-b border-transparent bg-transparent px-0 py-1 text-sm text-gray-200 outline-none placeholder:text-gray-600 hover:border-gray-600 focus:border-violet-400"
-/>
+                      <input
+                        value={deviceLeases[deviceId] || ""}
+                        onChange={(event) =>
+                          saveDeviceLease(deviceId, event.target.value)
+                        }
+                        placeholder="Add lease"
+                        className="w-32 border-0 border-b border-transparent bg-transparent px-0 py-1 text-sm text-gray-200 outline-none placeholder:text-gray-600 hover:border-gray-600 focus:border-violet-400"
+                      />
                     </td>
 
                     <td className="px-4 py-3 font-medium text-gray-300">
-                      {account}
+                      {section}
                     </td>
 
                     <td className="px-4 py-3 font-semibold text-white">
@@ -739,7 +745,7 @@ export default function UnityDevicesPage() {
               <input
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search devices, labels, leases..."
+                placeholder="Search devices, labels, leases, sections..."
                 className="w-full rounded-lg border border-[#263041] bg-[#0d1420] px-3 py-2 pr-9 text-sm text-gray-200 outline-none placeholder:text-gray-500 sm:w-64"
               />
             </div>
@@ -752,11 +758,11 @@ export default function UnityDevicesPage() {
           )}
         </section>
 
-<div className="space-y-5">
-  {renderDeviceTable("iPhones", iphoneDevices)}
-  {renderDeviceTable("Androids", androidDevices)}
-  {otherDevices.length > 0 && renderDeviceTable("Other", otherDevices)}
-</div>
+        <div className="space-y-5">
+          {renderDeviceTable("iPhones", iphoneDevices)}
+          {renderDeviceTable("Androids", androidDevices)}
+          {renderDeviceTable("Other", otherDevices)}
+        </div>
       </div>
     </div>
   );
