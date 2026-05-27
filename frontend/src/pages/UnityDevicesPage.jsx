@@ -32,6 +32,7 @@ import { syncFromExtensionNow } from "@/lib/unityNetworkExtensionSync";
 const DEVICE_LABELS_KEY = "unity_device_labels";
 const HIDDEN_DEVICES_KEY = "unity_hidden_devices";
 const DEVICE_LEASES_KEY = "unity_device_leases";
+const LAST_GOOD_UNITY_PAYLOAD_KEY = "unity_last_good_payload";
 
 function getStoredJson(key, fallback) {
   try {
@@ -46,9 +47,15 @@ function setStoredJson(key, value) {
 }
 
 export default function UnityDevicesPage() {
-  const [devices, setDevices] = useState([]);
-  const [accounts, setAccounts] = useState([]);
-  const [summary, setSummary] = useState(null);
+
+const savedUnityPayload = getStoredJson(LAST_GOOD_UNITY_PAYLOAD_KEY, null);
+const savedNormalized = savedUnityPayload
+  ? normalizePayload(savedUnityPayload)
+  : null;
+
+const [devices, setDevices] = useState(savedNormalized?.devices || []);
+const [accounts, setAccounts] = useState(savedNormalized?.accounts || []);
+const [summary, setSummary] = useState(savedNormalized?.summary || null);
   const [lastSync, setLastSync] = useState(null);
   const [chartType, setChartType] = useState("bar");
   const [search, setSearch] = useState("");
@@ -66,6 +73,8 @@ export default function UnityDevicesPage() {
   const [deviceLeases, setDeviceLeases] = useState(() =>
     getStoredJson(DEVICE_LEASES_KEY, {})
   );
+
+  
 
   const [editingDeviceId, setEditingDeviceId] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
@@ -102,6 +111,8 @@ export default function UnityDevicesPage() {
     };
   };
 
+const LAST_GOOD_UNITY_PAYLOAD_KEY = "unity_last_good_payload";
+
 const applyPayload = (payload) => {
   console.log("[UNITY PAGE] raw payload:", payload);
 
@@ -120,36 +131,7 @@ const applyPayload = (payload) => {
     Array.isArray(normalized.summary?.daily_earnings) &&
     normalized.summary.daily_earnings.length > 0;
 
-  const hasUsefulData =
-    hasMoney || hasDevices || hasAccounts || hasDaily;
-
-  if (!hasUsefulData) {
-    console.warn(
-      "[UNITY PAGE] Ignored empty payload so existing dashboard data was not wiped.",
-      normalized
-    );
-
-    toast.error("Sync returned empty data. Keeping previous dashboard values.");
-    setSyncing(false);const applyPayload = (payload) => {
-  console.log("[UNITY PAGE] raw payload:", payload);
-
-  const normalized = normalizePayload(payload);
-
-  console.log("[UNITY PAGE] normalized payload:", normalized);
-
-  const hasMoney =
-    Number(normalized.summary?.lifetime_usd || 0) > 0 ||
-    Number(normalized.summary?.balance_usd || 0) > 0 ||
-    Number(normalized.summary?.total_usd || 0) > 0;
-
-  const hasDevices = normalized.devices.length > 0;
-  const hasAccounts = normalized.accounts.length > 0;
-  const hasDaily =
-    Array.isArray(normalized.summary?.daily_earnings) &&
-    normalized.summary.daily_earnings.length > 0;
-
-  const hasUsefulData =
-    hasMoney || hasDevices || hasAccounts || hasDaily;
+  const hasUsefulData = hasMoney || hasDevices || hasAccounts || hasDaily;
 
   if (!hasUsefulData) {
     console.warn(
@@ -162,14 +144,7 @@ const applyPayload = (payload) => {
     return;
   }
 
-  setDevices(normalized.devices);
-  setAccounts(normalized.accounts);
-  setSummary(normalized.summary);
-  setLastSync(new Date());
-  setSyncing(false);
-};
-    return;
-  }
+  localStorage.setItem(LAST_GOOD_UNITY_PAYLOAD_KEY, JSON.stringify(payload));
 
   setDevices(normalized.devices);
   setAccounts(normalized.accounts);
@@ -188,6 +163,14 @@ const getPayloadFromSyncResult = (result) => {
     null
   );
 };
+
+useEffect(() => {
+  const saved = getStoredJson(LAST_GOOD_UNITY_PAYLOAD_KEY, null);
+
+  if (saved) {
+    applyPayload(saved);
+  }
+}, []);
 
 const syncExtension = async () => {
   setSyncing(true);
