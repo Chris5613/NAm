@@ -410,25 +410,35 @@ const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());
       0
     );
 
-    const defiTotal = freshDefiPositions.reduce(
-      (s, p) => s + (Number(p.total_value) || 0),
-      0
-    );
+const manualDefiTotal = MANUAL_DEFI_POSITIONS.reduce(
+  (s, p) => s + (Number(p.total_value) || 0),
+  0
+);
 
-    const total = walletTotal + defiTotal;
+const defiTotal = freshDefiPositions.reduce(
+  (s, p) => s + (Number(p.total_value) || 0),
+  0
+);
 
-    if (total > 0) {
-      setLiveHistory((prev) => [
-        ...prev,
-        {
-          time: new Date().toLocaleTimeString([], {
-            hour: "numeric",
-            minute: "2-digit",
-          }),
-          value: total,
-        },
-      ]);
-    }
+const total = walletTotal + defiTotal + manualDefiTotal;
+
+if (total > 0) {
+  setLiveHistory((prev) => {
+    const next = [
+      ...prev,
+      {
+        time: new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        value: total,
+      },
+    ].slice(-50);
+
+    saveCryptoHistory(next);
+    return next;
+  });
+}
 
     setRefreshing(false);
     toast.success("Refreshed");
@@ -449,7 +459,7 @@ const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());
     clearTimeout(timeoutId);
     if (intervalId) clearInterval(intervalId);
   };
-}, [wallets, balances, defiPositions]);
+}, []);
 
   const toggleHideToken = async (symbol) => {
     const current = tokenPrefs[symbol]?.hidden || false;
@@ -622,21 +632,22 @@ const filteredDefi =
 useEffect(() => {
   if (grandTotal <= 0) return;
 
-setLiveHistory((prev) => {
-  const next = [
-    ...prev,
-    {
-      time: new Date().toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      }),
-      value: total,
-    },
-  ].slice(-50);
+  setLiveHistory((prev) => {
+    if (prev.length > 0) return prev;
 
-  saveCryptoHistory(next);
-  return next;
-});
+    const next = [
+      {
+        time: new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        }),
+        value: grandTotal,
+      },
+    ];
+
+    saveCryptoHistory(next);
+    return next;
+  });
 }, [grandTotal]);
 
   useEffect(() => {
