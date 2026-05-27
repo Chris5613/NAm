@@ -173,17 +173,18 @@ function extractDefiTokensFromList(list, fallbackKind = "supplied") {
     .map((item) => {
       const token = item?.token || item?.asset || item?.coin || item || {};
 
-      const symbol =
-        token.symbol ||
-        item.symbol ||
-        item.ticker ||
-        item.coinSymbol ||
-        item.coin ||
-        token.name ||
-        item.name ||
-        item.coinId ||
-        item.id ||
-        "Asset";
+const symbol =
+  token.symbol ||
+  item.symbol ||
+  item.ticker ||
+  item.coinSymbol ||
+  item.coin ||
+  item.coinId ||
+  token.coinId ||
+  token.name ||
+  item.name ||
+  item.id ||
+  "Asset";
 
       const name =
         token.name ||
@@ -245,16 +246,16 @@ function extractDefiTokensFromList(list, fallbackKind = "supplied") {
         amount,
         price,
         value,
-        image_uri:
-          token.logo ||
-          token.icon ||
-          token.imgUrl ||
-          token.image ||
-          item.logo ||
-          item.icon ||
-          item.imgUrl ||
-          item.image ||
-          "",
+image_uri:
+  token.logo ||
+  token.icon ||
+  token.imgUrl ||
+  token.image ||
+  item.logo ||
+  item.icon ||
+  item.imgUrl ||
+  item.image ||
+  "",
         kind: item.type || item.kind || item.positionType || fallbackKind,
       };
     })
@@ -284,6 +285,20 @@ function extractDefiTokens(protocol) {
   listSources.forEach(([key, kind]) => {
     tokens.push(...extractDefiTokensFromList(protocol?.[key], kind));
   });
+
+  if (Array.isArray(protocol?.investments)) {
+  protocol.investments.forEach((investment) => {
+    const investmentKind =
+      investment.type ||
+      investment.title ||
+      investment.name ||
+      "supplied";
+
+    tokens.push(...extractDefiTokensFromList(investment?.assets, investmentKind));
+    tokens.push(...extractDefiTokensFromList(investment?.tokens, investmentKind));
+    tokens.push(...extractDefiTokensFromList(investment?.balances, investmentKind));
+  });
+}
 
   if (Array.isArray(protocol?.pools)) {
     protocol.pools.forEach((pool) => {
