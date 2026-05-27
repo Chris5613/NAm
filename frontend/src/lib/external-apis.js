@@ -68,7 +68,7 @@ export const coinGeckoApi = {
 
 // Finnhub API (requires API key)
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
-const FINNHUB_KEY = process.env.REACT_APP_FINNHUB_API_KEY;
+const FINNHUB_KEY = process.env.VITE_FINNHUB_API;
 
 export const finnhubApi = {
   getQuote: async (symbol) => {
@@ -238,22 +238,12 @@ export const jupiterApi = {
 // CoinStats — returns an array of token holdings for a wallet on a given chain.
 // Docs: https://openapi.coinstats.app/  GET /wallet/balance
 const COINSTATS_BASE = "https://openapiv1.coinstats.app";
-const COINSTATS_API_KEY = "8a115a835260860fc9409473da905d8973454a07d6ed"
+const COINSTATS_API_KEY = process.env.VITE_COINSTATS_KEY;
 
 // Map our internal chain names → the CoinStats connectionId values
 // (verified via /wallet/blockchains).
 const COINSTATS_CHAIN_MAP = {
   solana: "solana",
-  bitcoin: "bitcoin",
-  ethereum: "ethereum",
-  bsc: "binancesmartchain",
-  polygon: "polygon-wallet",
-  avalanche: "avalanche-wallet",
-  arbitrum: "arbitrum-wallet",
-  optimism: "optimism-wallet",
-  base: "base-wallet",
-  tron: "tron",
-  fantom: "fantom-wallet",
 };
 
 export const coinStatsApi = {
