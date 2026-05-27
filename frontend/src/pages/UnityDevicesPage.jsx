@@ -47,15 +47,9 @@ function setStoredJson(key, value) {
 }
 
 export default function UnityDevicesPage() {
-
-const savedUnityPayload = getStoredJson(LAST_GOOD_UNITY_PAYLOAD_KEY, null);
-const savedNormalized = savedUnityPayload
-  ? normalizePayload(savedUnityPayload)
-  : null;
-
-const [devices, setDevices] = useState(savedNormalized?.devices || []);
-const [accounts, setAccounts] = useState(savedNormalized?.accounts || []);
-const [summary, setSummary] = useState(savedNormalized?.summary || null);
+  const [devices, setDevices] = useState([]);
+  const [accounts, setAccounts] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [lastSync, setLastSync] = useState(null);
   const [chartType, setChartType] = useState("bar");
   const [search, setSearch] = useState("");
@@ -74,8 +68,6 @@ const [summary, setSummary] = useState(savedNormalized?.summary || null);
     getStoredJson(DEVICE_LEASES_KEY, {})
   );
 
-  
-
   const [editingDeviceId, setEditingDeviceId] = useState(null);
   const [editingLabel, setEditingLabel] = useState("");
 
@@ -83,11 +75,19 @@ const [summary, setSummary] = useState(savedNormalized?.summary || null);
     String(device.license_id || device.device_id || device.id || "unknown");
 
   const normalizePayload = (payload = {}) => {
-    const accountList = Array.isArray(payload.accounts) ? payload.accounts : [];
+    const basePayload = payload?.combined_payload || payload;
+
+    const accountList = Array.isArray(basePayload.accounts)
+      ? basePayload.accounts
+      : Array.isArray(payload.accounts)
+        ? payload.accounts
+        : [];
 
     let deviceList = [];
 
-    if (Array.isArray(payload.devices)) {
+    if (Array.isArray(basePayload.devices)) {
+      deviceList = basePayload.devices;
+    } else if (Array.isArray(payload.devices)) {
       deviceList = payload.devices;
     } else if (Array.isArray(payload.combined_payload?.devices)) {
       deviceList = payload.combined_payload.devices;
@@ -107,94 +107,82 @@ const [summary, setSummary] = useState(savedNormalized?.summary || null);
     return {
       devices: deviceList,
       accounts: accountList,
-      summary: payload.combined_payload || payload,
+      summary: basePayload,
     };
   };
 
-const LAST_GOOD_UNITY_PAYLOAD_KEY = "unity_last_good_payload";
+  const applyPayload = (payload) => {
+    console.log("[UNITY PAGE] raw payload:", payload);
 
-const applyPayload = (payload) => {
-  console.log("[UNITY PAGE] raw payload:", payload);
+    const normalized = normalizePayload(payload);
 
-  const normalized = normalizePayload(payload);
+    console.log("[UNITY PAGE] normalized payload:", normalized);
 
-  console.log("[UNITY PAGE] normalized payload:", normalized);
+    const hasMoney =
+      Number(normalized.summary?.lifetime_usd || 0) > 0 ||
+      Number(normalized.summary?.balance_usd || 0) > 0 ||
+      Number(normalized.summary?.total_usd || 0) > 0;
 
-  const hasMoney =
-    Number(normalized.summary?.lifetime_usd || 0) > 0 ||
-    Number(normalized.summary?.balance_usd || 0) > 0 ||
-    Number(normalized.summary?.total_usd || 0) > 0;
+    const hasDevices = normalized.devices.length > 0;
+    const hasAccounts = normalized.accounts.length > 0;
+    const hasDaily =
+      Array.isArray(normalized.summary?.daily_earnings) &&
+      normalized.summary.daily_earnings.length > 0;
 
-  const hasDevices = normalized.devices.length > 0;
-  const hasAccounts = normalized.accounts.length > 0;
-  const hasDaily =
-    Array.isArray(normalized.summary?.daily_earnings) &&
-    normalized.summary.daily_earnings.length > 0;
+    const hasUsefulData = hasMoney || hasDevices || hasAccounts || hasDaily;
 
-  const hasUsefulData = hasMoney || hasDevices || hasAccounts || hasDaily;
+    if (!hasUsefulData) {
+      console.warn(
+        "[UNITY PAGE] Ignored empty payload so existing dashboard data was not wiped.",
+        normalized
+      );
 
-  if (!hasUsefulData) {
-    console.warn(
-      "[UNITY PAGE] Ignored empty payload so existing dashboard data was not wiped.",
-      normalized
-    );
-
-    toast.error("Sync returned empty data. Keeping previous dashboard values.");
-    setSyncing(false);
-    return;
-  }
-
-  localStorage.setItem(LAST_GOOD_UNITY_PAYLOAD_KEY, JSON.stringify(payload));
-
-  setDevices(normalized.devices);
-  setAccounts(normalized.accounts);
-  setSummary(normalized.summary);
-  setLastSync(new Date());
-  setSyncing(false);
-};
-
-const getPayloadFromSyncResult = (result) => {
-  return (
-    result?.payload ||
-    result?.combined_payload ||
-    result?.summary?.combined_payload ||
-    result?.summary ||
-    result?.data ||
-    null
-  );
-};
-
-useEffect(() => {
-  const saved = getStoredJson(LAST_GOOD_UNITY_PAYLOAD_KEY, null);
-
-  if (saved) {
-    applyPayload(saved);
-  }
-}, []);
-
-const syncExtension = async () => {
-  setSyncing(true);
-
-  try {
-    const result = await syncFromExtensionNow({
-      allowAutoConfigure: true,
-      timeoutMs: 5000,
-    });
-
-    console.log("[UNITY PAGE] sync result:", result);
-
-    if (!result?.ok) {
-      toast.error(result?.error || "Extension sync failed.");
+      toast.error("Sync returned empty data. Keeping previous dashboard values.");
+      setSyncing(false);
       return;
     }
 
-    const freshPayload = getPayloadFromSyncResult(result);
+    localStorage.setItem(LAST_GOOD_UNITY_PAYLOAD_KEY, JSON.stringify(payload));
 
-    if (freshPayload) {
-      applyPayload(freshPayload);
-    } else {
-      toast.error("Sync returned no payload.");
+    setDevices(normalized.devices);
+    setAccounts(normalized.accounts);
+    setSummary(normalized.summary);
+    setLastSync(new Date());
+    setSyncing(false);
+  };
+
+  const getPayloadFromSyncResult = (result) => {
+    return (
+      result?.combined_payload ||
+      result?.payload ||
+      result?.summary?.combined_payload ||
+      result?.summary ||
+      result?.data ||
+      null
+    );
+  };
+
+  useEffect(() => {
+    const saved = getStoredJson(LAST_GOOD_UNITY_PAYLOAD_KEY, null);
+
+    if (saved) {
+      applyPayload(saved);
     }
+  }, []);
+
+  useEffect(() => {
+    const handleMessage = (event) => {
+      if (event.origin !== window.location.origin) return;
+
+      const data = event.data;
+      if (!data || data.source !== "unity-nodes-tracker-ext") return;
+
+      if (data.type === "EARNINGS_PUSH_MULTI" || data.type === "EARNINGS_PUSH") {
+        applyPayload(data.payload || {});
+      }
+    };
+
+    window.addEventListener("message", handleMessage);
 
     window.postMessage(
       {
@@ -203,22 +191,47 @@ const syncExtension = async () => {
       },
       window.location.origin
     );
-  } catch (err) {
-    toast.error(err?.message || "Extension sync failed.");
-  } finally {
-    setTimeout(() => setSyncing(false), 1000);
-  }
-};
 
-  const getTodayKey = () => {
-  const now = new Date();
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+  const syncExtension = async () => {
+    setSyncing(true);
 
-  return `${year}-${month}-${day}`;
-};
+    try {
+      const result = await syncFromExtensionNow({
+        allowAutoConfigure: true,
+        timeoutMs: 5000,
+      });
+
+      console.log("[UNITY PAGE] sync result:", result);
+
+      if (!result?.ok) {
+        toast.error(result?.error || "Extension sync failed.");
+        return;
+      }
+
+      const freshPayload = getPayloadFromSyncResult(result);
+
+      if (freshPayload) {
+        applyPayload(freshPayload);
+      } else {
+        toast.error("Sync returned no payload.");
+      }
+
+      window.postMessage(
+        {
+          source: "unity-nodes-tracker-app",
+          type: "REQUEST_LATEST",
+        },
+        window.location.origin
+      );
+    } catch (err) {
+      toast.error(err?.message || "Extension sync failed.");
+    } finally {
+      setTimeout(() => setSyncing(false), 1000);
+    }
+  };
 
   const formatUsd = (value) => {
     const num = Number(value || 0);
@@ -350,23 +363,50 @@ const syncExtension = async () => {
 
   const balanceUsd = Number(summary?.balance_usd || 0);
   const lifetimeUsd = Number(summary?.lifetime_usd || 0);
-const todayUsd = useMemo(() => {
-  let rows = [];
 
-  if (Array.isArray(summary?.daily_earnings) && summary.daily_earnings.length > 0) {
-    rows = summary.daily_earnings;
-  } else if (
-    Array.isArray(summary?.combined_payload?.daily_earnings) &&
-    summary.combined_payload.daily_earnings.length > 0
-  ) {
-    rows = summary.combined_payload.daily_earnings;
-  } else {
-    const accountMap = new Map();
+  const todayUsd = useMemo(() => {
+    let rows = [];
 
-    accounts.forEach((account) => {
-      (account.daily_earnings || []).forEach((row) => {
+    if (Array.isArray(summary?.daily_earnings) && summary.daily_earnings.length > 0) {
+      rows = summary.daily_earnings;
+    } else if (
+      Array.isArray(summary?.combined_payload?.daily_earnings) &&
+      summary.combined_payload.daily_earnings.length > 0
+    ) {
+      rows = summary.combined_payload.daily_earnings;
+    } else {
+      const accountMap = new Map();
+
+      accounts.forEach((account) => {
+        (account.daily_earnings || []).forEach((row) => {
+          const date = row.date || row.day;
+          if (!date) return;
+
+          const amount = Number(
+            row.earnings_usd ||
+              row.amount_usd ||
+              row.total_usd ||
+              row.amount ||
+              0
+          );
+
+          if (!accountMap.has(date)) {
+            accountMap.set(date, {
+              date,
+              earnings_usd: 0,
+            });
+          }
+
+          accountMap.get(date).earnings_usd += amount;
+        });
+      });
+
+      rows = Array.from(accountMap.values());
+    }
+
+    const normalizedRows = rows
+      .map((row) => {
         const date = row.date || row.day;
-        if (!date) return;
 
         const amount = Number(
           row.earnings_usd ||
@@ -376,53 +416,26 @@ const todayUsd = useMemo(() => {
             0
         );
 
-        if (!accountMap.has(date)) {
-          accountMap.set(date, {
-            date,
-            earnings_usd: 0,
-          });
-        }
+        if (!date || Number.isNaN(amount)) return null;
 
-        accountMap.get(date).earnings_usd += amount;
-      });
-    });
+        return {
+          date,
+          amount,
+        };
+      })
+      .filter(Boolean)
+      .sort((a, b) => a.date.localeCompare(b.date));
 
-    rows = Array.from(accountMap.values());
-  }
+    const latestRow = normalizedRows[normalizedRows.length - 1];
 
-  const normalizedRows = rows
-    .map((row) => {
-      const date = row.date || row.day;
+    if (latestRow) {
+      return latestRow.amount;
+    }
 
-      const amount = Number(
-        row.earnings_usd ||
-          row.amount_usd ||
-          row.total_usd ||
-          row.amount ||
-          0
-      );
-
-      if (!date || Number.isNaN(amount)) return null;
-
-      return {
-        date,
-        amount,
-      };
-    })
-    .filter(Boolean)
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  const latestRow = normalizedRows[normalizedRows.length - 1];
-
-  if (latestRow) {
-    return latestRow.amount;
-  }
-
-  return devices.reduce((sum, device) => {
-    return sum + Number(device.amount_usd || 0);
-  }, 0);
-}, [summary, accounts, devices]);
-
+    return devices.reduce((sum, device) => {
+      return sum + Number(device.amount_usd || 0);
+    }, 0);
+  }, [summary, accounts, devices]);
 
   const chartData = useMemo(() => {
     let rows = [];
@@ -785,13 +798,13 @@ const todayUsd = useMemo(() => {
             accent="yellow"
           />
 
-<StatCard
-  title="Latest Day"
-  value={formatUsd(todayUsd)}
-  subText="Most recent synced daily earnings"
-  icon={<Calendar size={22} />}
-  accent="green"
-/>
+          <StatCard
+            title="Latest Day"
+            value={formatUsd(todayUsd)}
+            subText="Most recent synced daily earnings"
+            icon={<Calendar size={22} />}
+            accent="green"
+          />
 
           <StatCard
             title="7-Day Avg"
@@ -828,7 +841,7 @@ const todayUsd = useMemo(() => {
 
             <div className="text-xs text-gray-500">
               {chartData.length > 0
-                ? "Using one daily source only"
+                ? "Using synced daily earnings"
                 : "Waiting for daily earnings history"}
             </div>
           </div>
