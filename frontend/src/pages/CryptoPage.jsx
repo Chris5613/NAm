@@ -13,6 +13,8 @@ import { Plus, RefreshCw, Trash2, Wallet, Coins, Layers, Settings, EyeOff, Eye, 
 
 const DAILY_CRYPTO_BASELINE_KEY = "daily_crypto_net_worth_baseline_pst";
 const CRYPTO_LIVE_HISTORY_KEY = "crypto_live_history";
+const WALLET_BALANCE_CACHE_KEY = "crypto_wallet_balance_cache";
+const WALLET_BALANCE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 const MANUAL_DEFI_POSITIONS = [
   {
@@ -36,6 +38,45 @@ const MANUAL_DEFI_POSITIONS = [
     manual: true,
   },
 ];
+
+function getWalletBalanceCache() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(WALLET_BALANCE_CACHE_KEY) || "{}");
+    return saved && typeof saved === "object" ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveWalletBalanceCache(cache) {
+  try {
+    localStorage.setItem(WALLET_BALANCE_CACHE_KEY, JSON.stringify(cache));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+function getCachedWalletBalance(walletId) {
+  const cache = getWalletBalanceCache();
+  const entry = cache[walletId];
+
+  if (!entry?.data || !entry?.savedAt) return null;
+
+  const isFresh = Date.now() - entry.savedAt < WALLET_BALANCE_CACHE_TTL_MS;
+
+  return isFresh ? entry.data : null;
+}
+
+function setCachedWalletBalance(walletId, data) {
+  const cache = getWalletBalanceCache();
+
+  cache[walletId] = {
+    savedAt: Date.now(),
+    data,
+  };
+
+  saveWalletBalanceCache(cache);
+}
 
 function getSavedCryptoHistory() {
   try {
@@ -353,19 +394,30 @@ const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());
 
         fetchingRef.current.add(w.id);
 
-        try {
-          const res = await walletsApi.getBalances(w.id);
+try {
+  const cached = getCachedWalletBalance(w.id);
 
-          if (!cancelled) {
-            setBalances((prev) => ({ ...prev, [w.id]: res.data }));
-          }
+  if (cached) {
+    if (!cancelled) {
+      setBalances((prev) => ({ ...prev, [w.id]: cached }));
+    }
 
-          await sleep(2000);
-        } catch (err) {
-          console.error(`Balance fetch error for ${w.id}:`, err);
-        } finally {
-          fetchingRef.current.delete(w.id);
-        }
+    continue;
+  }
+
+  const res = await walletsApi.getBalances(w.id);
+
+  if (!cancelled) {
+    setBalances((prev) => ({ ...prev, [w.id]: res.data }));
+    setCachedWalletBalance(w.id, res.data);
+  }
+
+  await sleep(2000);
+} catch (err) {
+  console.error(`Balance fetch error for ${w.id}:`, err);
+} finally {
+  fetchingRef.current.delete(w.id);
+}
       }
     };
 
@@ -383,10 +435,11 @@ const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());
 
     for (const w of wallets) {
       try {
-        const res = await walletsApi.getBalances(w.id);
-        newBalances[w.id] = res.data;
+const res = await walletsApi.getBalances(w.id);
+newBalances[w.id] = res.data;
+setCachedWalletBalance(w.id, res.data);
 
-        await sleep(2000);
+await sleep(2000);
       } catch {
         // silent
       }
