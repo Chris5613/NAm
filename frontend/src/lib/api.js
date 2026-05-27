@@ -1,4 +1,4 @@
-import { coinGeckoApi, finnhubApi, ebayApi, jupiterApi, coinStatsApi, solanaApi, bitcoinApi } from "./external-apis";
+import { coinGeckoApi, finnhubApi, ebayApi, jupiterApi, jupiterPriceApi, solanaApi, bitcoinApi } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
 
 const createId = () => {
@@ -455,26 +455,42 @@ export const walletsApi = {
         });
       }
 
-      const tokenList = await coinStatsApi.getWalletBalance(wallet.address, wallet.chain);
-      const tokens = (Array.isArray(tokenList) ? tokenList : []).map((t) => {
-        const amount = Number(t.amount ?? t.balance ?? t.quantity ?? 0);
-        const price = Number(t.price ?? t.current_price ?? 0);
-        const usdValue = Number(t.usd_value ?? t.value ?? (amount * price));
-        return {
-          id: t.id || t.coinId || `${t.symbol || t.name}_${wallet.address}`,
-          symbol: t.symbol || t.name || wallet.chain,
-          name: t.name || t.symbol || wallet.chain,
-          amount,
-          price,
-          usd_value: usdValue,
-          icon_url: t.imgUrl || t.icon || t.image || t.logo || '',
-          chain: wallet.chain,
-          category: 'wallet',
-          protocol: null,
-        };
-      });
-      const totalUsd = tokens.reduce((sum, t) => sum + (t.usd_value || 0), 0);
-      return toResponse({ total_usd: totalUsd, tokens });
+if (wallet.chain === "solana") {
+  const rawTokens = await solanaApi.getParsedWalletTokens(wallet.address);
+
+  const prices = await jupiterPriceApi.getPrices(
+    rawTokens.map((t) => t.mint),
+  );
+
+  const tokens = rawTokens
+    .map((t) => {
+      const priceInfo = prices?.[t.mint] || {};
+      const price = Number(priceInfo.usdPrice ?? 0);
+      const usdValue = t.amount * price;
+
+      return {
+        id: t.mint,
+        mint: t.mint,
+        symbol: t.symbol,
+        name: t.name,
+        amount: t.amount,
+        price,
+        usd_value: usdValue,
+        icon_url: "",
+        chain: "solana",
+        category: "wallet",
+        protocol: null,
+      };
+    })
+    .filter((t) => t.amount > 0 && t.usd_value >= 0.01);
+
+  const totalUsd = tokens.reduce((sum, t) => sum + (t.usd_value || 0), 0);
+
+  return toResponse({
+    total_usd: totalUsd,
+    tokens,
+  });
+}
     } catch (error) {
       console.warn(`Balance fetch failed for ${wallet.address}:`, error);
       return toResponse({ total_usd: 0, tokens: [] });
@@ -486,16 +502,7 @@ export const walletsApi = {
       return toResponse(data);
     } catch (error) {
       console.warn(`DeFi fetch failed for ${address}:`, error);
-      return toResponse([]);
-    }
-  },
-  getCoinStatsBalance: async (address, chain = 'solana') => {
-    try {
-      const data = await coinStatsApi.getWalletBalance(address, chain);
-      return toResponse(data);
-    } catch (error) {
-      console.warn(`CoinStats fetch failed for ${address}:`, error);
-      return toResponse([]);
+      return toResponse({ positions: [] });
     }
   },
 };
@@ -699,8 +706,33 @@ export const walletSyncApi = {
         usd_value: v,
       });
     });
-    const defiTotal = allDefi.reduce((s, p) => s + (p.total_value || 0), 0);
-    if (defiTotal > 0) chainBreakdown.solana = (chainBreakdown.solana || 0) + defiTotal;
+const defiTotal = allDefi.reduce((s, p) => s + (p.total_value || 0), 0);
+
+if (defiTotal > 0) {
+  chainBreakdown.solana = (chainBreakdown.solana || 0) + defiTotal;
+}
+
+if (allDefi.length > 0) {
+  if (!tokensByChain.solana) tokensByChain.solana = [];
+
+  allDefi.forEach((p) => {
+    const value = Number(p.total_value) || 0;
+    if (value < 0.01) return;
+
+    tokensByChain.solana.push({
+      symbol: p.platform || "DeFi",
+      name: p.label ? `${p.platform} - ${p.label}` : p.platform || "DeFi Position",
+      icon_url: "",
+      amount: 1,
+      price: value,
+      usd_value: value,
+      category: "defi",
+      protocol: p.platform || p.platform_id || "Unknown",
+      tokens: p.tokens || [],
+      apy: p.apy || 0,
+    });
+  });
+}
 
     const total = Object.values(chainBreakdown).reduce((s, v) => s + v, 0);
     const chains = Object.entries(chainBreakdown)

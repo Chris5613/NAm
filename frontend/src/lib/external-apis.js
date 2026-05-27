@@ -1,5 +1,4 @@
-// External API calls are executed directly in the frontend
-import axios from "axios";
+
 import { withCorsProxy, fetchWithCors } from "./cors-proxy";
 
 // CoinGecko API (free, no auth required) - CORS-friendly
@@ -25,11 +24,6 @@ export const coinGeckoApi = {
       return [];
     }
   },
-
-  // Resolve a ticker symbol (e.g. "TRX") to CoinGecko's canonical coin id
-  // (e.g. "tron"). The simple/price endpoint only accepts ids, so without
-  // this step custom tokens added by symbol come back priced at $0.
-  // Returns: { id, name, symbol, thumb } or null.
   resolveSymbol: async (symbol) => {
     if (!symbol) return null;
     try {
@@ -94,16 +88,9 @@ export const finnhubApi = {
   },
 };
 
-// Jupiter Portfolio API — new endpoint (replaces the old /portfolio/{address} path
-// which now 404s). Returns Solana DeFi positions (staking, lending, LP, leverage, …).
-// Docs: https://dev.jup.ag/docs/api-reference/portfolio/get-positions
 const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY;
 const JUPITER_PORTFOLIO_BASE = "https://api.jup.ag/portfolio/v1";
 
-// Translate a Jupiter Portfolio "element" → the position shape our UI expects:
-// { platform_id, platform, label, total_value, apy, tokens: [...] }
-// Jupiter Portfolio returns 5 element shapes (multiple / liquidity / borrowlend /
-// leverage / trade), each with assets in different paths. We extract them all.
 function buildToken(asset, tokenInfo, networkId, kind = "supplied") {
   if (!asset) return null;
   const data = asset.data || asset;
@@ -235,56 +222,77 @@ export const jupiterApi = {
   },
 };
 
-// CoinStats — returns an array of token holdings for a wallet on a given chain.
-// Docs: https://openapi.coinstats.app/  GET /wallet/balance
-const COINSTATS_BASE = "https://openapiv1.coinstats.app";
-const COINSTATS_API_KEY = import.meta.env.VITE_COINSTATS_KEY?.trim();
+const JUPITER_PRICE_BASE = "https://api.jup.ag/price/v3";
+const SOL_MINT = "So11111111111111111111111111111111111111112";
 
-// Map our internal chain names → the CoinStats connectionId values
-// (verified via /wallet/blockchains).
-const COINSTATS_CHAIN_MAP = {
-  solana: "solana",
-};
+export const jupiterPriceApi = {
+  getPrices: async (mints = []) => {
+    const uniqueMints = [...new Set(mints.filter(Boolean))];
 
-export const coinStatsApi = {
-  getWalletBalance: async (address, chain = "solana") => {
+    if (uniqueMints.length === 0) return {};
+
     try {
-      const connectionId = COINSTATS_CHAIN_MAP[chain] || chain;
-      const url = `${COINSTATS_BASE}/wallet/balance?address=${encodeURIComponent(address)}&connectionId=${encodeURIComponent(connectionId)}`;
-      const response = await fetch(url, {
-        headers: COINSTATS_API_KEY ? { "X-API-KEY": COINSTATS_API_KEY } : {},
-      });
-      if (!response.ok) {
-        const text = await response.text();
-        console.warn(`CoinStats ${response.status} for ${address} on ${chain}: ${text.slice(0, 200)}`);
-        return [];
+      const chunks = [];
+      for (let i = 0; i < uniqueMints.length; i += 50) {
+        chunks.push(uniqueMints.slice(i, i + 50));
       }
-      const data = await response.json();
-      // Endpoint returns an array of token objects.
-      return Array.isArray(data) ? data : (data?.tokens || data?.coins || []);
+
+      const out = {};
+
+      for (const chunk of chunks) {
+        const url = `${JUPITER_PRICE_BASE}?ids=${encodeURIComponent(chunk.join(","))}`;
+
+        const response = await fetch(url, {
+          headers: JUPITER_API_KEY
+            ? { "x-api-key": JUPITER_API_KEY }
+            : {},
+        });
+
+        if (!response.ok) {
+          const text = await response.text();
+          console.warn(`Jupiter price ${response.status}: ${text.slice(0, 200)}`);
+          continue;
+        }
+
+        const data = await response.json();
+        Object.assign(out, data || {});
+      }
+
+      return out;
     } catch (error) {
-      console.warn(`CoinStats wallet balance fetch failed for ${address}:`, error);
-      return [];
+      console.warn("Jupiter price fetch failed:", error);
+      return {};
     }
   },
 };
 
-// Solana RPC - might need CORS proxy for some setups
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+const SPL_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
+const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEHdkAS6EP8CCpM4TbP9pXdJq4iR";
+
+async function rpc(method, params) {
+  const response = await withCorsProxy(SOLANA_RPC, {
+    method: "POST",
+    data: {
+      jsonrpc: "2.0",
+      id: 1,
+      method,
+      params,
+    },
+  });
+
+  if (response.data?.error) {
+    throw new Error(response.data.error.message || "Solana RPC error");
+  }
+
+  return response.data?.result;
+}
 
 export const solanaApi = {
   getBalance: async (address) => {
     try {
-      const response = await withCorsProxy(SOLANA_RPC, {
-        method: "POST",
-        data: {
-          jsonrpc: "2.0",
-          id: 1,
-          method: "getBalance",
-          params: [address],
-        },
-      });
-      return response.data.result?.value || 0;
+      const result = await rpc("getBalance", [address]);
+      return result?.value || 0;
     } catch (error) {
       console.warn(`Solana balance fetch failed for ${address}:`, error);
       return 0;
@@ -293,20 +301,67 @@ export const solanaApi = {
 
   getTokenAccounts: async (address) => {
     try {
-      const response = await withCorsProxy(SOLANA_RPC, {
-        method: "POST",
-        data: {
-          jsonrpc: "2.0",
-          id: 1,
-          method: "getTokenAccountsByOwner",
-          params: [address, { programId: "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" }, { encoding: "jsonParsed" }],
-        },
-      });
-      return response.data.result?.value || [];
+      const fetchByProgram = async (programId) => {
+        const result = await rpc("getTokenAccountsByOwner", [
+          address,
+          { programId },
+          { encoding: "jsonParsed" },
+        ]);
+
+        return result?.value || [];
+      };
+
+      const [classicTokens, token2022Tokens] = await Promise.all([
+        fetchByProgram(SPL_TOKEN_PROGRAM),
+        fetchByProgram(TOKEN_2022_PROGRAM),
+      ]);
+
+      return [...classicTokens, ...token2022Tokens];
     } catch (error) {
       console.warn(`Solana token accounts fetch failed for ${address}:`, error);
       return [];
     }
+  },
+
+  getParsedWalletTokens: async (address) => {
+    const [lamports, tokenAccounts] = await Promise.all([
+      solanaApi.getBalance(address),
+      solanaApi.getTokenAccounts(address),
+    ]);
+
+    const tokens = [];
+
+    tokens.push({
+      mint: SOL_MINT,
+      symbol: "SOL",
+      name: "Solana",
+      amount: lamports / 1e9,
+      decimals: 9,
+      chain: "solana",
+      category: "wallet",
+      protocol: null,
+    });
+
+    tokenAccounts.forEach((account) => {
+      const info = account?.account?.data?.parsed?.info;
+      const tokenAmount = info?.tokenAmount;
+      const amount = Number(tokenAmount?.uiAmount ?? 0);
+
+      if (!info?.mint || amount <= 0) return;
+
+      tokens.push({
+        mint: info.mint,
+        symbol: info.mint.slice(0, 4),
+        name: info.mint,
+        amount,
+        decimals: tokenAmount?.decimals ?? 0,
+        chain: "solana",
+        category: "wallet",
+        protocol: null,
+      });
+    });
+
+    return tokens;
   },
 };
 
@@ -326,99 +381,6 @@ export const bitcoinApi = {
   },
 };
 
-// RapidAPI eBay average selling price.
-// Since the app is fully client-side, the key rides in the browser bundle (same
-// posture as the other public API keys here). The endpoint sets permissive CORS
-// for the browser origin so we can call it directly.
-const RAPIDAPI_KEY = process.env.REACT_APP_RAPIDAPI_KEY;
-const RAPIDAPI_EBAY_HOST = process.env.REACT_APP_RAPIDAPI_EBAY_HOST || "ebay-average-selling-price.p.rapidapi.com";
-const EBAY_CATEGORY_CELL_PHONES = "9355"; // Cell Phones & Smartphones
-const EBAY_CACHE_TTL_MS = 60 * 60 * 1000; // 1h
-
-function readEbayCache(key) {
-  try {
-    const raw = sessionStorage.getItem(`ebay:${key}`);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    if (!parsed || Date.now() - parsed.t > EBAY_CACHE_TTL_MS) return null;
-    return parsed.v;
-  } catch {
-    return null;
-  }
-}
-
-function writeEbayCache(key, value) {
-  try {
-    sessionStorage.setItem(`ebay:${key}`, JSON.stringify({ t: Date.now(), v: value }));
-  } catch {
-    /* sessionStorage full / unavailable — non-fatal */
-  }
-}
-
-export const ebayApi = {
-  // Returns the median sold price for `model` on eBay, in USD. 0 if unavailable.
-  getAveragePrice: async (model) => {
-    const data = await ebayApi.getMarketData(model);
-    return data?.median_price || data?.average_price || 0;
-  },
-
-  // Full market snapshot (median, avg, min, max, sample size, link to eBay search).
-  getMarketData: async (model) => {
-    if (!model) return null;
-    if (!RAPIDAPI_KEY) {
-      console.warn("eBay: REACT_APP_RAPIDAPI_KEY is not set — skipping price lookup.");
-      return null;
-    }
-
-    const key = model.trim().toLowerCase();
-    const cached = readEbayCache(key);
-    if (cached) return cached;
-
-    try {
-      const response = await fetch(`https://${RAPIDAPI_EBAY_HOST}/findCompletedItems`, {
-        method: "POST",
-        headers: {
-          "X-RapidAPI-Key": RAPIDAPI_KEY,
-          "X-RapidAPI-Host": RAPIDAPI_EBAY_HOST,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          keywords: model,
-          max_search_results: "240",
-          category_id: EBAY_CATEGORY_CELL_PHONES,
-          remove_outliers: "true",
-          site_id: "0",
-        }),
-      });
-      if (!response.ok) {
-        let detail = "";
-        try { detail = await response.text(); } catch { /* body already consumed */ }
-        console.warn(`eBay ${response.status} for "${model}": ${detail.slice(0, 200)}`);
-        return null;
-      }
-      const data = await response.json();
-      const result = {
-        median_price: Number(data?.median_price ?? 0),
-        average_price: Number(data?.average_price ?? 0),
-        min_price: Number(data?.min_price ?? 0),
-        max_price: Number(data?.max_price ?? 0),
-        sample_size: Number(data?.results ?? 0),
-        ebay_url: data?.response_url || `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(model)}&LH_Sold=1&LH_Complete=1`,
-      };
-      writeEbayCache(key, result);
-      return result;
-    } catch (error) {
-      console.warn(`eBay price lookup failed for "${model}":`, error);
-      return null;
-    }
-  },
-};
-
-// Nosana dashboard API — official earning history for a node operator.
-// Public endpoint, returns per-day USD earnings grouped by month. We use it to
-// auto-populate the Investment Overview's Nosana project with rewards (no need
-// to track wallet NOS balance changes — this avoids the swap double-dip issue
-// since earnings come straight from Nosana's backend).
 const NOSANA_API_BASE = "https://dashboard.k8s.prd.nos.ci/api/stats/earning-history";
 
 export const nosanaApi = {
