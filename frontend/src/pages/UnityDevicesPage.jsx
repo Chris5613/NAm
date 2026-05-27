@@ -109,43 +109,82 @@ const applyPayload = (payload) => {
 
   console.log("[UNITY PAGE] normalized payload:", normalized);
 
+  const hasMoney =
+    Number(normalized.summary?.lifetime_usd || 0) > 0 ||
+    Number(normalized.summary?.balance_usd || 0) > 0 ||
+    Number(normalized.summary?.total_usd || 0) > 0;
+
+  const hasDevices = normalized.devices.length > 0;
+  const hasAccounts = normalized.accounts.length > 0;
+  const hasDaily =
+    Array.isArray(normalized.summary?.daily_earnings) &&
+    normalized.summary.daily_earnings.length > 0;
+
+  const hasUsefulData =
+    hasMoney || hasDevices || hasAccounts || hasDaily;
+
+  if (!hasUsefulData) {
+    console.warn(
+      "[UNITY PAGE] Ignored empty payload so existing dashboard data was not wiped.",
+      normalized
+    );
+
+    toast.error("Sync returned empty data. Keeping previous dashboard values.");
+    setSyncing(false);const applyPayload = (payload) => {
+  console.log("[UNITY PAGE] raw payload:", payload);
+
+  const normalized = normalizePayload(payload);
+
+  console.log("[UNITY PAGE] normalized payload:", normalized);
+
+  const hasMoney =
+    Number(normalized.summary?.lifetime_usd || 0) > 0 ||
+    Number(normalized.summary?.balance_usd || 0) > 0 ||
+    Number(normalized.summary?.total_usd || 0) > 0;
+
+  const hasDevices = normalized.devices.length > 0;
+  const hasAccounts = normalized.accounts.length > 0;
+  const hasDaily =
+    Array.isArray(normalized.summary?.daily_earnings) &&
+    normalized.summary.daily_earnings.length > 0;
+
+  const hasUsefulData =
+    hasMoney || hasDevices || hasAccounts || hasDaily;
+
+  if (!hasUsefulData) {
+    console.warn(
+      "[UNITY PAGE] Ignored empty payload so existing dashboard data was not wiped.",
+      normalized
+    );
+
+    toast.error("Sync returned empty data. Keeping previous dashboard values.");
+    setSyncing(false);
+    return;
+  }
+
   setDevices(normalized.devices);
   setAccounts(normalized.accounts);
   setSummary(normalized.summary);
   setLastSync(new Date());
   setSyncing(false);
 };
-  useEffect(() => {
-    const handleMessage = (event) => {
-      if (event.origin !== window.location.origin) return;
+    return;
+  }
 
-      const data = event.data;
-      if (!data || data.source !== "unity-nodes-tracker-ext") return;
-
-      if (data.type === "EARNINGS_PUSH_MULTI" || data.type === "EARNINGS_PUSH") {
-        applyPayload(data.payload || {});
-      }
-    };
-
-    window.addEventListener("message", handleMessage);
-
-    window.postMessage(
-      {
-        source: "unity-nodes-tracker-app",
-        type: "REQUEST_LATEST",
-      },
-      window.location.origin
-    );
-
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  setDevices(normalized.devices);
+  setAccounts(normalized.accounts);
+  setSummary(normalized.summary);
+  setLastSync(new Date());
+  setSyncing(false);
+};
 
 const getPayloadFromSyncResult = (result) => {
   return (
     result?.payload ||
-    result?.data ||
     result?.combined_payload ||
-    result?.response?.payload ||
+    result?.summary?.combined_payload ||
+    result?.summary ||
+    result?.data ||
     null
   );
 };
@@ -169,8 +208,9 @@ const syncExtension = async () => {
     const freshPayload = getPayloadFromSyncResult(result);
 
     if (freshPayload) {
-      console.log("[UNITY PAGE] applying fresh payload directly:", freshPayload);
       applyPayload(freshPayload);
+    } else {
+      toast.error("Sync returned no payload.");
     }
 
     window.postMessage(
@@ -180,8 +220,6 @@ const syncExtension = async () => {
       },
       window.location.origin
     );
-
-    toast.success("Synced from extension.");
   } catch (err) {
     toast.error(err?.message || "Extension sync failed.");
   } finally {
