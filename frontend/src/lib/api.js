@@ -1,4 +1,4 @@
-import { coinGeckoApi, finnhubApi, jupiterApi, jupiterPriceApi, solanaApi, bitcoinApi } from "./external-apis";
+import { coinGeckoApi, finnhubApi, moralisDefiApi, jupiterPriceApi, solanaApi, bitcoinApi } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
 
 const createId = () => {
@@ -412,15 +412,15 @@ if (wallet.chain === "solana") {
       return toResponse({ total_usd: 0, tokens: [] });
     }
   },
-  getDefiPositions: async (address) => {
-    try {
-      const data = await jupiterApi.getPortfolio(address);
-      return toResponse(data);
-    } catch (error) {
-      console.warn(`DeFi fetch failed for ${address}:`, error);
-      return toResponse({ positions: [] });
-    }
-  },
+getDefiPositions: async (address) => {
+  try {
+    const data = await moralisDefiApi.getPositions(address);
+    return toResponse(data);
+  } catch (error) {
+    console.warn(`DeFi fetch failed for ${address}:`, error);
+    return toResponse({ positions: [] });
+  }
+},
 };
 
 export const tokenPrefsApi = {
@@ -508,12 +508,12 @@ export const customTokensApi = {
 
 export const netWorthApi = {
   getCurrent: async () => {
-    const [assets, phones, cryptoCache] = await Promise.all([
-      assetsApi.getAll().then((res) => res.data),
-      phonesApi.list().then((res) => res.data.phones || []),
-      cryptoCacheApi.get().then((res) => res.data),
-    ]);
+const [assets, cryptoCache] = await Promise.all([
+  assetsApi.getAll().then((res) => res.data),
+  cryptoCacheApi.get().then((res) => res.data),
+]);
 
+const phones = [];
     const breakdown = {
       stocks: 0,
       crypto: cryptoCache.total || 0,
