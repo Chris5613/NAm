@@ -299,26 +299,30 @@ export default function CryptoPage() {
       }
     }
 
-    try {
-      const defiRes = await walletsApi.getDefiPositions();
-      setDefiPositions(defiRes.data?.positions || []);
-    } catch {
-      setDefiPositions([]);
-    }
+let freshDefiPositions = [];
 
-    setBalances(newBalances);
+try {
+  const defiRes = await walletsApi.getDefiPositions();
+  freshDefiPositions = defiRes.data?.positions || [];
+  setDefiPositions(freshDefiPositions);
+} catch {
+  freshDefiPositions = [];
+  setDefiPositions([]);
+}
 
-    const walletTotal = Object.values(newBalances).reduce(
-      (s, b) => s + (b?.total_usd || 0),
-      0
-    );
+setBalances(newBalances);
 
-    const defiTotal = defiPositions.reduce(
-      (s, p) => s + (Number(p.total_value) || 0),
-      0
-    );
+const walletTotal = Object.values(newBalances).reduce(
+  (s, b) => s + (b?.total_usd || 0),
+  0
+);
 
-    const total = walletTotal + defiTotal;
+const defiTotal = freshDefiPositions.reduce(
+  (s, p) => s + (Number(p.total_value) || 0),
+  0
+);
+
+const total = walletTotal + defiTotal;
 
     if (total > 0) {
       setLiveHistory((prev) => [
