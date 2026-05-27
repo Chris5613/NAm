@@ -14,7 +14,7 @@ import { Plus, RefreshCw, Trash2, Wallet, Coins, Layers, Settings, EyeOff, Eye, 
 const DAILY_CRYPTO_BASELINE_KEY = "daily_crypto_net_worth_baseline_pst";
 const CRYPTO_LIVE_HISTORY_KEY = "crypto_live_history";
 const WALLET_BALANCE_CACHE_KEY = "crypto_wallet_balance_cache";
-const WALLET_BALANCE_CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
+const WALLET_BALANCE_CACHE_TTL_MS = 60 * 60 * 1000; 
 
 const MANUAL_DEFI_POSITIONS = [
   {
