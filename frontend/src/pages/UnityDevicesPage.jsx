@@ -102,16 +102,19 @@ export default function UnityDevicesPage() {
     };
   };
 
-  const applyPayload = (payload) => {
-    const normalized = normalizePayload(payload);
+const applyPayload = (payload) => {
+  console.log("[UNITY PAGE] raw payload:", payload);
 
-    setDevices(normalized.devices);
-    setAccounts(normalized.accounts);
-    setSummary(normalized.summary);
-    setLastSync(new Date());
-    setSyncing(false);
-  };
+  const normalized = normalizePayload(payload);
 
+  console.log("[UNITY PAGE] normalized payload:", normalized);
+
+  setDevices(normalized.devices);
+  setAccounts(normalized.accounts);
+  setSummary(normalized.summary);
+  setLastSync(new Date());
+  setSyncing(false);
+};
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.origin !== window.location.origin) return;
@@ -137,34 +140,54 @@ export default function UnityDevicesPage() {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
-  const syncExtension = async () => {
-    setSyncing(true);
+const getPayloadFromSyncResult = (result) => {
+  return (
+    result?.payload ||
+    result?.data ||
+    result?.combined_payload ||
+    result?.response?.payload ||
+    null
+  );
+};
 
-    try {
-      const result = await syncFromExtensionNow({
-        allowAutoConfigure: true,
-        timeoutMs: 5000,
-      });
+const syncExtension = async () => {
+  setSyncing(true);
 
-      window.postMessage(
-        {
-          source: "unity-nodes-tracker-app",
-          type: "REQUEST_LATEST",
-        },
-        window.location.origin
-      );
+  try {
+    const result = await syncFromExtensionNow({
+      allowAutoConfigure: true,
+      timeoutMs: 5000,
+    });
 
-      if (!result?.ok) {
-        toast.error(result?.error || "Extension sync failed.");
-      } else {
-        toast.success("Synced from extension.");
-      }
-    } catch (err) {
-      toast.error(err?.message || "Extension sync failed.");
-    } finally {
-      setTimeout(() => setSyncing(false), 1000);
+    console.log("[UNITY PAGE] sync result:", result);
+
+    if (!result?.ok) {
+      toast.error(result?.error || "Extension sync failed.");
+      return;
     }
-  };
+
+    const freshPayload = getPayloadFromSyncResult(result);
+
+    if (freshPayload) {
+      console.log("[UNITY PAGE] applying fresh payload directly:", freshPayload);
+      applyPayload(freshPayload);
+    }
+
+    window.postMessage(
+      {
+        source: "unity-nodes-tracker-app",
+        type: "REQUEST_LATEST",
+      },
+      window.location.origin
+    );
+
+    toast.success("Synced from extension.");
+  } catch (err) {
+    toast.error(err?.message || "Extension sync failed.");
+  } finally {
+    setTimeout(() => setSyncing(false), 1000);
+  }
+};
 
   const getTodayKey = () => {
   const now = new Date();
