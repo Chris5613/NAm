@@ -92,86 +92,25 @@ export const finnhubApi = {
   },
 };
 
-// CoinStats wallet balance API
+// CoinStats API
 const COINSTATS_BASE = "https://openapiv1.coinstats.app";
 const COINSTATS_API_KEY = process.env.REACT_APP_COINSTATS_KEY?.trim();
-
-const COINSTATS_CHAIN_MAP = {
-  solana: "solana"
-};
-
 const COINSTATS_PORTFOLIO_ID =
   process.env.REACT_APP_COINSTATS_PORTFOLIO_ID?.trim();
 
-export const coinStatsPortfolioApi = {
-  getDefiPortfolio: async (portfolioId = COINSTATS_PORTFOLIO_ID) => {
-    if (!COINSTATS_API_KEY) {
-      console.warn("CoinStats: REACT_APP_COINSTATS_KEY is not set.");
-      return { positions: [], totalAssets: {} };
-    }
-
-    if (!portfolioId) {
-      console.warn("CoinStats: REACT_APP_COINSTATS_PORTFOLIO_ID is not set.");
-      return { positions: [], totalAssets: {} };
-    }
-
-    try {
-      const url =
-        `${COINSTATS_BASE}/portfolio/defi` +
-        `?portfolioId=${encodeURIComponent(portfolioId)}`;
-
-      const response = await fetch(url, {
-        headers: {
-          "X-API-KEY": COINSTATS_API_KEY,
-          accept: "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        console.warn(
-          `CoinStats DeFi ${response.status}: ${text.slice(0, 300)}`
-        );
-        return { positions: [], totalAssets: {} };
-      }
-
-      const data = await response.json();
-
-      const positions = (data?.protocols || []).map((p) => {
-        const totalValue = p?.totalValue || {};
-        const usdValue =
-          Number(totalValue.USD ?? totalValue.usd ?? totalValue.Usd ?? 0) || 0;
-
-        return {
-          platform_id: p.id || p.protocolId || p.name || "unknown",
-          platform: p.name || p.protocolId || "Unknown",
-          label: "DeFi",
-          logo: p.logo || "",
-          url: p.url || "",
-          total_value: usdValue,
-          total_value_raw: totalValue,
-          tokens: Object.entries(totalValue).map(([symbol, value]) => ({
-            symbol,
-            name: symbol,
-            amount: 0,
-            price: 0,
-            value: Number(value) || 0,
-            image_uri: "",
-            apy: 0,
-            kind: "supplied",
-          })),
-        };
-      });
-
-      return {
-        positions,
-        totalAssets: data?.totalAssets || {},
-      };
-    } catch (error) {
-      console.warn("CoinStats DeFi portfolio fetch failed:", error);
-      return { positions: [], totalAssets: {} };
-    }
-  },
+const COINSTATS_CHAIN_MAP = {
+  solana: "solana",
+  ethereum: "ethereum",
+  bitcoin: "bitcoin",
+  tron: "tron",
+  bsc: "binance-smart-chain",
+  bnb: "binance-smart-chain",
+  polygon: "polygon",
+  arbitrum: "arbitrum",
+  optimism: "optimism",
+  base: "base",
+  avalanche: "avalanche",
+  fantom: "fantom",
 };
 
 export const coinStatsApi = {
@@ -218,156 +157,228 @@ export const coinStatsApi = {
   },
 };
 
-// Jupiter Portfolio API
-const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY?.trim();
-const JUPITER_PORTFOLIO_BASE = "https://api.jup.ag/portfolio/v1";
+function getNumericValue(...values) {
+  for (const value of values) {
+    const num = Number(value);
+    if (Number.isFinite(num) && num !== 0) return num;
+  }
 
-function buildToken(asset, tokenInfo, networkId, kind = "supplied") {
-  if (!asset) return null;
-
-  const data = asset.data || asset;
-  const addr = data.address || data.mint || asset.address || "";
-  const amount = Number(data.amount ?? asset.amount ?? 0);
-  const price = Number(data.price ?? asset.price ?? 0);
-  const value = Number(asset.value ?? data.value ?? amount * price);
-  const tokInfo = tokenInfo?.[networkId]?.[addr] || {};
-  const apy = Number(asset?.attributes?.apy ?? data?.apy ?? 0);
-
-  return {
-    address: addr,
-    symbol: tokInfo.symbol || data.symbol || asset.symbol || "",
-    name: tokInfo.name || data.name || asset.name || "",
-    image_uri: tokInfo.logoURI || tokInfo.image || data.image_uri || "",
-    amount,
-    price,
-    value: kind === "borrowed" ? -Math.abs(value) : value,
-    apy,
-    kind,
-  };
+  return 0;
 }
 
-function mapJupiterElement(el, tokenInfo = {}) {
-  const networkId = el?.networkId || "solana";
-  const data = el?.data || {};
+function extractDefiTokensFromList(list, fallbackKind = "supplied") {
+  if (!Array.isArray(list)) return [];
+
+  return list
+    .map((item) => {
+      const token = item?.token || item?.asset || item?.coin || item || {};
+
+      const symbol =
+        token.symbol ||
+        item.symbol ||
+        token.name ||
+        item.name ||
+        item.coinId ||
+        item.id ||
+        "Asset";
+
+      const name = token.name || item.name || symbol;
+
+      const amount = getNumericValue(
+        item.amount,
+        item.balance,
+        item.quantity,
+        item.qty,
+        item.tokenAmount,
+        token.amount,
+        token.balance,
+        token.quantity
+      );
+
+      const price = getNumericValue(
+        item.price,
+        item.currentPrice,
+        item.current_price,
+        item.usdPrice,
+        token.price,
+        token.currentPrice,
+        token.current_price,
+        token.usdPrice
+      );
+
+      const value = getNumericValue(
+        item.value,
+        item.usdValue,
+        item.usd_value,
+        item.totalValue,
+        item.total_value,
+        item.amountUsd,
+        item.amount_usd,
+        item.balanceUsd,
+        item.balance_usd,
+        token.value,
+        token.usdValue,
+        token.usd_value,
+        amount * price
+      );
+
+      if (!symbol && value <= 0) return null;
+
+      return {
+        symbol,
+        name,
+        amount,
+        price,
+        value,
+        image_uri:
+          token.logo ||
+          token.icon ||
+          token.imgUrl ||
+          token.image ||
+          item.logo ||
+          item.icon ||
+          item.imgUrl ||
+          item.image ||
+          "",
+        kind: item.type || item.kind || item.positionType || fallbackKind,
+      };
+    })
+    .filter(Boolean);
+}
+
+function extractDefiTokens(protocol) {
   const tokens = [];
 
-  const pushAll = (arr, kind = "supplied") => {
-    if (!Array.isArray(arr)) return;
+  const listSources = [
+    ["assets", "supplied"],
+    ["tokens", "supplied"],
+    ["balances", "supplied"],
+    ["positions", "supplied"],
+    ["supplied", "supplied"],
+    ["suppliedAssets", "supplied"],
+    ["supplied_tokens", "supplied"],
+    ["borrowed", "borrowed"],
+    ["borrowedAssets", "borrowed"],
+    ["borrowed_tokens", "borrowed"],
+    ["rewardAssets", "reward"],
+    ["rewards", "reward"],
+    ["reward_tokens", "reward"],
+  ];
 
-    arr.forEach((a) => {
-      const t = buildToken(a, tokenInfo, networkId, kind);
-      if (t) tokens.push(t);
+  listSources.forEach(([key, kind]) => {
+    tokens.push(...extractDefiTokensFromList(protocol?.[key], kind));
+  });
+
+  if (Array.isArray(protocol?.pools)) {
+    protocol.pools.forEach((pool) => {
+      tokens.push(...extractDefiTokensFromList(pool?.assets, "supplied"));
+      tokens.push(...extractDefiTokensFromList(pool?.tokens, "supplied"));
+      tokens.push(...extractDefiTokensFromList(pool?.rewardAssets, "reward"));
+      tokens.push(...extractDefiTokensFromList(pool?.rewards, "reward"));
     });
-  };
+  }
 
-  switch (el?.type) {
-    case "multiple":
-      pushAll(data.assets, "supplied");
-      pushAll(data.rewardAssets, "reward");
-      break;
+  if (Array.isArray(protocol?.liquidities)) {
+    protocol.liquidities.forEach((liquidity) => {
+      tokens.push(...extractDefiTokensFromList(liquidity?.assets, "supplied"));
+      tokens.push(...extractDefiTokensFromList(liquidity?.tokens, "supplied"));
+      tokens.push(...extractDefiTokensFromList(liquidity?.rewardAssets, "reward"));
+      tokens.push(...extractDefiTokensFromList(liquidity?.rewards, "reward"));
+    });
+  }
 
-    case "borrowlend":
-      pushAll(data.suppliedAssets, "supplied");
-      pushAll(data.borrowedAssets, "borrowed");
-      pushAll(data.rewardAssets, "reward");
-      break;
+  const merged = {};
 
-    case "liquidity":
-      if (Array.isArray(data.liquidities)) {
-        data.liquidities.forEach((l) => {
-          pushAll(l?.assets, "supplied");
-          pushAll(l?.rewardAssets, "reward");
-        });
-      } else {
-        pushAll(data.assets, "supplied");
-      }
-      break;
+  tokens.forEach((token) => {
+    const key = `${token.symbol}_${token.kind}`;
 
-    case "leverage":
-    case "trade": {
-      const t = buildToken(
-        { data, value: el.value, attributes: el.attributes },
-        tokenInfo,
-        networkId,
-        "supplied"
-      );
-      if (t) tokens.push(t);
-      pushAll(data.rewardAssets, "reward");
-      break;
+    if (!merged[key]) {
+      merged[key] = { ...token };
+      return;
     }
 
-    default:
-      pushAll(data.assets, "supplied");
-      pushAll(data.suppliedAssets, "supplied");
-      pushAll(data.borrowedAssets, "borrowed");
-      pushAll(data.rewardAssets, "reward");
-      break;
-  }
+    merged[key].amount += Number(token.amount) || 0;
+    merged[key].value += Number(token.value) || 0;
 
-  const totalValue = Number(
-    el?.value ?? tokens.reduce((s, t) => s + (Number.isFinite(t.value) ? t.value : 0), 0)
-  );
+    if (!merged[key].price && token.price) {
+      merged[key].price = token.price;
+    }
 
-  if (tokens.length === 0 && Math.abs(totalValue) > 0.01) {
-    tokens.push({
-      address: "",
-      symbol: el?.label || el?.name || "Position",
-      name: `${el?.name || "Unknown"} - ${el?.label || ""}`.trim(),
-      image_uri: "",
-      amount: 0,
-      price: 0,
-      value: totalValue,
-      apy: Number(el?.netApy ?? 0),
-      kind: "supplied",
-    });
-  }
+    if (!merged[key].image_uri && token.image_uri) {
+      merged[key].image_uri = token.image_uri;
+    }
+  });
 
-  return {
-    platform_id: el?.platformId || el?.fetcherId || el?.name || "unknown",
-    platform: el?.name || el?.platformId || "Unknown",
-    label: el?.label || "",
-    total_value: totalValue,
-    apy: Number(el?.netApy ?? 0),
-    tokens,
-  };
+  return Object.values(merged).sort((a, b) => (b.value || 0) - (a.value || 0));
 }
 
-export const jupiterApi = {
-  getPortfolio: async (walletAddress) => {
-    if (!walletAddress) return { positions: [] };
+export const coinStatsPortfolioApi = {
+  getDefiPortfolio: async (portfolioId = COINSTATS_PORTFOLIO_ID) => {
+    if (!COINSTATS_API_KEY) {
+      console.warn("CoinStats: REACT_APP_COINSTATS_KEY is not set.");
+      return { positions: [], totalAssets: {} };
+    }
+
+    if (!portfolioId) {
+      console.warn("CoinStats: REACT_APP_COINSTATS_PORTFOLIO_ID is not set.");
+      return { positions: [], totalAssets: {} };
+    }
 
     try {
-      const url = `${JUPITER_PORTFOLIO_BASE}/positions/${walletAddress}`;
+      const url =
+        `${COINSTATS_BASE}/portfolio/defi` +
+        `?portfolioId=${encodeURIComponent(portfolioId)}`;
 
       const response = await fetch(url, {
-        headers: JUPITER_API_KEY ? { "x-api-key": JUPITER_API_KEY } : {},
+        headers: {
+          "X-API-KEY": COINSTATS_API_KEY,
+          accept: "application/json",
+        },
       });
 
       if (!response.ok) {
-        console.warn(`Jupiter portfolio ${response.status} for ${walletAddress}`);
-        return { positions: [] };
+        const text = await response.text().catch(() => "");
+        console.warn(`CoinStats DeFi ${response.status}: ${text.slice(0, 300)}`);
+        return { positions: [], totalAssets: {} };
       }
 
       const data = await response.json();
-      const elements = Array.isArray(data?.elements) ? data.elements : [];
-      const tokenInfo = data?.tokenInfo || {};
 
-      const positions = elements
-        .filter((el) => (el?.label || "").toLowerCase() !== "wallet")
-        .map((el) => mapJupiterElement(el, tokenInfo))
-        .filter((p) => p.total_value > 0.01 || p.tokens.length > 0);
+      console.log("RAW CoinStats DeFi Portfolio:", data);
 
-      return { positions };
+      const positions = (data?.protocols || []).map((p) => {
+        const totalValue = p?.totalValue || {};
+        const usdValue =
+          Number(totalValue.USD ?? totalValue.usd ?? totalValue.Usd ?? 0) || 0;
+
+        const tokens = extractDefiTokens(p);
+
+        return {
+          platform_id: p.id || p.protocolId || p.protocol_id || p.name || "unknown",
+          platform: p.name || p.protocolName || p.protocolId || "Unknown",
+          label: p.label || p.type || "DeFi",
+          logo: p.logo || p.icon || "",
+          url: p.url || p.website || "",
+          total_value: usdValue,
+          total_value_raw: totalValue,
+          tokens,
+        };
+      });
+
+      return {
+        positions,
+        totalAssets: data?.totalAssets || {},
+      };
     } catch (error) {
-      console.warn(`Jupiter portfolio fetch failed for ${walletAddress}:`, error);
-      return { positions: [] };
+      console.warn("CoinStats DeFi portfolio fetch failed:", error);
+      return { positions: [], totalAssets: {} };
     }
   },
 };
 
 // Jupiter Price API
+const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY?.trim();
 const JUPITER_PRICE_BASE = "https://api.jup.ag/price/v3";
-const SOL_MINT = "So11111111111111111111111111111111111111112";
 
 export const jupiterPriceApi = {
   getPrices: async (mints = []) => {
@@ -410,6 +421,7 @@ export const jupiterPriceApi = {
 };
 
 // Solana RPC fallback/helper
+const SOL_MINT = "So11111111111111111111111111111111111111112";
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
 const SPL_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEHdkAS6EP8CCpM4TbP9pXdJq4iR";

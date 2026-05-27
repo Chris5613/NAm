@@ -1089,9 +1089,32 @@ const total = walletTotal + defiTotal;
                       {pos.label || "DeFi"}
                     </span>
 
-                    <span className="font-mono text-xs text-muted-foreground text-right">
-                      {(pos.tokens || []).length || "-"}
-                    </span>
+<div className="text-right">
+  {(pos.tokens || []).length > 0 ? (
+    <div className="flex flex-col items-end gap-0.5">
+      {(pos.tokens || []).slice(0, 4).map((token, tokenIdx) => (
+        <span
+          key={`${token.symbol}-${tokenIdx}`}
+          className="font-mono text-xs text-muted-foreground"
+        >
+          {Number(token.amount) > 0
+            ? `${Number(token.amount).toLocaleString(undefined, {
+                maximumFractionDigits: 4,
+              })} ${token.symbol}`
+            : token.symbol}
+        </span>
+      ))}
+
+      {(pos.tokens || []).length > 4 && (
+        <span className="text-[10px] text-muted-foreground">
+          +{(pos.tokens || []).length - 4} more
+        </span>
+      )}
+    </div>
+  ) : (
+    <span className="font-mono text-xs text-muted-foreground">-</span>
+  )}
+</div>
 
                     <span className="font-mono text-sm text-foreground text-right font-medium">
                       {formatCurrency(Number(pos.total_value) || 0)}
