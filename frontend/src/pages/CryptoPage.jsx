@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
-import { Plus, RefreshCw, Trash2, Wallet, ExternalLink, Lock, Coins, Layers, Settings, EyeOff, Eye, Image, Pencil } from "lucide-react";
+import { Plus, RefreshCw, Trash2, Wallet, Coins, Layers, Settings, EyeOff, Eye, Image, Pencil } from "lucide-react";
 
 const DAILY_CRYPTO_BASELINE_KEY = "daily_crypto_net_worth_baseline_pst";
 
@@ -107,8 +107,7 @@ const CHAIN_NATIVE = {
 
 export default function CryptoPage() {
   const [wallets, setWallets] = useState([]);
-  const [balances, setBalances] = useState({});
-  const [defiPositions, setDefiPositions] = useState([]);
+  const [balances, setBalances] = useState({});  
   const [tokenPrefs, setTokenPrefs] = useState({});
   const [customTokens, setCustomTokens] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -144,54 +143,31 @@ export default function CryptoPage() {
 
   const fetchingRef = useRef(new Set());
 
-  useEffect(() => {
-    if (wallets.length === 0) return;
-    // Fetch balances for any wallet that hasn't been fetched yet (covers newly added wallets too)
-    wallets.forEach(async (w) => {
-      if (balances[w.id] || fetchingRef.current.has(w.id)) return;
+useEffect(() => {
+  if (wallets.length === 0) return;
+
+  wallets.forEach(async (w) => {
+    if (fetchingRef.current.has(w.id)) return;
+
+    setBalances((prev) => {
+      if (prev[w.id]) return prev;
       fetchingRef.current.add(w.id);
-      try {
-        const res = await walletsApi.getBalances(w.id);
-        setBalances(prev => ({ ...prev, [w.id]: res.data }));
-      } catch (err) {
-        console.error(`Balance fetch error for ${w.id}:`, err);
-      } finally {
-        fetchingRef.current.delete(w.id);
-      }
+      return prev;
     });
-    // Fetch DeFi positions once for Solana wallets
-    const solWallets = wallets.filter(w => w.chain === "solana");
-    if (solWallets.length > 0 && defiPositions.length === 0) fetchAllDefi(solWallets);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wallets]);
 
-  const fetchBalance = async (wid) => {
+    if (fetchingRef.current.has(`done-${w.id}`)) return;
+
     try {
-      const res = await walletsApi.getBalances(wid);
-      setBalances(prev => ({ ...prev, [wid]: res.data }));
-    } catch { /* silent */ }
-  };
-
-  const fetchAllDefi = async (solWallets) => {
-    const allPositions = [];
-    for (const w of solWallets) {
-      try {
-        const res = await walletsApi.getDefiPositions(w.address);
-        if (res.data?.positions) allPositions.push(...res.data.positions);
-      } catch { /* silent */ }
+      const res = await walletsApi.getBalances(w.id);
+      setBalances((prev) => ({ ...prev, [w.id]: res.data }));
+      fetchingRef.current.add(`done-${w.id}`);
+    } catch (err) {
+      console.error(`Balance fetch error for ${w.id}:`, err);
+    } finally {
+      fetchingRef.current.delete(w.id);
     }
-    // Merge by platform
-    const merged = {};
-    allPositions.forEach(p => {
-      const key = p.platform_id || p.platform;
-      if (!merged[key]) { merged[key] = { ...p, tokens: [...p.tokens] }; }
-      else {
-        merged[key].total_value += p.total_value;
-        merged[key].tokens.push(...p.tokens);
-      }
-    });
-    setDefiPositions(Object.values(merged).sort((a, b) => b.total_value - a.total_value));
-  };
+  });
+}, [wallets]);
 
   const refreshAll = async () => {
     setRefreshing(true);
@@ -203,8 +179,6 @@ export default function CryptoPage() {
       } catch { /* silent */ }
     }
     setBalances(newBalances);
-    const solWallets = wallets.filter(w => w.chain === "solana");
-    if (solWallets.length > 0) await fetchAllDefi(solWallets);
     const total = Object.values(newBalances).reduce((s, b) => s + (b?.total_usd || 0), 0);
     if (total > 0) setLiveHistory(prev => [...prev, { time: new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }), value: total }]);
     setRefreshing(false);
@@ -241,8 +215,7 @@ export default function CryptoPage() {
   // Calculate total excluding hidden
   const hiddenSymbols = new Set(Object.entries(tokenPrefs).filter(([_, p]) => p.hidden).map(([s]) => s));
   const visibleTotal = allTokensRaw.filter(t => !hiddenSymbols.has(t.symbol)).reduce((s, t) => s + (t.usd_value || 0), 0);
-  const defiTotalValue = defiPositions.reduce((s, p) => s + p.total_value, 0);
-  const grandTotal = visibleTotal + defiTotalValue;
+const grandTotal = visibleTotal;
 
   const dailyCryptoChange = getDailyCryptoChange(grandTotal);
 const cryptoDailyPositive = dailyCryptoChange.change >= 0;
@@ -260,7 +233,6 @@ const cryptoDailyPositive = dailyCryptoChange.change >= 0;
       chainBreakdown[ctChain] = (chainBreakdown[ctChain] || 0) + (ct.amount * ct.price);
     }
   });
-  if (defiTotalValue > 0) chainBreakdown["solana"] = (chainBreakdown["solana"] || 0) + defiTotalValue;
   const sortedChains = Object.entries(chainBreakdown).sort((a, b) => b[1] - a[1]);
 
   // Combine tokens (wallet balances + custom tokens)
@@ -302,9 +274,6 @@ const cryptoDailyPositive = dailyCryptoChange.change >= 0;
   const hiddenTokens = combinedTokens
     .filter(t => t.category === "wallet" && t.usd_value > 0.01 && tokenPrefs[t.symbol]?.hidden);
   const walletTotal = walletTokens.reduce((s, t) => s + t.usd_value, 0);
-
-  // Filter DeFi by chain (defi is always solana)
-  const filteredDefi = (!activeChain || activeChain === "solana") ? defiPositions : [];
 
   useEffect(() => { if (grandTotal > 0 && liveHistory.length === 0) setLiveHistory([{ time: "Now", value: grandTotal }]); }, [grandTotal]);
 
@@ -568,38 +537,6 @@ const cryptoDailyPositive = dailyCryptoChange.change >= 0;
               </CardContent>
             </Card>
           )}
-
-          {/* DeFi Positions from Jupiter */}
-          {filteredDefi.filter(p => p.label !== "Wallet").map((pos, idx) => (
-            <Card key={idx} className="border-border/40 bg-card" data-testid={`defi-${pos.platform_id}`}>
-              <CardHeader className="pb-0 pt-4 px-5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2"><Layers className="w-4 h-4 text-emerald-400" strokeWidth={1.5} /><CardTitle className="text-sm font-medium">{pos.platform}</CardTitle><span className="text-xs text-muted-foreground">{pos.label}</span></div>
-                  <div className="flex items-center gap-3">
-                    {pos.apy > 0 && <span className="text-xs font-mono text-emerald-400">Earn</span>}
-                    <span className="font-mono text-sm text-foreground">{formatCurrency(pos.total_value)}</span>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="px-2 pb-2 pt-2">
-                <div className="px-3 py-1.5 grid grid-cols-5 text-xs text-muted-foreground border-b border-border/20">
-                  <span>Asset</span><span className="text-right">Balance</span><span className="text-right">Yield</span><span className="text-right">Price</span><span className="text-right">Value</span>
-                </div>
-                {pos.tokens.filter(t => t.value > 0.01).map((t, i) => (
-                  <div key={i} className="px-3 py-2.5 grid grid-cols-5 items-center hover:bg-secondary/30 transition-colors">
-                    <div className="flex items-center gap-2">
-                      {t.image_uri ? <img src={t.image_uri} alt="" className="w-5 h-5 rounded-full" /> : <div className="w-5 h-5 rounded-full bg-secondary" />}
-                      <span className="text-sm font-medium text-foreground">{t.symbol || t.name || shortenAddr(t.address)}</span>
-                    </div>
-                    <span className="font-mono text-xs text-foreground text-right">{t.amount?.toLocaleString(undefined, { maximumFractionDigits: 2 })} {t.symbol}</span>
-                    <span className="font-mono text-xs text-emerald-400 text-right">{t.apy ? `${(t.apy * 100).toFixed(2)}% APY` : "-"}</span>
-                    <span className="font-mono text-xs text-muted-foreground text-right">{t.price > 0 ? formatCurrency(t.price) : "-"}</span>
-                    <span className="font-mono text-sm text-foreground text-right font-medium">{formatCurrency(t.value)}</span>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          ))}
         </>
       )}
 

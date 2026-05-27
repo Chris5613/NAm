@@ -1,6 +1,6 @@
 import { withCorsProxy, fetchWithCors } from "./cors-proxy";
 
-// CoinGecko API (free, no auth required) - CORS-friendly
+// CoinGecko API
 const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 
 export const coinGeckoApi = {
@@ -92,8 +92,60 @@ export const finnhubApi = {
   },
 };
 
+// CoinStats wallet balance API
+const COINSTATS_BASE = "https://openapiv1.coinstats.app";
+const COINSTATS_API_KEY = process.env.REACT_APP_COINSTATS_KEY?.trim();
+
+const COINSTATS_CHAIN_MAP = {
+  solana: "solana"
+};
+
+export const coinStatsApi = {
+  getWalletBalance: async (address, chain = "solana") => {
+    if (!address) return [];
+
+    if (!COINSTATS_API_KEY) {
+      console.warn("CoinStats: REACT_APP_COINSTATS_KEY is not set.");
+      return [];
+    }
+
+    try {
+      const connectionId = COINSTATS_CHAIN_MAP[chain] || chain;
+
+      const url =
+        `${COINSTATS_BASE}/wallet/balance` +
+        `?address=${encodeURIComponent(address)}` +
+        `&connectionId=${encodeURIComponent(connectionId)}`;
+
+      const response = await fetch(url, {
+        headers: {
+          "X-API-KEY": COINSTATS_API_KEY,
+          accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        console.warn(
+          `CoinStats ${response.status} for ${address} on ${chain}: ${text.slice(0, 300)}`
+        );
+        return [];
+      }
+
+      const data = await response.json();
+
+      return Array.isArray(data)
+        ? data
+        : data?.tokens || data?.coins || data?.balances || [];
+    } catch (error) {
+      console.warn(`CoinStats wallet balance fetch failed for ${address}:`, error);
+      return [];
+    }
+  },
+};
+
 // Jupiter Portfolio API
-const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY;
+const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY?.trim();
 const JUPITER_PORTFOLIO_BASE = "https://api.jup.ag/portfolio/v1";
 
 function buildToken(asset, tokenInfo, networkId, kind = "supplied") {
@@ -283,137 +335,7 @@ export const jupiterPriceApi = {
   },
 };
 
-// Moralis DeFi API
-const MORALIS_API_KEY = process.env.REACT_APP_MORALIS_API_KEY;
-const MORALIS_DEFI_BASE = "https://api.moralis.com/v1";
-
-function mapMoralisPosition(position) {
-  const protocol =
-    position?.protocol?.name ||
-    position?.protocol_name ||
-    position?.protocol ||
-    "Unknown";
-
-  const label =
-    position?.position_label ||
-    position?.label ||
-    position?.type ||
-    position?.position_type ||
-    "DeFi Position";
-
-  const tokens = [];
-
-  const pushToken = (asset, kind = "supplied") => {
-    if (!asset) return;
-
-    const amount = Number(
-      asset.amount ?? asset.balance ?? asset.quantity ?? asset.token_amount ?? 0
-    );
-
-    const price = Number(
-      asset.usd_price ?? asset.price_usd ?? asset.price ?? 0
-    );
-
-    const value = Number(
-      asset.usd_value ?? asset.value_usd ?? asset.value ?? amount * price
-    );
-
-    tokens.push({
-      address: asset.token_address || asset.address || asset.mint || "",
-      symbol: asset.symbol || asset.token_symbol || "",
-      name: asset.name || asset.token_name || "",
-      image_uri: asset.logo || asset.logo_url || asset.thumbnail || "",
-      amount,
-      price,
-      value: kind === "borrowed" ? -Math.abs(value) : value,
-      kind,
-    });
-  };
-
-  const supplied =
-    position?.supplied ||
-    position?.supplied_tokens ||
-    position?.supply ||
-    position?.assets ||
-    [];
-
-  const borrowed =
-    position?.borrowed ||
-    position?.borrowed_tokens ||
-    position?.debt ||
-    [];
-
-  const rewards =
-    position?.rewards ||
-    position?.reward_tokens ||
-    [];
-
-  if (Array.isArray(supplied)) supplied.forEach((t) => pushToken(t, "supplied"));
-  if (Array.isArray(borrowed)) borrowed.forEach((t) => pushToken(t, "borrowed"));
-  if (Array.isArray(rewards)) rewards.forEach((t) => pushToken(t, "reward"));
-
-  const totalValue = Number(
-    position?.usd_value ??
-      position?.total_usd_value ??
-      position?.net_usd_value ??
-      tokens.reduce((sum, t) => sum + (Number(t.value) || 0), 0)
-  );
-
-  return {
-    platform_id: protocol.toLowerCase().replace(/\s+/g, "_"),
-    platform: protocol,
-    label,
-    total_value: totalValue,
-    apy: Number(position?.apy ?? position?.net_apy ?? 0),
-    tokens,
-    raw: position,
-  };
-}
-
-export const moralisDefiApi = {
-  getPositions: async (walletAddress) => {
-    if (!walletAddress) return { positions: [] };
-
-    if (!MORALIS_API_KEY) {
-      console.warn("Moralis API key missing: REACT_APP_MORALIS_API_KEY");
-      return { positions: [] };
-    }
-
-    try {
-      const url = `${MORALIS_DEFI_BASE}/wallets/${walletAddress}/defi/positions?chain=solana`;
-
-      const response = await fetch(url, {
-        headers: {
-          "X-API-Key": MORALIS_API_KEY,
-          accept: "application/json",
-        },
-      });
-
-      if (!response.ok) {
-        const text = await response.text();
-        console.warn(`Moralis DeFi ${response.status}: ${text.slice(0, 300)}`);
-        return { positions: [] };
-      }
-
-      const data = await response.json();
-
-      const rawPositions = Array.isArray(data)
-        ? data
-        : data?.positions || data?.result || data?.data || [];
-
-      const positions = rawPositions
-        .map(mapMoralisPosition)
-        .filter((p) => Math.abs(Number(p.total_value) || 0) > 0.01 || p.tokens.length > 0);
-
-      return { positions };
-    } catch (error) {
-      console.warn(`Moralis DeFi fetch failed for ${walletAddress}:`, error);
-      return { positions: [] };
-    }
-  },
-};
-
-// Solana RPC
+// Solana RPC fallback/helper
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
 const SPL_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEHdkAS6EP8CCpM4TbP9pXdJq4iR";
@@ -660,7 +582,9 @@ export const nosanaApi = {
           0
         );
 
-        if (sum > 0) out.push({ date, amount: sum });
+        if (sum > 0) {
+          out.push({ date, amount: sum });
+        }
       }
     }
 
