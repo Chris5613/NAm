@@ -14,7 +14,7 @@ import { Plus, RefreshCw, Trash2, Wallet, Coins, Layers, Settings, EyeOff, Eye, 
 const DAILY_CRYPTO_BASELINE_KEY = "daily_crypto_net_worth_baseline_pst";
 const CRYPTO_LIVE_HISTORY_KEY = "crypto_live_history";
 const WALLET_BALANCE_CACHE_KEY = "crypto_wallet_balance_cache";
-const WALLET_BALANCE_CACHE_TTL_MS = 60 * 60 * 1000; 
+const DEFI_CACHE_KEY = "crypto_defi_cache";
 
 const MANUAL_DEFI_POSITIONS = [
   {
@@ -56,17 +56,6 @@ function saveWalletBalanceCache(cache) {
   }
 }
 
-function getCachedWalletBalance(walletId) {
-  const cache = getWalletBalanceCache();
-  const entry = cache[walletId];
-
-  if (!entry?.data || !entry?.savedAt) return null;
-
-  const isFresh = Date.now() - entry.savedAt < WALLET_BALANCE_CACHE_TTL_MS;
-
-  return isFresh ? entry.data : null;
-}
-
 function setCachedWalletBalance(walletId, data) {
   const cache = getWalletBalanceCache();
 
@@ -77,6 +66,24 @@ function setCachedWalletBalance(walletId, data) {
 
   saveWalletBalanceCache(cache);
 }
+
+function getSavedDefiPositions() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(DEFI_CACHE_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDefiPositions(positions) {
+  try {
+    localStorage.setItem(DEFI_CACHE_KEY, JSON.stringify(positions || []));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
 
 function getSavedCryptoHistory() {
   try {
@@ -95,18 +102,6 @@ function saveCryptoHistory(history) {
   }
 }
 
-function getMsUntilNextRefresh(hour = 23, minute = 58) {
-  const now = new Date();
-  const next = new Date();
-
-  next.setHours(hour, minute, 0, 0);
-
-  if (next <= now) {
-    next.setDate(next.getDate() + 1);
-  }
-
-  return next.getTime() - now.getTime();
-}
 
 function getPstDateKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -300,19 +295,18 @@ const CHAIN_NATIVE = {
 export default function CryptoPage() {
   const [wallets, setWallets] = useState([]);
   const [balances, setBalances] = useState({});
-  const [defiPositions, setDefiPositions] = useState([]);
-  const [defiLoading, setDefiLoading] = useState(false);
+  const [defiPositions, setDefiPositions] = useState(() => getSavedDefiPositions());
+  const [defiLoading] = useState(false);
   const [tokenPrefs, setTokenPrefs] = useState({});
   const [customTokens, setCustomTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
-const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());  
+  const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());
   const [activeChain, setActiveChain] = useState(null);
   const [logoEditToken, setLogoEditToken] = useState(null);
 
 
-  const fetchingRef = useRef(new Set());
   const lastSyncedRef = useRef(null);
   const allDefiPositions = [...defiPositions, ...MANUAL_DEFI_POSITIONS];
 
@@ -340,93 +334,36 @@ const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());
     }
   }, []);
 
-  const fetchDefiPortfolio = useCallback(async () => {
-    setDefiLoading(true);
 
-    try {
-      const res = await walletsApi.getDefiPositions();
-      setDefiPositions(res.data?.positions || []);
-    } catch (error) {
-      console.warn("Failed to load DeFi portfolio:", error);
-      setDefiPositions([]);
-    } finally {
-      setDefiLoading(false);
-    }
-  }, []);
 
-  useEffect(() => {
-    fetchWallets();
-    fetchDefiPortfolio();
-  }, [fetchWallets, fetchDefiPortfolio]);
+useEffect(() => {
+  fetchWallets();
+}, [fetchWallets]);
 
   useEffect(() => {
     const refresh = () => {
       fetchWallets();
-      fetchDefiPortfolio();
     };
 
     window.addEventListener("crypto-holding-updated", refresh);
 
     return () => window.removeEventListener("crypto-holding-updated", refresh);
-  }, [fetchWallets, fetchDefiPortfolio]);
+  }, [fetchWallets]);
 
-  useEffect(() => {
-    if (wallets.length === 0) return;
+useEffect(() => {
+  if (wallets.length === 0) return;
 
-    let cancelled = false;
+  const cache = getWalletBalanceCache();
+  const cachedBalances = {};
 
-    const fetchWalletBalancesSequentially = async () => {
-      for (const w of wallets) {
-        if (cancelled) return;
-        if (fetchingRef.current.has(w.id)) continue;
-
-        let alreadyFetched = false;
-
-        setBalances((prev) => {
-          if (prev[w.id]) {
-            alreadyFetched = true;
-          }
-
-          return prev;
-        });
-
-        if (alreadyFetched) continue;
-
-        fetchingRef.current.add(w.id);
-
-try {
-  const cached = getCachedWalletBalance(w.id);
-
-  if (cached) {
-    if (!cancelled) {
-      setBalances((prev) => ({ ...prev, [w.id]: cached }));
+  wallets.forEach((w) => {
+    if (cache[w.id]?.data) {
+      cachedBalances[w.id] = cache[w.id].data;
     }
+  });
 
-    continue;
-  }
-
-  const res = await walletsApi.getBalances(w.id);
-
-  if (!cancelled) {
-    setBalances((prev) => ({ ...prev, [w.id]: res.data }));
-    setCachedWalletBalance(w.id, res.data);
-  }
-
-  await sleep(2000);
-} catch (err) {
-  console.error(`Balance fetch error for ${w.id}:`, err);
-} finally {
-  fetchingRef.current.delete(w.id);
-}
-      }
-    };
-
-    fetchWalletBalancesSequentially();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [wallets]);
+  setBalances(cachedBalances);
+}, [wallets]);
 
   const refreshAll = async () => {
     setRefreshing(true);
@@ -451,9 +388,11 @@ await sleep(2000);
       const defiRes = await walletsApi.getDefiPositions();
       freshDefiPositions = defiRes.data?.positions || [];
       setDefiPositions(freshDefiPositions);
+      saveDefiPositions(freshDefiPositions);
     } catch {
       freshDefiPositions = [];
       setDefiPositions([]);
+      saveDefiPositions([]);
     }
 
     setBalances(newBalances);
@@ -496,23 +435,6 @@ if (total > 0) {
     setRefreshing(false);
     toast.success("Refreshed");
   };
-
-  useEffect(() => {
-  let intervalId = null;
-
-  const timeoutId = setTimeout(() => {
-    refreshAll();
-
-    intervalId = setInterval(() => {
-      refreshAll();
-    }, 24 * 60 * 60 * 1000);
-  }, getMsUntilNextRefresh(23, 58));
-
-  return () => {
-    clearTimeout(timeoutId);
-    if (intervalId) clearInterval(intervalId);
-  };
-}, []);
 
   const toggleHideToken = async (symbol) => {
     const current = tokenPrefs[symbol]?.hidden || false;
