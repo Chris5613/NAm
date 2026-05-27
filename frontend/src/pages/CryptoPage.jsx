@@ -12,6 +12,7 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip } from "recharts";
 import { Plus, RefreshCw, Trash2, Wallet, Coins, Layers, Settings, EyeOff, Eye, Image, Pencil } from "lucide-react";
 
 const DAILY_CRYPTO_BASELINE_KEY = "daily_crypto_net_worth_baseline_pst";
+const CRYPTO_LIVE_HISTORY_KEY = "crypto_live_history";
 
 const MANUAL_DEFI_POSITIONS = [
   {
@@ -19,22 +20,52 @@ const MANUAL_DEFI_POSITIONS = [
     platform: "Lulo",
     label: "DeFi",
     type: "Lending",
-    logo: "",
+    logo: "https://raw.githubusercontent.com/jup-ag/platform-list/main/img/flexlend.webp",
     url: "https://lulo.fi",
-    total_value: 223.49,
+    total_value: 223.56,
     tokens: [
       {
         symbol: "USDC",
         name: "USD Coin",
         amount: 223.56,
         price: 0.99969,
-        value: 223.49,
+        value: 223.56,
         kind: "supplied",
       },
     ],
     manual: true,
   },
 ];
+
+function getSavedCryptoHistory() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CRYPTO_LIVE_HISTORY_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCryptoHistory(history) {
+  try {
+    localStorage.setItem(CRYPTO_LIVE_HISTORY_KEY, JSON.stringify(history.slice(-50)));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+function getMsUntilNextRefresh(hour = 23, minute = 58) {
+  const now = new Date();
+  const next = new Date();
+
+  next.setHours(hour, minute, 0, 0);
+
+  if (next <= now) {
+    next.setDate(next.getDate() + 1);
+  }
+
+  return next.getTime() - now.getTime();
+}
 
 function getPstDateKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
@@ -235,7 +266,7 @@ export default function CryptoPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
-  const [liveHistory, setLiveHistory] = useState([]);
+const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());  
   const [activeChain, setActiveChain] = useState(null);
   const [logoEditToken, setLogoEditToken] = useState(null);
 
@@ -403,6 +434,23 @@ export default function CryptoPage() {
     toast.success("Refreshed");
   };
 
+  useEffect(() => {
+  let intervalId = null;
+
+  const timeoutId = setTimeout(() => {
+    refreshAll();
+
+    intervalId = setInterval(() => {
+      refreshAll();
+    }, 24 * 60 * 60 * 1000);
+  }, getMsUntilNextRefresh(23, 58));
+
+  return () => {
+    clearTimeout(timeoutId);
+    if (intervalId) clearInterval(intervalId);
+  };
+}, [wallets, balances, defiPositions]);
+
   const toggleHideToken = async (symbol) => {
     const current = tokenPrefs[symbol]?.hidden || false;
 
@@ -566,14 +614,30 @@ const defiTotalValue = allDefiPositions.reduce(
 
 const filteredDefi =
   !activeChain || activeChain === "solana"
-    ? allDefiPositions.filter((p) => (Number(p.total_value) || 0) > 0.01)
+    ? allDefiPositions
+        .filter((p) => (Number(p.total_value) || 0) > 0.01)
+        .sort((a, b) => (Number(b.total_value) || 0) - (Number(a.total_value) || 0))
     : [];
 
-  useEffect(() => {
-    if (grandTotal > 0 && liveHistory.length === 0) {
-      setLiveHistory([{ time: "Now", value: grandTotal }]);
-    }
-  }, [grandTotal, liveHistory.length]);
+useEffect(() => {
+  if (grandTotal <= 0) return;
+
+setLiveHistory((prev) => {
+  const next = [
+    ...prev,
+    {
+      time: new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      }),
+      value: total,
+    },
+  ].slice(-50);
+
+  saveCryptoHistory(next);
+  return next;
+});
+}, [grandTotal]);
 
   useEffect(() => {
     if (loading) return;
