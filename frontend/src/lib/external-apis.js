@@ -1,4 +1,3 @@
-
 import { withCorsProxy, fetchWithCors } from "./cors-proxy";
 
 // CoinGecko API (free, no auth required) - CORS-friendly
@@ -7,7 +6,9 @@ const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
 export const coinGeckoApi = {
   getPrice: async (coinId, vsCurrency = "usd") => {
     try {
-      const response = await withCorsProxy(`${COINGECKO_BASE}/simple/price?ids=${coinId}&vs_currencies=${vsCurrency}`);
+      const response = await withCorsProxy(
+        `${COINGECKO_BASE}/simple/price?ids=${coinId}&vs_currencies=${vsCurrency}`
+      );
       return response.data[coinId]?.[vsCurrency] || 0;
     } catch (error) {
       console.warn(`CoinGecko price fetch failed for ${coinId}:`, error);
@@ -24,19 +25,22 @@ export const coinGeckoApi = {
       return [];
     }
   },
+
   resolveSymbol: async (symbol) => {
     if (!symbol) return null;
+
     try {
       const coins = await coinGeckoApi.search(symbol);
       const target = symbol.trim().toLowerCase();
-      // Prefer an exact symbol match; CoinGecko returns results sorted by
-      // market-cap rank, so the first exact hit is almost always correct.
+
       const match =
         coins.find((c) => (c.symbol || "").toLowerCase() === target) ||
         coins.find((c) => (c.name || "").toLowerCase() === target) ||
         coins[0] ||
         null;
+
       if (!match) return null;
+
       return {
         id: match.id,
         name: match.name,
@@ -60,7 +64,7 @@ export const coinGeckoApi = {
   },
 };
 
-// Finnhub API (requires API key)
+// Finnhub API
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
 const FINNHUB_KEY = process.env.REACT_APP_FINNHUB_API_KEY;
 
@@ -88,11 +92,13 @@ export const finnhubApi = {
   },
 };
 
+// Jupiter Portfolio API
 const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY;
 const JUPITER_PORTFOLIO_BASE = "https://api.jup.ag/portfolio/v1";
 
 function buildToken(asset, tokenInfo, networkId, kind = "supplied") {
   if (!asset) return null;
+
   const data = asset.data || asset;
   const addr = data.address || data.mint || asset.address || "";
   const amount = Number(data.amount ?? asset.amount ?? 0);
@@ -100,6 +106,7 @@ function buildToken(asset, tokenInfo, networkId, kind = "supplied") {
   const value = Number(asset.value ?? data.value ?? amount * price);
   const tokInfo = tokenInfo?.[networkId]?.[addr] || {};
   const apy = Number(asset?.attributes?.apy ?? data?.apy ?? 0);
+
   return {
     address: addr,
     symbol: tokInfo.symbol || data.symbol || asset.symbol || "",
@@ -120,6 +127,7 @@ function mapJupiterElement(el, tokenInfo = {}) {
 
   const pushAll = (arr, kind = "supplied") => {
     if (!Array.isArray(arr)) return;
+
     arr.forEach((a) => {
       const t = buildToken(a, tokenInfo, networkId, kind);
       if (t) tokens.push(t);
@@ -131,11 +139,13 @@ function mapJupiterElement(el, tokenInfo = {}) {
       pushAll(data.assets, "supplied");
       pushAll(data.rewardAssets, "reward");
       break;
+
     case "borrowlend":
       pushAll(data.suppliedAssets, "supplied");
       pushAll(data.borrowedAssets, "borrowed");
       pushAll(data.rewardAssets, "reward");
       break;
+
     case "liquidity":
       if (Array.isArray(data.liquidities)) {
         data.liquidities.forEach((l) => {
@@ -146,16 +156,21 @@ function mapJupiterElement(el, tokenInfo = {}) {
         pushAll(data.assets, "supplied");
       }
       break;
+
     case "leverage":
     case "trade": {
-      // Single asset described directly on `data` itself.
-      const t = buildToken({ data, value: el.value, attributes: el.attributes }, tokenInfo, networkId, "supplied");
+      const t = buildToken(
+        { data, value: el.value, attributes: el.attributes },
+        tokenInfo,
+        networkId,
+        "supplied"
+      );
       if (t) tokens.push(t);
       pushAll(data.rewardAssets, "reward");
       break;
     }
+
     default:
-      // Best-effort: scan common asset arrays anywhere.
       pushAll(data.assets, "supplied");
       pushAll(data.suppliedAssets, "supplied");
       pushAll(data.borrowedAssets, "borrowed");
@@ -164,12 +179,9 @@ function mapJupiterElement(el, tokenInfo = {}) {
   }
 
   const totalValue = Number(
-    el?.value ??
-      tokens.reduce((s, t) => s + (Number.isFinite(t.value) ? t.value : 0), 0),
+    el?.value ?? tokens.reduce((s, t) => s + (Number.isFinite(t.value) ? t.value : 0), 0)
   );
 
-  // Fallback row so the user can still see a position card with non-zero value
-  // even when Jupiter omitted the token breakdown (it happens for some fetchers).
   if (tokens.length === 0 && Math.abs(totalValue) > 0.01) {
     tokens.push({
       address: "",
@@ -197,23 +209,28 @@ function mapJupiterElement(el, tokenInfo = {}) {
 export const jupiterApi = {
   getPortfolio: async (walletAddress) => {
     if (!walletAddress) return { positions: [] };
+
     try {
       const url = `${JUPITER_PORTFOLIO_BASE}/positions/${walletAddress}`;
+
       const response = await fetch(url, {
         headers: JUPITER_API_KEY ? { "x-api-key": JUPITER_API_KEY } : {},
       });
+
       if (!response.ok) {
         console.warn(`Jupiter portfolio ${response.status} for ${walletAddress}`);
         return { positions: [] };
       }
+
       const data = await response.json();
       const elements = Array.isArray(data?.elements) ? data.elements : [];
       const tokenInfo = data?.tokenInfo || {};
-      // Skip the implicit "Wallet" element — those tokens already come from CoinStats.
+
       const positions = elements
         .filter((el) => (el?.label || "").toLowerCase() !== "wallet")
         .map((el) => mapJupiterElement(el, tokenInfo))
         .filter((p) => p.total_value > 0.01 || p.tokens.length > 0);
+
       return { positions };
     } catch (error) {
       console.warn(`Jupiter portfolio fetch failed for ${walletAddress}:`, error);
@@ -222,6 +239,7 @@ export const jupiterApi = {
   },
 };
 
+// Jupiter Price API
 const JUPITER_PRICE_BASE = "https://api.jup.ag/price/v3";
 const SOL_MINT = "So11111111111111111111111111111111111111112";
 
@@ -233,6 +251,7 @@ export const jupiterPriceApi = {
 
     try {
       const chunks = [];
+
       for (let i = 0; i < uniqueMints.length; i += 50) {
         chunks.push(uniqueMints.slice(i, i + 50));
       }
@@ -243,9 +262,7 @@ export const jupiterPriceApi = {
         const url = `${JUPITER_PRICE_BASE}?ids=${encodeURIComponent(chunk.join(","))}`;
 
         const response = await fetch(url, {
-          headers: JUPITER_API_KEY
-            ? { "x-api-key": JUPITER_API_KEY }
-            : {},
+          headers: JUPITER_API_KEY ? { "x-api-key": JUPITER_API_KEY } : {},
         });
 
         if (!response.ok) {
@@ -266,6 +283,137 @@ export const jupiterPriceApi = {
   },
 };
 
+// Moralis DeFi API
+const MORALIS_API_KEY = process.env.REACT_APP_MORALIS_API_KEY;
+const MORALIS_DEFI_BASE = "https://api.moralis.com/v1";
+
+function mapMoralisPosition(position) {
+  const protocol =
+    position?.protocol?.name ||
+    position?.protocol_name ||
+    position?.protocol ||
+    "Unknown";
+
+  const label =
+    position?.position_label ||
+    position?.label ||
+    position?.type ||
+    position?.position_type ||
+    "DeFi Position";
+
+  const tokens = [];
+
+  const pushToken = (asset, kind = "supplied") => {
+    if (!asset) return;
+
+    const amount = Number(
+      asset.amount ?? asset.balance ?? asset.quantity ?? asset.token_amount ?? 0
+    );
+
+    const price = Number(
+      asset.usd_price ?? asset.price_usd ?? asset.price ?? 0
+    );
+
+    const value = Number(
+      asset.usd_value ?? asset.value_usd ?? asset.value ?? amount * price
+    );
+
+    tokens.push({
+      address: asset.token_address || asset.address || asset.mint || "",
+      symbol: asset.symbol || asset.token_symbol || "",
+      name: asset.name || asset.token_name || "",
+      image_uri: asset.logo || asset.logo_url || asset.thumbnail || "",
+      amount,
+      price,
+      value: kind === "borrowed" ? -Math.abs(value) : value,
+      kind,
+    });
+  };
+
+  const supplied =
+    position?.supplied ||
+    position?.supplied_tokens ||
+    position?.supply ||
+    position?.assets ||
+    [];
+
+  const borrowed =
+    position?.borrowed ||
+    position?.borrowed_tokens ||
+    position?.debt ||
+    [];
+
+  const rewards =
+    position?.rewards ||
+    position?.reward_tokens ||
+    [];
+
+  if (Array.isArray(supplied)) supplied.forEach((t) => pushToken(t, "supplied"));
+  if (Array.isArray(borrowed)) borrowed.forEach((t) => pushToken(t, "borrowed"));
+  if (Array.isArray(rewards)) rewards.forEach((t) => pushToken(t, "reward"));
+
+  const totalValue = Number(
+    position?.usd_value ??
+      position?.total_usd_value ??
+      position?.net_usd_value ??
+      tokens.reduce((sum, t) => sum + (Number(t.value) || 0), 0)
+  );
+
+  return {
+    platform_id: protocol.toLowerCase().replace(/\s+/g, "_"),
+    platform: protocol,
+    label,
+    total_value: totalValue,
+    apy: Number(position?.apy ?? position?.net_apy ?? 0),
+    tokens,
+    raw: position,
+  };
+}
+
+export const moralisDefiApi = {
+  getPositions: async (walletAddress) => {
+    if (!walletAddress) return { positions: [] };
+
+    if (!MORALIS_API_KEY) {
+      console.warn("Moralis API key missing: REACT_APP_MORALIS_API_KEY");
+      return { positions: [] };
+    }
+
+    try {
+      const url = `${MORALIS_DEFI_BASE}/wallets/${walletAddress}/defi/positions?chain=solana`;
+
+      const response = await fetch(url, {
+        headers: {
+          "X-API-Key": MORALIS_API_KEY,
+          accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text();
+        console.warn(`Moralis DeFi ${response.status}: ${text.slice(0, 300)}`);
+        return { positions: [] };
+      }
+
+      const data = await response.json();
+
+      const rawPositions = Array.isArray(data)
+        ? data
+        : data?.positions || data?.result || data?.data || [];
+
+      const positions = rawPositions
+        .map(mapMoralisPosition)
+        .filter((p) => Math.abs(Number(p.total_value) || 0) > 0.01 || p.tokens.length > 0);
+
+      return { positions };
+    } catch (error) {
+      console.warn(`Moralis DeFi fetch failed for ${walletAddress}:`, error);
+      return { positions: [] };
+    }
+  },
+};
+
+// Solana RPC
 const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
 const SPL_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEHdkAS6EP8CCpM4TbP9pXdJq4iR";
@@ -365,7 +513,7 @@ export const solanaApi = {
   },
 };
 
-// Bitcoin Blockchain.info - needs CORS proxy
+// Bitcoin Blockchain.info
 const BITCOIN_API = "https://blockchain.info";
 
 export const bitcoinApi = {
@@ -381,42 +529,141 @@ export const bitcoinApi = {
   },
 };
 
+// RapidAPI eBay average selling price
+const RAPIDAPI_KEY = process.env.REACT_APP_RAPIDAPI_KEY;
+const RAPIDAPI_EBAY_HOST =
+  process.env.REACT_APP_RAPIDAPI_EBAY_HOST ||
+  "ebay-average-selling-price.p.rapidapi.com";
+
+const EBAY_CATEGORY_CELL_PHONES = "9355";
+const EBAY_CACHE_TTL_MS = 60 * 60 * 1000;
+
+function readEbayCache(key) {
+  try {
+    const raw = sessionStorage.getItem(`ebay:${key}`);
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    if (!parsed || Date.now() - parsed.t > EBAY_CACHE_TTL_MS) return null;
+
+    return parsed.v;
+  } catch {
+    return null;
+  }
+}
+
+function writeEbayCache(key, value) {
+  try {
+    sessionStorage.setItem(`ebay:${key}`, JSON.stringify({ t: Date.now(), v: value }));
+  } catch {
+    // sessionStorage unavailable — non-fatal
+  }
+}
+
+export const ebayApi = {
+  getAveragePrice: async (model) => {
+    const data = await ebayApi.getMarketData(model);
+    return data?.median_price || data?.average_price || 0;
+  },
+
+  getMarketData: async (model) => {
+    if (!model) return null;
+
+    if (!RAPIDAPI_KEY) {
+      console.warn("eBay: REACT_APP_RAPIDAPI_KEY is not set.");
+      return null;
+    }
+
+    const key = model.trim().toLowerCase();
+    const cached = readEbayCache(key);
+    if (cached) return cached;
+
+    try {
+      const response = await fetch(`https://${RAPIDAPI_EBAY_HOST}/findCompletedItems`, {
+        method: "POST",
+        headers: {
+          "X-RapidAPI-Key": RAPIDAPI_KEY,
+          "X-RapidAPI-Host": RAPIDAPI_EBAY_HOST,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          keywords: model,
+          max_search_results: "240",
+          category_id: EBAY_CATEGORY_CELL_PHONES,
+          remove_outliers: "true",
+          site_id: "0",
+        }),
+      });
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        console.warn(`eBay ${response.status} for "${model}": ${detail.slice(0, 200)}`);
+        return null;
+      }
+
+      const data = await response.json();
+
+      const result = {
+        median_price: Number(data?.median_price ?? 0),
+        average_price: Number(data?.average_price ?? 0),
+        min_price: Number(data?.min_price ?? 0),
+        max_price: Number(data?.max_price ?? 0),
+        sample_size: Number(data?.results ?? 0),
+        ebay_url:
+          data?.response_url ||
+          `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
+            model
+          )}&LH_Sold=1&LH_Complete=1`,
+      };
+
+      writeEbayCache(key, result);
+      return result;
+    } catch (error) {
+      console.warn(`eBay price lookup failed for "${model}":`, error);
+      return null;
+    }
+  },
+};
+
+// Nosana dashboard API
 const NOSANA_API_BASE = "https://dashboard.k8s.prd.nos.ci/api/stats/earning-history";
 
 export const nosanaApi = {
-  // Fetch earning history for `address`. `startDate` / `endDate` are ISO
-  // YYYY-MM-DD strings. `endDate` is optional (server defaults to today).
-  // Returns the raw API payload — see `flattenDailyEarnings` for parsing.
   getEarningHistory: async (address, startDate, endDate, groupBy = "month") => {
     if (!address) throw new Error("Nosana address required");
     if (!startDate) throw new Error("start_date required");
+
     const params = new URLSearchParams({
       address,
       start_date: startDate,
       group_by: groupBy,
     });
+
     if (endDate) params.set("end_date", endDate);
+
     const url = `${NOSANA_API_BASE}?${params.toString()}`;
     const response = await withCorsProxy(url);
+
     return response.data;
   },
 
-  // Walks the API's `results[*].daily_breakdown` and returns a flat list of
-  // { date: 'YYYY-MM-DD', amount: number } entries (summed across markets).
-  // Sorted ascending by date.
   flattenDailyEarnings: (apiResponse) => {
     const out = [];
     const results = Array.isArray(apiResponse?.results) ? apiResponse.results : [];
+
     for (const r of results) {
       const daily = r?.daily_breakdown || {};
+
       for (const [date, marketMap] of Object.entries(daily)) {
         const sum = Object.values(marketMap || {}).reduce(
           (acc, v) => acc + (Number(v) || 0),
-          0,
+          0
         );
+
         if (sum > 0) out.push({ date, amount: sum });
       }
     }
+
     out.sort((a, b) => a.date.localeCompare(b.date));
     return out;
   },
