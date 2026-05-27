@@ -166,6 +166,16 @@ export default function UnityDevicesPage() {
     }
   };
 
+  const getTodayKey = () => {
+  const now = new Date();
+
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+
+  return `${year}-${month}-${day}`;
+};
+
   const formatUsd = (value) => {
     const num = Number(value || 0);
 
@@ -296,7 +306,39 @@ export default function UnityDevicesPage() {
 
   const balanceUsd = Number(summary?.balance_usd || 0);
   const lifetimeUsd = Number(summary?.lifetime_usd || 0);
-  const recentUsd = Number(summary?.total_usd || 0);
+const todayUsd = useMemo(() => {
+  const todayKey = getTodayKey();
+
+  const dailyRows =
+    Array.isArray(summary?.daily_earnings)
+      ? summary.daily_earnings
+      : Array.isArray(summary?.combined_payload?.daily_earnings)
+        ? summary.combined_payload.daily_earnings
+        : [];
+
+  const directToday = dailyRows.reduce((sum, row) => {
+    const rowDate = row.date || row.day;
+
+    if (rowDate !== todayKey) return sum;
+
+    return (
+      sum +
+      Number(
+        row.earnings_usd ||
+          row.amount_usd ||
+          row.total_usd ||
+          row.amount ||
+          0
+      )
+    );
+  }, 0);
+
+  if (directToday > 0) return directToday;
+
+  return devices.reduce((sum, device) => {
+    return sum + Number(device.amount_usd || 0);
+  }, 0);
+}, [summary, devices]);  
 
   const chartData = useMemo(() => {
     let rows = [];
@@ -659,13 +701,13 @@ export default function UnityDevicesPage() {
             accent="yellow"
           />
 
-          <StatCard
-            title="Recent"
-            value={formatUsd(recentUsd)}
-            subText="Latest synced earnings"
-            icon={<Calendar size={22} />}
-            accent="green"
-          />
+<StatCard
+  title="Today"
+  value={formatUsd(todayUsd)}
+  subText="Today’s synced earnings"
+  icon={<Calendar size={22} />}
+  accent="green"
+/>
 
           <StatCard
             title="7-Day Avg"

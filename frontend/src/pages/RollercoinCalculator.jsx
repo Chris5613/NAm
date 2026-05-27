@@ -272,17 +272,6 @@ return {
   return (
     <main className="min-h-screen px-4 py-8 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8 text-center">
-          <h1 className="mt-3 text-4xl font-black uppercase tracking-wide text-slate-100 sm:text-6xl">
-            Rollercoin Calculator
-          </h1>
-
-          {loadedUser?.profile?.name && (
-            <p className="mt-3 text-sm font-semibold text-cyan-100">
-              Loaded stats for {loadedUser.profile.name}
-            </p>
-          )}
-        </div>
 
         <section className="mb-6 grid gap-4 md:grid-cols-3">
           <StatBox title="Current Power" value={formatEh(result.currentPower)} subtitle={result.currentLeague} />
@@ -313,25 +302,6 @@ return {
               </div>
               {inputRow("Power", minerToAddPower, setMinerToAddPower, minerToAddUnit, setMinerToAddUnit)}
               {inputRow("Miner Bonus", minerToAddBonus, setMinerToAddBonus)}
-            </div>
-
-            <div className="overflow-hidden rounded-2xl border border-cyan-300/20 bg-cyan-950/40 shadow-xl">
-              <div className="bg-cyan-900/70 px-4 py-3 text-center text-lg font-black uppercase tracking-widest text-cyan-50">
-                Power Difference
-              </div>
-<div className="grid grid-cols-2 border-b border-white/10 px-4 py-3 text-sm">
-  <span className="font-semibold text-slate-200">Base miner power</span>
-  <span className="text-right font-black text-white">
-    {formatEh(result.addedBasePower)}
-  </span>
-</div>
-
-<div className="grid grid-cols-2 px-4 py-3 text-sm">
-  <span className="font-semibold text-slate-200">With account + miner bonus</span>
-  <span className="text-right font-black text-white">
-    {formatEh(result.addedPowerWithBonus)}
-  </span>
-</div>
             </div>
           </div>
 
