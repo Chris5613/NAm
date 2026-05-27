@@ -68,7 +68,7 @@ export const coinGeckoApi = {
 
 // Finnhub API (requires API key)
 const FINNHUB_BASE = "https://finnhub.io/api/v1";
-const FINNHUB_KEY = process.env.VITE_FINNHUB_API;
+const FINNHUB_KEY = process.env.REACT_APP_FINNHUB_API_KEY;
 
 export const finnhubApi = {
   getQuote: async (symbol) => {
@@ -238,7 +238,7 @@ export const jupiterApi = {
 // CoinStats — returns an array of token holdings for a wallet on a given chain.
 // Docs: https://openapi.coinstats.app/  GET /wallet/balance
 const COINSTATS_BASE = "https://openapiv1.coinstats.app";
-const COINSTATS_API_KEY = process.env.VITE_COINSTATS_KEY;
+const COINSTATS_API_KEY = import.meta.env.VITE_COINSTATS_KEY?.trim();
 
 // Map our internal chain names → the CoinStats connectionId values
 // (verified via /wallet/blockchains).
