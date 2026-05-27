@@ -238,7 +238,7 @@ export const jupiterApi = {
 // CoinStats — returns an array of token holdings for a wallet on a given chain.
 // Docs: https://openapi.coinstats.app/  GET /wallet/balance
 const COINSTATS_BASE = "https://openapiv1.coinstats.app";
-const COINSTATS_API_KEY = process.env.REACT_APP_COINSTATS_API_KEY;
+const COINSTATS_API_KEY = "8a115a835260860fc9409473da905d8973454a07d6ed"
 
 // Map our internal chain names → the CoinStats connectionId values
 // (verified via /wallet/blockchains).
