@@ -307,38 +307,78 @@ export default function UnityDevicesPage() {
   const balanceUsd = Number(summary?.balance_usd || 0);
   const lifetimeUsd = Number(summary?.lifetime_usd || 0);
 const todayUsd = useMemo(() => {
-  const todayKey = getTodayKey();
+  let rows = [];
 
-  const dailyRows =
-    Array.isArray(summary?.daily_earnings)
-      ? summary.daily_earnings
-      : Array.isArray(summary?.combined_payload?.daily_earnings)
-        ? summary.combined_payload.daily_earnings
-        : [];
+  if (Array.isArray(summary?.daily_earnings) && summary.daily_earnings.length > 0) {
+    rows = summary.daily_earnings;
+  } else if (
+    Array.isArray(summary?.combined_payload?.daily_earnings) &&
+    summary.combined_payload.daily_earnings.length > 0
+  ) {
+    rows = summary.combined_payload.daily_earnings;
+  } else {
+    const accountMap = new Map();
 
-  const directToday = dailyRows.reduce((sum, row) => {
-    const rowDate = row.date || row.day;
+    accounts.forEach((account) => {
+      (account.daily_earnings || []).forEach((row) => {
+        const date = row.date || row.day;
+        if (!date) return;
 
-    if (rowDate !== todayKey) return sum;
+        const amount = Number(
+          row.earnings_usd ||
+            row.amount_usd ||
+            row.total_usd ||
+            row.amount ||
+            0
+        );
 
-    return (
-      sum +
-      Number(
+        if (!accountMap.has(date)) {
+          accountMap.set(date, {
+            date,
+            earnings_usd: 0,
+          });
+        }
+
+        accountMap.get(date).earnings_usd += amount;
+      });
+    });
+
+    rows = Array.from(accountMap.values());
+  }
+
+  const normalizedRows = rows
+    .map((row) => {
+      const date = row.date || row.day;
+
+      const amount = Number(
         row.earnings_usd ||
           row.amount_usd ||
           row.total_usd ||
           row.amount ||
           0
-      )
-    );
-  }, 0);
+      );
 
-  if (directToday > 0) return directToday;
+      if (!date || Number.isNaN(amount)) return null;
+
+      return {
+        date,
+        amount,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.date.localeCompare(b.date));
+
+  const latestRow = normalizedRows[normalizedRows.length - 1];
+
+  if (latestRow) {
+    return latestRow.amount;
+  }
 
   return devices.reduce((sum, device) => {
     return sum + Number(device.amount_usd || 0);
   }, 0);
-}, [summary, devices]);  
+}, [summary, accounts, devices]);
+
 
   const chartData = useMemo(() => {
     let rows = [];
@@ -702,9 +742,9 @@ const todayUsd = useMemo(() => {
           />
 
 <StatCard
-  title="Today"
+  title="Latest Day"
   value={formatUsd(todayUsd)}
-  subText="Today’s synced earnings"
+  subText="Most recent synced daily earnings"
   icon={<Calendar size={22} />}
   accent="green"
 />
