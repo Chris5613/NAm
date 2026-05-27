@@ -168,6 +168,8 @@ const CHAIN_NATIVE = {
 export default function CryptoPage() {
   const [wallets, setWallets] = useState([]);
   const [balances, setBalances] = useState({});
+  const [defiPositions, setDefiPositions] = useState([]);
+  const [defiLoading, setDefiLoading] = useState(false);
   const [tokenPrefs, setTokenPrefs] = useState({});
   const [customTokens, setCustomTokens] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -204,16 +206,35 @@ export default function CryptoPage() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchWallets();
-  }, [fetchWallets]);
+  const fetchDefiPortfolio = useCallback(async () => {
+    setDefiLoading(true);
+
+    try {
+      const res = await walletsApi.getDefiPositions();
+      setDefiPositions(res.data?.positions || []);
+    } catch (error) {
+      console.warn("Failed to load DeFi portfolio:", error);
+      setDefiPositions([]);
+    } finally {
+      setDefiLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
-    const refresh = () => fetchWallets();
+    fetchWallets();
+    fetchDefiPortfolio();
+  }, [fetchWallets, fetchDefiPortfolio]);
+
+  useEffect(() => {
+    const refresh = () => {
+      fetchWallets();
+      fetchDefiPortfolio();
+    };
+
     window.addEventListener("crypto-holding-updated", refresh);
 
     return () => window.removeEventListener("crypto-holding-updated", refresh);
-  }, [fetchWallets]);
+  }, [fetchWallets, fetchDefiPortfolio]);
 
   useEffect(() => {
     if (wallets.length === 0) return;
@@ -278,12 +299,26 @@ export default function CryptoPage() {
       }
     }
 
+    try {
+      const defiRes = await walletsApi.getDefiPositions();
+      setDefiPositions(defiRes.data?.positions || []);
+    } catch {
+      setDefiPositions([]);
+    }
+
     setBalances(newBalances);
 
-    const total = Object.values(newBalances).reduce(
+    const walletTotal = Object.values(newBalances).reduce(
       (s, b) => s + (b?.total_usd || 0),
       0
     );
+
+    const defiTotal = defiPositions.reduce(
+      (s, p) => s + (Number(p.total_value) || 0),
+      0
+    );
+
+    const total = walletTotal + defiTotal;
 
     if (total > 0) {
       setLiveHistory((prev) => [
@@ -369,7 +404,12 @@ export default function CryptoPage() {
     .filter((t) => !hiddenSymbols.has(t.symbol))
     .reduce((s, t) => s + (t.usd_value || 0), 0);
 
-  const grandTotal = visibleTotal;
+  const defiTotalValue = defiPositions.reduce(
+    (s, p) => s + (Number(p.total_value) || 0),
+    0
+  );
+
+  const grandTotal = visibleTotal + defiTotalValue;
 
   const dailyCryptoChange = getDailyCryptoChange(grandTotal);
   const cryptoDailyPositive = dailyCryptoChange.change >= 0;
@@ -393,6 +433,10 @@ export default function CryptoPage() {
         (chainBreakdown[ctChain] || 0) + (ct.amount * ct.price);
     }
   });
+
+  if (defiTotalValue > 0) {
+    chainBreakdown.solana = (chainBreakdown.solana || 0) + defiTotalValue;
+  }
 
   const sortedChains = Object.entries(chainBreakdown).sort((a, b) => b[1] - a[1]);
 
@@ -454,6 +498,11 @@ export default function CryptoPage() {
 
   const walletTotal = walletTokens.reduce((s, t) => s + t.usd_value, 0);
 
+  const filteredDefi =
+    !activeChain || activeChain === "solana"
+      ? defiPositions.filter((p) => (Number(p.total_value) || 0) > 0.01)
+      : [];
+
   useEffect(() => {
     if (grandTotal > 0 && liveHistory.length === 0) {
       setLiveHistory([{ time: "Now", value: grandTotal }]);
@@ -464,7 +513,11 @@ export default function CryptoPage() {
     if (loading) return;
     if (wallets.length > 0 && Object.keys(balances).length === 0) return;
 
-    const syncKey = JSON.stringify({ t: grandTotal, c: sortedChains.length });
+    const syncKey = JSON.stringify({
+      t: grandTotal,
+      c: sortedChains.length,
+      d: defiPositions.length,
+    });
 
     if (lastSyncedRef.current === syncKey) return;
 
@@ -489,6 +542,7 @@ export default function CryptoPage() {
           usd_value: t.usd_value || 0,
           icon_url: tokenPrefs[t.symbol]?.custom_icon_url || t.icon_url || "",
           chain: w.chain,
+          category: "wallet",
         });
       });
     });
@@ -514,14 +568,39 @@ export default function CryptoPage() {
         usd_value: value,
         icon_url: tokenPrefs[ct.symbol]?.custom_icon_url || ct.icon_url || "",
         chain: ch,
+        category: "wallet",
       });
     });
+
+    if (defiPositions.length > 0) {
+      if (!tokensByChain.solana) {
+        tokensByChain.solana = [];
+      }
+
+      defiPositions.forEach((p) => {
+        const value = Number(p.total_value) || 0;
+        if (value < 0.01) return;
+
+        tokensByChain.solana.push({
+          symbol: p.platform || "DeFi",
+          name: p.label ? `${p.platform} - ${p.label}` : p.platform || "DeFi Position",
+          amount: 1,
+          price: value,
+          usd_value: value,
+          icon_url: p.logo || "",
+          chain: "solana",
+          category: "defi",
+          protocol: p.platform || p.platform_id || "Unknown",
+          tokens: p.tokens || [],
+        });
+      });
+    }
 
     Object.keys(tokensByChain).forEach((ch) => {
       const merged = {};
 
       tokensByChain[ch].forEach((t) => {
-        const k = t.symbol;
+        const k = `${t.symbol}_${t.category || "wallet"}_${t.protocol || ""}`;
 
         if (merged[k]) {
           merged[k].amount += t.amount;
@@ -562,6 +641,7 @@ export default function CryptoPage() {
     balances,
     customTokens,
     tokenPrefs,
+    defiPositions,
     hiddenSymbols,
     sortedChains,
   ]);
@@ -580,7 +660,7 @@ export default function CryptoPage() {
         <h1 className="text-4xl font-medium tracking-tight">Crypto</h1>
 
         <div className="flex items-center gap-2">
-          {wallets.length > 0 && (
+          {(wallets.length > 0 || defiPositions.length > 0) && (
             <Button
               variant="outline"
               size="sm"
@@ -610,11 +690,13 @@ export default function CryptoPage() {
         </div>
       </div>
 
-      {wallets.length === 0 && customTokens.length === 0 ? (
+      {wallets.length === 0 && customTokens.length === 0 && defiPositions.length === 0 ? (
         <Card className="border-border/40 bg-card">
           <CardContent className="p-8 flex flex-col items-center justify-center text-center">
             <Wallet className="w-10 h-10 text-muted-foreground mb-4" strokeWidth={1.5} />
-            <p className="text-muted-foreground text-sm mb-3">No wallets added yet</p>
+            <p className="text-muted-foreground text-sm mb-3">
+              No wallets or DeFi positions loaded yet
+            </p>
 
             <Button
               size="sm"
@@ -626,7 +708,7 @@ export default function CryptoPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : wallets.length === 0 && customTokens.length > 0 ? (
+      ) : wallets.length === 0 && customTokens.length > 0 && defiPositions.length === 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="border-border/40 bg-card" data-testid="crypto-net-worth">
@@ -718,6 +800,12 @@ export default function CryptoPage() {
                   {cryptoDailyPositive ? "+" : "-"}
                   {Math.abs(dailyCryptoChange.percentChange).toFixed(2)}%)
                 </p>
+
+                {defiTotalValue > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Includes {formatCurrency(defiTotalValue)} in DeFi positions
+                  </p>
+                )}
               </CardContent>
             </Card>
 
@@ -931,6 +1019,81 @@ export default function CryptoPage() {
                     </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          )}
+
+          {(filteredDefi.length > 0 || defiLoading) && (
+            <Card className="border-border/40 bg-card" data-testid="defi-section">
+              <CardHeader className="pb-0 pt-4 px-5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-emerald-400" strokeWidth={1.5} />
+                    <CardTitle className="text-sm font-medium">DeFi Positions</CardTitle>
+                  </div>
+
+                  <span className="font-mono text-sm text-foreground">
+                    {defiLoading ? "Loading..." : formatCurrency(defiTotalValue)}
+                  </span>
+                </div>
+              </CardHeader>
+
+              <CardContent className="px-2 pb-2 pt-2">
+                <div className="px-3 py-1.5 grid grid-cols-4 text-xs text-muted-foreground border-b border-border/20">
+                  <span>Protocol</span>
+                  <span className="text-right">Type</span>
+                  <span className="text-right">Assets</span>
+                  <span className="text-right">Value</span>
+                </div>
+
+                {filteredDefi.map((pos, idx) => (
+                  <div
+                    key={`${pos.platform_id || pos.platform}-${idx}`}
+                    className="px-3 py-2.5 grid grid-cols-4 items-center hover:bg-secondary/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      {pos.logo ? (
+                        <img
+                          src={pos.logo}
+                          alt=""
+                          className="w-6 h-6 rounded-full"
+                          onError={(e) => {
+                            e.target.style.display = "none";
+                          }}
+                        />
+                      ) : (
+                        <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center border border-border/40">
+                          <span className="text-[10px] font-bold text-muted-foreground">
+                            {(pos.platform || "D")[0]}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {pos.platform || "DeFi"}
+                        </p>
+                        {pos.url && (
+                          <p className="text-[10px] text-muted-foreground truncate">
+                            {pos.url}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <span className="font-mono text-xs text-muted-foreground text-right">
+                      {pos.label || "DeFi"}
+                    </span>
+
+                    <span className="font-mono text-xs text-muted-foreground text-right">
+                      {(pos.tokens || []).length || "-"}
+                    </span>
+
+                    <span className="font-mono text-sm text-foreground text-right font-medium">
+                      {formatCurrency(Number(pos.total_value) || 0)}
+                    </span>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
@@ -1194,7 +1357,13 @@ function LogoEditDialog({ symbol, open, onOpenChange, onSave }) {
         </DialogHeader>
 
         <div className="space-y-3">
-          {url && <img src={url} alt="" className="w-10 h-10 rounded-full mx-auto border border-border" />}
+          {url && (
+            <img
+              src={url}
+              alt=""
+              className="w-10 h-10 rounded-full mx-auto border border-border"
+            />
+          )}
 
           <Input
             placeholder="https://example.com/logo.png"

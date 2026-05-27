@@ -100,6 +100,80 @@ const COINSTATS_CHAIN_MAP = {
   solana: "solana"
 };
 
+const COINSTATS_PORTFOLIO_ID =
+  process.env.REACT_APP_COINSTATS_PORTFOLIO_ID?.trim();
+
+export const coinStatsPortfolioApi = {
+  getDefiPortfolio: async (portfolioId = COINSTATS_PORTFOLIO_ID) => {
+    if (!COINSTATS_API_KEY) {
+      console.warn("CoinStats: REACT_APP_COINSTATS_KEY is not set.");
+      return { positions: [], totalAssets: {} };
+    }
+
+    if (!portfolioId) {
+      console.warn("CoinStats: REACT_APP_COINSTATS_PORTFOLIO_ID is not set.");
+      return { positions: [], totalAssets: {} };
+    }
+
+    try {
+      const url =
+        `${COINSTATS_BASE}/portfolio/defi` +
+        `?portfolioId=${encodeURIComponent(portfolioId)}`;
+
+      const response = await fetch(url, {
+        headers: {
+          "X-API-KEY": COINSTATS_API_KEY,
+          accept: "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const text = await response.text().catch(() => "");
+        console.warn(
+          `CoinStats DeFi ${response.status}: ${text.slice(0, 300)}`
+        );
+        return { positions: [], totalAssets: {} };
+      }
+
+      const data = await response.json();
+
+      const positions = (data?.protocols || []).map((p) => {
+        const totalValue = p?.totalValue || {};
+        const usdValue =
+          Number(totalValue.USD ?? totalValue.usd ?? totalValue.Usd ?? 0) || 0;
+
+        return {
+          platform_id: p.id || p.protocolId || p.name || "unknown",
+          platform: p.name || p.protocolId || "Unknown",
+          label: "DeFi",
+          logo: p.logo || "",
+          url: p.url || "",
+          total_value: usdValue,
+          total_value_raw: totalValue,
+          tokens: Object.entries(totalValue).map(([symbol, value]) => ({
+            symbol,
+            name: symbol,
+            amount: 0,
+            price: 0,
+            value: Number(value) || 0,
+            image_uri: "",
+            apy: 0,
+            kind: "supplied",
+          })),
+        };
+      });
+
+      return {
+        positions,
+        totalAssets: data?.totalAssets || {},
+      };
+    } catch (error) {
+      console.warn("CoinStats DeFi portfolio fetch failed:", error);
+      return { positions: [], totalAssets: {} };
+    }
+  },
+};
+
 export const coinStatsApi = {
   getWalletBalance: async (address, chain = "solana") => {
     if (!address) return [];
