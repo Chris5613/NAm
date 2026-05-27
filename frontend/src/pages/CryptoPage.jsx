@@ -111,7 +111,7 @@ function getDisplayDefiTokens(pos) {
     ]);
 
     if (fakeLabels.has(symbol) || fakeLabels.has(name)) return false;
-    if (blockedWords.has(symbol) || blockedWords.has(name) || blockedWords.has(kind)) return false;
+    if (blockedWords.has(symbol) || blockedWords.has(name)) return false;
 
     return true;
   });
