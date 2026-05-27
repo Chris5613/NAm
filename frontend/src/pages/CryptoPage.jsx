@@ -80,6 +80,43 @@ function shortenAddr(a) {
   return a?.length > 12 ? `${a.slice(0, 6)}...${a.slice(-4)}` : a || "";
 }
 
+function normalizeText(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function getDisplayDefiTokens(pos) {
+  const typeText = normalizeText(pos.type || pos.label || "");
+  const blockedWords = new Set(typeText.split(" ").filter(Boolean));
+
+  return (pos.tokens || []).filter((token) => {
+    const symbol = normalizeText(token.symbol);
+    const name = normalizeText(token.name);
+    const kind = normalizeText(token.kind);
+
+    if (!symbol) return false;
+
+    const fakeLabels = new Set([
+      "locked escrow",
+      "locked",
+      "escrow",
+      "farming",
+      "vault",
+      "farming vault",
+      "defi",
+      "supplied",
+      "deposit",
+    ]);
+
+    if (fakeLabels.has(symbol) || fakeLabels.has(name)) return false;
+    if (blockedWords.has(symbol) || blockedWords.has(name) || blockedWords.has(kind)) return false;
+
+    return true;
+  });
+}
+
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const CHAIN_META = {
@@ -587,7 +624,7 @@ export default function CryptoPage() {
 
         tokensByChain.solana.push({
           symbol: p.platform || "DeFi",
-          name: p.label ? `${p.platform} - ${p.label}` : p.platform || "DeFi Position",
+          name: p.type ? `${p.platform} - ${p.type}` : p.platform || "DeFi Position",
           amount: 1,
           price: value,
           usd_value: value,
@@ -1037,86 +1074,90 @@ export default function CryptoPage() {
               </CardHeader>
 
               <CardContent className="px-2 pb-2 pt-2">
-                <div className="px-3 py-1.5 grid grid-cols-4 text-xs text-white border-b border-border/20">
+                <div className="px-3 py-1.5 grid grid-cols-4 text-xs text-muted-foreground border-b border-border/20">
                   <span>Protocol</span>
                   <span className="text-right">Type</span>
                   <span className="text-right">Assets</span>
                   <span className="text-right">Value</span>
                 </div>
 
-                {filteredDefi.map((pos, idx) => (
-                  <div
-                    key={`${pos.platform_id || pos.platform}-${idx}`}
-                    className="px-3 py-2.5 grid grid-cols-4 items-center hover:bg-secondary/30 transition-colors"
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      {pos.logo ? (
-                        <img
-                          src={pos.logo}
-                          alt=""
-                          className="w-6 h-6 rounded-full"
-                          onError={(e) => {
-                            e.target.style.display = "none";
-                          }}
-                        />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center border border-border/40">
-                          <span className="text-[10px] font-bold text-muted-foreground">
-                            {(pos.platform || "D")[0]}
-                          </span>
-                        </div>
-                      )}
+                {filteredDefi.map((pos, idx) => {
+                  const displayTokens = getDisplayDefiTokens(pos);
 
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">
-                          {pos.platform || "DeFi"}
-                        </p>
-                        {pos.url && (
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {pos.url}
-                          </p>
+                  return (
+                    <div
+                      key={`${pos.platform_id || pos.platform}-${idx}`}
+                      className="px-3 py-2.5 grid grid-cols-4 items-center hover:bg-secondary/30 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        {pos.logo ? (
+                          <img
+                            src={pos.logo}
+                            alt=""
+                            className="w-6 h-6 rounded-full"
+                            onError={(e) => {
+                              e.target.style.display = "none";
+                            }}
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center border border-border/40">
+                            <span className="text-[10px] font-bold text-muted-foreground">
+                              {(pos.platform || "D")[0]}
+                            </span>
+                          </div>
                         )}
-                      </div>
-                    </div>
 
-<span className="font-mono text-xs text-white text-right">
-  {pos.type || pos.label || "DeFi"}
-</span>
-
-                    <div className="text-right">
-                      {(pos.tokens || []).length > 0 ? (
-                        <div className="flex flex-col items-end gap-0.5">
-                          {(pos.tokens || []).slice(0, 4).map((token, tokenIdx) => (
-                            <span
-                              key={`${token.symbol}-${tokenIdx}`}
-                             className="font-mono text-xs text-white"
-                            >
-{Number(token.amount) > 0
-  ? `${Number(token.amount).toLocaleString(undefined, {
-      maximumFractionDigits: 4,
-    })} ${token.symbol}`
-  : token.symbol}
-                            </span>
-                          ))}
-
-                          {(pos.tokens || []).length > 4 && (
-                            <span className="text-[10px] text-white">
-                              +{(pos.tokens || []).length - 4} more
-                            </span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {pos.platform || "DeFi"}
+                          </p>
+                          {pos.url && (
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {pos.url}
+                            </p>
                           )}
                         </div>
-                      ) : (
-                        <span className="font-mono text-xs text-white">
-                          Protocol-level only
-                        </span>
-                      )}
-                    </div>
+                      </div>
 
-                    <span className="font-mono text-sm text-foreground text-right font-medium">
-                      {formatCurrency(Number(pos.total_value) || 0)}
-                    </span>
-                  </div>
-                ))}
+                      <span className="font-mono text-xs text-white text-right">
+                        {pos.type || pos.label || "DeFi"}
+                      </span>
+
+                      <div className="text-right">
+                        {displayTokens.length > 0 ? (
+                          <div className="flex flex-col items-end gap-0.5">
+                            {displayTokens.slice(0, 4).map((token, tokenIdx) => (
+                              <span
+                                key={`${token.symbol}-${tokenIdx}`}
+                                className="font-mono text-xs text-white"
+                              >
+                                {Number(token.amount) > 0
+                                  ? `${Number(token.amount).toLocaleString(undefined, {
+                                      maximumFractionDigits: 4,
+                                    })} ${token.symbol}`
+                                  : token.symbol}
+                              </span>
+                            ))}
+
+                            {displayTokens.length > 4 && (
+                              <span className="text-[10px] text-white">
+                                +{displayTokens.length - 4} more
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="font-mono text-xs text-white">
+                            Protocol-level only
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="font-mono text-sm text-foreground text-right font-medium">
+                        {formatCurrency(Number(pos.total_value) || 0)}
+                      </span>
+                    </div>
+                  );
+                })}
               </CardContent>
             </Card>
           )}
