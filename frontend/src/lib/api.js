@@ -7,6 +7,8 @@ import {
 } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const createId = () => {
   if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
   return `id_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
@@ -825,14 +827,17 @@ export const walletSyncApi = {
     // Sequential to keep us under API rate limits.
     const balances = {};
 
-    for (const w of wallets) {
-      try {
-        const res = await walletsApi.getBalances(w.id);
-        balances[w.id] = res.data;
-      } catch {
-        // silent
-      }
-    }
+for (const w of wallets) {
+  try {
+    const res = await walletsApi.getBalances(w.id);
+    balances[w.id] = res.data;
+
+    // CoinStats rate limit protection
+    await sleep(2000);
+  } catch {
+    // silent
+  }
+}
 
     const chainBreakdown = {};
     const tokensByChain = {};
