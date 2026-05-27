@@ -13,6 +13,29 @@ import { Plus, RefreshCw, Trash2, Wallet, Coins, Layers, Settings, EyeOff, Eye, 
 
 const DAILY_CRYPTO_BASELINE_KEY = "daily_crypto_net_worth_baseline_pst";
 
+const MANUAL_DEFI_POSITIONS = [
+  {
+    platform_id: "manual-lulo-usdc",
+    platform: "Lulo",
+    label: "DeFi",
+    type: "Lending",
+    logo: "",
+    url: "https://lulo.fi",
+    total_value: 223.49,
+    tokens: [
+      {
+        symbol: "USDC",
+        name: "USD Coin",
+        amount: 223.56,
+        price: 0.99969,
+        value: 223.49,
+        kind: "supplied",
+      },
+    ],
+    manual: true,
+  },
+];
+
 function getPstDateKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Los_Angeles",
@@ -216,8 +239,10 @@ export default function CryptoPage() {
   const [activeChain, setActiveChain] = useState(null);
   const [logoEditToken, setLogoEditToken] = useState(null);
 
+
   const fetchingRef = useRef(new Set());
   const lastSyncedRef = useRef(null);
+  const allDefiPositions = [...defiPositions, ...MANUAL_DEFI_POSITIONS];
 
   const fetchWallets = useCallback(async () => {
     try {
@@ -445,10 +470,10 @@ export default function CryptoPage() {
     .filter((t) => !hiddenSymbols.has(t.symbol))
     .reduce((s, t) => s + (t.usd_value || 0), 0);
 
-  const defiTotalValue = defiPositions.reduce(
-    (s, p) => s + (Number(p.total_value) || 0),
-    0
-  );
+const defiTotalValue = allDefiPositions.reduce(
+  (s, p) => s + (Number(p.total_value) || 0),
+  0
+);
 
   const grandTotal = visibleTotal + defiTotalValue;
 
@@ -539,10 +564,10 @@ export default function CryptoPage() {
 
   const walletTotal = walletTokens.reduce((s, t) => s + t.usd_value, 0);
 
-  const filteredDefi =
-    !activeChain || activeChain === "solana"
-      ? defiPositions.filter((p) => (Number(p.total_value) || 0) > 0.01)
-      : [];
+const filteredDefi =
+  !activeChain || activeChain === "solana"
+    ? allDefiPositions.filter((p) => (Number(p.total_value) || 0) > 0.01)
+    : [];
 
   useEffect(() => {
     if (grandTotal > 0 && liveHistory.length === 0) {
@@ -557,7 +582,7 @@ export default function CryptoPage() {
     const syncKey = JSON.stringify({
       t: grandTotal,
       c: sortedChains.length,
-      d: defiPositions.length,
+      d: allDefiPositions.length,
     });
 
     if (lastSyncedRef.current === syncKey) return;
@@ -613,12 +638,12 @@ export default function CryptoPage() {
       });
     });
 
-    if (defiPositions.length > 0) {
+    if (allDefiPositions.length > 0) {
       if (!tokensByChain.solana) {
         tokensByChain.solana = [];
       }
 
-      defiPositions.forEach((p) => {
+      allDefiPositions.forEach((p) => {
         const value = Number(p.total_value) || 0;
         if (value < 0.01) return;
 
@@ -701,7 +726,7 @@ export default function CryptoPage() {
         <h1 className="text-4xl font-medium tracking-tight">Crypto</h1>
 
         <div className="flex items-center gap-2">
-          {(wallets.length > 0 || defiPositions.length > 0) && (
+          {(wallets.length > 0 || allDefiPositions.length > 0) && (
             <Button
               variant="outline"
               size="sm"
@@ -731,7 +756,7 @@ export default function CryptoPage() {
         </div>
       </div>
 
-      {wallets.length === 0 && customTokens.length === 0 && defiPositions.length === 0 ? (
+      {wallets.length === 0 && customTokens.length === 0 && allDefiPositions.length === 0? (
         <Card className="border-border/40 bg-card">
           <CardContent className="p-8 flex flex-col items-center justify-center text-center">
             <Wallet className="w-10 h-10 text-muted-foreground mb-4" strokeWidth={1.5} />
@@ -749,7 +774,7 @@ export default function CryptoPage() {
             </Button>
           </CardContent>
         </Card>
-      ) : wallets.length === 0 && customTokens.length > 0 && defiPositions.length === 0 ? (
+      ) : wallets.length === 0 && customTokens.length > 0 && allDefiPositions.length === 0 ? (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Card className="border-border/40 bg-card" data-testid="crypto-net-worth">
