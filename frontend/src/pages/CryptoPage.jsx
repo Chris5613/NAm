@@ -1037,7 +1037,7 @@ export default function CryptoPage() {
               </CardHeader>
 
               <CardContent className="px-2 pb-2 pt-2">
-                <div className="px-3 py-1.5 grid grid-cols-4 text-xs text-muted-foreground border-b border-border/20">
+                <div className="px-3 py-1.5 grid grid-cols-4 text-xs text-white border-b border-border/20">
                   <span>Protocol</span>
                   <span className="text-right">Type</span>
                   <span className="text-right">Assets</span>
@@ -1079,9 +1079,9 @@ export default function CryptoPage() {
                       </div>
                     </div>
 
-                    <span className="font-mono text-xs text-muted-foreground text-right">
-                      {pos.label || "DeFi"}
-                    </span>
+<span className="font-mono text-xs text-white text-right">
+  {pos.type || pos.label || "DeFi"}
+</span>
 
                     <div className="text-right">
                       {(pos.tokens || []).length > 0 ? (
@@ -1089,24 +1089,24 @@ export default function CryptoPage() {
                           {(pos.tokens || []).slice(0, 4).map((token, tokenIdx) => (
                             <span
                               key={`${token.symbol}-${tokenIdx}`}
-                              className="font-mono text-xs text-muted-foreground"
+                             className="font-mono text-xs text-white"
                             >
-                              {Number(token.amount) > 0
-                                ? `${Number(token.amount).toLocaleString(undefined, {
-                                    maximumFractionDigits: 4,
-                                  })} ${token.symbol}`
-                                : token.symbol}
+{Number(token.amount) > 0
+  ? `${Number(token.amount).toLocaleString(undefined, {
+      maximumFractionDigits: 4,
+    })} ${token.symbol}`
+  : token.symbol}
                             </span>
                           ))}
 
                           {(pos.tokens || []).length > 4 && (
-                            <span className="text-[10px] text-muted-foreground">
+                            <span className="text-[10px] text-white">
                               +{(pos.tokens || []).length - 4} more
                             </span>
                           )}
                         </div>
                       ) : (
-                        <span className="font-mono text-xs text-muted-foreground">
+                        <span className="font-mono text-xs text-white">
                           Protocol-level only
                         </span>
                       )}

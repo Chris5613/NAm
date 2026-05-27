@@ -181,10 +181,8 @@ const symbol =
   item.coin ||
   item.coinId ||
   token.coinId ||
-  token.name ||
-  item.name ||
   item.id ||
-  "Asset";
+  "";
 
       const name =
         token.name ||
@@ -238,7 +236,7 @@ const symbol =
         amount * price
       );
 
-      if (!symbol && value <= 0) return null;
+      if (!symbol || symbol === "Asset") return null;
 
       return {
         symbol,
@@ -386,16 +384,24 @@ export const coinStatsPortfolioApi = {
 
         const tokens = extractDefiTokens(p);
 
-        return {
-          platform_id: p.id || p.protocolId || p.protocol_id || p.name || "unknown",
-          platform: p.name || p.protocolName || p.protocolId || "Unknown",
-          label: p.label || p.type || "DeFi",
-          logo: p.logo || p.icon || "",
-          url: p.url || p.website || "",
-          total_value: usdValue,
-          total_value_raw: totalValue,
-          tokens,
-        };
+const typeLabels = Array.isArray(p.investments)
+  ? p.investments
+      .map((inv) => inv.type || inv.title || inv.name)
+      .filter(Boolean)
+      .filter((value, index, arr) => arr.indexOf(value) === index)
+  : [];
+
+return {
+  platform_id: p.id || p.protocolId || p.protocol_id || p.name || "unknown",
+  platform: p.name || p.protocolName || p.protocolId || "Unknown",
+  label: p.label || "DeFi",
+  type: typeLabels.length > 0 ? typeLabels.join(" / ") : p.type || "DeFi",
+  logo: p.logo || p.icon || "",
+  url: p.url || p.website || "",
+  total_value: usdValue,
+  total_value_raw: totalValue,
+  tokens,
+};
       });
 
       return {
