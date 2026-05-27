@@ -176,13 +176,20 @@ function extractDefiTokensFromList(list, fallbackKind = "supplied") {
       const symbol =
         token.symbol ||
         item.symbol ||
+        item.ticker ||
+        item.coinSymbol ||
+        item.coin ||
         token.name ||
         item.name ||
         item.coinId ||
         item.id ||
         "Asset";
 
-      const name = token.name || item.name || symbol;
+      const name =
+        token.name ||
+        item.name ||
+        item.coinName ||
+        symbol;
 
       const amount = getNumericValue(
         item.amount,
@@ -190,6 +197,9 @@ function extractDefiTokensFromList(list, fallbackKind = "supplied") {
         item.quantity,
         item.qty,
         item.tokenAmount,
+        item.amountInToken,
+        item.token_amount,
+        item.count,
         token.amount,
         token.balance,
         token.quantity
@@ -200,6 +210,8 @@ function extractDefiTokensFromList(list, fallbackKind = "supplied") {
         item.currentPrice,
         item.current_price,
         item.usdPrice,
+        item.priceUsd,
+        item.price_usd,
         token.price,
         token.currentPrice,
         token.current_price,
@@ -216,6 +228,9 @@ function extractDefiTokensFromList(list, fallbackKind = "supplied") {
         item.amount_usd,
         item.balanceUsd,
         item.balance_usd,
+        item.valueUsd,
+        item.value_usd,
+        item.usd,
         token.value,
         token.usdValue,
         token.usd_value,
@@ -254,6 +269,7 @@ function extractDefiTokens(protocol) {
     ["tokens", "supplied"],
     ["balances", "supplied"],
     ["positions", "supplied"],
+    ["investments", "supplied"],
     ["supplied", "supplied"],
     ["suppliedAssets", "supplied"],
     ["supplied_tokens", "supplied"],
@@ -273,6 +289,7 @@ function extractDefiTokens(protocol) {
     protocol.pools.forEach((pool) => {
       tokens.push(...extractDefiTokensFromList(pool?.assets, "supplied"));
       tokens.push(...extractDefiTokensFromList(pool?.tokens, "supplied"));
+      tokens.push(...extractDefiTokensFromList(pool?.investments, "supplied"));
       tokens.push(...extractDefiTokensFromList(pool?.rewardAssets, "reward"));
       tokens.push(...extractDefiTokensFromList(pool?.rewards, "reward"));
     });
@@ -282,6 +299,7 @@ function extractDefiTokens(protocol) {
     protocol.liquidities.forEach((liquidity) => {
       tokens.push(...extractDefiTokensFromList(liquidity?.assets, "supplied"));
       tokens.push(...extractDefiTokensFromList(liquidity?.tokens, "supplied"));
+      tokens.push(...extractDefiTokensFromList(liquidity?.investments, "supplied"));
       tokens.push(...extractDefiTokensFromList(liquidity?.rewardAssets, "reward"));
       tokens.push(...extractDefiTokensFromList(liquidity?.rewards, "reward"));
     });

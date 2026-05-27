@@ -299,30 +299,30 @@ export default function CryptoPage() {
       }
     }
 
-let freshDefiPositions = [];
+    let freshDefiPositions = [];
 
-try {
-  const defiRes = await walletsApi.getDefiPositions();
-  freshDefiPositions = defiRes.data?.positions || [];
-  setDefiPositions(freshDefiPositions);
-} catch {
-  freshDefiPositions = [];
-  setDefiPositions([]);
-}
+    try {
+      const defiRes = await walletsApi.getDefiPositions();
+      freshDefiPositions = defiRes.data?.positions || [];
+      setDefiPositions(freshDefiPositions);
+    } catch {
+      freshDefiPositions = [];
+      setDefiPositions([]);
+    }
 
-setBalances(newBalances);
+    setBalances(newBalances);
 
-const walletTotal = Object.values(newBalances).reduce(
-  (s, b) => s + (b?.total_usd || 0),
-  0
-);
+    const walletTotal = Object.values(newBalances).reduce(
+      (s, b) => s + (b?.total_usd || 0),
+      0
+    );
 
-const defiTotal = freshDefiPositions.reduce(
-  (s, p) => s + (Number(p.total_value) || 0),
-  0
-);
+    const defiTotal = freshDefiPositions.reduce(
+      (s, p) => s + (Number(p.total_value) || 0),
+      0
+    );
 
-const total = walletTotal + defiTotal;
+    const total = walletTotal + defiTotal;
 
     if (total > 0) {
       setLiveHistory((prev) => [
@@ -804,12 +804,6 @@ const total = walletTotal + defiTotal;
                   {cryptoDailyPositive ? "+" : "-"}
                   {Math.abs(dailyCryptoChange.percentChange).toFixed(2)}%)
                 </p>
-
-                {defiTotalValue > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Includes {formatCurrency(defiTotalValue)} in DeFi positions
-                  </p>
-                )}
               </CardContent>
             </Card>
 
@@ -1089,32 +1083,34 @@ const total = walletTotal + defiTotal;
                       {pos.label || "DeFi"}
                     </span>
 
-<div className="text-right">
-  {(pos.tokens || []).length > 0 ? (
-    <div className="flex flex-col items-end gap-0.5">
-      {(pos.tokens || []).slice(0, 4).map((token, tokenIdx) => (
-        <span
-          key={`${token.symbol}-${tokenIdx}`}
-          className="font-mono text-xs text-muted-foreground"
-        >
-          {Number(token.amount) > 0
-            ? `${Number(token.amount).toLocaleString(undefined, {
-                maximumFractionDigits: 4,
-              })} ${token.symbol}`
-            : token.symbol}
-        </span>
-      ))}
+                    <div className="text-right">
+                      {(pos.tokens || []).length > 0 ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          {(pos.tokens || []).slice(0, 4).map((token, tokenIdx) => (
+                            <span
+                              key={`${token.symbol}-${tokenIdx}`}
+                              className="font-mono text-xs text-muted-foreground"
+                            >
+                              {Number(token.amount) > 0
+                                ? `${Number(token.amount).toLocaleString(undefined, {
+                                    maximumFractionDigits: 4,
+                                  })} ${token.symbol}`
+                                : token.symbol}
+                            </span>
+                          ))}
 
-      {(pos.tokens || []).length > 4 && (
-        <span className="text-[10px] text-muted-foreground">
-          +{(pos.tokens || []).length - 4} more
-        </span>
-      )}
-    </div>
-  ) : (
-    <span className="font-mono text-xs text-muted-foreground">-</span>
-  )}
-</div>
+                          {(pos.tokens || []).length > 4 && (
+                            <span className="text-[10px] text-muted-foreground">
+                              +{(pos.tokens || []).length - 4} more
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="font-mono text-xs text-muted-foreground">
+                          Protocol-level only
+                        </span>
+                      )}
+                    </div>
 
                     <span className="font-mono text-sm text-foreground text-right font-medium">
                       {formatCurrency(Number(pos.total_value) || 0)}
