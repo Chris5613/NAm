@@ -1,4 +1,4 @@
-import { coinGeckoApi, finnhubApi, ebayApi, moralisDefiApi, jupiterPriceApi, solanaApi, bitcoinApi } from "./external-apis";
+import { coinGeckoApi, finnhubApi, jupiterPriceApi, solanaApi, bitcoinApi } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
 
 const createId = () => {
@@ -528,15 +528,6 @@ if (wallet.chain === "solana") {
       return toResponse({ total_usd: 0, tokens: [] });
     }
   },
-getDefiPositions: async (address) => {
-  try {
-    const data = await moralisDefiApi.getPositions(address);
-    return toResponse(data);
-  } catch (error) {
-    console.warn(`DeFi fetch failed for ${address}:`, error);
-    return toResponse({ positions: [] });
-  }
-},
 };
 
 export const tokenPrefsApi = {
@@ -695,14 +686,6 @@ export const walletSyncApi = {
         balances[w.id] = res.data;
       } catch { /* silent */ }
     }
-    const solWallets = wallets.filter((w) => w.chain === 'solana');
-    const allDefi = [];
-    for (const w of solWallets) {
-      try {
-        const res = await walletsApi.getDefiPositions(w.address);
-        if (Array.isArray(res.data?.positions)) allDefi.push(...res.data.positions);
-      } catch { /* silent */ }
-    }
 
     const chainBreakdown = {};
     const tokensByChain = {};
@@ -738,33 +721,6 @@ export const walletSyncApi = {
         usd_value: v,
       });
     });
-const defiTotal = allDefi.reduce((s, p) => s + (p.total_value || 0), 0);
-
-if (defiTotal > 0) {
-  chainBreakdown.solana = (chainBreakdown.solana || 0) + defiTotal;
-}
-
-if (allDefi.length > 0) {
-  if (!tokensByChain.solana) tokensByChain.solana = [];
-
-  allDefi.forEach((p) => {
-    const value = Number(p.total_value) || 0;
-    if (value < 0.01) return;
-
-    tokensByChain.solana.push({
-      symbol: p.platform || "DeFi",
-      name: p.label ? `${p.platform} - ${p.label}` : p.platform || "DeFi Position",
-      icon_url: "",
-      amount: 1,
-      price: value,
-      usd_value: value,
-      category: "defi",
-      protocol: p.platform || p.platform_id || "Unknown",
-      tokens: p.tokens || [],
-      apy: p.apy || 0,
-    });
-  });
-}
 
     const total = Object.values(chainBreakdown).reduce((s, v) => s + v, 0);
     const chains = Object.entries(chainBreakdown)
