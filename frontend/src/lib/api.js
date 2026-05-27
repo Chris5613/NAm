@@ -1,4 +1,4 @@
-import { coinGeckoApi, finnhubApi, moralisDefiApi, jupiterPriceApi, solanaApi, bitcoinApi } from "./external-apis";
+import { coinGeckoApi, finnhubApi, ebayApi, moralisDefiApi, jupiterPriceApi, solanaApi, bitcoinApi } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
 
 const createId = () => {
@@ -44,6 +44,122 @@ export const cryptoCacheApi = {
     const next = { ...current, ...body, updated_at: new Date().toISOString() };
     storage.setCryptoCache(next);
     return toResponse(next);
+  },
+};
+
+export const phonesApi = {
+  list: async () => {
+    const phones = normalizeItems(storage.getPhones());
+    const totalValue = phones.reduce((sum, phone) => sum + (phone.market_value || 0), 0);
+    return toResponse({ phones, total_value: totalValue, count: phones.length });
+  },
+
+  create: async (data) => {
+    const phone = normalizeId({ ...data });
+    const all = normalizeItems(storage.getPhones());
+    storage.setPhones([...all, phone]);
+    return toResponse(phone);
+  },
+
+  update: async (id, data) => {
+    const all = normalizeItems(storage.getPhones());
+    const updated = all.map((item) =>
+      item.id === id ? normalizeId({ ...item, ...data }) : item
+    );
+    storage.setPhones(updated);
+    return toResponse(updated.find((item) => item.id === id) || null);
+  },
+
+  delete: async (id) => {
+    const all = normalizeItems(storage.getPhones());
+    const remaining = all.filter((item) => item.id !== id);
+    storage.setPhones(remaining);
+    return toResponse({ id });
+  },
+
+  tags: async () => {
+    const phones = normalizeItems(storage.getPhones());
+    const seen = new Set();
+    const tags = [];
+
+    phones.forEach((phone) => {
+      (phone.tags || []).forEach((tag) => {
+        const normalizedTag = tag.trim();
+        if (!normalizedTag) return;
+
+        const lower = normalizedTag.toLowerCase();
+        if (!seen.has(lower)) {
+          seen.add(lower);
+          tags.push(normalizedTag);
+        }
+      });
+    });
+
+    return toResponse(tags.sort((a, b) => a.localeCompare(b)));
+  },
+
+  refreshPrice: async (id) => {
+    const all = normalizeItems(storage.getPhones());
+    const phone = all.find((item) => item.id === id);
+    if (!phone) throw new Error("Phone not found");
+
+    const price = await ebayApi.getAveragePrice(phone.model);
+
+    const updated = all.map((item) =>
+      item.id === id
+        ? normalizeId({
+            ...item,
+            market_value: price,
+            market_value_source: "ebay",
+          })
+        : item
+    );
+
+    storage.setPhones(updated);
+    return toResponse(updated.find((item) => item.id === id));
+  },
+
+  refreshAllPrices: async () => {
+    const all = normalizeItems(storage.getPhones());
+
+    let updated = 0;
+    let failed = 0;
+    let skipped = 0;
+    const refreshed = [];
+
+    for (const phone of all) {
+      if (phone.market_value_source === "manual" && phone.market_value > 0) {
+        skipped += 1;
+        refreshed.push(phone);
+        continue;
+      }
+
+      try {
+        const price = await ebayApi.getAveragePrice(phone.model);
+
+        if (price > 0) {
+          updated += 1;
+          refreshed.push(
+            normalizeId({
+              ...phone,
+              market_value: price,
+              market_value_source: "ebay",
+            })
+          );
+        } else {
+          failed += 1;
+          refreshed.push(phone);
+        }
+      } catch {
+        failed += 1;
+        refreshed.push(phone);
+      }
+
+      await new Promise((r) => setTimeout(r, 350));
+    }
+
+    storage.setPhones(refreshed);
+    return toResponse({ updated, failed, skipped, total: all.length });
   },
 };
 
