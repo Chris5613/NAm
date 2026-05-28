@@ -89,6 +89,8 @@ const [trxPrice, setTrxPrice] = useState(0);
 
   const [configOpen, setConfigOpen] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
+  const [balanceInput, setBalanceInput] = useState("");
+const [updatingBalance, setUpdatingBalance] = useState(false);
 
   const [tickKey, setTickKey] = useState(0);
 
@@ -116,6 +118,16 @@ const [trxPrice, setTrxPrice] = useState(0);
 
     return () => clearInterval(tickRef.current);
   }, []);
+
+  useEffect(() => {
+  if (!updateOpen) return;
+
+  setBalanceInput(
+    config?.baseline_trx != null
+      ? String(config.baseline_trx)
+      : ""
+  );
+}, [updateOpen, config?.baseline_trx]);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,6 +168,48 @@ if (!cancelled) setTrxPrice(p);
       );
     };
   }, []);
+
+  const handleBalanceUpdate = async () => {
+  const newBalance = Number(balanceInput);
+
+  if (!Number.isFinite(newBalance) || newBalance < 0) {
+    toast.error("Enter a valid TRX balance");
+    return;
+  }
+
+  const oldBalance = Number(config?.baseline_trx) || 0;
+
+  let action = "no_change";
+
+  if (newBalance > oldBalance) {
+    action = "earning";
+  } else if (newBalance < oldBalance) {
+    action = "withdrawal";
+  }
+
+  setUpdatingBalance(true);
+
+  try {
+    await applyRollerCoinBalanceUpdate({
+      newBalance,
+      action,
+      trxPriceOverride: trxPrice > 0 ? trxPrice : null,
+      label: "RollerCoin",
+    });
+
+    const nextConfig = storage.getRollerCoinConfig();
+    setConfig(nextConfig);
+
+    window.dispatchEvent(new CustomEvent("crypto-holding-updated"));
+
+    setUpdateOpen(false);
+    toast.success("RollerCoin balance updated");
+  } catch (err) {
+    toast.error(err?.message || "Failed to update RollerCoin balance");
+  } finally {
+    setUpdatingBalance(false);
+  }
+};
 
   const handleManualExtensionSync =
     async () => {
@@ -214,7 +268,67 @@ const baselineUsd =
   (Number(trxPrice) || 0);
 
   return (
+
+    
     <>
+    <Dialog open={updateOpen} onOpenChange={setUpdateOpen}>
+  <DialogContent className="bg-card border-border sm:max-w-md">
+    <DialogHeader>
+      <DialogTitle>Update RollerCoin Balance</DialogTitle>
+      <DialogDescription>
+        Enter your current total RollerCoin TRX balance.
+      </DialogDescription>
+    </DialogHeader>
+
+    <div className="space-y-3">
+      <div className="space-y-2">
+        <Label>Current TRX balance</Label>
+
+        <Input
+          type="number"
+          step="any"
+          value={balanceInput}
+          onChange={(e) => setBalanceInput(e.target.value)}
+          placeholder="Example: 123.4567"
+          className="bg-background border-border font-mono"
+        />
+      </div>
+
+      <div className="rounded-md border border-border/40 bg-secondary/20 p-3 text-xs text-muted-foreground space-y-1">
+        <p>
+          Previous balance:{" "}
+          <span className="font-mono text-foreground">
+            {formatTrx(config?.baseline_trx || 0)}
+          </span>
+        </p>
+
+        <p>
+          New balance:{" "}
+          <span className="font-mono text-foreground">
+            {formatTrx(balanceInput || 0)}
+          </span>
+        </p>
+      </div>
+    </div>
+
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() => setUpdateOpen(false)}
+        disabled={updatingBalance}
+      >
+        Cancel
+      </Button>
+
+      <Button
+        onClick={handleBalanceUpdate}
+        disabled={updatingBalance}
+      >
+        {updatingBalance ? "Updating..." : "Save update"}
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
       <Card className="border-border/40 bg-card">
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-3 flex-wrap">
