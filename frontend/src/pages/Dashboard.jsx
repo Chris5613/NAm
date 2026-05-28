@@ -197,7 +197,7 @@ function getMonthlyNetWorthHistory(currentNetWorth) {
     { monthKey: "2026-01", month: "Jan 2026", value: 14200 },
     { monthKey: "2026-02", month: "Feb 2026", value: 15300 },
     { monthKey: "2026-03", month: "Mar 2026", value: 16400 },
-    { monthKey: "2026-04", month: "Apr 2026", value: 17500 },
+    { monthKey: "2026-04", month: "Apr 2026", value: 17244 },
   ];
 
   let saved = null;
