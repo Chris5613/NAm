@@ -98,17 +98,33 @@ export default function InvestmentOverview() {
   };
 
   // Totals
-  const totals = projects.reduce(
-    (acc, p) => ({
-      invested: acc.invested + (p.invested || 0),
-      earned: acc.earned + (p.earned || 0),
-      per_day: acc.per_day + (p.per_day || 0),
-      per_week: acc.per_week + (p.per_week || 0),
-      per_month: acc.per_month + (p.per_month || 0),
-      per_year: acc.per_year + (p.per_year || 0),
-    }),
-    { invested: 0, earned: 0, per_day: 0, per_week: 0, per_month: 0, per_year: 0 }
-  );
+const totals = projects.reduce(
+  (acc, p) => {
+    const tableDaily = Number(dailyReturns?.[p.name]);
+
+    const daily =
+      Number.isFinite(tableDaily) && tableDaily > 0
+        ? tableDaily
+        : Number(p.per_day) || 0;
+
+    return {
+      invested: acc.invested + (Number(p.invested) || 0),
+      earned: acc.earned + (Number(p.earned) || 0),
+      per_day: acc.per_day + daily,
+      per_week: acc.per_week + daily * 7,
+      per_month: acc.per_month + daily * 30,
+      per_year: acc.per_year + daily * 365,
+    };
+  },
+  {
+    invested: 0,
+    earned: 0,
+    per_day: 0,
+    per_week: 0,
+    per_month: 0,
+    per_year: 0,
+  }
+);
   const totalPnl = totals.earned - totals.invested;
 
 function getRoiDays(project) {
