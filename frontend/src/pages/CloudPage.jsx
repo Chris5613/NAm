@@ -154,8 +154,8 @@ export default function CloudPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
-      <Card className="w-full max-w-4xl border-border/40 bg-card shadow-xl">
+    <div className="min-h-screen bg-background text-foreground p-6">
+      <Card className="w-full min-h-[calc(100vh-3rem)] border-border/40 bg-card shadow-xl">
         <CardContent className="p-5">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -256,9 +256,17 @@ export default function CloudPage() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[360px] overflow-y-auto pr-2">
-                {bets.map((bet) => {
-                  const won = Number(bet.amount) >= 0;
+              <div className="space-y-3 max-h-[calc(100vh-420px)] overflow-y-auto pr-2">
+{[...bets]
+  .sort((a, b) => {
+    const dateA = new Date(a.date || a.created_at || 0).getTime();
+    const dateB = new Date(b.date || b.created_at || 0).getTime();
+
+    if (dateB !== dateA) return dateB - dateA;
+
+    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+  })
+  .map((bet) => {
 
                   return (
                     <div
