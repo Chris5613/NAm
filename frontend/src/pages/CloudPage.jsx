@@ -266,9 +266,10 @@ export default function CloudPage() {
 
     return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
   })
-  .map((bet) => {
+.map((bet) => {
+  const won = Number(bet.amount) >= 0;
 
-                  return (
+  return (
                     <div
                       key={bet.id}
                       className={`rounded-lg border p-4 bg-secondary/40 ${
