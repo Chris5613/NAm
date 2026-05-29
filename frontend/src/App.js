@@ -9,6 +9,7 @@ import GoMiningPage from "@/pages/GoMiningPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 import PhoneList from "@/pages/PhoneList";
 import UnityDevicesPage from "@/pages/UnityDevicesPage";
+import CloudPage from "@/pages/CloudPage";
 import { Toaster } from "@/components/ui/sonner";
 import { netWorthApi } from "@/lib/api";
 import { localStorage as storage } from "@/lib/localStorage";
