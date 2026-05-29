@@ -55,9 +55,29 @@ function formatRecord(wins, losses) {
   return `${wins}W · ${losses}L`;
 }
 
+function getBetMonthKey(bet) {
+  const date = bet.date || bet.created_at;
+  if (!date) return "";
+
+  return date.slice(0, 7); // YYYY-MM
+}
+
+function formatMonthLabel(monthKey) {
+  if (!monthKey) return "All Months";
+
+  const [year, month] = monthKey.split("-");
+  const date = new Date(Number(year), Number(month) - 1, 1);
+
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export default function CloudPage() {
   const [bets, setBets] = useState(() => getSavedBets());
   const [addOpen, setAddOpen] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState("all");
 
   const [form, setForm] = useState({
     title: "",
@@ -68,13 +88,37 @@ export default function CloudPage() {
     note: "",
   });
 
+  const monthOptions = useMemo(() => {
+  const months = [...new Set(bets.map(getBetMonthKey).filter(Boolean))];
+
+  return months.sort((a, b) => b.localeCompare(a));
+}, [bets]);
+
+const filteredBets = useMemo(() => {
+  const sorted = [...bets].sort((a, b) => {
+    const dateA = new Date(a.date || a.created_at || 0).getTime();
+    const dateB = new Date(b.date || b.created_at || 0).getTime();
+
+    if (dateB !== dateA) return dateB - dateA;
+
+    return (
+      new Date(b.created_at || 0).getTime() -
+      new Date(a.created_at || 0).getTime()
+    );
+  });
+
+  if (selectedMonth === "all") return sorted;
+
+  return sorted.filter((bet) => getBetMonthKey(bet) === selectedMonth);
+}, [bets, selectedMonth]);
+
   const stats = useMemo(() => {
     let wins = 0;
     let losses = 0;
     let wagered = 0;
     let netPnl = 0;
 
-    bets.forEach((bet) => {
+    filteredBets.forEach((bet) => {
       const amount = Number(bet.amount) || 0;
       wagered += Math.abs(amount);
 
@@ -97,7 +141,7 @@ export default function CloudPage() {
       netPnl,
       winRate,
     };
-  }, [bets]);
+  }, [filteredBets]);
 
   const handleAddBet = () => {
     const amountRaw = Number(form.amount);
@@ -154,9 +198,9 @@ export default function CloudPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground p-6">
-      <Card className="w-full min-h-[calc(100vh-3rem)] border-border/40 bg-card shadow-xl">
-        <CardContent className="p-5">
+<div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
+  <Card className="w-full min-h-[calc(100vh-4rem)] rounded-none border-0 bg-card shadow-none">
+        <CardContent className="p-8">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full bg-violet-600 flex items-center justify-center">
@@ -165,9 +209,6 @@ export default function CloudPage() {
 
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Cloud</h1>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Manual bet tracker
-                </p>
               </div>
             </div>
 
@@ -192,9 +233,25 @@ export default function CloudPage() {
           </div>
 
           <div className="mt-8">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-3">
-              This Month
-            </p>
+<div className="flex items-center justify-between gap-3 mb-3">
+  <p className="text-xs uppercase tracking-wider text-muted-foreground">
+    {selectedMonth === "all" ? "All Months" : formatMonthLabel(selectedMonth)}
+  </p>
+
+  <select
+    value={selectedMonth}
+    onChange={(e) => setSelectedMonth(e.target.value)}
+    className="h-9 rounded-md border border-border/40 bg-background px-3 text-xs font-mono text-foreground outline-none"
+  >
+    <option value="all">All Months</option>
+
+    {monthOptions.map((monthKey) => (
+      <option key={monthKey} value={monthKey}>
+        {formatMonthLabel(monthKey)}
+      </option>
+    ))}
+  </select>
+</div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
@@ -249,24 +306,15 @@ export default function CloudPage() {
               Bets
             </p>
 
-            {bets.length === 0 ? (
+            {filteredBets.length === 0 ? (
               <div className="rounded-lg border border-border/40 bg-secondary/30 p-8 text-center">
                 <p className="text-sm text-muted-foreground">
                   No bets added yet.
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[calc(100vh-420px)] overflow-y-auto pr-2">
-{[...bets]
-  .sort((a, b) => {
-    const dateA = new Date(a.date || a.created_at || 0).getTime();
-    const dateB = new Date(b.date || b.created_at || 0).getTime();
-
-    if (dateB !== dateA) return dateB - dateA;
-
-    return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-  })
-.map((bet) => {
+              <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto pr-2">
+{filteredBets.map((bet) => {
   const won = Number(bet.amount) >= 0;
 
   return (
