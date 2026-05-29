@@ -18,11 +18,11 @@ const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
   { path: "/investments", label: "Investment Overview", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
-  { path: "/gomining", label: "GoMining", icon: Pickaxe },
+  // { path: "/gomining", label: "GoMining", icon: Pickaxe },
   { path: "/integrations", label: "Integrations", icon: Zap },
   { path: "/unity-devices", label: "Unity Devices", icon: Cable },
   { path: "/tello-dashboard", label: "Tello Dashboard", icon: Smartphone },
-  { path: "/rollercoin-calculator", label: "Rollercoin", icon: Squirrel },
+  // { path: "/rollercoin-calculator", label: "Rollercoin", icon: Squirrel },
   { path: "/cloud", label: "Cloud", icon: Volleyball },
 ];
 
