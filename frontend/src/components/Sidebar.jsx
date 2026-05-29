@@ -4,7 +4,7 @@ import {
   DollarSign,
   BarChart3,
   Bitcoin,
-  Baseball,
+  Volleyball,
   Pickaxe,
   Zap,
   Smartphone,
@@ -23,7 +23,7 @@ const NAV_ITEMS = [
   { path: "/unity-devices", label: "Unity Devices", icon: Cable },
   { path: "/tello-dashboard", label: "Tello Dashboard", icon: Smartphone },
   { path: "/rollercoin-calculator", label: "Rollercoin", icon: Squirrel },
-  { path: "/cloud", label: "Cloud", icon: Baseball },
+  { path: "/cloud", label: "Cloud", icon: Volleyball },
 ];
 
 
