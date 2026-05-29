@@ -140,6 +140,7 @@ function App() {
               <Route path="/unity-devices" element={<UnityDevicesPage />} />
               <Route path="/tello-dashboard" element={<TelloDashboard />} />
               <Route path="/rollercoin-calculator" element={<RollercoinCalculator />} />
+              <Route path="/cloud" element={<CloudPage />} />
             </Routes>
           </div>
         </main>
