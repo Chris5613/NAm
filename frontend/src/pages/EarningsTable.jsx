@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const DEFAULT_RETURNS = {
   Nosana: 1.36,
@@ -12,12 +12,17 @@ function formatUsd(value) {
   return `$${n.toFixed(2)}`;
 }
 
-function EarningsTable() {
+function EarningsTable({ excludedProjectNames = [] }) {
   const [dailyReturns, setDailyReturns] = useState(() => {
     const saved = localStorage.getItem("projectDailyReturns");
     return saved ? JSON.parse(saved) : DEFAULT_RETURNS;
   });
 
+  const visibleReturns = useMemo(() => {
+    return Object.entries(dailyReturns)
+      .filter(([project]) => !excludedProjectNames.includes(project))
+      .sort((a, b) => Number(b[1]) - Number(a[1]));
+  }, [dailyReturns, excludedProjectNames]);
 
   const updateDaily = (project, value) => {
     setDailyReturns((prev) => ({
@@ -27,10 +32,13 @@ function EarningsTable() {
   };
 
   useEffect(() => {
-  localStorage.setItem("projectDailyReturns", JSON.stringify(dailyReturns));
+    localStorage.setItem("projectDailyReturns", JSON.stringify(dailyReturns));
+    window.dispatchEvent(new Event("project-daily-returns-updated"));
+  }, [dailyReturns]);
 
-  window.dispatchEvent(new Event("project-daily-returns-updated"));
-}, [dailyReturns]);
+  if (visibleReturns.length === 0) {
+    return null;
+  }
 
   return (
     <div className="mt-6 rounded-xl border border-white/10 bg-[#111] p-5">
@@ -49,40 +57,38 @@ function EarningsTable() {
           </thead>
 
           <tbody>
-            {Object.entries(dailyReturns)
-              .sort((a, b) => Number(b[1]) - Number(a[1]))
-              .map(([project, daily]) => {
-                const dailyValue = Number(daily) || 0;
-                const weekly = dailyValue * 7;
-                const monthly = dailyValue * 30;
-                const yearly = dailyValue * 365;
+            {visibleReturns.map(([project, daily]) => {
+              const dailyValue = Number(daily) || 0;
+              const weekly = dailyValue * 7;
+              const monthly = dailyValue * 30;
+              const yearly = dailyValue * 365;
 
-                return (
-                  <tr key={project} className="h-[72px] border-b border-white/5">
-                    <td className="py-3 font-medium">{project}</td>
+              return (
+                <tr key={project} className="h-[72px] border-b border-white/5">
+                  <td className="py-3 font-medium">{project}</td>
 
-                    <td className="py-3">
-                      <div className="relative max-w-[140px]">
-                        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
-                          $
-                        </span>
+                  <td className="py-3">
+                    <div className="relative max-w-[140px]">
+                      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">
+                        $
+                      </span>
 
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={daily}
-                          onChange={(e) => updateDaily(project, e.target.value)}
-                          className="w-full rounded-md border-0 bg-[#111] py-2 pl-7 pr-3 text-sm text-white shadow-none outline-none ring-0 focus:border-0 focus:bg-[#151515] focus:outline-none focus:ring-0"
-                        />
-                      </div>
-                    </td>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={daily}
+                        onChange={(e) => updateDaily(project, e.target.value)}
+                        className="w-full rounded-md border-0 bg-[#111] py-2 pl-7 pr-3 text-sm text-white shadow-none outline-none ring-0 focus:border-0 focus:bg-[#151515] focus:outline-none focus:ring-0"
+                      />
+                    </div>
+                  </td>
 
-                    <td className="py-3 font-mono">{formatUsd(weekly)}</td>
-                    <td className="py-3 font-mono">{formatUsd(monthly)}</td>
-                    <td className="py-3 font-mono">{formatUsd(yearly)}</td>
-                  </tr>
-                );
-              })}
+                  <td className="py-3 font-mono">{formatUsd(weekly)}</td>
+                  <td className="py-3 font-mono">{formatUsd(monthly)}</td>
+                  <td className="py-3 font-mono">{formatUsd(yearly)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
