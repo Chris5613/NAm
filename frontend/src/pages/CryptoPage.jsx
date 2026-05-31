@@ -24,14 +24,14 @@ const MANUAL_DEFI_POSITIONS = [
     type: "Lending",
     logo: "https://raw.githubusercontent.com/jup-ag/platform-list/main/img/flexlend.webp",
     url: "https://lulo.fi",
-    total_value: 223.56,
+    total_value: 1018.47,
     tokens: [
       {
         symbol: "USDC",
         name: "USD Coin",
-        amount: 223.56,
-        price: 0.99969,
-        value: 223.56,
+        amount: 1018.47,
+        price: 1,
+        value: 1018.47,
         kind: "supplied",
       },
     ],
