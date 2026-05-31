@@ -15,29 +15,24 @@ const DAILY_CRYPTO_BASELINE_KEY = "daily_crypto_net_worth_baseline_pst";
 const CRYPTO_LIVE_HISTORY_KEY = "crypto_live_history";
 const WALLET_BALANCE_CACHE_KEY = "crypto_wallet_balance_cache";
 const DEFI_CACHE_KEY = "crypto_defi_cache";
+const MANUAL_DEFI_KEY = "manual_defi_positions";
 
-const MANUAL_DEFI_POSITIONS = [
-  {
-    platform_id: "manual-lulo-usdc",
-    platform: "Lulo",
-    label: "DeFi",
-    type: "Lending",
-    logo: "https://raw.githubusercontent.com/jup-ag/platform-list/main/img/flexlend.webp",
-    url: "https://lulo.fi",
-    total_value: 1018.47,
-    tokens: [
-      {
-        symbol: "USDC",
-        name: "USD Coin",
-        amount: 1018.47,
-        price: 1,
-        value: 1018.47,
-        kind: "supplied",
-      },
-    ],
-    manual: true,
-  },
-];
+function getSavedManualDefiPositions() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MANUAL_DEFI_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveManualDefiPositions(positions) {
+  try {
+    localStorage.setItem(MANUAL_DEFI_KEY, JSON.stringify(positions || []));
+  } catch {
+    // localStorage unavailable
+  }
+}
 
 function getWalletBalanceCache() {
   try {
@@ -296,19 +291,32 @@ export default function CryptoPage() {
   const [wallets, setWallets] = useState([]);
   const [balances, setBalances] = useState({});
   const [defiPositions, setDefiPositions] = useState(() => getSavedDefiPositions());
+  const [manualDefiPositions, setManualDefiPositions] = useState(() =>
+    getSavedManualDefiPositions()
+  );
   const [defiLoading] = useState(false);
   const [tokenPrefs, setTokenPrefs] = useState({});
   const [customTokens, setCustomTokens] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [manualDefiOpen, setManualDefiOpen] = useState(false);
+  const [manualDefiForm, setManualDefiForm] = useState({
+    platform: "Lulo",
+    type: "Lending",
+    symbol: "USDC",
+    amount: "",
+    price: "1",
+    url: "https://lulo.fi",
+    logo: "https://raw.githubusercontent.com/jup-ag/platform-list/main/img/flexlend.webp",
+  });
   const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());
   const [activeChain, setActiveChain] = useState(null);
   const [logoEditToken, setLogoEditToken] = useState(null);
 
 
   const lastSyncedRef = useRef(null);
-  const allDefiPositions = [...defiPositions, ...MANUAL_DEFI_POSITIONS];
+  const allDefiPositions = [...defiPositions, ...manualDefiPositions];
 
   const fetchWallets = useCallback(async () => {
     try {
@@ -365,6 +373,99 @@ useEffect(() => {
   setBalances(cachedBalances);
 }, [wallets]);
 
+  const openManualDefiModal = () => {
+    const existing =
+      manualDefiPositions.find((p) => p.platform?.toLowerCase() === "lulo") ||
+      manualDefiPositions[0];
+
+    if (existing) {
+      const token = existing.tokens?.[0] || {};
+
+      setManualDefiForm({
+        platform: existing.platform || "Lulo",
+        type: existing.type || "Lending",
+        symbol: token.symbol || "USDC",
+        amount: token.amount != null ? String(token.amount) : "",
+        price: token.price != null ? String(token.price) : "1",
+        url: existing.url || "https://lulo.fi",
+        logo:
+          existing.logo ||
+          "https://raw.githubusercontent.com/jup-ag/platform-list/main/img/flexlend.webp",
+      });
+    }
+
+    setManualDefiOpen(true);
+  };
+
+  const handleSaveManualDefi = () => {
+    const amount = Number(manualDefiForm.amount) || 0;
+    const price = Number(manualDefiForm.price) || 0;
+    const value = amount * price;
+    const platform = manualDefiForm.platform.trim();
+    const symbol = manualDefiForm.symbol.trim().toUpperCase();
+
+    if (!platform) {
+      toast.error("Enter a protocol name");
+      return;
+    }
+
+    if (!symbol) {
+      toast.error("Enter a token symbol");
+      return;
+    }
+
+    if (amount <= 0) {
+      toast.error("Enter a valid amount");
+      return;
+    }
+
+    if (price <= 0) {
+      toast.error("Enter a valid price");
+      return;
+    }
+
+    const platformId = `manual-${platform.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+
+    const nextPosition = {
+      platform_id: platformId,
+      platform,
+      label: "DeFi",
+      type: manualDefiForm.type || "Manual",
+      logo: manualDefiForm.logo || "",
+      url: manualDefiForm.url || "",
+      total_value: value,
+      tokens: [
+        {
+          symbol,
+          name: symbol,
+          amount,
+          price,
+          value,
+          kind: "supplied",
+        },
+      ],
+      manual: true,
+    };
+
+    const next = [
+      ...manualDefiPositions.filter((p) => p.platform_id !== platformId),
+      nextPosition,
+    ];
+
+    setManualDefiPositions(next);
+    saveManualDefiPositions(next);
+    setManualDefiOpen(false);
+    toast.success(`${platform} updated`);
+  };
+
+  const handleDeleteManualDefi = (platformId) => {
+    const next = manualDefiPositions.filter((p) => p.platform_id !== platformId);
+
+    setManualDefiPositions(next);
+    saveManualDefiPositions(next);
+    toast.success("Manual DeFi removed");
+  };
+
   const refreshAll = async () => {
     setRefreshing(true);
 
@@ -402,7 +503,7 @@ await sleep(2000);
       0
     );
 
-const manualDefiTotal = MANUAL_DEFI_POSITIONS.reduce(
+const manualDefiTotal = manualDefiPositions.reduce(
   (s, p) => s + (Number(p.total_value) || 0),
   0
 );
@@ -758,6 +859,7 @@ useEffect(() => {
     customTokens,
     tokenPrefs,
     defiPositions,
+    manualDefiPositions,
     hiddenSymbols,
     sortedChains,
   ]);
@@ -792,6 +894,17 @@ useEffect(() => {
               Refresh
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openManualDefiModal}
+            className="border-border/40 hover:bg-secondary"
+            data-testid="manual-defi-btn"
+          >
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
+            Manual DeFi
+          </Button>
 
           <Button
             variant="outline"
@@ -1246,6 +1359,175 @@ useEffect(() => {
         customTokens={customTokens}
         onUpdate={fetchWallets}
       />
+
+      <Dialog open={manualDefiOpen} onOpenChange={setManualDefiOpen}>
+        <DialogContent className="bg-card border-border sm:max-w-md" data-testid="manual-defi-modal">
+          <DialogHeader>
+            <DialogTitle>Manual DeFi Position</DialogTitle>
+            <DialogDescription>
+              Add or update a manual DeFi position like Lulo.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            <div className="space-y-2">
+              <Label>Protocol</Label>
+              <Input
+                value={manualDefiForm.platform}
+                onChange={(e) =>
+                  setManualDefiForm((prev) => ({
+                    ...prev,
+                    platform: e.target.value,
+                  }))
+                }
+                placeholder="Lulo"
+                className="bg-background border-border"
+                data-testid="manual-defi-platform"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Input
+                value={manualDefiForm.type}
+                onChange={(e) =>
+                  setManualDefiForm((prev) => ({
+                    ...prev,
+                    type: e.target.value,
+                  }))
+                }
+                placeholder="Lending"
+                className="bg-background border-border"
+                data-testid="manual-defi-type"
+              />
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="space-y-2">
+                <Label>Token</Label>
+                <Input
+                  value={manualDefiForm.symbol}
+                  onChange={(e) =>
+                    setManualDefiForm((prev) => ({
+                      ...prev,
+                      symbol: e.target.value,
+                    }))
+                  }
+                  placeholder="USDC"
+                  className="bg-background border-border font-mono"
+                  data-testid="manual-defi-symbol"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Amount</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={manualDefiForm.amount}
+                  onChange={(e) =>
+                    setManualDefiForm((prev) => ({
+                      ...prev,
+                      amount: e.target.value,
+                    }))
+                  }
+                  placeholder="1018.47"
+                  className="bg-background border-border font-mono"
+                  data-testid="manual-defi-amount"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Price</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  value={manualDefiForm.price}
+                  onChange={(e) =>
+                    setManualDefiForm((prev) => ({
+                      ...prev,
+                      price: e.target.value,
+                    }))
+                  }
+                  placeholder="1"
+                  className="bg-background border-border font-mono"
+                  data-testid="manual-defi-price"
+                />
+              </div>
+            </div>
+
+            <div className="rounded-md border border-border/40 bg-secondary/20 p-3">
+              <p className="text-xs text-muted-foreground">Value</p>
+              <p className="font-mono text-lg font-medium text-foreground">
+                {formatCurrency(
+                  (Number(manualDefiForm.amount) || 0) *
+                    (Number(manualDefiForm.price) || 0)
+                )}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label>URL</Label>
+              <Input
+                value={manualDefiForm.url}
+                onChange={(e) =>
+                  setManualDefiForm((prev) => ({
+                    ...prev,
+                    url: e.target.value,
+                  }))
+                }
+                placeholder="https://lulo.fi"
+                className="bg-background border-border"
+                data-testid="manual-defi-url"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Logo URL</Label>
+              <Input
+                value={manualDefiForm.logo}
+                onChange={(e) =>
+                  setManualDefiForm((prev) => ({
+                    ...prev,
+                    logo: e.target.value,
+                  }))
+                }
+                placeholder="https://example.com/logo.png"
+                className="bg-background border-border text-sm"
+                data-testid="manual-defi-logo"
+              />
+            </div>
+
+            <div className="flex gap-2">
+              {manualDefiPositions.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    handleDeleteManualDefi(
+                      `manual-${manualDefiForm.platform
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]+/g, "-")
+                        .replace(/^-|-$/g, "")}`
+                    )
+                  }
+                  className="border-border/40 text-rose-400 hover:text-rose-300"
+                >
+                  Delete
+                </Button>
+              )}
+
+              <Button
+                onClick={handleSaveManualDefi}
+                className="flex-1 bg-white text-black hover:bg-neutral-200"
+                data-testid="save-manual-defi"
+              >
+                Save Manual DeFi
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <LogoEditDialog
         symbol={logoEditToken}
