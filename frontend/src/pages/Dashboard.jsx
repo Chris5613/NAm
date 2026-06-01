@@ -250,11 +250,10 @@ function calculateNetWorth(assets = [], cryptoTotal = 0) {
   };
 
   assets.forEach((asset) => {
-    const value =
-      asset.manual_value != null
-        ? Number(asset.manual_value) || 0
-        : (Number(asset.quantity) || 0) * (Number(asset.current_price) || 0);
-
+const value =
+  asset.category !== "stocks" && asset.manual_value != null
+    ? Number(asset.manual_value) || 0
+    : (Number(asset.quantity) || 0) * (Number(asset.current_price) || 0);
     if (asset.category === "debts") {
       breakdown.debts += value;
     } else if (breakdown[asset.category] !== undefined) {
