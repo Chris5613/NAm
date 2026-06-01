@@ -402,19 +402,63 @@ export default function Dashboard() {
     ].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
   }, [assets, netWorth]);
 
-  const handleRefreshPrices = async () => {
-    setRefreshing(true);
+const handleRefreshPrices = async () => {
+  setRefreshing(true);
 
-    try {
-      await pricesApi.refreshAll?.();
-      await fetchData();
-      toast.success("Refreshed");
-    } catch {
-      toast.error("Failed to refresh");
-    } finally {
-      setRefreshing(false);
-    }
-  };
+  try {
+    const currentAssets = storage.getAssets?.() || [];
+    let updatedCount = 0;
+
+    const nextAssets = await Promise.all(
+      currentAssets.map(async (asset) => {
+        if (asset.category !== "stocks" || !asset.symbol) {
+          return asset;
+        }
+
+        try {
+          const quote = await pricesApi.getStock(asset.symbol);
+          const price = Number(quote?.c || quote?.price || quote?.current_price || 0);
+
+          if (price > 0) {
+            updatedCount += 1;
+
+            return {
+              ...asset,
+              current_price: price,
+              manual_value: null,
+              updated_at: new Date().toISOString(),
+            };
+          }
+
+          return asset;
+        } catch (error) {
+          console.warn(`Failed to refresh ${asset.symbol}:`, error);
+          return asset;
+        }
+      })
+    );
+
+    storage.setAssets?.(nextAssets);
+
+    const cryptoCache = storage.getCryptoCache?.() || {};
+    const cryptoTotal = Number(cryptoCache.total) || 0;
+    const calculatedNetWorth = calculateNetWorth(nextAssets, cryptoTotal);
+
+    setAssets(nextAssets);
+    setNetWorth(calculatedNetWorth);
+    setDailyNetWorthChange(getDailyNetWorthChange(calculatedNetWorth.total_net_worth));
+    setDailyCategoryChanges(getCategoryDailyChanges(calculatedNetWorth.breakdown));
+    setHistory(getMonthlyNetWorthHistory(calculatedNetWorth.total_net_worth));
+    setLastUpdated(new Date());
+
+    toast.success(`Refreshed ${updatedCount} stock price${updatedCount === 1 ? "" : "s"}`);
+  } catch (error) {
+    console.error("Failed to refresh stock prices:", error);
+    toast.error("Failed to refresh stock prices");
+  } finally {
+    setRefreshing(false);
+  }
+};
 
   if (loading) {
     return (

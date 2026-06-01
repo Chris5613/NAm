@@ -214,23 +214,26 @@ export const pricesApi = {
       }
     }
 
-    for (const asset of stockAssets) {
-      try {
-        const quote = await finnhubApi.getQuote(asset.symbol);
-        const price = quote.c || 0;
+for (const asset of stockAssets) {
+  try {
+    const quote = await finnhubApi.getQuote(asset.symbol);
+    const price = Number(quote?.c) || 0;
 
-        if (price > 0) {
-          const existing = nextAssets.find((item) => item.id === asset.id);
+    if (price > 0) {
+      const existing = nextAssets.find((item) => item.id === asset.id);
 
-          if (existing) {
-            existing.current_price = price;
-            updatedCount += 1;
-          }
-        }
-      } catch (error) {
-        console.warn(`Failed to refresh price for ${asset.symbol}:`, error);
+      if (existing) {
+        existing.current_price = price;
+        existing.manual_value = null;
+        existing.price_source = "finnhub";
+        existing.price_updated_at = new Date().toISOString();
+        updatedCount += 1;
       }
     }
+  } catch (error) {
+    console.warn(`Failed to refresh price for ${asset.symbol}:`, error);
+  }
+}
 
     storage.setAssets(normalizeItems(nextAssets));
     return { updatedCount, totalAssets: assets.length };
