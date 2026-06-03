@@ -566,7 +566,7 @@ export default function InvestmentOverview() {
         />
       )}
 
-      <EarningsTable excludedProjectIds={inactiveProjects.map((p) => p.id)} />
+      <EarningsTable projects={activeProjects} />
     </div>
   );
 }
