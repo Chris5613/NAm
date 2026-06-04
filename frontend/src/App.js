@@ -130,7 +130,7 @@ function App() {
       <BrowserRouter>
         <Sidebar />
         <main className="pl-56 min-h-screen">
-          <div className="max-w-[1400px] mx-auto px-6 py-8">
+          <div className="w-full p-6 py-8">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/investments" element={<InvestmentOverview />} />
