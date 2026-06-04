@@ -467,7 +467,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
-                className="h-9 rounded-md border border-slate-600/60 bg-[#0A0F1D] px-3 text-xs font-mono text-white outline-none hover:bg-[#111A2E]"
+                className="h-9 rounded-md border border-border/40 bg-background px-3 text-xs font-mono text-foreground outline-none"
               >
                 <option value="all">All Months</option>
 
@@ -490,7 +490,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
               <Button
                 size="icon"
                 variant="ghost"
-                className="text-slate-300 hover:text-white hover:bg-[#111A2E]"
+                className="text-muted-foreground hover:text-foreground"
               >
                 <X className="w-5 h-5" />
               </Button>
@@ -545,7 +545,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
 
           <Card className="border-border/40 bg-secondary/20">
             <CardContent className="p-5">
-              <p className="text-sm font-semibold text-white mb-4">
+              <p className="text-sm font-semibold text-muted-foreground mb-4">
                 P/L Progression
               </p>
 
@@ -637,7 +637,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                   variant="outline"
                   size="sm"
                   onClick={() => setShowHidden((prev) => !prev)}
-                  className="border-slate-600/60 bg-[#0A0F1D] text-white hover:bg-[#111A2E]"
+                  className="border-border/40"
                 >
                   {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
                 </Button>
@@ -645,8 +645,8 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
             </div>
 
             {visibleBets.length === 0 ? (
-              <div className="rounded-lg border border-slate-600/50 bg-[#10182A] p-8 text-center">
-                <p className="text-sm text-slate-300">No visible bets.</p>
+              <div className="rounded-lg border border-border/40 bg-secondary/30 p-8 text-center">
+                <p className="text-sm text-muted-foreground">No visible bets.</p>
               </div>
             ) : (
               <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2">
@@ -656,7 +656,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                   return (
                     <div
                       key={bet.id}
-                      className={`rounded-lg border p-4 bg-secondary/40 ${ 
+                      className={`rounded-lg border p-4 bg-secondary/40 ${
                         bet.hidden ? "opacity-50" : ""
                       } ${
                         won
@@ -721,7 +721,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
 
                           <button
                             onClick={() => openEditModal(bet)}
-                            className="text-slate-300 hover:text-white p-1"
+                            className="text-muted-foreground hover:text-foreground p-1"
                             title="Edit bet"
                           >
                             <Pencil className="w-4 h-4" />
@@ -729,7 +729,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
 
                           <button
                             onClick={() => toggleHideBet(bet.id)}
-                            className="text-slate-300 hover:text-white p-1"
+                            className="text-muted-foreground hover:text-foreground p-1"
                             title={bet.hidden ? "Unhide bet" : "Hide bet"}
                           >
                             {bet.hidden ? (
@@ -741,7 +741,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
 
                           <button
                             onClick={() => handleDeleteBet(bet.id)}
-                            className="text-slate-300 hover:text-rose-300 p-1"
+                            className="text-muted-foreground hover:text-rose-400 p-1"
                           >
                             <Trash2 className="w-4 h-4" />
                           </button>
@@ -760,13 +760,13 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
         open={addOpen}
         onOpenChange={(open) => (open ? setAddOpen(true) : closeModal())}
       >
-        <DialogContent className="bg-[#10182A] border-slate-600/60 sm:max-w-md">
+        <DialogContent className="bg-card border-border sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white">
+            <DialogTitle className="text-foreground">
               {isEditing ? "Edit Cloud Bet" : "Add Cloud Bet"}
             </DialogTitle>
 
-            <DialogDescription className="text-slate-300">
+            <DialogDescription className="text-muted-foreground">
               {isEditing
                 ? "Update this manual bet."
                 : "Manually enter a win or loss."}
@@ -775,7 +775,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-white">Bet title</Label>
+              <Label className="text-foreground">Bet title</Label>
 
               <Input
                 value={form.title}
@@ -786,12 +786,12 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                   }))
                 }
                 placeholder="Example: Yuta Tomida Set 2"
-                className="bg-[#0A0F1D] border-slate-600/60 text-white placeholder:text-slate-500"
+                className="bg-background border-border"
               />
             </div>
 
             <div className="space-y-2">
-              <Label className="text-white">Matchup or details</Label>
+              <Label className="text-foreground">Matchup or details</Label>
 
               <Input
                 value={form.matchup}
@@ -802,13 +802,13 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                   }))
                 }
                 placeholder="Example: Sora Fukuda vs Yuta Tomida"
-                className="bg-[#0A0F1D] border-slate-600/60 text-white placeholder:text-slate-500"
+                className="bg-background border-border"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label className="text-white">Amount</Label>
+                <Label className="text-foreground">Amount</Label>
 
                 <Input
                   type="number"
@@ -821,12 +821,12 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                     }))
                   }
                   placeholder="458.34"
-                  className="bg-[#0A0F1D] border-slate-600/60 text-white placeholder:text-slate-500 font-mono"
+                  className="bg-background border-border font-mono"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label className="text-white">Date</Label>
+                <Label className="text-foreground">Date</Label>
 
                 <Input
                   type="date"
@@ -837,13 +837,13 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                       date: e.target.value,
                     }))
                   }
-                  className="bg-[#0A0F1D] border-slate-600/60 text-white font-mono"
+                  className="bg-background border-border font-mono"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-white">Sport</Label>
+              <Label className="text-foreground">Sport</Label>
 
               <select
                 value={form.category}
@@ -853,7 +853,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                     category: e.target.value,
                   }))
                 }
-                className="w-full h-10 rounded-md border border-slate-600/60 bg-[#0A0F1D] px-3 text-sm text-white outline-none"
+                className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none"
               >
                 {SPORTS.map((sport) => (
                   <option key={sport.value || "empty"} value={sport.value}>
@@ -864,7 +864,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-white">Result</Label>
+              <Label className="text-foreground">Result</Label>
 
               <div className="grid grid-cols-2 gap-2">
                 <Button
@@ -908,7 +908,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
             </div>
 
             <div className="space-y-2">
-              <Label className="text-white">Note</Label>
+              <Label className="text-foreground">Note</Label>
 
               <Input
                 value={form.note}
@@ -919,7 +919,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                   }))
                 }
                 placeholder="Optional"
-                className="bg-[#0A0F1D] border-slate-600/60 text-white placeholder:text-slate-500"
+                className="bg-background border-border"
               />
             </div>
           </div>
@@ -928,7 +928,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
             <Button
               variant="outline"
               onClick={closeModal}
-              className="border-slate-600/60 bg-[#0A0F1D] text-white hover:bg-[#111A2E]"
+              className="border-border/40"
             >
               Cancel
             </Button>
@@ -986,7 +986,7 @@ function SegmentedProfitLine({ data, xAxisMap, yAxisMap }) {
 function StatCard({ label, value, positive }) {
   return (
     <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
-      <p className="text-[10px] uppercase tracking-wider text-slate-300">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
         {label}
       </p>
 
@@ -1007,17 +1007,17 @@ function StatCard({ label, value, positive }) {
 
 function CloudStatsTable({ title, rows, mode }) {
   return (
-    <Card className="border-slate-600/50 bg-[#10182A] shadow-[0_0_24px_rgba(59,130,246,0.06)]">
+    <Card className="border-border/40 bg-secondary/20">
       <CardContent className="p-5">
-        <p className="text-sm font-semibold text-white mb-4">
+        <p className="text-sm font-semibold text-muted-foreground mb-4">
           {title}
         </p>
 
         {rows.length === 0 ? (
-          <p className="text-sm text-slate-300">No data yet.</p>
+          <p className="text-sm text-muted-foreground">No data yet.</p>
         ) : (
           <div className="space-y-2">
-            <div className="grid grid-cols-4 text-[10px] uppercase tracking-wider text-slate-300 border-b border-slate-700/40 pb-2">
+            <div className="grid grid-cols-4 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
               <span>Sport</span>
               <span className="text-right">Record</span>
               <span className="text-right">
@@ -1031,7 +1031,7 @@ function CloudStatsTable({ title, rows, mode }) {
             {rows.map((row) => (
               <div
                 key={row.name}
-                className="grid grid-cols-4 text-sm items-center py-1.5 border-b border-slate-800/70 last:border-b-0"
+                className="grid grid-cols-4 text-sm items-center py-1.5 border-b border-border/10 last:border-b-0"
               >
                 <span className="text-white truncate">
                   {getSportLabel(row.name)}
