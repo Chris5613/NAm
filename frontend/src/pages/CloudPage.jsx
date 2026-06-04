@@ -444,8 +444,8 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
   };
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-[#070B14] text-foreground p-0">
-      <Card className="w-full min-h-[calc(100vh-4rem)] rounded-none border-0 bg-[#0B1020] shadow-none">
+<div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
+  <Card className="w-full min-h-[calc(100vh-4rem)] rounded-none border-0 bg-card shadow-none">
         <CardContent className="p-8 space-y-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -543,7 +543,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
             <StatCard label="Total Bets" value={String(stats.total)} />
           </div>
 
-          <Card className="border-slate-600/50 bg-[#10182A] shadow-[0_0_24px_rgba(59,130,246,0.06)]">
+          <Card className="border-border/40 bg-secondary/20">
             <CardContent className="p-5">
               <p className="text-sm font-semibold text-white mb-4">
                 P/L Progression
@@ -656,7 +656,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                   return (
                     <div
                       key={bet.id}
-                      className={`rounded-lg border p-4 bg-[#0F172A] hover:bg-[#131E35] transition-colors ${
+                      className={`rounded-lg border p-4 bg-secondary/40 ${ 
                         bet.hidden ? "opacity-50" : ""
                       } ${
                         won
@@ -985,7 +985,7 @@ function SegmentedProfitLine({ data, xAxisMap, yAxisMap }) {
 
 function StatCard({ label, value, positive }) {
   return (
-    <div className="rounded-lg border border-slate-600/50 p-4 text-center shadow-[0_0_16px_rgba(59,130,246,0.05)] bg-[#111A2E]">
+    <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
       <p className="text-[10px] uppercase tracking-wider text-slate-300">
         {label}
       </p>
