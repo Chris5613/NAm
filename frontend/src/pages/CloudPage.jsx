@@ -281,6 +281,23 @@ export default function CloudPage() {
       });
   }, [filteredBets]);
 
+  const chartSegments = useMemo(() => {
+    const segments = [];
+
+    for (let i = 1; i < chartData.length; i += 1) {
+      const prev = chartData[i - 1];
+      const current = chartData[i];
+
+      segments.push({
+        id: `${i}-${prev.value}-${current.value}`,
+        color: current.value >= prev.value ? "#34D399" : "#F43F5E",
+        data: [prev, current],
+      });
+    }
+
+    return segments;
+  }, [chartData]);
+
   const categoryStats = useMemo(() => {
     return buildGroupStats(filteredBets, getCategory);
   }, [filteredBets]);
@@ -459,13 +476,42 @@ export default function CloudPage() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-            <StatCard label="Net P/L" value={`${stats.netPnl >= 0 ? "+" : ""}${formatCurrency(stats.netPnl)}`} positive={stats.netPnl >= 0} />
-            <StatCard label="Win Rate" value={formatPercent(stats.winRate)} positive={stats.winRate >= 50} />
-            <StatCard label="ROI" value={`${stats.roi >= 0 ? "+" : ""}${formatPercent(stats.roi)}`} positive={stats.roi >= 0} />
+            <StatCard
+              label="Net P/L"
+              value={`${stats.netPnl >= 0 ? "+" : ""}${formatCurrency(
+                stats.netPnl
+              )}`}
+              positive={stats.netPnl >= 0}
+            />
+
+            <StatCard
+              label="Win Rate"
+              value={formatPercent(stats.winRate)}
+              positive={stats.winRate >= 50}
+            />
+
+            <StatCard
+              label="ROI"
+              value={`${stats.roi >= 0 ? "+" : ""}${formatPercent(stats.roi)}`}
+              positive={stats.roi >= 0}
+            />
+
             <StatCard label="Avg Bet Size" value={formatCurrency(stats.avgBetSize)} />
+
             <StatCard label="Total Wagered" value={formatCurrency(stats.wagered)} />
-            <StatCard label="Current Win Streak" value={`${stats.currentWinStreak}W`} positive={stats.currentWinStreak > 0} />
-            <StatCard label="Longest Win Streak" value={String(stats.longestWinStreak)} positive />
+
+            <StatCard
+              label="Current Win Streak"
+              value={`${stats.currentWinStreak}W`}
+              positive={stats.currentWinStreak > 0}
+            />
+
+            <StatCard
+              label="Longest Win Streak"
+              value={String(stats.longestWinStreak)}
+              positive
+            />
+
             <StatCard label="Total Bets" value={String(stats.total)} />
           </div>
 
@@ -480,6 +526,7 @@ export default function CloudPage() {
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#27272A" />
+
                       <XAxis
                         dataKey="name"
                         stroke="#71717A"
@@ -487,6 +534,7 @@ export default function CloudPage() {
                         tickLine={false}
                         axisLine={false}
                       />
+
                       <YAxis
                         stroke="#71717A"
                         fontSize={10}
@@ -494,6 +542,7 @@ export default function CloudPage() {
                         axisLine={false}
                         tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
                       />
+
                       <Tooltip
                         contentStyle={{
                           background: "#121214",
@@ -503,13 +552,20 @@ export default function CloudPage() {
                         }}
                         formatter={(value) => [formatCurrency(value), "P/L"]}
                       />
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="#34D399"
-                        strokeWidth={2}
-                        dot={false}
-                      />
+
+                      {chartSegments.map((segment) => (
+                        <Line
+                          key={segment.id}
+                          data={segment.data}
+                          type="linear"
+                          dataKey="value"
+                          stroke={segment.color}
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={false}
+                          isAnimationActive={false}
+                        />
+                      ))}
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
@@ -686,6 +742,7 @@ export default function CloudPage() {
             <DialogTitle>
               {isEditing ? "Edit Cloud Bet" : "Add Cloud Bet"}
             </DialogTitle>
+
             <DialogDescription>
               {isEditing
                 ? "Update this manual bet."
