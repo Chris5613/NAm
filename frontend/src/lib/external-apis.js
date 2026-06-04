@@ -718,7 +718,7 @@ export const nosanaApi = {
   },
 };
 
-// Clore AI Host API
+/// Clore AI Host API
 const CLORE_API_BASE = "https://api.clore.ai/v1";
 const CLORE_API_KEY = process.env.REACT_APP_CLORE_API_KEY?.trim();
 
@@ -754,6 +754,24 @@ async function cloreRequest(endpoint) {
   return data;
 }
 
+function findCloreWallet(wallets = []) {
+  return (
+    wallets.find((wallet) => {
+      const name = String(wallet.name || "").toLowerCase();
+      const symbol = String(wallet.symbol || "").toLowerCase();
+      const coin = String(wallet.coin || "").toLowerCase();
+      const ticker = String(wallet.ticker || "").toLowerCase();
+
+      return (
+        name.includes("clore") ||
+        symbol === "clore" ||
+        coin === "clore" ||
+        ticker === "clore"
+      );
+    }) || wallets[0]
+  );
+}
+
 export const cloreApi = {
   getWallets: async () => {
     return cloreRequest("/wallets");
@@ -763,22 +781,22 @@ export const cloreApi = {
     return cloreRequest("/my_servers");
   },
 
-  getOrders: async () => {
-    return cloreRequest("/my_orders?return_completed=true");
-  },
-
   getOverview: async () => {
-    // Clore allows only about 1 request/sec, so do these one at a time.
+    // Clore rate limit protection: do requests one at a time.
     const wallets = await cloreApi.getWallets();
     await new Promise((resolve) => setTimeout(resolve, 1200));
 
     const servers = await cloreApi.getServers();
 
-    const btcWallet =
-      wallets.wallets?.find((wallet) => {
-        const name = String(wallet.name || "").toLowerCase();
-        return name.includes("bitcoin") || name.includes("btc");
-      }) || wallets.wallets?.[0];
+    const cloreWallet = findCloreWallet(wallets.wallets || []);
+
+    const cloreBalance = Number(
+      cloreWallet?.balance ??
+        cloreWallet?.amount ??
+        cloreWallet?.available ??
+        cloreWallet?.confirmed ??
+        0
+    );
 
     const mappedServers =
       servers.servers?.map((server) => {
@@ -788,16 +806,16 @@ export const cloreApi = {
           server.gpu ||
           "Unknown GPU";
 
-        const onDemandBTC =
-          server.pricing?.bitcoin ||
-          server.pricing?.btc ||
+        const onDemandClore =
           server.pricing?.clore ||
+          server.pricing?.CLORE ||
+          server.pricing?.usd ||
           0;
 
-        const spotBTC =
-          server.min_spot_pricing?.bitcoin ||
-          server.min_spot_pricing?.btc ||
+        const spotClore =
           server.min_spot_pricing?.clore ||
+          server.min_spot_pricing?.CLORE ||
+          server.min_spot_pricing?.usd ||
           0;
 
         return {
@@ -806,25 +824,26 @@ export const cloreApi = {
           connected: Boolean(server.connected),
           visibility: server.visibility || "unknown",
           gpu,
-          onDemandBTC: Number(onDemandBTC) || 0,
-          spotBTC: Number(spotBTC) || 0,
+          onDemandClore: Number(onDemandClore) || 0,
+          spotClore: Number(spotClore) || 0,
         };
       }) || [];
 
-    const totalDailyPotentialBTC = mappedServers.reduce((sum, server) => {
-      return sum + Number(server.onDemandBTC || 0);
+    const totalDailyPotentialClore = mappedServers.reduce((sum, server) => {
+      return sum + Number(server.onDemandClore || 0);
     }, 0);
 
     return {
-      balanceBTC: Number(btcWallet?.balance || 0),
-      withdrawalFeeBTC: Number(btcWallet?.withdrawal_fee || 0),
+      cloreBalance,
+      withdrawalFeeClore: Number(cloreWallet?.withdrawal_fee || 0),
       totalServers: mappedServers.length,
       onlineServers: mappedServers.filter((server) => server.online).length,
-      totalDailyPotentialBTC,
+      totalDailyPotentialClore,
       servers: mappedServers,
       raw: {
         wallets,
         servers,
+        cloreWallet,
       },
       updatedAt: new Date().toISOString(),
     };

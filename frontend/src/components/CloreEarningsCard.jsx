@@ -62,6 +62,7 @@ export default function CloreEarningsCard() {
       setError("");
 
       const res = await cloreTrackingApi.resetBaseline();
+
       setStatus((prev) => ({
         ...(prev || {}),
         ...res.data,
@@ -81,9 +82,9 @@ export default function CloreEarningsCard() {
     loadOverview();
   }, []);
 
-  const balanceBTC = Number(data?.balanceBTC || 0);
-  const dailyPotentialBTC = Number(data?.totalDailyPotentialBTC || 0);
-  const earnedBTC = Number(data?.earnedBTC || 0);
+  const cloreBalance = Number(data?.cloreBalance || 0);
+  const dailyPotentialClore = Number(data?.totalDailyPotentialClore || 0);
+  const earnedClore = Number(data?.earnedClore || 0);
   const history = status?.history || data?.history || [];
 
   return (
@@ -101,7 +102,7 @@ export default function CloreEarningsCard() {
           </div>
 
           <p className="text-sm text-muted-foreground mt-1">
-            Track Clore wallet balance, server status, and estimated host earnings.
+            Track CLORE balance, server status, and sync new CLORE earnings into Project Overview.
           </p>
         </div>
 
@@ -129,7 +130,7 @@ export default function CloreEarningsCard() {
             <RefreshCw
               className={`w-4 h-4 mr-2 ${syncing ? "animate-spin" : ""}`}
             />
-            Sync
+            Sync Earnings
           </Button>
         </div>
       </div>
@@ -137,8 +138,9 @@ export default function CloreEarningsCard() {
       <div className="mt-4 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-3">
         <div>
           <label className="text-xs text-muted-foreground">
-            Project name
+            Project name in Project Overview
           </label>
+
           <input
             value={projectName}
             onChange={(event) => setProjectName(event.target.value)}
@@ -178,19 +180,19 @@ export default function CloreEarningsCard() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <MetricBox
               icon={<Wallet className="w-4 h-4" strokeWidth={1.5} />}
-              label="Wallet Balance"
-              value={`${balanceBTC.toFixed(8)} BTC`}
+              label="CLORE Balance"
+              value={`${cloreBalance.toFixed(8)} CLORE`}
             />
 
             <MetricBox
               icon={<Activity className="w-4 h-4" strokeWidth={1.5} />}
               label="Daily Potential"
-              value={`${dailyPotentialBTC.toFixed(8)} BTC/day`}
+              value={`${dailyPotentialClore.toFixed(8)} CLORE/day`}
             />
 
             <MetricBox
-              label="New Since Last Sync"
-              value={`${earnedBTC.toFixed(8)} BTC`}
+              label="New Synced Earnings"
+              value={`+${earnedClore.toFixed(8)} CLORE`}
             />
 
             <MetricBox
@@ -221,29 +223,6 @@ export default function CloreEarningsCard() {
                       {server.online ? "🟢 Online" : "🔴 Offline"}
                     </span>
                   </div>
-
-                  <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-muted-foreground">
-                    <p>
-                      On-demand:{" "}
-                      <span className="text-foreground">
-                        {Number(server.onDemandBTC || 0).toFixed(8)} BTC/day
-                      </span>
-                    </p>
-
-                    <p>
-                      Spot min:{" "}
-                      <span className="text-foreground">
-                        {Number(server.spotBTC || 0).toFixed(8)} BTC/day
-                      </span>
-                    </p>
-
-                    <p>
-                      Visibility:{" "}
-                      <span className="text-foreground">
-                        {server.visibility || "Unknown"}
-                      </span>
-                    </p>
-                  </div>
                 </div>
               ))}
             </div>
@@ -256,7 +235,7 @@ export default function CloreEarningsCard() {
           {history.length > 0 && (
             <div className="rounded-xl border border-border p-4">
               <h3 className="text-sm font-medium text-foreground">
-                Recent Clore Sync History
+                Recent CLORE Sync History
               </h3>
 
               <div className="mt-3 space-y-2">
@@ -274,7 +253,7 @@ export default function CloreEarningsCard() {
                       </span>
 
                       <span className="text-foreground">
-                        +{Number(item.earned_btc || 0).toFixed(8)} BTC
+                        +{Number(item.earned_clore || 0).toFixed(8)} CLORE
                       </span>
                     </div>
                   ))}
