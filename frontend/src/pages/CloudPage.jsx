@@ -43,19 +43,7 @@ const SPORTS = [
   { value: "Soccer", label: "⚽ Soccer" },
   { value: "Tennis", label: "🎾 Tennis" },
   { value: "Hockey", label: "🏒 Hockey" },
-  { value: "Golf", label: "⛳ Golf" },
-  { value: "MMA / UFC", label: "🥊 MMA / UFC" },
-  { value: "Boxing", label: "🥊 Boxing" },
-  { value: "Esports", label: "🎮 Esports" },
-  { value: "Horse Racing", label: "🐎 Horse Racing" },
-  { value: "Cricket", label: "🏏 Cricket" },
-  { value: "Rugby", label: "🏉 Rugby" },
-  { value: "Volleyball", label: "🏐 Volleyball" },
-  { value: "Motorsports", label: "🏎️ Motorsports" },
-  { value: "Table Tennis", label: "🏓 Table Tennis" },
-  { value: "Parlay", label: "🎟️ Parlay" },
-  { value: "Casino", label: "🎰 Casino" },
-  { value: "Other", label: "📌 Other" },
+
 ];
 
 function getSavedBets() {
