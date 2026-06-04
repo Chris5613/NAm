@@ -243,52 +243,17 @@ export default function CloudPage() {
       wagered += Math.abs(amount);
       netPnl += amount;
 
-if (isBetWin(bet)) {
-  wins += 1;
-} else {
-  losses += 1;
-}
+      if (isBetWin(bet)) {
+        wins += 1;
+      } else {
+        losses += 1;
+      }
     });
 
     const total = wins + losses;
     const winRate = total > 0 ? (wins / total) * 100 : 0;
     const roi = wagered > 0 ? (netPnl / wagered) * 100 : 0;
     const avgBetSize = total > 0 ? wagered / total : 0;
-
-    const chronological = [...filteredBets].sort(
-      (a, b) => getBetDateTime(a) - getBetDateTime(b)
-    );
-
-    let currentWinStreak = 0;
-    let longestWinStreak = 0;
-    let longestLossStreak = 0;
-    let runningWin = 0;
-    let runningLoss = 0;
-
-    chronological.forEach((bet) => {
-      const won = isBetWin(bet);
-
-      if (won) {
-        runningWin += 1;
-        runningLoss = 0;
-      } else {
-        runningLoss += 1;
-        runningWin = 0;
-      }
-
-      longestWinStreak = Math.max(longestWinStreak, runningWin);
-      longestLossStreak = Math.max(longestLossStreak, runningLoss);
-    });
-
-for (let i = chronological.length - 1; i >= 0; i -= 1) {
-  const bet = chronological[i];
-
-  if (isBetWin(bet)) {
-    currentWinStreak += 1;
-  } else {
-    break;
-  }
-}
 
     return {
       wins,
@@ -299,9 +264,6 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
       winRate,
       roi,
       avgBetSize,
-      currentWinStreak,
-      longestWinStreak,
-      longestLossStreak,
     };
   }, [filteredBets]);
 
@@ -564,10 +526,10 @@ const chartSegments = useMemo(() => {
               </p>
 
               <div className="h-[240px]">
-                {chartSegments.length > 1 ? (
+                {chartSegments.data.length > 1 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
-                      data={chartSegments}
+                      data={chartSegments.data}
                       margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -579,7 +541,7 @@ const chartSegments = useMemo(() => {
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={(value, index) =>
-                          chartSegments[index]?.date || value
+                          chartSegments.data[index]?.date || value
                         }
                       />
 
