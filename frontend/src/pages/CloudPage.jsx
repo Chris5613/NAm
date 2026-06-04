@@ -1087,9 +1087,6 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
     bets: [],
   };
 
-  const withdrawGoal = 3000;
-  const withdrawProgress = Math.max(0, Math.min(monthStats.pnl, withdrawGoal));
-  const withdrawPercent = withdrawGoal > 0 ? (withdrawProgress / withdrawGoal) * 100 : 0;
 
   return (
     <Card className="border-border/40 bg-secondary/20 2xl:sticky 2xl:top-6">
@@ -1135,24 +1132,6 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
           </p>
         </div>
 
-        <div className="rounded-lg border border-border/40 bg-secondary/40 p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-              Withdraw Goal
-            </p>
-
-            <p className="font-mono text-sm font-bold text-foreground">
-              {formatCurrency(withdrawProgress)} / {formatCurrency(withdrawGoal)}
-            </p>
-          </div>
-
-          <div className="h-2 rounded-full bg-background overflow-hidden">
-            <div
-              className="h-full rounded-full bg-violet-500"
-              style={{ width: `${withdrawPercent}%` }}
-            />
-          </div>
-        </div>
 
         <div className="grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-wider text-muted-foreground">
           {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day) => (
