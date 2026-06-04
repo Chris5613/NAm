@@ -35,6 +35,29 @@ import { toast } from "sonner";
 
 const CLOUD_BETS_KEY = "cloud_manual_bets";
 
+const SPORTS = [
+  { value: "", label: "Select sport" },
+  { value: "Basketball", label: "🏀 Basketball" },
+  { value: "Football", label: "🏈 Football" },
+  { value: "Baseball", label: "⚾ Baseball" },
+  { value: "Soccer", label: "⚽ Soccer" },
+  { value: "Tennis", label: "🎾 Tennis" },
+  { value: "Hockey", label: "🏒 Hockey" },
+  { value: "Golf", label: "⛳ Golf" },
+  { value: "MMA / UFC", label: "🥊 MMA / UFC" },
+  { value: "Boxing", label: "🥊 Boxing" },
+  { value: "Esports", label: "🎮 Esports" },
+  { value: "Horse Racing", label: "🐎 Horse Racing" },
+  { value: "Cricket", label: "🏏 Cricket" },
+  { value: "Rugby", label: "🏉 Rugby" },
+  { value: "Volleyball", label: "🏐 Volleyball" },
+  { value: "Motorsports", label: "🏎️ Motorsports" },
+  { value: "Table Tennis", label: "🏓 Table Tennis" },
+  { value: "Parlay", label: "🎟️ Parlay" },
+  { value: "Casino", label: "🎰 Casino" },
+  { value: "Other", label: "📌 Other" },
+];
+
 function getSavedBets() {
   try {
     const saved = JSON.parse(localStorage.getItem(CLOUD_BETS_KEY) || "[]");
@@ -107,12 +130,13 @@ function emptyForm() {
   };
 }
 
-function getCategory(bet) {
-  return bet.category?.trim() || "Uncategorized";
+function getSportLabel(value) {
+  const sport = SPORTS.find((s) => s.value === value);
+  return sport?.label || value || "Uncategorized";
 }
 
-function getSportsbook(bet) {
-  return bet.sportsbook?.trim() || "Manual";
+function getCategory(bet) {
+  return bet.category?.trim() || "Uncategorized";
 }
 
 function buildGroupStats(bets, getKey) {
@@ -244,6 +268,7 @@ export default function CloudPage() {
 
     for (let i = filteredBets.length - 1; i >= 0; i -= 1) {
       const bet = filteredBets[i];
+
       if (Number(bet.amount) >= 0) {
         currentWinStreak += 1;
       } else {
@@ -269,41 +294,38 @@ export default function CloudPage() {
   const chartData = useMemo(() => {
     let running = 0;
 
-    return [...filteredBets]
+    const base = [...filteredBets]
       .sort((a, b) => getBetDateTime(a) - getBetDateTime(b))
       .map((bet, index) => {
         running += Number(bet.amount) || 0;
 
         return {
-          name: bet.date || `Bet ${index + 1}`,
+          label: `${index + 1}`,
+          date: bet.date || `Bet ${index + 1}`,
           value: running,
+          upValue: null,
+          downValue: null,
         };
       });
-  }, [filteredBets]);
 
-  const chartSegments = useMemo(() => {
-    const segments = [];
+    for (let i = 1; i < base.length; i += 1) {
+      const prev = base[i - 1];
+      const current = base[i];
 
-    for (let i = 1; i < chartData.length; i += 1) {
-      const prev = chartData[i - 1];
-      const current = chartData[i];
-
-      segments.push({
-        id: `${i}-${prev.value}-${current.value}`,
-        color: current.value >= prev.value ? "#34D399" : "#F43F5E",
-        data: [prev, current],
-      });
+      if (current.value >= prev.value) {
+        base[i - 1].upValue = prev.value;
+        base[i].upValue = current.value;
+      } else {
+        base[i - 1].downValue = prev.value;
+        base[i].downValue = current.value;
+      }
     }
 
-    return segments;
-  }, [chartData]);
+    return base;
+  }, [filteredBets]);
 
   const categoryStats = useMemo(() => {
     return buildGroupStats(filteredBets, getCategory);
-  }, [filteredBets]);
-
-  const sportsbookStats = useMemo(() => {
-    return buildGroupStats(filteredBets, getSportsbook);
   }, [filteredBets]);
 
   const openAddModal = () => {
@@ -496,9 +518,15 @@ export default function CloudPage() {
               positive={stats.roi >= 0}
             />
 
-            <StatCard label="Avg Bet Size" value={formatCurrency(stats.avgBetSize)} />
+            <StatCard
+              label="Avg Bet Size"
+              value={formatCurrency(stats.avgBetSize)}
+            />
 
-            <StatCard label="Total Wagered" value={formatCurrency(stats.wagered)} />
+            <StatCard
+              label="Total Wagered"
+              value={formatCurrency(stats.wagered)}
+            />
 
             <StatCard
               label="Current Win Streak"
@@ -528,11 +556,14 @@ export default function CloudPage() {
                       <CartesianGrid strokeDasharray="3 3" stroke="#27272A" />
 
                       <XAxis
-                        dataKey="name"
+                        dataKey="label"
                         stroke="#71717A"
                         fontSize={10}
                         tickLine={false}
                         axisLine={false}
+                        tickFormatter={(value, index) =>
+                          chartData[index]?.date || value
+                        }
                       />
 
                       <YAxis
@@ -551,21 +582,30 @@ export default function CloudPage() {
                           fontSize: "12px",
                         }}
                         formatter={(value) => [formatCurrency(value), "P/L"]}
+                        labelFormatter={(value, payload) =>
+                          payload?.[0]?.payload?.date || value
+                        }
                       />
 
-                      {chartSegments.map((segment) => (
-                        <Line
-                          key={segment.id}
-                          data={segment.data}
-                          type="linear"
-                          dataKey="value"
-                          stroke={segment.color}
-                          strokeWidth={2}
-                          dot={false}
-                          activeDot={false}
-                          isAnimationActive={false}
-                        />
-                      ))}
+                      <Line
+                        type="linear"
+                        dataKey="upValue"
+                        stroke="#34D399"
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                      />
+
+                      <Line
+                        type="linear"
+                        dataKey="downValue"
+                        stroke="#F43F5E"
+                        strokeWidth={2}
+                        dot={false}
+                        connectNulls={false}
+                        isAnimationActive={false}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
@@ -579,20 +619,14 @@ export default function CloudPage() {
 
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             <CloudStatsTable
-              title="Win Rate by Category"
+              title="Win Rate by Sport"
               rows={[...categoryStats].sort((a, b) => b.winRate - a.winRate)}
               mode="winRate"
             />
 
             <CloudStatsTable
-              title="Profit by Category"
+              title="Profit by Sport"
               rows={[...categoryStats].sort((a, b) => b.pnl - a.pnl)}
-              mode="profit"
-            />
-
-            <CloudStatsTable
-              title="Performance by Sportsbook"
-              rows={[...sportsbookStats].sort((a, b) => b.pnl - a.pnl)}
               mode="profit"
             />
           </div>
@@ -675,10 +709,7 @@ export default function CloudPage() {
                             <p className="text-[11px] text-muted-foreground/70 mt-1">
                               {bet.date}
                               {getCategory(bet) !== "Uncategorized"
-                                ? ` · ${getCategory(bet)}`
-                                : ""}
-                              {getSportsbook(bet) !== "Manual"
-                                ? ` · ${getSportsbook(bet)}`
+                                ? ` · ${getSportLabel(getCategory(bet))}`
                                 : ""}
                               {bet.note ? ` · ${bet.note}` : ""}
                             </p>
@@ -819,38 +850,25 @@ export default function CloudPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-2">
-                <Label>Category</Label>
+            <div className="space-y-2">
+              <Label>Sport</Label>
 
-                <Input
-                  value={form.category}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      category: e.target.value,
-                    }))
-                  }
-                  placeholder="Basketball, Baseball..."
-                  className="bg-background border-border"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label>Sportsbook</Label>
-
-                <Input
-                  value={form.sportsbook}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      sportsbook: e.target.value,
-                    }))
-                  }
-                  placeholder="FanDuel, DraftKings..."
-                  className="bg-background border-border"
-                />
-              </div>
+              <select
+                value={form.category}
+                onChange={(e) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    category: e.target.value,
+                  }))
+                }
+                className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none"
+              >
+                {SPORTS.map((sport) => (
+                  <option key={sport.value || "empty"} value={sport.value}>
+                    {sport.label}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="space-y-2">
@@ -964,7 +982,7 @@ function CloudStatsTable({ title, rows, mode }) {
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-4 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
-              <span>Category</span>
+              <span>Sport</span>
               <span className="text-right">Record</span>
               <span className="text-right">
                 {mode === "winRate" ? "Win %" : "Wagered"}
@@ -979,7 +997,9 @@ function CloudStatsTable({ title, rows, mode }) {
                 key={row.name}
                 className="grid grid-cols-4 text-sm items-center py-1.5 border-b border-border/10 last:border-b-0"
               >
-                <span className="text-foreground truncate">{row.name}</span>
+                <span className="text-foreground truncate">
+                  {getSportLabel(row.name)}
+                </span>
 
                 <span className="font-mono text-xs text-muted-foreground text-right">
                   {formatRecord(row.wins, row.losses)}
