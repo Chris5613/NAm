@@ -140,13 +140,27 @@ function getCategory(bet) {
   return bet.category?.trim() || "Uncategorized";
 }
 
+function isBetWin(bet) {
+  const result = String(bet.result || "").toLowerCase();
+
+  if (result === "win" || result === "won") return true;
+  if (result === "loss" || result === "lost") return false;
+
+  const titleText = `${bet.title || ""} ${bet.note || ""}`.toLowerCase();
+
+  if (titleText.includes("won")) return true;
+  if (titleText.includes("lost") || titleText.includes("loss")) return false;
+
+  return Number(bet.amount) > 0;
+}
+
 function buildGroupStats(bets, getKey) {
   const groups = {};
 
   bets.forEach((bet) => {
     const key = getKey(bet);
     const amount = Number(bet.amount) || 0;
-    const won = amount > 0;
+    const won = isBetWin(bet);
 
     if (!groups[key]) {
       groups[key] = {
@@ -230,11 +244,11 @@ export default function CloudPage() {
       wagered += Math.abs(amount);
       netPnl += amount;
 
-      if (amount > 0) {
-        wins += 1;
-      } else {
-        losses += 1;
-      }
+if (isBetWin(bet)) {
+  wins += 1;
+} else {
+  losses += 1;
+}
     });
 
     const total = wins + losses;
@@ -253,7 +267,7 @@ export default function CloudPage() {
     let runningLoss = 0;
 
     chronological.forEach((bet) => {
-      const won = Number(bet.amount) > 0;
+      const won = isBetWin(bet);
 
       if (won) {
         runningWin += 1;
@@ -267,15 +281,15 @@ export default function CloudPage() {
       longestLossStreak = Math.max(longestLossStreak, runningLoss);
     });
 
-    for (let i = chronological.length - 1; i >= 0; i -= 1) {
-      const bet = chronological[i];
+for (let i = chronological.length - 1; i >= 0; i -= 1) {
+  const bet = chronological[i];
 
-      if (Number(bet.amount) > 0) {
-        currentWinStreak += 1;
-      } else {
-        break;
-      }
-    }
+  if (isBetWin(bet)) {
+    currentWinStreak += 1;
+  } else {
+    break;
+  }
+}
 
     return {
       wins,
@@ -637,7 +651,7 @@ export default function CloudPage() {
             ) : (
               <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2">
                 {visibleBets.map((bet) => {
-                  const won = Number(bet.amount) > 0;
+                  const won = isBetWin(bet);
 
                   return (
                     <div
