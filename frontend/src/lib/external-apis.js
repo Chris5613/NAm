@@ -717,3 +717,116 @@ export const nosanaApi = {
     return out;
   },
 };
+
+// Clore AI Host API
+const CLORE_API_BASE = "https://api.clore.ai/v1";
+const CLORE_API_KEY = process.env.REACT_APP_CLORE_API_KEY?.trim();
+
+async function cloreRequest(endpoint) {
+  if (!CLORE_API_KEY) {
+    throw new Error("Clore: REACT_APP_CLORE_API_KEY is not set.");
+  }
+
+  const url = `${CLORE_API_BASE}${endpoint}`;
+
+  const response = await withCorsProxy(url, {
+    method: "GET",
+    headers: {
+      auth: CLORE_API_KEY,
+      "Content-Type": "application/json",
+    },
+  });
+
+  const data = response?.data || response;
+
+  if (data?.code === 3) {
+    throw new Error("Invalid Clore API token.");
+  }
+
+  if (data?.code === 5) {
+    throw new Error("Clore rate limit hit. Wait a second and try again.");
+  }
+
+  if (data?.code !== 0) {
+    throw new Error(data?.message || "Clore API returned an error.");
+  }
+
+  return data;
+}
+
+export const cloreApi = {
+  getWallets: async () => {
+    return cloreRequest("/wallets");
+  },
+
+  getServers: async () => {
+    return cloreRequest("/my_servers");
+  },
+
+  getOrders: async () => {
+    return cloreRequest("/my_orders?return_completed=true");
+  },
+
+  getOverview: async () => {
+    // Clore allows only about 1 request/sec, so do these one at a time.
+    const wallets = await cloreApi.getWallets();
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+
+    const servers = await cloreApi.getServers();
+
+    const btcWallet =
+      wallets.wallets?.find((wallet) => {
+        const name = String(wallet.name || "").toLowerCase();
+        return name.includes("bitcoin") || name.includes("btc");
+      }) || wallets.wallets?.[0];
+
+    const mappedServers =
+      servers.servers?.map((server) => {
+        const gpu =
+          server.specs?.gpu ||
+          server.specs?.gpus ||
+          server.gpu ||
+          "Unknown GPU";
+
+        const onDemandBTC =
+          server.pricing?.bitcoin ||
+          server.pricing?.btc ||
+          server.pricing?.clore ||
+          0;
+
+        const spotBTC =
+          server.min_spot_pricing?.bitcoin ||
+          server.min_spot_pricing?.btc ||
+          server.min_spot_pricing?.clore ||
+          0;
+
+        return {
+          name: server.name || "Unnamed server",
+          online: Boolean(server.online),
+          connected: Boolean(server.connected),
+          visibility: server.visibility || "unknown",
+          gpu,
+          onDemandBTC: Number(onDemandBTC) || 0,
+          spotBTC: Number(spotBTC) || 0,
+        };
+      }) || [];
+
+    const totalDailyPotentialBTC = mappedServers.reduce((sum, server) => {
+      return sum + Number(server.onDemandBTC || 0);
+    }, 0);
+
+    return {
+      balanceBTC: Number(btcWallet?.balance || 0),
+      withdrawalFeeBTC: Number(btcWallet?.withdrawal_fee || 0),
+      totalServers: mappedServers.length,
+      onlineServers: mappedServers.filter((server) => server.online).length,
+      totalDailyPotentialBTC,
+      servers: mappedServers,
+      raw: {
+        wallets,
+        servers,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+  },
+};

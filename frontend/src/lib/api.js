@@ -5,6 +5,7 @@ import {
   coinStatsApi,
   coinStatsPortfolioApi,
   bitcoinApi,
+  cloreApi,
 } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
 
@@ -932,3 +933,135 @@ export const nosTrackingApi = {
   configure: async (wallet_address, project_name) =>
     toResponse({ configured: true, wallet_address, project_name }),
 };
+
+export const cloreTrackingApi = {
+  getStatus: async () => {
+    const config = readCloreConfig();
+    const history = readCloreHistory();
+
+    return toResponse({
+      enabled: Boolean(config.enabled),
+      project_name: config.project_name || "Clore AI",
+      baseline_btc: Number(config.baseline_btc || 0),
+      last_balance_btc: Number(config.last_balance_btc || 0),
+      last_synced_at: config.last_synced_at || null,
+      history,
+    });
+  },
+
+  configure: async (project_name = "Clore AI") => {
+    const existing = readCloreConfig();
+
+    const next = {
+      ...existing,
+      enabled: true,
+      project_name,
+      configured_at: existing.configured_at || new Date().toISOString(),
+    };
+
+    writeCloreConfig(next);
+
+    return toResponse(next);
+  },
+
+  getOverview: async () => {
+    const overview = await cloreApi.getOverview();
+    return toResponse(overview);
+  },
+
+  sync: async (project_name = "Clore AI") => {
+    const overview = await cloreApi.getOverview();
+
+    const config = readCloreConfig();
+    const history = readCloreHistory();
+
+    const previousBalance =
+      Number(config.last_balance_btc) ||
+      Number(config.baseline_btc) ||
+      Number(overview.balanceBTC) ||
+      0;
+
+    const currentBalance = Number(overview.balanceBTC || 0);
+    const earnedBTC = Math.max(0, currentBalance - previousBalance);
+
+    const snapshot = {
+      id: createId(),
+      date: new Date().toISOString().slice(0, 10),
+      timestamp: new Date().toISOString(),
+      balance_btc: currentBalance,
+      earned_btc: earnedBTC,
+      online_servers: overview.onlineServers,
+      total_servers: overview.totalServers,
+      daily_potential_btc: overview.totalDailyPotentialBTC,
+    };
+
+    const nextHistory = [...history, snapshot].slice(-90);
+
+    writeCloreHistory(nextHistory);
+
+    writeCloreConfig({
+      ...config,
+      enabled: true,
+      project_name,
+      last_balance_btc: currentBalance,
+      last_synced_at: snapshot.timestamp,
+    });
+
+    return toResponse({
+      ...overview,
+      earnedBTC,
+      snapshot,
+      history: nextHistory,
+    });
+  },
+
+  resetBaseline: async () => {
+    const overview = await cloreApi.getOverview();
+    const config = readCloreConfig();
+
+    const next = {
+      ...config,
+      enabled: true,
+      baseline_btc: Number(overview.balanceBTC || 0),
+      last_balance_btc: Number(overview.balanceBTC || 0),
+      last_synced_at: new Date().toISOString(),
+    };
+
+    writeCloreConfig(next);
+    writeCloreHistory([]);
+
+    return toResponse(next);
+  },
+};
+
+function readCloreConfig() {
+  try {
+    return JSON.parse(window.localStorage.getItem("clore_config") || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeCloreConfig(config) {
+  try {
+    window.localStorage.setItem("clore_config", JSON.stringify(config));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
+function readCloreHistory() {
+  try {
+    return JSON.parse(window.localStorage.getItem("clore_history") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function writeCloreHistory(history) {
+  try {
+    window.localStorage.setItem("clore_history", JSON.stringify(history));
+  } catch {
+    // localStorage unavailable
+  }
+}
