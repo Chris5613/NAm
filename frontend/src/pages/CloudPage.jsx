@@ -30,6 +30,7 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  Customized,
 } from "recharts";
 import { toast } from "sonner";
 
@@ -294,7 +295,7 @@ export default function CloudPage() {
   const chartData = useMemo(() => {
     let running = 0;
 
-    const base = [...filteredBets]
+    return [...filteredBets]
       .sort((a, b) => getBetDateTime(a) - getBetDateTime(b))
       .map((bet, index) => {
         running += Number(bet.amount) || 0;
@@ -303,25 +304,8 @@ export default function CloudPage() {
           label: `${index + 1}`,
           date: bet.date || `Bet ${index + 1}`,
           value: running,
-          upValue: null,
-          downValue: null,
         };
       });
-
-    for (let i = 1; i < base.length; i += 1) {
-      const prev = base[i - 1];
-      const current = base[i];
-
-      if (current.value >= prev.value) {
-        base[i - 1].upValue = prev.value;
-        base[i].upValue = current.value;
-      } else {
-        base[i - 1].downValue = prev.value;
-        base[i].downValue = current.value;
-      }
-    }
-
-    return base;
   }, [filteredBets]);
 
   const categoryStats = useMemo(() => {
@@ -595,27 +579,15 @@ export default function CloudPage() {
 
                       <Line
                         type="monotone"
-                        dataKey="upValue"
-                        stroke="#34D399"
-                        strokeWidth={3}
+                        dataKey="value"
+                        stroke="transparent"
+                        strokeWidth={0}
                         dot={false}
-                        connectNulls={false}
+                        activeDot={false}
                         isAnimationActive={false}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
                       />
 
-                      <Line
-                        type="monotone"
-                        dataKey="downValue"
-                        stroke="#FB7185"
-                        strokeWidth={3}
-                        dot={false}
-                        connectNulls={false}
-                        isAnimationActive={false}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
+                      <Customized component={<SegmentedProfitLine data={chartData} />} />
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
@@ -957,6 +929,43 @@ export default function CloudPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function SegmentedProfitLine({ data, xAxisMap, yAxisMap }) {
+  const xAxis = Object.values(xAxisMap || {})[0];
+  const yAxis = Object.values(yAxisMap || {})[0];
+
+  if (!xAxis?.scale || !yAxis?.scale || !Array.isArray(data)) {
+    return null;
+  }
+
+  return (
+    <g>
+      {data.slice(1).map((point, index) => {
+        const previous = data[index];
+
+        const x1 = xAxis.scale(previous.label);
+        const y1 = yAxis.scale(previous.value);
+        const x2 = xAxis.scale(point.label);
+        const y2 = yAxis.scale(point.value);
+
+        const midX = (x1 + x2) / 2;
+        const stroke = point.value >= previous.value ? "#34D399" : "#FB7185";
+
+        return (
+          <path
+            key={`${previous.label}-${point.label}`}
+            d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
+            fill="none"
+            stroke={stroke}
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        );
+      })}
+    </g>
   );
 }
 
