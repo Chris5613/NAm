@@ -19,7 +19,18 @@ import {
   TrendingDown,
   Trophy,
   Pencil,
+  Eye,
+  EyeOff,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import { toast } from "sonner";
 
 const CLOUD_BETS_KEY = "cloud_manual_bets";
@@ -52,6 +63,11 @@ function formatCurrency(value) {
   });
 }
 
+function formatPercent(value) {
+  const n = Number(value) || 0;
+  return `${n.toFixed(1)}%`;
+}
+
 function formatRecord(wins, losses) {
   return `${wins}W · ${losses}L`;
 }
@@ -59,7 +75,6 @@ function formatRecord(wins, losses) {
 function getBetMonthKey(bet) {
   const date = bet.date || bet.created_at;
   if (!date) return "";
-
   return date.slice(0, 7);
 }
 
@@ -75,14 +90,70 @@ function formatMonthLabel(monthKey) {
   });
 }
 
-const emptyForm = () => ({
-  title: "",
-  matchup: "",
-  amount: "",
-  result: "win",
-  date: new Date().toISOString().slice(0, 10),
-  note: "",
-});
+function getBetDateTime(bet) {
+  return new Date(bet.date || bet.created_at || 0).getTime();
+}
+
+function emptyForm() {
+  return {
+    title: "",
+    matchup: "",
+    amount: "",
+    result: "win",
+    date: new Date().toISOString().slice(0, 10),
+    category: "",
+    sportsbook: "",
+    note: "",
+  };
+}
+
+function getCategory(bet) {
+  return bet.category?.trim() || "Uncategorized";
+}
+
+function getSportsbook(bet) {
+  return bet.sportsbook?.trim() || "Manual";
+}
+
+function buildGroupStats(bets, getKey) {
+  const groups = {};
+
+  bets.forEach((bet) => {
+    const key = getKey(bet);
+    const amount = Number(bet.amount) || 0;
+    const won = amount >= 0;
+
+    if (!groups[key]) {
+      groups[key] = {
+        name: key,
+        wins: 0,
+        losses: 0,
+        wagered: 0,
+        pnl: 0,
+      };
+    }
+
+    groups[key].wagered += Math.abs(amount);
+    groups[key].pnl += amount;
+
+    if (won) {
+      groups[key].wins += 1;
+    } else {
+      groups[key].losses += 1;
+    }
+  });
+
+  return Object.values(groups).map((group) => {
+    const total = group.wins + group.losses;
+
+    return {
+      ...group,
+      total,
+      winRate: total > 0 ? (group.wins / total) * 100 : 0,
+      roi: group.wagered > 0 ? (group.pnl / group.wagered) * 100 : 0,
+    };
+  });
+}
 
 export default function CloudPage() {
   const [bets, setBets] = useState(() => getSavedBets());
@@ -90,7 +161,6 @@ export default function CloudPage() {
   const [editingBetId, setEditingBetId] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [showHidden, setShowHidden] = useState(false);
-
   const [form, setForm] = useState(() => emptyForm());
 
   const isEditing = !!editingBetId;
@@ -102,8 +172,8 @@ export default function CloudPage() {
 
   const filteredBets = useMemo(() => {
     const sorted = [...bets].sort((a, b) => {
-      const dateA = new Date(a.date || a.created_at || 0).getTime();
-      const dateB = new Date(b.date || b.created_at || 0).getTime();
+      const dateA = getBetDateTime(a);
+      const dateB = getBetDateTime(b);
 
       if (dateB !== dateA) return dateB - dateA;
 
@@ -133,26 +203,90 @@ export default function CloudPage() {
     filteredBets.forEach((bet) => {
       const amount = Number(bet.amount) || 0;
       wagered += Math.abs(amount);
+      netPnl += amount;
 
       if (amount >= 0) {
         wins += 1;
       } else {
         losses += 1;
       }
-
-      netPnl += amount;
     });
 
     const total = wins + losses;
     const winRate = total > 0 ? (wins / total) * 100 : 0;
+    const roi = wagered > 0 ? (netPnl / wagered) * 100 : 0;
+    const avgBetSize = total > 0 ? wagered / total : 0;
+
+    const chronological = [...filteredBets].sort(
+      (a, b) => getBetDateTime(a) - getBetDateTime(b)
+    );
+
+    let currentWinStreak = 0;
+    let longestWinStreak = 0;
+    let longestLossStreak = 0;
+    let runningWin = 0;
+    let runningLoss = 0;
+
+    chronological.forEach((bet) => {
+      const won = Number(bet.amount) >= 0;
+
+      if (won) {
+        runningWin += 1;
+        runningLoss = 0;
+      } else {
+        runningLoss += 1;
+        runningWin = 0;
+      }
+
+      longestWinStreak = Math.max(longestWinStreak, runningWin);
+      longestLossStreak = Math.max(longestLossStreak, runningLoss);
+    });
+
+    for (let i = filteredBets.length - 1; i >= 0; i -= 1) {
+      const bet = filteredBets[i];
+      if (Number(bet.amount) >= 0) {
+        currentWinStreak += 1;
+      } else {
+        break;
+      }
+    }
 
     return {
       wins,
       losses,
+      total,
       wagered,
       netPnl,
       winRate,
+      roi,
+      avgBetSize,
+      currentWinStreak,
+      longestWinStreak,
+      longestLossStreak,
     };
+  }, [filteredBets]);
+
+  const chartData = useMemo(() => {
+    let running = 0;
+
+    return [...filteredBets]
+      .sort((a, b) => getBetDateTime(a) - getBetDateTime(b))
+      .map((bet, index) => {
+        running += Number(bet.amount) || 0;
+
+        return {
+          name: bet.date || `Bet ${index + 1}`,
+          value: running,
+        };
+      });
+  }, [filteredBets]);
+
+  const categoryStats = useMemo(() => {
+    return buildGroupStats(filteredBets, getCategory);
+  }, [filteredBets]);
+
+  const sportsbookStats = useMemo(() => {
+    return buildGroupStats(filteredBets, getSportsbook);
   }, [filteredBets]);
 
   const openAddModal = () => {
@@ -170,6 +304,8 @@ export default function CloudPage() {
       amount: String(Math.abs(Number(bet.amount) || 0)),
       result: Number(bet.amount) >= 0 ? "win" : "loss",
       date: bet.date || new Date().toISOString().slice(0, 10),
+      category: bet.category || "",
+      sportsbook: bet.sportsbook || "",
       note: bet.note || "",
     });
 
@@ -208,6 +344,8 @@ export default function CloudPage() {
               amount: finalAmount,
               result: form.result,
               date: form.date,
+              category: form.category.trim(),
+              sportsbook: form.sportsbook.trim(),
               note: form.note.trim(),
               updated_at: new Date().toISOString(),
             }
@@ -228,6 +366,8 @@ export default function CloudPage() {
       amount: finalAmount,
       result: form.result,
       date: form.date,
+      category: form.category.trim(),
+      sportsbook: form.sportsbook.trim(),
       note: form.note.trim(),
       created_at: new Date().toISOString(),
       hidden: false,
@@ -269,7 +409,7 @@ export default function CloudPage() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
       <Card className="w-full min-h-[calc(100vh-4rem)] rounded-none border-0 bg-card shadow-none">
-        <CardContent className="p-8">
+        <CardContent className="p-8 space-y-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full bg-violet-600 flex items-center justify-center">
@@ -278,10 +418,27 @@ export default function CloudPage() {
 
               <div>
                 <h1 className="text-2xl font-bold tracking-tight">Cloud</h1>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Manual bet tracker
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="h-9 rounded-md border border-border/40 bg-background px-3 text-xs font-mono text-foreground outline-none"
+              >
+                <option value="all">All Months</option>
+
+                {monthOptions.map((monthKey) => (
+                  <option key={monthKey} value={monthKey}>
+                    {formatMonthLabel(monthKey)}
+                  </option>
+                ))}
+              </select>
+
               <Button
                 size="sm"
                 onClick={openAddModal}
@@ -301,78 +458,90 @@ export default function CloudPage() {
             </div>
           </div>
 
-          <div className="mt-8">
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                {selectedMonth === "all"
-                  ? "All Months"
-                  : formatMonthLabel(selectedMonth)}
-              </p>
-
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="h-9 rounded-md border border-border/40 bg-background px-3 text-xs font-mono text-foreground outline-none"
-              >
-                <option value="all">All Months</option>
-
-                {monthOptions.map((monthKey) => (
-                  <option key={monthKey} value={monthKey}>
-                    {formatMonthLabel(monthKey)}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Net P/L
-                </p>
-
-                <p
-                  className={`font-mono text-xl font-bold mt-1 ${
-                    stats.netPnl >= 0 ? "text-emerald-400" : "text-rose-400"
-                  }`}
-                >
-                  {stats.netPnl >= 0 ? "+" : ""}
-                  {formatCurrency(stats.netPnl)}
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Win Rate
-                </p>
-
-                <p className="font-mono text-xl font-bold mt-1 text-foreground">
-                  {stats.winRate.toFixed(0)}%
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Record
-                </p>
-
-                <p className="font-mono text-xl font-bold mt-1 text-foreground">
-                  {formatRecord(stats.wins, stats.losses)}
-                </p>
-              </div>
-
-              <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">
-                  Wagered
-                </p>
-
-                <p className="font-mono text-xl font-bold mt-1 text-foreground">
-                  {formatCurrency(stats.wagered)}
-                </p>
-              </div>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+            <StatCard label="Net P/L" value={`${stats.netPnl >= 0 ? "+" : ""}${formatCurrency(stats.netPnl)}`} positive={stats.netPnl >= 0} />
+            <StatCard label="Win Rate" value={formatPercent(stats.winRate)} positive={stats.winRate >= 50} />
+            <StatCard label="ROI" value={`${stats.roi >= 0 ? "+" : ""}${formatPercent(stats.roi)}`} positive={stats.roi >= 0} />
+            <StatCard label="Avg Bet Size" value={formatCurrency(stats.avgBetSize)} />
+            <StatCard label="Total Wagered" value={formatCurrency(stats.wagered)} />
+            <StatCard label="Current Win Streak" value={`${stats.currentWinStreak}W`} positive={stats.currentWinStreak > 0} />
+            <StatCard label="Longest Win Streak" value={String(stats.longestWinStreak)} positive />
+            <StatCard label="Total Bets" value={String(stats.total)} />
           </div>
 
-          <div className="mt-8">
+          <Card className="border-border/40 bg-secondary/20">
+            <CardContent className="p-5">
+              <p className="text-sm font-semibold text-muted-foreground mb-4">
+                P/L Progression
+              </p>
+
+              <div className="h-[240px]">
+                {chartData.length > 1 ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#27272A" />
+                      <XAxis
+                        dataKey="name"
+                        stroke="#71717A"
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                      />
+                      <YAxis
+                        stroke="#71717A"
+                        fontSize={10}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
+                      />
+                      <Tooltip
+                        contentStyle={{
+                          background: "#121214",
+                          border: "1px solid #27272A",
+                          borderRadius: "6px",
+                          fontSize: "12px",
+                        }}
+                        formatter={(value) => [formatCurrency(value), "P/L"]}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="value"
+                        stroke="#34D399"
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+                    Add more bets to build the chart.
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+            <CloudStatsTable
+              title="Win Rate by Category"
+              rows={[...categoryStats].sort((a, b) => b.winRate - a.winRate)}
+              mode="winRate"
+            />
+
+            <CloudStatsTable
+              title="Profit by Category"
+              rows={[...categoryStats].sort((a, b) => b.pnl - a.pnl)}
+              mode="profit"
+            />
+
+            <CloudStatsTable
+              title="Performance by Sportsbook"
+              rows={[...sportsbookStats].sort((a, b) => b.pnl - a.pnl)}
+              mode="profit"
+            />
+          </div>
+
+          <div>
             <div className="flex items-center justify-between gap-3 mb-3">
               <p className="text-sm font-semibold text-muted-foreground">
                 Bets
@@ -398,7 +567,7 @@ export default function CloudPage() {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2">
                 {visibleBets.map((bet) => {
                   const won = Number(bet.amount) >= 0;
 
@@ -449,6 +618,12 @@ export default function CloudPage() {
 
                             <p className="text-[11px] text-muted-foreground/70 mt-1">
                               {bet.date}
+                              {getCategory(bet) !== "Uncategorized"
+                                ? ` · ${getCategory(bet)}`
+                                : ""}
+                              {getSportsbook(bet) !== "Manual"
+                                ? ` · ${getSportsbook(bet)}`
+                                : ""}
                               {bet.note ? ` · ${bet.note}` : ""}
                             </p>
                           </div>
@@ -475,9 +650,14 @@ export default function CloudPage() {
 
                           <button
                             onClick={() => toggleHideBet(bet.id)}
-                            className="text-muted-foreground hover:text-foreground p-1 text-xs font-mono"
+                            className="text-muted-foreground hover:text-foreground p-1"
+                            title={bet.hidden ? "Unhide bet" : "Hide bet"}
                           >
-                            {bet.hidden ? "Unhide" : "Hide"}
+                            {bet.hidden ? (
+                              <Eye className="w-4 h-4" />
+                            ) : (
+                              <EyeOff className="w-4 h-4" />
+                            )}
                           </button>
 
                           <button
@@ -497,7 +677,10 @@ export default function CloudPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={addOpen} onOpenChange={(open) => (open ? setAddOpen(true) : closeModal())}>
+      <Dialog
+        open={addOpen}
+        onOpenChange={(open) => (open ? setAddOpen(true) : closeModal())}
+      >
         <DialogContent className="bg-card border-border sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
@@ -579,6 +762,40 @@ export default function CloudPage() {
               </div>
             </div>
 
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Category</Label>
+
+                <Input
+                  value={form.category}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      category: e.target.value,
+                    }))
+                  }
+                  placeholder="Basketball, Baseball..."
+                  className="bg-background border-border"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Sportsbook</Label>
+
+                <Input
+                  value={form.sportsbook}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      sportsbook: e.target.value,
+                    }))
+                  }
+                  placeholder="FanDuel, DraftKings..."
+                  className="bg-background border-border"
+                />
+              </div>
+            </div>
+
             <div className="space-y-2">
               <Label>Result</Label>
 
@@ -652,5 +869,87 @@ export default function CloudPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function StatCard({ label, value, positive }) {
+  return (
+    <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
+      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+        {label}
+      </p>
+
+      <p
+        className={`font-mono text-lg font-bold mt-1 ${
+          positive === true
+            ? "text-emerald-400"
+            : positive === false
+              ? "text-rose-400"
+              : "text-foreground"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function CloudStatsTable({ title, rows, mode }) {
+  return (
+    <Card className="border-border/40 bg-secondary/20">
+      <CardContent className="p-5">
+        <p className="text-sm font-semibold text-muted-foreground mb-4">
+          {title}
+        </p>
+
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No data yet.</p>
+        ) : (
+          <div className="space-y-2">
+            <div className="grid grid-cols-4 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
+              <span>Category</span>
+              <span className="text-right">Record</span>
+              <span className="text-right">
+                {mode === "winRate" ? "Win %" : "Wagered"}
+              </span>
+              <span className="text-right">
+                {mode === "winRate" ? "ROI" : "P/L"}
+              </span>
+            </div>
+
+            {rows.map((row) => (
+              <div
+                key={row.name}
+                className="grid grid-cols-4 text-sm items-center py-1.5 border-b border-border/10 last:border-b-0"
+              >
+                <span className="text-foreground truncate">{row.name}</span>
+
+                <span className="font-mono text-xs text-muted-foreground text-right">
+                  {formatRecord(row.wins, row.losses)}
+                </span>
+
+                <span className="font-mono text-xs text-foreground text-right">
+                  {mode === "winRate"
+                    ? formatPercent(row.winRate)
+                    : formatCurrency(row.wagered)}
+                </span>
+
+                <span
+                  className={`font-mono text-xs font-medium text-right ${
+                    (mode === "winRate" ? row.roi : row.pnl) >= 0
+                      ? "text-emerald-400"
+                      : "text-rose-400"
+                  }`}
+                >
+                  {mode === "winRate"
+                    ? `${row.roi >= 0 ? "+" : ""}${formatPercent(row.roi)}`
+                    : `${row.pnl >= 0 ? "+" : ""}${formatCurrency(row.pnl)}`}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
