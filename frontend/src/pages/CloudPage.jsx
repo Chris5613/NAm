@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,6 +97,15 @@ function formatRecord(wins, losses) {
 
 function getCurrentMonthKey() {
   return new Date().toISOString().slice(0, 7);
+}
+
+function moveMonthKey(monthKey, amount) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(year, month - 1 + amount, 1);
+  const nextYear = date.getFullYear();
+  const nextMonth = String(date.getMonth() + 1).padStart(2, "0");
+
+  return `${nextYear}-${nextMonth}`;
 }
 
 function getDayKey(date) {
@@ -229,6 +238,7 @@ export default function CloudPage() {
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [showHidden, setShowHidden] = useState(false);
   const [form, setForm] = useState(() => emptyForm());
+  const [calendarMonthKey, setCalendarMonthKey] = useState(() => getCurrentMonthKey());
 
   const isEditing = !!editingBetId;
 
@@ -381,11 +391,6 @@ const chartSegments = useMemo(() => {
     return buildGroupStats(filteredBets, getCategory);
   }, [filteredBets]);
 
-
-  const calendarMonthKey =
-    selectedMonth === "all"
-      ? monthOptions[0] || getCurrentMonthKey()
-      : selectedMonth;
 
   const calendarBets = useMemo(() => {
     return bets.filter((bet) => getBetMonthKey(bet) === calendarMonthKey);
@@ -812,7 +817,16 @@ const chartSegments = useMemo(() => {
           </div>
             </div>
 
-            <CalendarSidePanel monthKey={calendarMonthKey} bets={calendarBets} />
+            <CalendarSidePanel
+              monthKey={calendarMonthKey}
+              bets={calendarBets}
+              onPreviousMonth={() =>
+                setCalendarMonthKey((prev) => moveMonthKey(prev, -1))
+              }
+              onNextMonth={() =>
+                setCalendarMonthKey((prev) => moveMonthKey(prev, 1))
+              }
+            />
           </div>
         </CardContent>
       </Card>
@@ -1008,8 +1022,12 @@ const chartSegments = useMemo(() => {
 }
 
 
-function CalendarSidePanel({ monthKey, bets }) {
+function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
   const [selectedDate, setSelectedDate] = useState(null);
+
+  useEffect(() => {
+    setSelectedDate(null);
+  }, [monthKey]);
 
   const days = useMemo(() => getCalendarDays(monthKey), [monthKey]);
 
@@ -1076,14 +1094,28 @@ function CalendarSidePanel({ monthKey, bets }) {
   return (
     <Card className="border-border/40 bg-secondary/20 2xl:sticky 2xl:top-6">
       <CardContent className="p-5 space-y-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold tracking-wide text-foreground">
+        <div className="flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={onPreviousMonth}
+            className="w-9 h-9 rounded-lg border border-border/40 bg-secondary/40 text-xl font-bold text-foreground hover:bg-secondary"
+            aria-label="Previous month"
+          >
+            &lt;
+          </button>
+
+          <h2 className="flex-1 text-center text-2xl font-bold tracking-wide text-foreground">
             {formatMonthLabel(monthKey)}
           </h2>
 
-          <div className="w-9 h-9 rounded-lg border border-violet-500/70 text-violet-400 flex items-center justify-center">
-            ▦
-          </div>
+          <button
+            type="button"
+            onClick={onNextMonth}
+            className="w-9 h-9 rounded-lg border border-border/40 bg-secondary/40 text-xl font-bold text-foreground hover:bg-secondary"
+            aria-label="Next month"
+          >
+            &gt;
+          </button>
         </div>
 
         <div className="h-px bg-border/50" />
