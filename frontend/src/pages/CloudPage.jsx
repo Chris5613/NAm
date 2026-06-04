@@ -95,6 +95,35 @@ function formatRecord(wins, losses) {
   return `${wins}W · ${losses}L`;
 }
 
+function getCurrentMonthKey() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+function getDayKey(date) {
+  return String(date || "").slice(0, 10);
+}
+
+function getCalendarDays(monthKey) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const firstDay = new Date(year, month - 1, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const startPadding = firstDay.getDay();
+  const days = [];
+
+  for (let i = 0; i < startPadding; i += 1) {
+    days.push(null);
+  }
+
+  for (let day = 1; day <= daysInMonth; day += 1) {
+    days.push({
+      day,
+      dateKey: `${monthKey}-${String(day).padStart(2, "0")}`,
+    });
+  }
+
+  return days;
+}
+
 function getBetMonthKey(bet) {
   const date = bet.date || bet.created_at;
   if (!date) return "";
@@ -243,17 +272,52 @@ export default function CloudPage() {
       wagered += Math.abs(amount);
       netPnl += amount;
 
-      if (isBetWin(bet)) {
-        wins += 1;
-      } else {
-        losses += 1;
-      }
+if (isBetWin(bet)) {
+  wins += 1;
+} else {
+  losses += 1;
+}
     });
 
     const total = wins + losses;
     const winRate = total > 0 ? (wins / total) * 100 : 0;
     const roi = wagered > 0 ? (netPnl / wagered) * 100 : 0;
     const avgBetSize = total > 0 ? wagered / total : 0;
+
+    const chronological = [...filteredBets].sort(
+      (a, b) => getBetDateTime(a) - getBetDateTime(b)
+    );
+
+    let currentWinStreak = 0;
+    let longestWinStreak = 0;
+    let longestLossStreak = 0;
+    let runningWin = 0;
+    let runningLoss = 0;
+
+    chronological.forEach((bet) => {
+      const won = isBetWin(bet);
+
+      if (won) {
+        runningWin += 1;
+        runningLoss = 0;
+      } else {
+        runningLoss += 1;
+        runningWin = 0;
+      }
+
+      longestWinStreak = Math.max(longestWinStreak, runningWin);
+      longestLossStreak = Math.max(longestLossStreak, runningLoss);
+    });
+
+for (let i = chronological.length - 1; i >= 0; i -= 1) {
+  const bet = chronological[i];
+
+  if (isBetWin(bet)) {
+    currentWinStreak += 1;
+  } else {
+    break;
+  }
+}
 
     return {
       wins,
@@ -264,6 +328,9 @@ export default function CloudPage() {
       winRate,
       roi,
       avgBetSize,
+      currentWinStreak,
+      longestWinStreak,
+      longestLossStreak,
     };
   }, [filteredBets]);
 
@@ -313,6 +380,16 @@ const chartSegments = useMemo(() => {
   const categoryStats = useMemo(() => {
     return buildGroupStats(filteredBets, getCategory);
   }, [filteredBets]);
+
+
+  const calendarMonthKey =
+    selectedMonth === "all"
+      ? monthOptions[0] || getCurrentMonthKey()
+      : selectedMonth;
+
+  const calendarBets = useMemo(() => {
+    return bets.filter((bet) => getBetMonthKey(bet) === calendarMonthKey);
+  }, [bets, calendarMonthKey]);
 
   const openAddModal = () => {
     setEditingBetId(null);
@@ -519,7 +596,9 @@ const chartSegments = useMemo(() => {
             <StatCard label="Total Bets" value={String(stats.total)} />
           </div>
 
-          <Card className="border-border/40 bg-secondary/20">
+          <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_390px] gap-6 items-start">
+            <div className="space-y-6">
+              <Card className="border-border/40 bg-secondary/20">
             <CardContent className="p-5">
               <p className="text-sm font-semibold text-muted-foreground mb-4">
                 P/L Progression
@@ -731,6 +810,10 @@ const chartSegments = useMemo(() => {
               </div>
             )}
           </div>
+            </div>
+
+            <CalendarSidePanel monthKey={calendarMonthKey} bets={calendarBets} />
+          </div>
         </CardContent>
       </Card>
 
@@ -921,6 +1004,236 @@ const chartSegments = useMemo(() => {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+
+function CalendarSidePanel({ monthKey, bets }) {
+  const [selectedDate, setSelectedDate] = useState(null);
+
+  const days = useMemo(() => getCalendarDays(monthKey), [monthKey]);
+
+  const dailyStats = useMemo(() => {
+    const map = {};
+
+    bets.forEach((bet) => {
+      const dateKey = getDayKey(bet.date || bet.created_at);
+      const amount = Number(bet.amount) || 0;
+
+      if (!map[dateKey]) {
+        map[dateKey] = {
+          wins: 0,
+          losses: 0,
+          pnl: 0,
+          bets: [],
+        };
+      }
+
+      map[dateKey].pnl += amount;
+      map[dateKey].bets.push(bet);
+
+      if (isBetWin(bet)) {
+        map[dateKey].wins += 1;
+      } else {
+        map[dateKey].losses += 1;
+      }
+    });
+
+    return map;
+  }, [bets]);
+
+  const monthStats = useMemo(() => {
+    return bets.reduce(
+      (acc, bet) => {
+        const amount = Number(bet.amount) || 0;
+        acc.pnl += amount;
+
+        if (isBetWin(bet)) {
+          acc.wins += 1;
+        } else {
+          acc.losses += 1;
+        }
+
+        return acc;
+      },
+      { wins: 0, losses: 0, pnl: 0 }
+    );
+  }, [bets]);
+
+  const firstBetDate = bets[0]?.date || bets[0]?.created_at || "";
+  const activeDate = selectedDate || getDayKey(firstBetDate) || `${monthKey}-01`;
+  const activeStats = dailyStats[activeDate] || {
+    wins: 0,
+    losses: 0,
+    pnl: 0,
+    bets: [],
+  };
+
+  const withdrawGoal = 3000;
+  const withdrawProgress = Math.max(0, Math.min(monthStats.pnl, withdrawGoal));
+  const withdrawPercent = withdrawGoal > 0 ? (withdrawProgress / withdrawGoal) * 100 : 0;
+
+  return (
+    <Card className="border-border/40 bg-secondary/20 2xl:sticky 2xl:top-6">
+      <CardContent className="p-5 space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold tracking-wide text-foreground">
+            {formatMonthLabel(monthKey)}
+          </h2>
+
+          <div className="w-9 h-9 rounded-lg border border-violet-500/70 text-violet-400 flex items-center justify-center">
+            ▦
+          </div>
+        </div>
+
+        <div className="h-px bg-border/50" />
+
+        <div className="rounded-lg border border-border/40 bg-secondary/40 p-4 flex items-center justify-between">
+          <p className="text-lg font-bold text-foreground">
+            {formatRecord(monthStats.wins, monthStats.losses)}
+          </p>
+
+          <p
+            className={`text-lg font-bold font-mono ${
+              monthStats.pnl >= 0 ? "text-emerald-300" : "text-rose-300"
+            }`}
+          >
+            {monthStats.pnl >= 0 ? "+" : ""}
+            {formatCurrency(monthStats.pnl)}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-border/40 bg-secondary/40 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <p className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+              Withdraw Goal
+            </p>
+
+            <p className="font-mono text-sm font-bold text-foreground">
+              {formatCurrency(withdrawProgress)} / {formatCurrency(withdrawGoal)}
+            </p>
+          </div>
+
+          <div className="h-2 rounded-full bg-background overflow-hidden">
+            <div
+              className="h-full rounded-full bg-violet-500"
+              style={{ width: `${withdrawPercent}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-wider text-muted-foreground">
+          {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day) => (
+            <span key={day}>{day}</span>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-2">
+          {days.map((day, index) => {
+            if (!day) {
+              return <div key={`empty-${index}`} className="aspect-square" />;
+            }
+
+            const dayStats = dailyStats[day.dateKey];
+            const hasBets = !!dayStats;
+            const isSelected = activeDate === day.dateKey;
+            const isPositive = (dayStats?.pnl || 0) >= 0;
+
+            return (
+              <button
+                key={day.dateKey}
+                type="button"
+                onClick={() => setSelectedDate(day.dateKey)}
+                className={`aspect-square rounded-lg border p-1 flex flex-col items-center justify-center transition-colors ${
+                  isSelected
+                    ? "border-violet-500 bg-violet-500/10"
+                    : hasBets
+                      ? isPositive
+                        ? "border-emerald-500/40 bg-emerald-500/10"
+                        : "border-rose-500/40 bg-rose-500/10"
+                      : "border-transparent bg-secondary/40 hover:bg-secondary/60"
+                }`}
+              >
+                <span className="text-sm font-bold text-foreground">{day.day}</span>
+
+                {hasBets && (
+                  <span
+                    className={`text-[10px] font-mono font-bold ${
+                      isPositive ? "text-emerald-300" : "text-rose-300"
+                    }`}
+                  >
+                    {dayStats.pnl >= 0 ? "+" : ""}
+                    {formatCurrency(dayStats.pnl).replace(".00", "")}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="h-px bg-border/50" />
+
+        <div className="flex items-center justify-between">
+          <p className="text-lg font-bold tracking-[0.2em] text-violet-400 uppercase">
+            {new Date(`${activeDate}T00:00:00`).toLocaleDateString("en-US", {
+              month: "long",
+              day: "numeric",
+            })}
+          </p>
+
+          <p className="font-mono text-sm font-bold text-muted-foreground">
+            {formatRecord(activeStats.wins, activeStats.losses)} · {activeStats.pnl >= 0 ? "+" : ""}
+            {formatCurrency(activeStats.pnl)}
+          </p>
+        </div>
+
+        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
+          {activeStats.bets.length === 0 ? (
+            <div className="rounded-lg border border-border/40 bg-secondary/30 p-4 text-center text-sm text-muted-foreground">
+              No bets on this day.
+            </div>
+          ) : (
+            activeStats.bets.map((bet) => {
+              const won = isBetWin(bet);
+
+              return (
+                <div
+                  key={bet.id}
+                  className={`rounded-lg border bg-secondary/40 p-3 flex items-center justify-between gap-3 ${
+                    won ? "border-emerald-500/40" : "border-rose-500/40"
+                  }`}
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground truncate">
+                      {bet.title}
+                    </p>
+
+                    <p className="text-xs text-muted-foreground truncate mt-1">
+                      {bet.matchup || getSportLabel(getCategory(bet))}
+                    </p>
+                  </div>
+
+                  <div className="text-right shrink-0">
+                    <p
+                      className={`font-mono text-sm font-bold ${
+                        won ? "text-emerald-300" : "text-rose-300"
+                      }`}
+                    >
+                      {Number(bet.amount) >= 0 ? "+" : ""}
+                      {formatCurrency(Number(bet.amount) || 0)}
+                    </p>
+
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                      {won ? "Won" : "Lost"}
+                    </p>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
