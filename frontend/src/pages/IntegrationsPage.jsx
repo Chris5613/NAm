@@ -11,7 +11,6 @@ import RollerCoinEarningsCard from "@/components/RollerCoinEarningsCard";
 import AcurastEarningsCard from "@/components/AcurastEarningsCard";
 import UnityNetworkEarningsCard from "@/components/UnityNetworkEarningsCard";
 import GoMiningEarningsCard from "@/components/GoMiningEarningsCard";
-import CloreEarningsCard from "@/components/CloreEarningsCard";
 import {
   AddIntegrationDialog,
   CustomIntegrationCard,
