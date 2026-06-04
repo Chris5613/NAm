@@ -18,6 +18,7 @@ import {
   TrendingUp,
   TrendingDown,
   Trophy,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -74,24 +75,28 @@ function formatMonthLabel(monthKey) {
   });
 }
 
+const emptyForm = () => ({
+  title: "",
+  matchup: "",
+  amount: "",
+  result: "win",
+  date: new Date().toISOString().slice(0, 10),
+  note: "",
+});
+
 export default function CloudPage() {
   const [bets, setBets] = useState(() => getSavedBets());
   const [addOpen, setAddOpen] = useState(false);
+  const [editingBetId, setEditingBetId] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [showHidden, setShowHidden] = useState(false);
 
-  const [form, setForm] = useState({
-    title: "",
-    matchup: "",
-    amount: "",
-    result: "win",
-    date: new Date().toISOString().slice(0, 10),
-    note: "",
-  });
+  const [form, setForm] = useState(() => emptyForm());
+
+  const isEditing = !!editingBetId;
 
   const monthOptions = useMemo(() => {
     const months = [...new Set(bets.map(getBetMonthKey).filter(Boolean))];
-
     return months.sort((a, b) => b.localeCompare(a));
   }, [bets]);
 
@@ -150,7 +155,34 @@ export default function CloudPage() {
     };
   }, [filteredBets]);
 
-  const handleAddBet = () => {
+  const openAddModal = () => {
+    setEditingBetId(null);
+    setForm(emptyForm());
+    setAddOpen(true);
+  };
+
+  const openEditModal = (bet) => {
+    setEditingBetId(bet.id);
+
+    setForm({
+      title: bet.title || "",
+      matchup: bet.matchup || "",
+      amount: String(Math.abs(Number(bet.amount) || 0)),
+      result: Number(bet.amount) >= 0 ? "win" : "loss",
+      date: bet.date || new Date().toISOString().slice(0, 10),
+      note: bet.note || "",
+    });
+
+    setAddOpen(true);
+  };
+
+  const closeModal = () => {
+    setAddOpen(false);
+    setEditingBetId(null);
+    setForm(emptyForm());
+  };
+
+  const handleSaveBet = () => {
     const amountRaw = Number(form.amount);
 
     if (!form.title.trim()) {
@@ -165,6 +197,29 @@ export default function CloudPage() {
 
     const finalAmount =
       form.result === "loss" ? -Math.abs(amountRaw) : Math.abs(amountRaw);
+
+    if (isEditing) {
+      const next = bets.map((bet) =>
+        bet.id === editingBetId
+          ? {
+              ...bet,
+              title: form.title.trim(),
+              matchup: form.matchup.trim(),
+              amount: finalAmount,
+              result: form.result,
+              date: form.date,
+              note: form.note.trim(),
+              updated_at: new Date().toISOString(),
+            }
+          : bet
+      );
+
+      setBets(next);
+      saveBets(next);
+      closeModal();
+      toast.success("Bet updated");
+      return;
+    }
 
     const nextBet = {
       id: crypto.randomUUID(),
@@ -182,17 +237,7 @@ export default function CloudPage() {
 
     setBets(next);
     saveBets(next);
-
-    setForm({
-      title: "",
-      matchup: "",
-      amount: "",
-      result: "win",
-      date: new Date().toISOString().slice(0, 10),
-      note: "",
-    });
-
-    setAddOpen(false);
+    closeModal();
     toast.success("Bet added");
   };
 
@@ -239,7 +284,7 @@ export default function CloudPage() {
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
-                onClick={() => setAddOpen(true)}
+                onClick={openAddModal}
                 className="bg-white text-black hover:bg-neutral-200"
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -421,6 +466,14 @@ export default function CloudPage() {
                           </span>
 
                           <button
+                            onClick={() => openEditModal(bet)}
+                            className="text-muted-foreground hover:text-foreground p-1"
+                            title="Edit bet"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+
+                          <button
                             onClick={() => toggleHideBet(bet.id)}
                             className="text-muted-foreground hover:text-foreground p-1 text-xs font-mono"
                           >
@@ -444,12 +497,16 @@ export default function CloudPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+      <Dialog open={addOpen} onOpenChange={(open) => (open ? setAddOpen(true) : closeModal())}>
         <DialogContent className="bg-card border-border sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Cloud Bet</DialogTitle>
+            <DialogTitle>
+              {isEditing ? "Edit Cloud Bet" : "Add Cloud Bet"}
+            </DialogTitle>
             <DialogDescription>
-              Manually enter a win or loss.
+              {isEditing
+                ? "Update this manual bet."
+                : "Manually enter a win or loss."}
             </DialogDescription>
           </DialogHeader>
 
@@ -584,11 +641,13 @@ export default function CloudPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setAddOpen(false)}>
+            <Button variant="outline" onClick={closeModal}>
               Cancel
             </Button>
 
-            <Button onClick={handleAddBet}>Save Bet</Button>
+            <Button onClick={handleSaveBet}>
+              {isEditing ? "Save Changes" : "Save Bet"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
