@@ -30,7 +30,6 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
-  Customized,
 } from "recharts";
 import { toast } from "sonner";
 
@@ -306,21 +305,48 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
     };
   }, [filteredBets]);
 
-  const chartData = useMemo(() => {
-    let running = 0;
+const chartSegments = useMemo(() => {
+  let running = 0;
 
-    return [...filteredBets]
-      .sort((a, b) => getBetDateTime(a) - getBetDateTime(b))
-      .map((bet, index) => {
-        running += Number(bet.amount) || 0;
+  const points = [...filteredBets]
+    .sort((a, b) => getBetDateTime(a) - getBetDateTime(b))
+    .map((bet, index) => {
+      running += Number(bet.amount) || 0;
 
-        return {
-          label: `${index + 1}`,
-          date: bet.date || `Bet ${index + 1}`,
-          value: running,
-        };
-      });
-  }, [filteredBets]);
+      return {
+        label: `${index + 1}`,
+        date: bet.date || `Bet ${index + 1}`,
+        value: running,
+      };
+    });
+
+  const data = points.map((point) => ({
+    label: point.label,
+    date: point.date,
+    value: point.value,
+  }));
+
+  const segments = [];
+
+  for (let i = 1; i < points.length; i += 1) {
+    const previous = points[i - 1];
+    const current = points[i];
+    const key = `segment_${i}`;
+
+    data[i - 1][key] = previous.value;
+    data[i][key] = current.value;
+
+    segments.push({
+      key,
+      color: current.value >= previous.value ? "#34D399" : "#FB7185",
+    });
+  }
+
+  return {
+    data,
+    segments,
+  };
+}, [filteredBets]);
 
   const categoryStats = useMemo(() => {
     return buildGroupStats(filteredBets, getCategory);
@@ -538,10 +564,10 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
               </p>
 
               <div className="h-[240px]">
-                {chartData.length > 1 ? (
+                {chartSegments.length > 1 ? (
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart
-                      data={chartData}
+                      data={chartSegments}
                       margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
@@ -553,7 +579,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={(value, index) =>
-                          chartData[index]?.date || value
+                          chartSegments[index]?.date || value
                         }
                       />
 
@@ -578,23 +604,21 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                           payload?.[0]?.payload?.date || value
                         }
                       />
-
-<Line
-  type="monotone"
-  dataKey="value"
-  stroke="transparent"
-  strokeWidth={1}
-  dot={false}
-  activeDot={false}
-  isAnimationActive={false}
-  opacity={0}
-/>
-
-<Customized
-  component={(props) => (
-    <SegmentedProfitLine {...props} data={chartData} />
-  )}
-/>                  </LineChart>
+{chartSegments.segments.map((segment) => (
+  <Line
+    key={segment.key}
+    type="monotone"
+    dataKey={segment.key}
+    stroke={segment.color}
+    strokeWidth={3}
+    dot={false}
+    connectNulls={false}
+    isAnimationActive={false}
+    strokeLinecap="round"
+    strokeLinejoin="round"
+  />
+))}
+                  </LineChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex items-center justify-center text-sm text-slate-300">
@@ -935,43 +959,6 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function SegmentedProfitLine({ data, xAxisMap, yAxisMap }) {
-  const xAxis = Object.values(xAxisMap || {})[0];
-  const yAxis = Object.values(yAxisMap || {})[0];
-
-  if (!xAxis?.scale || !yAxis?.scale || !Array.isArray(data)) {
-    return null;
-  }
-
-  return (
-    <g>
-      {data.slice(1).map((point, index) => {
-        const previous = data[index];
-
-        const x1 = xAxis.scale(previous.label);
-        const y1 = yAxis.scale(previous.value);
-        const x2 = xAxis.scale(point.label);
-        const y2 = yAxis.scale(point.value);
-
-        const midX = (x1 + x2) / 2;
-        const stroke = point.value >= previous.value ? "#34D399" : "#FB7185";
-
-        return (
-          <path
-            key={`${previous.label}-${point.label}`}
-            d={`M ${x1} ${y1} C ${midX} ${y1}, ${midX} ${y2}, ${x2} ${y2}`}
-            fill="none"
-            stroke={stroke}
-            strokeWidth={3}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        );
-      })}
-    </g>
   );
 }
 
