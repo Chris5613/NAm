@@ -78,6 +78,7 @@ export default function CloudPage() {
   const [bets, setBets] = useState(() => getSavedBets());
   const [addOpen, setAddOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState("all");
+  const [showHidden, setShowHidden] = useState(false);
 
   const [form, setForm] = useState({
     title: "",
@@ -111,6 +112,12 @@ const filteredBets = useMemo(() => {
 
   return sorted.filter((bet) => getBetMonthKey(bet) === selectedMonth);
 }, [bets, selectedMonth]);
+
+const visibleBets = useMemo(() => {
+  return filteredBets.filter((bet) => showHidden || !bet.hidden);
+}, [filteredBets, showHidden]);
+
+const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
 
   const stats = useMemo(() => {
     let wins = 0;
@@ -196,6 +203,22 @@ const filteredBets = useMemo(() => {
 
     toast.success("Bet removed");
   };
+
+  const toggleHideBet = (id) => {
+  const next = bets.map((bet) =>
+    bet.id === id
+      ? {
+          ...bet,
+          hidden: !bet.hidden,
+        }
+      : bet
+  );
+
+  setBets(next);
+  saveBets(next);
+
+  toast.success("Bet updated");
+};
 
   return (
 <div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
@@ -306,21 +329,37 @@ const filteredBets = useMemo(() => {
               Bets
             </p>
 
-            {filteredBets.length === 0 ? (
+            {visibleBets.length === 0 ? (
               <div className="rounded-lg border border-border/40 bg-secondary/30 p-8 text-center">
-                <p className="text-sm text-muted-foreground">
-                  No bets added yet.
-                </p>
+<div className="flex items-center justify-between gap-3 mb-3">
+  <p className="text-sm font-semibold text-muted-foreground">
+    Bets
+  </p>
+
+  {hiddenCount > 0 && (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      onClick={() => setShowHidden((prev) => !prev)}
+      className="border-border/40"
+    >
+      {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
+    </Button>
+  )}
+</div>
               </div>
             ) : (
               <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto pr-2">
-{filteredBets.map((bet) => {
+{visibleBets.map((bet) => {
   const won = Number(bet.amount) >= 0;
 
   return (
                     <div
                       key={bet.id}
                       className={`rounded-lg border p-4 bg-secondary/40 ${
+  bet.hidden ? "opacity-50" : ""
+} ${
                         won
                           ? "border-emerald-500/40"
                           : "border-rose-500/40"
@@ -378,12 +417,19 @@ const filteredBets = useMemo(() => {
                             {won ? "Win" : "Loss"}
                           </span>
 
-                          <button
-                            onClick={() => handleDeleteBet(bet.id)}
-                            className="text-muted-foreground hover:text-rose-400 p-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+<button
+  onClick={() => toggleHideBet(bet.id)}
+  className="text-muted-foreground hover:text-foreground p-1 text-xs font-mono"
+>
+  {bet.hidden ? "Unhide" : "Hide"}
+</button>
+
+<button
+  onClick={() => handleDeleteBet(bet.id)}
+  className="text-muted-foreground hover:text-rose-400 p-1"
+>
+  <Trash2 className="w-4 h-4" />
+</button>
                         </div>
                       </div>
                     </div>
