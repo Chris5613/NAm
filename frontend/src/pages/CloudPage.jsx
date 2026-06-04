@@ -497,7 +497,7 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
             <StatCard
               label="Net P/L"
               value={`${stats.netPnl >= 0 ? "+" : ""}${formatCurrency(
@@ -526,18 +526,6 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
             <StatCard
               label="Total Wagered"
               value={formatCurrency(stats.wagered)}
-            />
-
-            <StatCard
-              label="Current Win Streak"
-              value={`${stats.currentWinStreak}W`}
-              positive={stats.currentWinStreak > 0}
-            />
-
-            <StatCard
-              label="Longest Win Streak"
-              value={String(stats.longestWinStreak)}
-              positive
             />
 
             <StatCard label="Total Bets" value={String(stats.total)} />
@@ -591,17 +579,21 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
                         }
                       />
 
-                      <Line
-                        type="monotone"
-                        dataKey="value"
-                        stroke="transparent"
-                        strokeWidth={0}
-                        dot={false}
-                        activeDot={false}
-                        isAnimationActive={false}
-                      />
-
-                      <Customized component={<SegmentedProfitLine data={chartData} />} />
+<Line
+  type="monotone"
+  dataKey="value"
+  stroke="transparent"
+  strokeWidth={1}
+  dot={false}
+  activeDot={false}
+  isAnimationActive={false}
+  opacity={0}
+/>
+                      <Customized
+  component={(props) => (
+    <SegmentedProfitLine {...props} data={chartData} />
+  )}
+/>
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
