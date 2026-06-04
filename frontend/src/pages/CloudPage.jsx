@@ -589,12 +589,12 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
   isAnimationActive={false}
   opacity={0}
 />
-                      <Customized
+
+<Customized
   component={(props) => (
     <SegmentedProfitLine {...props} data={chartData} />
   )}
-/>
-                    </LineChart>
+/>                  </LineChart>
                   </ResponsiveContainer>
                 ) : (
                   <div className="h-full flex items-center justify-center text-sm text-slate-300">
