@@ -59,7 +59,7 @@ function getBetMonthKey(bet) {
   const date = bet.date || bet.created_at;
   if (!date) return "";
 
-  return date.slice(0, 7); // YYYY-MM
+  return date.slice(0, 7);
 }
 
 function formatMonthLabel(monthKey) {
@@ -90,34 +90,34 @@ export default function CloudPage() {
   });
 
   const monthOptions = useMemo(() => {
-  const months = [...new Set(bets.map(getBetMonthKey).filter(Boolean))];
+    const months = [...new Set(bets.map(getBetMonthKey).filter(Boolean))];
 
-  return months.sort((a, b) => b.localeCompare(a));
-}, [bets]);
+    return months.sort((a, b) => b.localeCompare(a));
+  }, [bets]);
 
-const filteredBets = useMemo(() => {
-  const sorted = [...bets].sort((a, b) => {
-    const dateA = new Date(a.date || a.created_at || 0).getTime();
-    const dateB = new Date(b.date || b.created_at || 0).getTime();
+  const filteredBets = useMemo(() => {
+    const sorted = [...bets].sort((a, b) => {
+      const dateA = new Date(a.date || a.created_at || 0).getTime();
+      const dateB = new Date(b.date || b.created_at || 0).getTime();
 
-    if (dateB !== dateA) return dateB - dateA;
+      if (dateB !== dateA) return dateB - dateA;
 
-    return (
-      new Date(b.created_at || 0).getTime() -
-      new Date(a.created_at || 0).getTime()
-    );
-  });
+      return (
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime()
+      );
+    });
 
-  if (selectedMonth === "all") return sorted;
+    if (selectedMonth === "all") return sorted;
 
-  return sorted.filter((bet) => getBetMonthKey(bet) === selectedMonth);
-}, [bets, selectedMonth]);
+    return sorted.filter((bet) => getBetMonthKey(bet) === selectedMonth);
+  }, [bets, selectedMonth]);
 
-const visibleBets = useMemo(() => {
-  return filteredBets.filter((bet) => showHidden || !bet.hidden);
-}, [filteredBets, showHidden]);
+  const visibleBets = useMemo(() => {
+    return filteredBets.filter((bet) => showHidden || !bet.hidden);
+  }, [filteredBets, showHidden]);
 
-const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
+  const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
 
   const stats = useMemo(() => {
     let wins = 0;
@@ -175,6 +175,7 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
       date: form.date,
       note: form.note.trim(),
       created_at: new Date().toISOString(),
+      hidden: false,
     };
 
     const next = [nextBet, ...bets];
@@ -205,24 +206,24 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
   };
 
   const toggleHideBet = (id) => {
-  const next = bets.map((bet) =>
-    bet.id === id
-      ? {
-          ...bet,
-          hidden: !bet.hidden,
-        }
-      : bet
-  );
+    const next = bets.map((bet) =>
+      bet.id === id
+        ? {
+            ...bet,
+            hidden: !bet.hidden,
+          }
+        : bet
+    );
 
-  setBets(next);
-  saveBets(next);
+    setBets(next);
+    saveBets(next);
 
-  toast.success("Bet updated");
-};
+    toast.success("Bet updated");
+  };
 
   return (
-<div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
-  <Card className="w-full min-h-[calc(100vh-4rem)] rounded-none border-0 bg-card shadow-none">
+    <div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
+      <Card className="w-full min-h-[calc(100vh-4rem)] rounded-none border-0 bg-card shadow-none">
         <CardContent className="p-8">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
@@ -256,25 +257,27 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
           </div>
 
           <div className="mt-8">
-<div className="flex items-center justify-between gap-3 mb-3">
-  <p className="text-xs uppercase tracking-wider text-muted-foreground">
-    {selectedMonth === "all" ? "All Months" : formatMonthLabel(selectedMonth)}
-  </p>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <p className="text-xs uppercase tracking-wider text-muted-foreground">
+                {selectedMonth === "all"
+                  ? "All Months"
+                  : formatMonthLabel(selectedMonth)}
+              </p>
 
-  <select
-    value={selectedMonth}
-    onChange={(e) => setSelectedMonth(e.target.value)}
-    className="h-9 rounded-md border border-border/40 bg-background px-3 text-xs font-mono text-foreground outline-none"
-  >
-    <option value="all">All Months</option>
+              <select
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="h-9 rounded-md border border-border/40 bg-background px-3 text-xs font-mono text-foreground outline-none"
+              >
+                <option value="all">All Months</option>
 
-    {monthOptions.map((monthKey) => (
-      <option key={monthKey} value={monthKey}>
-        {formatMonthLabel(monthKey)}
-      </option>
-    ))}
-  </select>
-</div>
+                {monthOptions.map((monthKey) => (
+                  <option key={monthKey} value={monthKey}>
+                    {formatMonthLabel(monthKey)}
+                  </option>
+                ))}
+              </select>
+            </div>
 
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               <div className="rounded-lg bg-secondary/60 border border-border/40 p-4 text-center">
@@ -325,41 +328,41 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
           </div>
 
           <div className="mt-8">
-            <p className="text-sm font-semibold text-muted-foreground mb-3">
-              Bets
-            </p>
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <p className="text-sm font-semibold text-muted-foreground">
+                Bets
+              </p>
+
+              {hiddenCount > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowHidden((prev) => !prev)}
+                  className="border-border/40"
+                >
+                  {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
+                </Button>
+              )}
+            </div>
 
             {visibleBets.length === 0 ? (
               <div className="rounded-lg border border-border/40 bg-secondary/30 p-8 text-center">
-<div className="flex items-center justify-between gap-3 mb-3">
-  <p className="text-sm font-semibold text-muted-foreground">
-    Bets
-  </p>
-
-  {hiddenCount > 0 && (
-    <Button
-      type="button"
-      variant="outline"
-      size="sm"
-      onClick={() => setShowHidden((prev) => !prev)}
-      className="border-border/40"
-    >
-      {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
-    </Button>
-  )}
-</div>
+                <p className="text-sm text-muted-foreground">
+                  No visible bets.
+                </p>
               </div>
             ) : (
               <div className="space-y-3 max-h-[calc(100vh-360px)] overflow-y-auto pr-2">
-{visibleBets.map((bet) => {
-  const won = Number(bet.amount) >= 0;
+                {visibleBets.map((bet) => {
+                  const won = Number(bet.amount) >= 0;
 
-  return (
+                  return (
                     <div
                       key={bet.id}
                       className={`rounded-lg border p-4 bg-secondary/40 ${
-  bet.hidden ? "opacity-50" : ""
-} ${
+                        bet.hidden ? "opacity-50" : ""
+                      } ${
                         won
                           ? "border-emerald-500/40"
                           : "border-rose-500/40"
@@ -417,19 +420,19 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
                             {won ? "Win" : "Loss"}
                           </span>
 
-<button
-  onClick={() => toggleHideBet(bet.id)}
-  className="text-muted-foreground hover:text-foreground p-1 text-xs font-mono"
->
-  {bet.hidden ? "Unhide" : "Hide"}
-</button>
+                          <button
+                            onClick={() => toggleHideBet(bet.id)}
+                            className="text-muted-foreground hover:text-foreground p-1 text-xs font-mono"
+                          >
+                            {bet.hidden ? "Unhide" : "Hide"}
+                          </button>
 
-<button
-  onClick={() => handleDeleteBet(bet.id)}
-  className="text-muted-foreground hover:text-rose-400 p-1"
->
-  <Trash2 className="w-4 h-4" />
-</button>
+                          <button
+                            onClick={() => handleDeleteBet(bet.id)}
+                            className="text-muted-foreground hover:text-rose-400 p-1"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -453,6 +456,7 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Bet title</Label>
+
               <Input
                 value={form.title}
                 onChange={(e) =>
@@ -468,6 +472,7 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
 
             <div className="space-y-2">
               <Label>Matchup or details</Label>
+
               <Input
                 value={form.matchup}
                 onChange={(e) =>
@@ -484,6 +489,7 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Amount</Label>
+
                 <Input
                   type="number"
                   step="any"
@@ -501,6 +507,7 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
 
               <div className="space-y-2">
                 <Label>Date</Label>
+
                 <Input
                   type="date"
                   value={form.date}
@@ -561,6 +568,7 @@ const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
 
             <div className="space-y-2">
               <Label>Note</Label>
+
               <Input
                 value={form.note}
                 onChange={(e) =>
