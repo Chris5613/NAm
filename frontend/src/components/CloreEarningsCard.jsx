@@ -184,16 +184,17 @@ export default function CloreEarningsCard() {
               value={`${cloreBalance.toFixed(8)} CLORE`}
             />
 
-            <MetricBox
-              icon={<Activity className="w-4 h-4" strokeWidth={1.5} />}
-              label="Daily Potential"
-              value={`${dailyPotentialClore.toFixed(8)} CLORE/day`}
-            />
+<MetricBox
+  icon={<Wallet className="w-4 h-4" strokeWidth={1.5} />}
+  label="CLORE Balance"
+  value={`${cloreBalance.toFixed(8)} CLORE`}
+/>
 
-            <MetricBox
-              label="New Synced Earnings"
-              value={`+${earnedClore.toFixed(8)} CLORE`}
-            />
+<MetricBox
+  icon={<Activity className="w-4 h-4" strokeWidth={1.5} />}
+  label="Live CLORE Price"
+  value={`$${Number(data?.cloreUsdPrice || 0).toFixed(8)}`}
+/>
 
             <MetricBox
               label="Servers Online"
@@ -229,35 +230,6 @@ export default function CloreEarningsCard() {
           ) : (
             <div className="rounded-xl border border-border p-4 text-sm text-muted-foreground">
               No Clore servers found.
-            </div>
-          )}
-
-          {history.length > 0 && (
-            <div className="rounded-xl border border-border p-4">
-              <h3 className="text-sm font-medium text-foreground">
-                Recent CLORE Sync History
-              </h3>
-
-              <div className="mt-3 space-y-2">
-                {history
-                  .slice()
-                  .reverse()
-                  .slice(0, 7)
-                  .map((item) => (
-                    <div
-                      key={item.id || item.timestamp}
-                      className="flex items-center justify-between gap-3 text-sm"
-                    >
-                      <span className="text-muted-foreground">
-                        {item.date}
-                      </span>
-
-                      <span className="text-foreground">
-                        +{Number(item.earned_clore || 0).toFixed(8)} CLORE
-                      </span>
-                    </div>
-                  ))}
-              </div>
             </div>
           )}
 
