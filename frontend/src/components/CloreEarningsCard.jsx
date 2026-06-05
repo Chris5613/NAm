@@ -12,9 +12,14 @@ export default function CloreEarningsCard() {
   const [error, setError] = useState("");
 
   const cloreBalance = Number(data?.cloreBalance || 0);
-  const cloreUsdPrice = Number(data?.cloreUsdPrice || 0);
+  const cloreUsdPrice = Number(
+    data?.cloreUsdPrice ||
+      data?.raw?.cloreWallet?.price ||
+      data?.raw?.cloreWallet?.price_usd ||
+      data?.raw?.cloreWallet?.usd_price ||
+      0
+  );
   const cloreValueUsd = cloreBalance * cloreUsdPrice;
-  const history = status?.history || data?.history || [];
 
   const loadStatus = async () => {
     try {
@@ -186,13 +191,21 @@ export default function CloreEarningsCard() {
 
             <MetricBox
               icon={<Activity className="w-4 h-4" strokeWidth={1.5} />}
-              label="CLORE Price"
-              value={`$${cloreUsdPrice.toFixed(8)}`}
+              label="Live CLORE Price"
+              value={
+                cloreUsdPrice > 0
+                  ? `$${cloreUsdPrice.toFixed(8)}`
+                  : "Price unavailable"
+              }
             />
 
             <MetricBox
               label="Balance Value"
-              value={`$${cloreValueUsd.toFixed(2)}`}
+              value={
+                cloreUsdPrice > 0
+                  ? `$${cloreValueUsd.toFixed(2)}`
+                  : "Waiting for price"
+              }
             />
 
             <MetricBox
@@ -249,9 +262,7 @@ function MetricBox({ icon, label, value }) {
         {label}
       </div>
 
-      <p className="text-xl font-semibold mt-1 text-foreground">
-        {value}
-      </p>
+      <p className="text-xl font-semibold mt-1 text-foreground">{value}</p>
     </div>
   );
 }
