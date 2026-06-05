@@ -985,16 +985,10 @@ export const cloreTrackingApi = {
     return toResponse(next);
   },
 
-getOverview: async () => {
-  const overview = await cloreApi.getOverview();
-  const cloreUsdPrice = await getLiveCloreUsdPrice();
-
-  return toResponse({
-    ...overview,
-    cloreUsdPrice,
-    currentValueUsd: Number(overview.cloreBalance || 0) * cloreUsdPrice,
-  });
-},
+  getOverview: async () => {
+    const overview = await cloreApi.getOverview();
+    return toResponse(overview);
+  },
 
   sync: async (project_name = "Clore AI") => {
     const overview = await cloreApi.getOverview();
@@ -1221,4 +1215,4 @@ function writeCloreHistory(history) {
   } catch {
     // localStorage unavailable
   }
-}
+}fd
