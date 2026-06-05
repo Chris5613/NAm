@@ -263,4 +263,4 @@ function MetricBox({ icon, label, value }) {
       <p className="text-xl font-semibold mt-1 text-foreground">{value}</p>
     </div>
   );
-}gf
+}
