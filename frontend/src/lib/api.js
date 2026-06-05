@@ -985,10 +985,16 @@ export const cloreTrackingApi = {
     return toResponse(next);
   },
 
-  getOverview: async () => {
-    const overview = await cloreApi.getOverview();
-    return toResponse(overview);
-  },
+getOverview: async () => {
+  const overview = await cloreApi.getOverview();
+  const cloreUsdPrice = await getLiveCloreUsdPrice();
+
+  return toResponse({
+    ...overview,
+    cloreUsdPrice,
+    currentValueUsd: Number(overview.cloreBalance || 0) * cloreUsdPrice,
+  });
+},
 
   sync: async (project_name = "Clore AI") => {
     const overview = await cloreApi.getOverview();
