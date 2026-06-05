@@ -11,6 +11,11 @@ export default function CloreEarningsCard() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
 
+  const cloreBalance = Number(data?.cloreBalance || 0);
+  const cloreUsdPrice = Number(data?.cloreUsdPrice || 0);
+  const cloreValueUsd = cloreBalance * cloreUsdPrice;
+  const history = status?.history || data?.history || [];
+
   const loadStatus = async () => {
     try {
       const res = await cloreTrackingApi.getStatus();
@@ -82,11 +87,6 @@ export default function CloreEarningsCard() {
     loadOverview();
   }, []);
 
-  const cloreBalance = Number(data?.cloreBalance || 0);
-  const dailyPotentialClore = Number(data?.totalDailyPotentialClore || 0);
-  const earnedClore = Number(data?.earnedClore || 0);
-  const history = status?.history || data?.history || [];
-
   return (
     <div
       className="rounded-2xl border border-border bg-card p-5 shadow-sm"
@@ -102,7 +102,7 @@ export default function CloreEarningsCard() {
           </div>
 
           <p className="text-sm text-muted-foreground mt-1">
-            Track CLORE balance, server status, and sync new CLORE earnings into Project Overview.
+            Track CLORE balance, live price, and account value.
           </p>
         </div>
 
@@ -184,17 +184,16 @@ export default function CloreEarningsCard() {
               value={`${cloreBalance.toFixed(8)} CLORE`}
             />
 
-<MetricBox
-  icon={<Wallet className="w-4 h-4" strokeWidth={1.5} />}
-  label="CLORE Balance"
-  value={`${cloreBalance.toFixed(8)} CLORE`}
-/>
+            <MetricBox
+              icon={<Activity className="w-4 h-4" strokeWidth={1.5} />}
+              label="CLORE Price"
+              value={`$${cloreUsdPrice.toFixed(8)}`}
+            />
 
-<MetricBox
-  icon={<Activity className="w-4 h-4" strokeWidth={1.5} />}
-  label="Live CLORE Price"
-  value={`$${Number(data?.cloreUsdPrice || 0).toFixed(8)}`}
-/>
+            <MetricBox
+              label="Balance Value"
+              value={`$${cloreValueUsd.toFixed(2)}`}
+            />
 
             <MetricBox
               label="Servers Online"
