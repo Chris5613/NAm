@@ -64,16 +64,17 @@ export default function InvestmentOverview() {
       fetchProjects();
     };
 
-    const events = [
-      "focus",
-      "storage",
-      "acurast-sync-complete",
-      "unity-network-sync-complete",
-      "rollercoin-sync-complete",
-      "nosana-sync-complete",
-      "gomining-sync-complete",
-      "gomining-token-sync-complete",
-    ];
+const events = [
+  "focus",
+  "storage",
+  "acurast-sync-complete",
+  "unity-network-sync-complete",
+  "rollercoin-sync-complete",
+  "nosana-sync-complete",
+  "gomining-sync-complete",
+  "gomining-token-sync-complete",
+  "clore-sync-complete",
+];
 
     events.forEach((e) => window.addEventListener(e, refresh));
 

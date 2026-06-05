@@ -63,6 +63,21 @@ export const cryptoCacheApi = {
   },
 };
 
+async function getLiveCloreUsdPrice() {
+  try {
+    const price = await coinGeckoApi.getPrice("clore-ai");
+
+    if (Number(price) > 0) {
+      return Number(price);
+    }
+
+    return 0;
+  } catch (error) {
+    console.warn("Failed to fetch live CLORE price:", error);
+    return 0;
+  }
+}
+
 export const phonesApi = {
   list: async () => {
     const phones = normalizeItems(storage.getPhones());
@@ -367,6 +382,7 @@ export const projectsApi = {
 
     if (
       (
+        prev?.source === "clore" ||
         prev?.source === "gomining" ||
         prev?.source === "nosana" ||
         prev?.source === "rollercoin" ||
@@ -491,6 +507,7 @@ export const projectsApi = {
 
     if (
       (
+        removed?.source === "clore" ||
         removed?.source === "gomining" ||
         removed?.source === "nosana" ||
         removed?.source === "rollercoin" ||
@@ -987,10 +1004,15 @@ export const cloreTrackingApi = {
       Number(overview.cloreBalance) ||
       0;
 
-    const currentBalance = Number(overview.cloreBalance || 0);
+const currentBalance = Number(overview.cloreBalance || 0);
 
-    // This is the new CLORE earned since last sync.
-    const earnedClore = Math.max(0, currentBalance - previousBalance);
+// This is the new CLORE earned since last sync.
+const earnedClore = Math.max(0, currentBalance - previousBalance);
+
+// Live CLORE price in USD from CoinGecko.
+const cloreUsdPrice = await getLiveCloreUsdPrice();
+
+const earnedUsd = earnedClore * cloreUsdPrice;
 
     const timestamp = new Date().toISOString();
     const date = timestamp.slice(0, 10);
@@ -998,25 +1020,29 @@ export const cloreTrackingApi = {
     let transaction = null;
 
     if (earnedClore > 0) {
-      transaction = addCloreEarningToProject(project.id, {
-        amount: earnedClore,
-        date,
-        timestamp,
-        balance_clore: currentBalance,
-      });
+transaction = addCloreEarningToProject(project.id, {
+  earned_clore: earnedClore,
+  earned_usd: earnedUsd,
+  clore_price_usd: cloreUsdPrice,
+  date,
+  timestamp,
+  balance_clore: currentBalance,
+});
     }
 
-    const snapshot = {
-      id: createId(),
-      date,
-      timestamp,
-      balance_clore: currentBalance,
-      earned_clore: earnedClore,
-      online_servers: overview.onlineServers,
-      total_servers: overview.totalServers,
-      daily_potential_clore: overview.totalDailyPotentialClore,
-      txn_id: transaction?.id || null,
-    };
+const snapshot = {
+  id: createId(),
+  date,
+  timestamp,
+  balance_clore: currentBalance,
+  earned_clore: earnedClore,
+  earned_usd: earnedUsd,
+  clore_price_usd: cloreUsdPrice,
+  online_servers: overview.onlineServers,
+  total_servers: overview.totalServers,
+  daily_potential_clore: overview.totalDailyPotentialClore,
+  txn_id: transaction?.id || null,
+};
 
     const nextHistory = [...history, snapshot].slice(-90);
 
@@ -1031,13 +1057,15 @@ export const cloreTrackingApi = {
       last_synced_at: timestamp,
     });
 
-    return toResponse({
-      ...overview,
-      earnedClore,
-      snapshot,
-      transaction,
-      history: nextHistory,
-    });
+return toResponse({
+  ...overview,
+  earnedClore,
+  earnedUsd,
+  cloreUsdPrice,
+  snapshot,
+  transaction,
+  history: nextHistory,
+});
   },
 
   resetBaseline: async () => {
@@ -1097,30 +1125,65 @@ function addCloreEarningToProject(projectId, payload) {
   const next = all.map((project) => {
     if (project.id !== projectId) return project;
 
+    const earnedClore = Number(payload.earned_clore || 0);
+    const earnedUsd = Number(payload.earned_usd || 0);
+    const clorePriceUsd = Number(payload.clore_price_usd || 0);
+
     createdTransaction = normalizeId({
       type: "earning",
-      amount: Number(payload.amount || 0),
-      currency: "CLORE",
-      note: `Clore AI sync: +${Number(payload.amount || 0).toFixed(8)} CLORE`,
+      amount: earnedUsd,
+      currency: "USD",
+      note: `Clore AI sync: +${earnedClore.toFixed(
+        8
+      )} CLORE at $${clorePriceUsd.toFixed(8)} each`,
       source: "clore",
       source_date: payload.date,
       source_balance_clore: Number(payload.balance_clore || 0),
+      source_clore_delta: earnedClore,
+      source_clore_price_usd: clorePriceUsd,
       created_at: payload.timestamp,
       date: payload.date,
     });
 
     return {
       ...project,
-      earned:
-        Number(project.earned || 0) + Number(payload.amount || 0),
+      earned: Math.max(0, (Number(project.earned) || 0) + earnedUsd),
       transactions: [...(project.transactions || []), createdTransaction],
+      categories: upsertCloreCategory(project.categories || [], earnedUsd),
     };
   });
 
   storage.setProjects(next);
 
+  window.dispatchEvent(new Event("clore-sync-complete"));
+  window.dispatchEvent(new Event("storage"));
+
   return createdTransaction;
 }
+
+function upsertCloreCategory(categories, earnedUsd) {
+  const next = [...categories];
+
+  const index = next.findIndex(
+    (category) =>
+      String(category.name || "").toLowerCase() === "clore earnings"
+  );
+
+  if (index >= 0) {
+    next[index] = {
+      ...next[index],
+      earned: (Number(next[index].earned) || 0) + earnedUsd,
+    };
+  } else {
+    next.push({
+      name: "CLORE Earnings",
+      earned: earnedUsd,
+    });
+  }
+
+  return next;
+}
+
 
 function readCloreConfig() {
   try {
