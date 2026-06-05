@@ -65,12 +65,23 @@ export const cryptoCacheApi = {
 
 async function getLiveCloreUsdPrice() {
   try {
-    const price = await coinGeckoApi.getPrice("clore-ai");
+    const directPrice = await coinGeckoApi.getPrice("clore-ai");
 
-    if (Number(price) > 0) {
-      return Number(price);
+    if (Number(directPrice) > 0) {
+      return Number(directPrice);
     }
 
+    const resolved = await coinGeckoApi.resolveSymbol("CLORE");
+
+    if (resolved?.id) {
+      const resolvedPrice = await coinGeckoApi.getPrice(resolved.id);
+
+      if (Number(resolvedPrice) > 0) {
+        return Number(resolvedPrice);
+      }
+    }
+
+    console.warn("CLORE price unavailable from CoinGecko.");
     return 0;
   } catch (error) {
     console.warn("Failed to fetch live CLORE price:", error);
@@ -985,10 +996,16 @@ export const cloreTrackingApi = {
     return toResponse(next);
   },
 
-  getOverview: async () => {
-    const overview = await cloreApi.getOverview();
-    return toResponse(overview);
-  },
+getOverview: async () => {
+  const overview = await cloreApi.getOverview();
+  const cloreUsdPrice = await getLiveCloreUsdPrice();
+
+  return toResponse({
+    ...overview,
+    cloreUsdPrice,
+    currentValueUsd: Number(overview.cloreBalance || 0) * cloreUsdPrice,
+  });
+},
 
   sync: async (project_name = "Clore AI") => {
     const overview = await cloreApi.getOverview();
