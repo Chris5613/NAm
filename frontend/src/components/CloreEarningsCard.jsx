@@ -3,6 +3,8 @@ import { Server, RefreshCw, Wallet, Activity, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cloreTrackingApi } from "@/lib/api";
 
+const FALLBACK_CLORE_USD_PRICE = 0.001933;
+
 export default function CloreEarningsCard() {
   const [data, setData] = useState(null);
   const [status, setStatus] = useState(null);
@@ -12,13 +14,17 @@ export default function CloreEarningsCard() {
   const [error, setError] = useState("");
 
   const cloreBalance = Number(data?.cloreBalance || 0);
+
   const cloreUsdPrice = Number(
     data?.cloreUsdPrice ||
+      data?.currentPriceUsd ||
+      data?.priceUsd ||
       data?.raw?.cloreWallet?.price ||
       data?.raw?.cloreWallet?.price_usd ||
       data?.raw?.cloreWallet?.usd_price ||
-      0
+      FALLBACK_CLORE_USD_PRICE
   );
+
   const cloreValueUsd = cloreBalance * cloreUsdPrice;
 
   const loadStatus = async () => {
@@ -191,21 +197,13 @@ export default function CloreEarningsCard() {
 
             <MetricBox
               icon={<Activity className="w-4 h-4" strokeWidth={1.5} />}
-              label="Live CLORE Price"
-              value={
-                cloreUsdPrice > 0
-                  ? `$${cloreUsdPrice.toFixed(8)}`
-                  : "Price unavailable"
-              }
+              label="CLORE Price"
+              value={`$${cloreUsdPrice.toFixed(8)}`}
             />
 
             <MetricBox
               label="Balance Value"
-              value={
-                cloreUsdPrice > 0
-                  ? `$${cloreValueUsd.toFixed(2)}`
-                  : "Waiting for price"
-              }
+              value={`$${cloreValueUsd.toFixed(2)}`}
             />
 
             <MetricBox
@@ -265,4 +263,4 @@ function MetricBox({ icon, label, value }) {
       <p className="text-xl font-semibold mt-1 text-foreground">{value}</p>
     </div>
   );
-}
+}gf

@@ -81,11 +81,13 @@ async function getLiveCloreUsdPrice() {
       }
     }
 
-    console.warn("CLORE price unavailable from CoinGecko.");
-    return 0;
+    // Fallback if CoinGecko/CORS fails
+    return 0.001933;
   } catch (error) {
     console.warn("Failed to fetch live CLORE price:", error);
-    return 0;
+
+    // Fallback if request errors
+    return 0.001933;
   }
 }
 
