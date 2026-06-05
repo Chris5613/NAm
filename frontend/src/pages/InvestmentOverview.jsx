@@ -75,7 +75,6 @@ const events = [
   "gomining-token-sync-complete",
   "clore-sync-complete",
 ];
-
     events.forEach((e) => window.addEventListener(e, refresh));
 
     return () => {
