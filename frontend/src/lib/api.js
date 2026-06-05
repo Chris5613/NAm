@@ -1215,4 +1215,4 @@ function writeCloreHistory(history) {
   } catch {
     // localStorage unavailable
   }
-}fd
+}
