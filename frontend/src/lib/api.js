@@ -964,6 +964,51 @@ export const nosTrackingApi = {
     toResponse({ configured: true, wallet_address, project_name }),
 };
 
+const DEFAULT_CLORE_STARTING_USD = 0;
+
+const getCloreUsdBalance = (overview = {}) => {
+  const possibleValues = [
+    overview.usdBalance,
+    overview.usd_balance,
+    overview.balanceUsd,
+    overview.balance_usd,
+    overview.currentValueUsd,
+    overview.current_value_usd,
+    overview.walletUsdBalance,
+    overview.wallet_usd_balance,
+    overview.raw?.usdBalance,
+    overview.raw?.usd_balance,
+    overview.raw?.balanceUsd,
+    overview.raw?.balance_usd,
+    overview.raw?.walletUsdBalance,
+    overview.raw?.wallet_usd_balance,
+    overview.raw?.cloreWallet?.usdBalance,
+    overview.raw?.cloreWallet?.usd_balance,
+    overview.raw?.cloreWallet?.balanceUsd,
+    overview.raw?.cloreWallet?.balance_usd,
+    overview.raw?.cloreWallet?.valueUsd,
+    overview.raw?.cloreWallet?.value_usd,
+    overview.raw?.cloreWallet?.value,
+    overview.raw?.wallet?.usdBalance,
+    overview.raw?.wallet?.usd_balance,
+    overview.raw?.wallet?.balanceUsd,
+    overview.raw?.wallet?.balance_usd,
+    overview.raw?.wallet?.valueUsd,
+    overview.raw?.wallet?.value_usd,
+    overview.raw?.wallet?.value,
+  ];
+
+  for (const value of possibleValues) {
+    const number = Number(value);
+
+    if (Number.isFinite(number) && number >= 0) {
+      return number;
+    }
+  }
+
+  return 0;
+};
+
 export const cloreTrackingApi = {
   getStatus: async () => {
     const config = readCloreConfig();
@@ -973,8 +1018,8 @@ export const cloreTrackingApi = {
       enabled: Boolean(config.enabled),
       project_name: config.project_name || "Clore AI",
       project_id: config.project_id || null,
-      baseline_clore: Number(config.baseline_clore || 0),
-      last_balance_clore: Number(config.last_balance_clore || 0),
+      baseline_usd: Number(config.baseline_usd ?? DEFAULT_CLORE_STARTING_USD),
+      last_balance_usd: Number(config.last_balance_usd ?? config.baseline_usd ?? DEFAULT_CLORE_STARTING_USD),
       last_synced_at: config.last_synced_at || null,
       history,
     });
@@ -982,7 +1027,6 @@ export const cloreTrackingApi = {
 
   configure: async (project_name = "Clore AI") => {
     const existing = readCloreConfig();
-
     const project = findOrCreateCloreProject(project_name);
 
     const next = {
@@ -990,117 +1034,146 @@ export const cloreTrackingApi = {
       enabled: true,
       project_name,
       project_id: project.id,
+      baseline_usd: Number(existing.baseline_usd ?? DEFAULT_CLORE_STARTING_USD),
+      last_balance_usd: Number(existing.last_balance_usd ?? existing.baseline_usd ?? DEFAULT_CLORE_STARTING_USD),
       configured_at: existing.configured_at || new Date().toISOString(),
     };
+
+    delete next.baseline_clore;
+    delete next.last_balance_clore;
 
     writeCloreConfig(next);
 
     return toResponse(next);
   },
 
-getOverview: async () => {
-  const overview = await cloreApi.getOverview();
-  const cloreUsdPrice = await getLiveCloreUsdPrice();
+  getOverview: async () => {
+    const overview = await cloreApi.getOverview();
+    const usdBalance = getCloreUsdBalance(overview);
 
-  return toResponse({
-    ...overview,
-    cloreUsdPrice,
-    currentValueUsd: Number(overview.cloreBalance || 0) * cloreUsdPrice,
-  });
-},
+    return toResponse({
+      ...overview,
+      usdBalance,
+      currentValueUsd: usdBalance,
+      cloreUsdBalance: usdBalance,
+      cloreBalance: usdBalance,
+    });
+  },
 
   sync: async (project_name = "Clore AI") => {
     const overview = await cloreApi.getOverview();
-
     const config = readCloreConfig();
     const history = readCloreHistory();
-
     const project = findOrCreateCloreProject(project_name);
 
-    const previousBalance =
-      Number(config.last_balance_clore) ||
-      Number(config.baseline_clore) ||
-      Number(overview.cloreBalance) ||
-      0;
+    const currentBalanceUsd = getCloreUsdBalance(overview);
 
-const currentBalance = Number(overview.cloreBalance || 0);
+    const previousBalanceUsd =
+      config.last_balance_usd !== undefined &&
+      config.last_balance_usd !== null &&
+      config.last_balance_usd !== ""
+        ? Number(config.last_balance_usd || 0)
+        : Number(config.baseline_usd ?? DEFAULT_CLORE_STARTING_USD);
 
-// This is the new CLORE earned since last sync.
-const earnedClore = Math.max(0, currentBalance - previousBalance);
-
-// Live CLORE price in USD from CoinGecko.
-const cloreUsdPrice = await getLiveCloreUsdPrice();
-
-const earnedUsd = earnedClore * cloreUsdPrice;
+    const earnedUsd = Math.max(0, currentBalanceUsd - previousBalanceUsd);
 
     const timestamp = new Date().toISOString();
     const date = timestamp.slice(0, 10);
 
     let transaction = null;
 
-    if (earnedClore > 0) {
-transaction = addCloreEarningToProject(project.id, {
-  earned_clore: earnedClore,
-  earned_usd: earnedUsd,
-  clore_price_usd: cloreUsdPrice,
-  date,
-  timestamp,
-  balance_clore: currentBalance,
-});
+    if (earnedUsd > 0) {
+      transaction = addCloreEarningToProject(project.id, {
+        earned_usd: earnedUsd,
+        date,
+        timestamp,
+        previous_balance_usd: previousBalanceUsd,
+        current_balance_usd: currentBalanceUsd,
+      });
+    } else {
+      updateCloreProjectBalance(project.id, {
+        current_balance_usd: currentBalanceUsd,
+      });
     }
 
-const snapshot = {
-  id: createId(),
-  date,
-  timestamp,
-  balance_clore: currentBalance,
-  earned_clore: earnedClore,
-  earned_usd: earnedUsd,
-  clore_price_usd: cloreUsdPrice,
-  online_servers: overview.onlineServers,
-  total_servers: overview.totalServers,
-  daily_potential_clore: overview.totalDailyPotentialClore,
-  txn_id: transaction?.id || null,
-};
+    const snapshot = {
+      id: createId(),
+      date,
+      timestamp,
+      previous_balance_usd: previousBalanceUsd,
+      current_balance_usd: currentBalanceUsd,
+      earned_usd: earnedUsd,
+      online_servers: overview.onlineServers,
+      total_servers: overview.totalServers,
+      txn_id: transaction?.id || null,
+    };
 
     const nextHistory = [...history, snapshot].slice(-90);
 
     writeCloreHistory(nextHistory);
 
-    writeCloreConfig({
+    const nextConfig = {
       ...config,
       enabled: true,
       project_name,
       project_id: project.id,
-      last_balance_clore: currentBalance,
+      baseline_usd: Number(config.baseline_usd ?? DEFAULT_CLORE_STARTING_USD),
+      last_balance_usd: currentBalanceUsd,
       last_synced_at: timestamp,
-    });
+    };
 
-return toResponse({
-  ...overview,
-  earnedClore,
-  earnedUsd,
-  cloreUsdPrice,
-  snapshot,
-  transaction,
-  history: nextHistory,
-});
+    delete nextConfig.baseline_clore;
+    delete nextConfig.last_balance_clore;
+
+    writeCloreConfig(nextConfig);
+
+    window.dispatchEvent(new Event("clore-sync-complete"));
+    window.dispatchEvent(new Event("storage"));
+
+    return toResponse({
+      ...overview,
+      usdBalance: currentBalanceUsd,
+      currentValueUsd: currentBalanceUsd,
+      cloreUsdBalance: currentBalanceUsd,
+      cloreBalance: currentBalanceUsd,
+      previousBalanceUsd,
+      earnedUsd,
+      snapshot,
+      transaction,
+      history: nextHistory,
+    });
   },
 
   resetBaseline: async () => {
     const overview = await cloreApi.getOverview();
     const config = readCloreConfig();
 
+    const currentBalanceUsd = getCloreUsdBalance(overview);
+    const timestamp = new Date().toISOString();
+
     const next = {
       ...config,
       enabled: true,
-      baseline_clore: Number(overview.cloreBalance || 0),
-      last_balance_clore: Number(overview.cloreBalance || 0),
-      last_synced_at: new Date().toISOString(),
+      baseline_usd: currentBalanceUsd,
+      last_balance_usd: currentBalanceUsd,
+      last_synced_at: timestamp,
     };
+
+    delete next.baseline_clore;
+    delete next.last_balance_clore;
 
     writeCloreConfig(next);
     writeCloreHistory([]);
+
+    const projectName = next.project_name || "Clore AI";
+    const project = findOrCreateCloreProject(projectName);
+
+    updateCloreProjectBalance(project.id, {
+      current_balance_usd: currentBalanceUsd,
+    });
+
+    window.dispatchEvent(new Event("clore-sync-complete"));
+    window.dispatchEvent(new Event("storage"));
 
     return toResponse(next);
   },
@@ -1119,7 +1192,7 @@ function findOrCreateCloreProject(projectName = "Clore AI") {
 
   const project = normalizeId({
     name: projectName || "Clore AI",
-    description: "Auto-synced CLORE host earnings from Clore AI.",
+    description: "Auto-synced USD host earnings from Clore AI.",
     category: "Mining",
     invested: 0,
     earned: 0,
@@ -1144,22 +1217,20 @@ function addCloreEarningToProject(projectId, payload) {
   const next = all.map((project) => {
     if (project.id !== projectId) return project;
 
-    const earnedClore = Number(payload.earned_clore || 0);
     const earnedUsd = Number(payload.earned_usd || 0);
-    const clorePriceUsd = Number(payload.clore_price_usd || 0);
+    const currentBalanceUsd = Number(payload.current_balance_usd || 0);
+    const previousBalanceUsd = Number(payload.previous_balance_usd || 0);
 
     createdTransaction = normalizeId({
       type: "earning",
       amount: earnedUsd,
       currency: "USD",
-      note: `Clore AI sync: +${earnedClore.toFixed(
-        8
-      )} CLORE at $${clorePriceUsd.toFixed(8)} each`,
+      note: `Clore AI USD sync: +$${earnedUsd.toFixed(2)}`,
       source: "clore",
       source_date: payload.date,
-      source_balance_clore: Number(payload.balance_clore || 0),
-      source_clore_delta: earnedClore,
-      source_clore_price_usd: clorePriceUsd,
+      source_usd_delta: earnedUsd,
+      source_previous_balance_usd: previousBalanceUsd,
+      source_current_balance_usd: currentBalanceUsd,
       created_at: payload.timestamp,
       date: payload.date,
     });
@@ -1167,6 +1238,7 @@ function addCloreEarningToProject(projectId, payload) {
     return {
       ...project,
       earned: Math.max(0, (Number(project.earned) || 0) + earnedUsd),
+      current_value: currentBalanceUsd,
       transactions: [...(project.transactions || []), createdTransaction],
       categories: upsertCloreCategory(project.categories || [], earnedUsd),
     };
@@ -1178,6 +1250,24 @@ function addCloreEarningToProject(projectId, payload) {
   window.dispatchEvent(new Event("storage"));
 
   return createdTransaction;
+}
+
+function updateCloreProjectBalance(projectId, payload) {
+  const all = normalizeItems(storage.getProjects());
+  const currentBalanceUsd = Number(payload.current_balance_usd || 0);
+
+  const next = all.map((project) => {
+    if (project.id !== projectId) return project;
+
+    return {
+      ...project,
+      current_value: currentBalanceUsd,
+      clore_usd_balance: currentBalanceUsd,
+      clore_last_balance_sync: new Date().toISOString(),
+    };
+  });
+
+  storage.setProjects(next);
 }
 
 function upsertCloreCategory(categories, earnedUsd) {

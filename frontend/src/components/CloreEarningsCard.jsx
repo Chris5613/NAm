@@ -3,7 +3,7 @@ import { Server, RefreshCw, Wallet, Activity, RotateCcw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cloreTrackingApi } from "@/lib/api";
 
-const FALLBACK_CLORE_USD_PRICE = 0.001933;
+const STARTING_USD_VALUE = 6.75;
 
 export default function CloreEarningsCard() {
   const [data, setData] = useState(null);
@@ -13,19 +13,30 @@ export default function CloreEarningsCard() {
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState("");
 
-  const cloreBalance = Number(data?.cloreBalance || 0);
-
-  const cloreUsdPrice = Number(
-    data?.cloreUsdPrice ||
-      data?.currentPriceUsd ||
-      data?.priceUsd ||
-      data?.raw?.cloreWallet?.price ||
-      data?.raw?.cloreWallet?.price_usd ||
-      data?.raw?.cloreWallet?.usd_price ||
-      FALLBACK_CLORE_USD_PRICE
+  const usdBalance = Number(
+    data?.usdBalance ||
+      data?.currentValueUsd ||
+      data?.balanceUsd ||
+      data?.usd_balance ||
+      data?.raw?.usdBalance ||
+      data?.raw?.balanceUsd ||
+      data?.raw?.cloreWallet?.usdBalance ||
+      data?.raw?.cloreWallet?.usd_balance ||
+      data?.raw?.cloreWallet?.balanceUsd ||
+      data?.raw?.cloreWallet?.balance_usd ||
+      data?.raw?.cloreWallet?.value ||
+      data?.raw?.cloreWallet?.valueUsd ||
+      0
   );
 
-  const cloreValueUsd = cloreBalance * cloreUsdPrice;
+  const startingValueUsd = Number(
+    status?.baseline_value_usd ||
+      data?.baselineValueUsd ||
+      data?.previousValueUsd ||
+      STARTING_USD_VALUE
+  );
+
+  const newEarningsUsd = Math.max(0, usdBalance - startingValueUsd);
 
   const loadStatus = async () => {
     try {
@@ -113,7 +124,7 @@ export default function CloreEarningsCard() {
           </div>
 
           <p className="text-sm text-muted-foreground mt-1">
-            Track CLORE balance, live price, and account value.
+            Track USD balance, server status, and sync new USD earnings into Project Overview.
           </p>
         </div>
 
@@ -191,19 +202,19 @@ export default function CloreEarningsCard() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
             <MetricBox
               icon={<Wallet className="w-4 h-4" strokeWidth={1.5} />}
-              label="CLORE Balance"
-              value={`${cloreBalance.toFixed(8)} CLORE`}
+              label="USD Balance"
+              value={`$${usdBalance.toFixed(2)}`}
             />
 
             <MetricBox
               icon={<Activity className="w-4 h-4" strokeWidth={1.5} />}
-              label="CLORE Price"
-              value={`$${cloreUsdPrice.toFixed(8)}`}
+              label="Starting Value"
+              value={`$${startingValueUsd.toFixed(2)}`}
             />
 
             <MetricBox
-              label="Balance Value"
-              value={`$${cloreValueUsd.toFixed(2)}`}
+              label="New Earnings"
+              value={`$${newEarningsUsd.toFixed(2)}`}
             />
 
             <MetricBox
