@@ -6,7 +6,6 @@
 
 import { useState, useCallback } from "react";
 import NosanaEarningsCard from "@/components/NosanaEarningsCard";
-import CloreEarningsCard from "@/components/CloreEarningsCard";
 import RollerCoinEarningsCard from "@/components/RollerCoinEarningsCard";
 import AcurastEarningsCard from "@/components/AcurastEarningsCard";
 import UnityNetworkEarningsCard from "@/components/UnityNetworkEarningsCard";
@@ -59,7 +58,6 @@ export default function IntegrationsPage() {
           manual sync, and daily-history where relevant. */}
       <div className="space-y-4">
         <NosanaEarningsCard />
-        <CloreEarningsCard />
         <UnityNetworkEarningsCard />
         <RollerCoinEarningsCard />
         {/* <AcurastEarningsCard /> */}

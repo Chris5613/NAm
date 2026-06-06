@@ -73,7 +73,6 @@ const events = [
   "nosana-sync-complete",
   "gomining-sync-complete",
   "gomining-token-sync-complete",
-  "clore-sync-complete",
 ];
     events.forEach((e) => window.addEventListener(e, refresh));
 
