@@ -20,10 +20,10 @@ const NAV_ITEMS = [
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
   { path: "/gomining", label: "GoMining", icon: Pickaxe },
   { path: "/integrations", label: "Integrations", icon: Zap },
-  { path: "/unity-devices", label: "Unity Devices", icon: Cable },
-  { path: "/tello-dashboard", label: "Tello Dashboard", icon: Smartphone },
+  //{ path: "/unity-devices", label: "Unity Devices", icon: Cable },
+ // { path: "/tello-dashboard", label: "Tello Dashboard", icon: Smartphone },
   // { path: "/rollercoin-calculator", label: "Rollercoin", icon: Squirrel },
-  { path: "/cloud", label: "Cloud", icon: Volleyball },
+  { path: "/cloud", label: "Gamble", icon: Volleyball },
 ];
 
 
