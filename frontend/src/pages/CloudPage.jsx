@@ -157,72 +157,8 @@ const TEAM_OPTIONS = {
     { value: "Toronto Blue Jays", label: "Blue Jays" },
     { value: "Washington Nationals", label: "Nationals" },
   ],
-  Hockey: [
-    { value: "Anaheim Ducks", label: "Ducks" },
-    { value: "Boston Bruins", label: "Bruins" },
-    { value: "Buffalo Sabres", label: "Sabres" },
-    { value: "Calgary Flames", label: "Flames" },
-    { value: "Carolina Hurricanes", label: "Hurricanes" },
-    { value: "Chicago Blackhawks", label: "Blackhawks" },
-    { value: "Colorado Avalanche", label: "Avalanche" },
-    { value: "Columbus Blue Jackets", label: "Blue Jackets" },
-    { value: "Dallas Stars", label: "Stars" },
-    { value: "Detroit Red Wings", label: "Red Wings" },
-    { value: "Edmonton Oilers", label: "Oilers" },
-    { value: "Florida Panthers", label: "Panthers" },
-    { value: "Los Angeles Kings", label: "Kings" },
-    { value: "Minnesota Wild", label: "Wild" },
-    { value: "Montreal Canadiens", label: "Canadiens" },
-    { value: "Nashville Predators", label: "Predators" },
-    { value: "New Jersey Devils", label: "Devils" },
-    { value: "New York Islanders", label: "Islanders" },
-    { value: "New York Rangers", label: "Rangers" },
-    { value: "Ottawa Senators", label: "Senators" },
-    { value: "Philadelphia Flyers", label: "Flyers" },
-    { value: "Pittsburgh Penguins", label: "Penguins" },
-    { value: "San Jose Sharks", label: "Sharks" },
-    { value: "Seattle Kraken", label: "Kraken" },
-    { value: "St. Louis Blues", label: "Blues" },
-    { value: "Tampa Bay Lightning", label: "Lightning" },
-    { value: "Toronto Maple Leafs", label: "Maple Leafs" },
-    { value: "Utah Mammoth", label: "Mammoth" },
-    { value: "Vancouver Canucks", label: "Canucks" },
-    { value: "Vegas Golden Knights", label: "Golden Knights" },
-    { value: "Washington Capitals", label: "Capitals" },
-    { value: "Winnipeg Jets", label: "Jets" },
-  ],
-  Soccer: [
-    { value: "Atlanta United FC", label: "United FC" },
-    { value: "Austin FC", label: "Austin FC" },
-    { value: "CF Montréal", label: "CF Montréal" },
-    { value: "Charlotte FC", label: "Charlotte FC" },
-    { value: "Chicago Fire FC", label: "Fire FC" },
-    { value: "Colorado Rapids", label: "Rapids" },
-    { value: "Columbus Crew", label: "Crew" },
-    { value: "D.C. United", label: "D.C. United" },
-    { value: "FC Cincinnati", label: "FC Cincinnati" },
-    { value: "FC Dallas", label: "FC Dallas" },
-    { value: "Houston Dynamo FC", label: "Dynamo FC" },
-    { value: "Inter Miami CF", label: "Inter Miami CF" },
-    { value: "LA Galaxy", label: "Galaxy" },
-    { value: "Los Angeles FC", label: "LAFC" },
-    { value: "Minnesota United FC", label: "United FC" },
-    { value: "Nashville SC", label: "Nashville SC" },
-    { value: "New England Revolution", label: "Revolution" },
-    { value: "New York City FC", label: "City FC" },
-    { value: "New York Red Bulls", label: "Red Bulls" },
-    { value: "Orlando City SC", label: "City SC" },
-    { value: "Philadelphia Union", label: "Union" },
-    { value: "Portland Timbers", label: "Timbers" },
-    { value: "Real Salt Lake", label: "Real Salt Lake" },
-    { value: "San Diego FC", label: "San Diego FC" },
-    { value: "San Jose Earthquakes", label: "Earthquakes" },
-    { value: "Seattle Sounders FC", label: "Sounders FC" },
-    { value: "Sporting Kansas City", label: "Sporting KC" },
-    { value: "St. Louis City SC", label: "City SC" },
-    { value: "Toronto FC", label: "Toronto FC" },
-    { value: "Vancouver Whitecaps FC", label: "Whitecaps FC" },
-  ],
+
+
 };
 
 function getSavedBets() {
@@ -341,18 +277,13 @@ function getSportLabel(value) {
   return sport?.label || value || "Uncategorized";
 }
 
-function getTeamLabel(sportValue, teamValue) {
-  const value = teamValue ?? sportValue;
-
+function getTeamLabel(value) {
   if (!value) return "No Team";
 
-  const teams = sportValue && teamValue
-    ? TEAM_OPTIONS[sportValue] || []
-    : Object.values(TEAM_OPTIONS).flat();
+  const allTeams = Object.values(TEAM_OPTIONS).flat();
+  const team = allTeams.find((t) => t.value === value);
 
-  const team = teams.find((t) => t.value === value);
-
-  return team?.label || value || "No Team";
+  return team?.label || value;
 }
 
 function getTeam(bet) {
@@ -973,7 +904,7 @@ const chartSegments = useMemo(() => {
                                 ? ` · ${getSportLabel(getCategory(bet))}`
                                 : ""}
                               {getTeam(bet) !== "No Team"
-                                ? ` · ${getTeamLabel(getCategory(bet), getTeam(bet))}`
+                                ? ` · ${getTeamLabel(getTeam(bet))}`
                                 : ""}
                               {bet.note ? ` · ${bet.note}` : ""}
                             </p>
@@ -1456,7 +1387,7 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
                     </p>
 
                     <p className="text-xs text-muted-foreground truncate mt-1">
-                      {bet.matchup || (getTeam(bet) !== "No Team" ? getTeamLabel(getCategory(bet), getTeam(bet)) : getSportLabel(getCategory(bet)))}
+                      {bet.matchup || (getTeam(bet) !== "No Team" ? getTeamLabel(getTeam(bet)) : getSportLabel(getCategory(bet)))}
                     </p>
                   </div>
 
@@ -1506,8 +1437,12 @@ function StatCard({ label, value, positive }) {
   );
 }
 
-function CloudStatsTable({ title, rows, mode }) {
-  const firstColumnLabel = mode === "teamProfit" ? "Team" : "Sport";
+function CloudStatsTable({ title, rows, mode, firstColumnLabel, formatName }) {
+  const isTeamTable = mode === "teamProfit" || title === "Profit by Team";
+  const resolvedFirstColumnLabel =
+    firstColumnLabel || (isTeamTable ? "Team" : "Sport");
+  const resolvedFormatName =
+    formatName || (isTeamTable ? getTeamLabel : getSportLabel);
   const lastColumnLabel = mode === "winRate" ? "ROI" : "P/L";
 
   return (
@@ -1522,17 +1457,13 @@ function CloudStatsTable({ title, rows, mode }) {
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-[minmax(0,1fr)_90px_110px] text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
-              <span>{firstColumnLabel}</span>
+              <span>{resolvedFirstColumnLabel}</span>
               <span className="text-right">Record</span>
               <span className="text-right">{lastColumnLabel}</span>
             </div>
 
             {rows.map((row) => {
-              const displayName =
-                mode === "teamProfit"
-                  ? getTeamLabel(row.name)
-                  : getSportLabel(row.name);
-
+              const displayName = resolvedFormatName(row.name);
               const finalValue = mode === "winRate" ? row.roi : row.pnl;
 
               return (
