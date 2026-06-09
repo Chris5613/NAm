@@ -58,6 +58,173 @@ const SPORTS = [
   { value: "Other", label: "📌 Other" },
 ];
 
+const TEAM_OPTIONS = {
+  Basketball: [
+    { value: "Atlanta Hawks", label: "Atlanta Hawks" },
+    { value: "Boston Celtics", label: "Boston Celtics" },
+    { value: "Brooklyn Nets", label: "Brooklyn Nets" },
+    { value: "Charlotte Hornets", label: "Charlotte Hornets" },
+    { value: "Chicago Bulls", label: "Chicago Bulls" },
+    { value: "Cleveland Cavaliers", label: "Cleveland Cavaliers" },
+    { value: "Dallas Mavericks", label: "Dallas Mavericks" },
+    { value: "Denver Nuggets", label: "Denver Nuggets" },
+    { value: "Detroit Pistons", label: "Detroit Pistons" },
+    { value: "Golden State Warriors", label: "Golden State Warriors" },
+    { value: "Houston Rockets", label: "Houston Rockets" },
+    { value: "Indiana Pacers", label: "Indiana Pacers" },
+    { value: "LA Clippers", label: "LA Clippers" },
+    { value: "Los Angeles Lakers", label: "Los Angeles Lakers" },
+    { value: "Memphis Grizzlies", label: "Memphis Grizzlies" },
+    { value: "Miami Heat", label: "Miami Heat" },
+    { value: "Milwaukee Bucks", label: "Milwaukee Bucks" },
+    { value: "Minnesota Timberwolves", label: "Minnesota Timberwolves" },
+    { value: "New Orleans Pelicans", label: "New Orleans Pelicans" },
+    { value: "New York Knicks", label: "New York Knicks" },
+    { value: "Oklahoma City Thunder", label: "Oklahoma City Thunder" },
+    { value: "Orlando Magic", label: "Orlando Magic" },
+    { value: "Philadelphia 76ers", label: "Philadelphia 76ers" },
+    { value: "Phoenix Suns", label: "Phoenix Suns" },
+    { value: "Portland Trail Blazers", label: "Portland Trail Blazers" },
+    { value: "Sacramento Kings", label: "Sacramento Kings" },
+    { value: "San Antonio Spurs", label: "San Antonio Spurs" },
+    { value: "Toronto Raptors", label: "Toronto Raptors" },
+    { value: "Utah Jazz", label: "Utah Jazz" },
+    { value: "Washington Wizards", label: "Washington Wizards" },
+  ],
+  Football: [
+    { value: "Arizona Cardinals", label: "Arizona Cardinals" },
+    { value: "Atlanta Falcons", label: "Atlanta Falcons" },
+    { value: "Baltimore Ravens", label: "Baltimore Ravens" },
+    { value: "Buffalo Bills", label: "Buffalo Bills" },
+    { value: "Carolina Panthers", label: "Carolina Panthers" },
+    { value: "Chicago Bears", label: "Chicago Bears" },
+    { value: "Cincinnati Bengals", label: "Cincinnati Bengals" },
+    { value: "Cleveland Browns", label: "Cleveland Browns" },
+    { value: "Dallas Cowboys", label: "Dallas Cowboys" },
+    { value: "Denver Broncos", label: "Denver Broncos" },
+    { value: "Detroit Lions", label: "Detroit Lions" },
+    { value: "Green Bay Packers", label: "Green Bay Packers" },
+    { value: "Houston Texans", label: "Houston Texans" },
+    { value: "Indianapolis Colts", label: "Indianapolis Colts" },
+    { value: "Jacksonville Jaguars", label: "Jacksonville Jaguars" },
+    { value: "Kansas City Chiefs", label: "Kansas City Chiefs" },
+    { value: "Las Vegas Raiders", label: "Las Vegas Raiders" },
+    { value: "Los Angeles Chargers", label: "Los Angeles Chargers" },
+    { value: "Los Angeles Rams", label: "Los Angeles Rams" },
+    { value: "Miami Dolphins", label: "Miami Dolphins" },
+    { value: "Minnesota Vikings", label: "Minnesota Vikings" },
+    { value: "New England Patriots", label: "New England Patriots" },
+    { value: "New Orleans Saints", label: "New Orleans Saints" },
+    { value: "New York Giants", label: "New York Giants" },
+    { value: "New York Jets", label: "New York Jets" },
+    { value: "Philadelphia Eagles", label: "Philadelphia Eagles" },
+    { value: "Pittsburgh Steelers", label: "Pittsburgh Steelers" },
+    { value: "San Francisco 49ers", label: "San Francisco 49ers" },
+    { value: "Seattle Seahawks", label: "Seattle Seahawks" },
+    { value: "Tampa Bay Buccaneers", label: "Tampa Bay Buccaneers" },
+    { value: "Tennessee Titans", label: "Tennessee Titans" },
+    { value: "Washington Commanders", label: "Washington Commanders" },
+  ],
+  Baseball: [
+    { value: "Arizona Diamondbacks", label: "Arizona Diamondbacks" },
+    { value: "Atlanta Braves", label: "Atlanta Braves" },
+    { value: "Baltimore Orioles", label: "Baltimore Orioles" },
+    { value: "Boston Red Sox", label: "Boston Red Sox" },
+    { value: "Chicago Cubs", label: "Chicago Cubs" },
+    { value: "Chicago White Sox", label: "Chicago White Sox" },
+    { value: "Cincinnati Reds", label: "Cincinnati Reds" },
+    { value: "Cleveland Guardians", label: "Cleveland Guardians" },
+    { value: "Colorado Rockies", label: "Colorado Rockies" },
+    { value: "Detroit Tigers", label: "Detroit Tigers" },
+    { value: "Houston Astros", label: "Houston Astros" },
+    { value: "Kansas City Royals", label: "Kansas City Royals" },
+    { value: "Los Angeles Angels", label: "Los Angeles Angels" },
+    { value: "Los Angeles Dodgers", label: "Los Angeles Dodgers" },
+    { value: "Miami Marlins", label: "Miami Marlins" },
+    { value: "Milwaukee Brewers", label: "Milwaukee Brewers" },
+    { value: "Minnesota Twins", label: "Minnesota Twins" },
+    { value: "New York Mets", label: "New York Mets" },
+    { value: "New York Yankees", label: "New York Yankees" },
+    { value: "Oakland Athletics", label: "Oakland Athletics" },
+    { value: "Philadelphia Phillies", label: "Philadelphia Phillies" },
+    { value: "Pittsburgh Pirates", label: "Pittsburgh Pirates" },
+    { value: "San Diego Padres", label: "San Diego Padres" },
+    { value: "San Francisco Giants", label: "San Francisco Giants" },
+    { value: "Seattle Mariners", label: "Seattle Mariners" },
+    { value: "St. Louis Cardinals", label: "St. Louis Cardinals" },
+    { value: "Tampa Bay Rays", label: "Tampa Bay Rays" },
+    { value: "Texas Rangers", label: "Texas Rangers" },
+    { value: "Toronto Blue Jays", label: "Toronto Blue Jays" },
+    { value: "Washington Nationals", label: "Washington Nationals" },
+  ],
+  Hockey: [
+    { value: "Anaheim Ducks", label: "Anaheim Ducks" },
+    { value: "Boston Bruins", label: "Boston Bruins" },
+    { value: "Buffalo Sabres", label: "Buffalo Sabres" },
+    { value: "Calgary Flames", label: "Calgary Flames" },
+    { value: "Carolina Hurricanes", label: "Carolina Hurricanes" },
+    { value: "Chicago Blackhawks", label: "Chicago Blackhawks" },
+    { value: "Colorado Avalanche", label: "Colorado Avalanche" },
+    { value: "Columbus Blue Jackets", label: "Columbus Blue Jackets" },
+    { value: "Dallas Stars", label: "Dallas Stars" },
+    { value: "Detroit Red Wings", label: "Detroit Red Wings" },
+    { value: "Edmonton Oilers", label: "Edmonton Oilers" },
+    { value: "Florida Panthers", label: "Florida Panthers" },
+    { value: "Los Angeles Kings", label: "Los Angeles Kings" },
+    { value: "Minnesota Wild", label: "Minnesota Wild" },
+    { value: "Montreal Canadiens", label: "Montreal Canadiens" },
+    { value: "Nashville Predators", label: "Nashville Predators" },
+    { value: "New Jersey Devils", label: "New Jersey Devils" },
+    { value: "New York Islanders", label: "New York Islanders" },
+    { value: "New York Rangers", label: "New York Rangers" },
+    { value: "Ottawa Senators", label: "Ottawa Senators" },
+    { value: "Philadelphia Flyers", label: "Philadelphia Flyers" },
+    { value: "Pittsburgh Penguins", label: "Pittsburgh Penguins" },
+    { value: "San Jose Sharks", label: "San Jose Sharks" },
+    { value: "Seattle Kraken", label: "Seattle Kraken" },
+    { value: "St. Louis Blues", label: "St. Louis Blues" },
+    { value: "Tampa Bay Lightning", label: "Tampa Bay Lightning" },
+    { value: "Toronto Maple Leafs", label: "Toronto Maple Leafs" },
+    { value: "Utah Mammoth", label: "Utah Mammoth" },
+    { value: "Vancouver Canucks", label: "Vancouver Canucks" },
+    { value: "Vegas Golden Knights", label: "Vegas Golden Knights" },
+    { value: "Washington Capitals", label: "Washington Capitals" },
+    { value: "Winnipeg Jets", label: "Winnipeg Jets" },
+  ],
+  Soccer: [
+    { value: "Atlanta United FC", label: "Atlanta United FC" },
+    { value: "Austin FC", label: "Austin FC" },
+    { value: "CF Montréal", label: "CF Montréal" },
+    { value: "Charlotte FC", label: "Charlotte FC" },
+    { value: "Chicago Fire FC", label: "Chicago Fire FC" },
+    { value: "Colorado Rapids", label: "Colorado Rapids" },
+    { value: "Columbus Crew", label: "Columbus Crew" },
+    { value: "D.C. United", label: "D.C. United" },
+    { value: "FC Cincinnati", label: "FC Cincinnati" },
+    { value: "FC Dallas", label: "FC Dallas" },
+    { value: "Houston Dynamo FC", label: "Houston Dynamo FC" },
+    { value: "Inter Miami CF", label: "Inter Miami CF" },
+    { value: "LA Galaxy", label: "LA Galaxy" },
+    { value: "Los Angeles FC", label: "Los Angeles FC" },
+    { value: "Minnesota United FC", label: "Minnesota United FC" },
+    { value: "Nashville SC", label: "Nashville SC" },
+    { value: "New England Revolution", label: "New England Revolution" },
+    { value: "New York City FC", label: "New York City FC" },
+    { value: "New York Red Bulls", label: "New York Red Bulls" },
+    { value: "Orlando City SC", label: "Orlando City SC" },
+    { value: "Philadelphia Union", label: "Philadelphia Union" },
+    { value: "Portland Timbers", label: "Portland Timbers" },
+    { value: "Real Salt Lake", label: "Real Salt Lake" },
+    { value: "San Diego FC", label: "San Diego FC" },
+    { value: "San Jose Earthquakes", label: "San Jose Earthquakes" },
+    { value: "Seattle Sounders FC", label: "Seattle Sounders FC" },
+    { value: "Sporting Kansas City", label: "Sporting Kansas City" },
+    { value: "St. Louis City SC", label: "St. Louis City SC" },
+    { value: "Toronto FC", label: "Toronto FC" },
+    { value: "Vancouver Whitecaps FC", label: "Vancouver Whitecaps FC" },
+  ],
+};
+
 function getSavedBets() {
   try {
     const saved = JSON.parse(localStorage.getItem(CLOUD_BETS_KEY) || "[]");
@@ -163,6 +330,7 @@ function emptyForm() {
     result: "win",
     date: new Date().toISOString().slice(0, 10),
     category: "",
+    team: "",
     sportsbook: "",
     note: "",
   };
@@ -171,6 +339,16 @@ function emptyForm() {
 function getSportLabel(value) {
   const sport = SPORTS.find((s) => s.value === value);
   return sport?.label || value || "Uncategorized";
+}
+
+function getTeamLabel(sportValue, teamValue) {
+  const teams = TEAM_OPTIONS[sportValue] || [];
+  const team = teams.find((t) => t.value === teamValue);
+  return team?.label || teamValue || "No Team";
+}
+
+function getTeam(bet) {
+  return bet.team?.trim() || "No Team";
 }
 
 function getCategory(bet) {
@@ -241,6 +419,7 @@ export default function CloudPage() {
   const [calendarMonthKey, setCalendarMonthKey] = useState(() => getCurrentMonthKey());
 
   const isEditing = !!editingBetId;
+  const availableTeams = TEAM_OPTIONS[form.category] || [];
 
   const monthOptions = useMemo(() => {
     const months = [...new Set(bets.map(getBetMonthKey).filter(Boolean))];
@@ -391,6 +570,13 @@ const chartSegments = useMemo(() => {
     return buildGroupStats(filteredBets, getCategory);
   }, [filteredBets]);
 
+  const teamStats = useMemo(() => {
+    return buildGroupStats(
+      filteredBets.filter((bet) => getTeam(bet) !== "No Team"),
+      getTeam
+    );
+  }, [filteredBets]);
+
 
   const calendarBets = useMemo(() => {
     return bets.filter((bet) => getBetMonthKey(bet) === calendarMonthKey);
@@ -412,6 +598,7 @@ const chartSegments = useMemo(() => {
       result: Number(bet.amount) >= 0 ? "win" : "loss",
       date: bet.date || new Date().toISOString().slice(0, 10),
       category: bet.category || "",
+      team: bet.team || "",
       sportsbook: bet.sportsbook || "",
       note: bet.note || "",
     });
@@ -452,6 +639,7 @@ const chartSegments = useMemo(() => {
               result: form.result,
               date: form.date,
               category: form.category.trim(),
+              team: form.team.trim(),
               sportsbook: form.sportsbook.trim(),
               note: form.note.trim(),
               updated_at: new Date().toISOString(),
@@ -474,6 +662,7 @@ const chartSegments = useMemo(() => {
       result: form.result,
       date: form.date,
       category: form.category.trim(),
+      team: form.team.trim(),
       sportsbook: form.sportsbook.trim(),
       note: form.note.trim(),
       created_at: new Date().toISOString(),
@@ -675,17 +864,29 @@ const chartSegments = useMemo(() => {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
             <CloudStatsTable
               title="Win Rate by Sport"
               rows={[...categoryStats].sort((a, b) => b.winRate - a.winRate)}
               mode="winRate"
+              firstColumnLabel="Sport"
+              formatName={getSportLabel}
             />
 
             <CloudStatsTable
               title="Profit by Sport"
               rows={[...categoryStats].sort((a, b) => b.pnl - a.pnl)}
               mode="profit"
+              firstColumnLabel="Sport"
+              formatName={getSportLabel}
+            />
+
+            <CloudStatsTable
+              title="Profit by Team"
+              rows={[...teamStats].sort((a, b) => b.pnl - a.pnl)}
+              mode="profit"
+              firstColumnLabel="Team"
+              formatName={(name) => name}
             />
           </div>
 
@@ -764,6 +965,9 @@ const chartSegments = useMemo(() => {
                               {bet.date}
                               {getCategory(bet) !== "Uncategorized"
                                 ? ` · ${getSportLabel(getCategory(bet))}`
+                                : ""}
+                              {getTeam(bet) !== "No Team"
+                                ? ` · ${getTeamLabel(getCategory(bet), getTeam(bet))}`
                                 : ""}
                               {bet.note ? ` · ${bet.note}` : ""}
                             </p>
@@ -926,6 +1130,7 @@ const chartSegments = useMemo(() => {
                   setForm((prev) => ({
                     ...prev,
                     category: e.target.value,
+                    team: "",
                   }))
                 }
                 className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none"
@@ -937,6 +1142,31 @@ const chartSegments = useMemo(() => {
                 ))}
               </select>
             </div>
+
+            {availableTeams.length > 0 && (
+              <div className="space-y-2">
+                <Label className="text-foreground">Team</Label>
+
+                <select
+                  value={form.team}
+                  onChange={(e) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      team: e.target.value,
+                    }))
+                  }
+                  className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none"
+                >
+                  <option value="">Select team</option>
+
+                  {availableTeams.map((team) => (
+                    <option key={team.value} value={team.value}>
+                      {team.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label className="text-foreground">Result</Label>
@@ -1220,7 +1450,7 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
                     </p>
 
                     <p className="text-xs text-muted-foreground truncate mt-1">
-                      {bet.matchup || getSportLabel(getCategory(bet))}
+                      {bet.matchup || (getTeam(bet) !== "No Team" ? getTeamLabel(getCategory(bet), getTeam(bet)) : getSportLabel(getCategory(bet)))}
                     </p>
                   </div>
 
@@ -1270,7 +1500,7 @@ function StatCard({ label, value, positive }) {
   );
 }
 
-function CloudStatsTable({ title, rows, mode }) {
+function CloudStatsTable({ title, rows, mode, firstColumnLabel = "Sport", formatName = getSportLabel }) {
   return (
     <Card className="border-border/40 bg-secondary/20">
       <CardContent className="p-5">
@@ -1283,7 +1513,7 @@ function CloudStatsTable({ title, rows, mode }) {
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-4 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
-              <span>Sport</span>
+              <span>{firstColumnLabel}</span>
               <span className="text-right">Record</span>
               <span className="text-right">
                 {mode === "winRate" ? "Win %" : "Wagered"}
@@ -1299,7 +1529,7 @@ function CloudStatsTable({ title, rows, mode }) {
                 className="grid grid-cols-4 text-sm items-center py-1.5 border-b border-border/10 last:border-b-0"
               >
                 <span className="text-white truncate">
-                  {getSportLabel(row.name)}
+                  {formatName(row.name)}
                 </span>
 
                 <span className="font-mono text-xs text-white text-right">
