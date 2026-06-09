@@ -889,13 +889,11 @@ const chartSegments = useMemo(() => {
               formatName={getSportLabel}
             />
 
-            <CloudStatsTable
-              title="Profit by Team"
-              rows={[...teamStats].sort((a, b) => b.pnl - a.pnl)}
-              mode="profit"
-              firstColumnLabel="Team"
-              formatName={(name) => getTeamLabel(name)}
-            />
+<CloudStatsTable
+  title="Profit by Team"
+  rows={[...teamStats].sort((a, b) => b.pnl - a.pnl)}
+  mode="teamProfit"
+/>
           </div>
 
           <div>
@@ -1513,7 +1511,7 @@ function CloudStatsTable({ title, rows, mode }) {
   const lastColumnLabel = mode === "winRate" ? "ROI" : "P/L";
 
   return (
-    <Card className="border-border/40 bg-secondary/20">
+    <Card className="border-border/40 bg-secondary/20 overflow-hidden">
       <CardContent className="p-5">
         <p className="text-sm font-semibold text-muted-foreground mb-4">
           {title}
@@ -1523,7 +1521,7 @@ function CloudStatsTable({ title, rows, mode }) {
           <p className="text-sm text-muted-foreground">No data yet.</p>
         ) : (
           <div className="space-y-2">
-            <div className="grid grid-cols-3 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_90px_110px] text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
               <span>{firstColumnLabel}</span>
               <span className="text-right">Record</span>
               <span className="text-right">{lastColumnLabel}</span>
@@ -1531,19 +1529,18 @@ function CloudStatsTable({ title, rows, mode }) {
 
             {rows.map((row) => {
               const displayName =
-                mode === "teamProfit" ? getTeamLabel(row.name) : getSportLabel(row.name);
+                mode === "teamProfit"
+                  ? getTeamLabel(row.name)
+                  : getSportLabel(row.name);
 
-              const finalValue =
-                mode === "winRate"
-                  ? row.roi
-                  : row.pnl;
+              const finalValue = mode === "winRate" ? row.roi : row.pnl;
 
               return (
                 <div
                   key={row.name}
-                  className="grid grid-cols-3 text-sm items-center py-1.5 border-b border-border/10 last:border-b-0"
+                  className="grid grid-cols-[minmax(0,1fr)_90px_110px] text-sm items-center py-1.5 border-b border-border/10 last:border-b-0"
                 >
-                  <span className="text-white truncate">
+                  <span className="text-white truncate pr-2">
                     {displayName}
                   </span>
 
