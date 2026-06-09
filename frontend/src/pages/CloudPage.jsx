@@ -1508,7 +1508,10 @@ function StatCard({ label, value, positive }) {
   );
 }
 
-function CloudStatsTable({ title, rows, mode, firstColumnLabel = "Sport", formatName = getSportLabel }) {
+function CloudStatsTable({ title, rows, mode }) {
+  const firstColumnLabel = mode === "teamProfit" ? "Team" : "Sport";
+  const lastColumnLabel = mode === "winRate" ? "ROI" : "P/L";
+
   return (
     <Card className="border-border/40 bg-secondary/20">
       <CardContent className="p-5">
@@ -1520,49 +1523,46 @@ function CloudStatsTable({ title, rows, mode, firstColumnLabel = "Sport", format
           <p className="text-sm text-muted-foreground">No data yet.</p>
         ) : (
           <div className="space-y-2">
-            <div className="grid grid-cols-4 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
+            <div className="grid grid-cols-3 text-[10px] uppercase tracking-wider text-muted-foreground border-b border-border/30 pb-2">
               <span>{firstColumnLabel}</span>
               <span className="text-right">Record</span>
-              <span className="text-right">
-                {mode === "winRate" ? "Win %" : "Wagered"}
-              </span>
-              <span className="text-right">
-                {mode === "winRate" ? "ROI" : "P/L"}
-              </span>
+              <span className="text-right">{lastColumnLabel}</span>
             </div>
 
-            {rows.map((row) => (
-              <div
-                key={row.name}
-                className="grid grid-cols-4 text-sm items-center py-1.5 border-b border-border/10 last:border-b-0"
-              >
-                <span className="text-white truncate">
-                  {formatName(row.name)}
-                </span>
+            {rows.map((row) => {
+              const displayName =
+                mode === "teamProfit" ? getTeamLabel(row.name) : getSportLabel(row.name);
 
-                <span className="font-mono text-xs text-white text-right">
-                  {formatRecord(row.wins, row.losses)}
-                </span>
+              const finalValue =
+                mode === "winRate"
+                  ? row.roi
+                  : row.pnl;
 
-                <span className="font-mono text-xs text-white text-right">
-                  {mode === "winRate"
-                    ? formatPercent(row.winRate)
-                    : formatCurrency(row.wagered)}
-                </span>
-
-                <span
-                  className={`font-mono text-xs font-medium text-right ${
-                    (mode === "winRate" ? row.roi : row.pnl) >= 0
-                      ? "text-emerald-300"
-                      : "text-rose-300"
-                  }`}
+              return (
+                <div
+                  key={row.name}
+                  className="grid grid-cols-3 text-sm items-center py-1.5 border-b border-border/10 last:border-b-0"
                 >
-                  {mode === "winRate"
-                    ? `${row.roi >= 0 ? "+" : ""}${formatPercent(row.roi)}`
-                    : `${row.pnl >= 0 ? "+" : ""}${formatCurrency(row.pnl)}`}
-                </span>
-              </div>
-            ))}
+                  <span className="text-white truncate">
+                    {displayName}
+                  </span>
+
+                  <span className="font-mono text-xs text-white text-right">
+                    {formatRecord(row.wins, row.losses)}
+                  </span>
+
+                  <span
+                    className={`font-mono text-xs font-medium text-right ${
+                      finalValue >= 0 ? "text-emerald-300" : "text-rose-300"
+                    }`}
+                  >
+                    {mode === "winRate"
+                      ? `${row.roi >= 0 ? "+" : ""}${formatPercent(row.roi)}`
+                      : `${row.pnl >= 0 ? "+" : ""}${formatCurrency(row.pnl)}`}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         )}
       </CardContent>
