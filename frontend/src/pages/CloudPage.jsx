@@ -40,7 +40,22 @@ const SPORTS = [
   { value: "Basketball", label: "🏀 Basketball" },
   { value: "Football", label: "🏈 Football" },
   { value: "Baseball", label: "⚾ Baseball" },
-
+  { value: "Soccer", label: "⚽ Soccer" },
+  { value: "Tennis", label: "🎾 Tennis" },
+  { value: "Hockey", label: "🏒 Hockey" },
+  { value: "Golf", label: "⛳ Golf" },
+  { value: "MMA / UFC", label: "🥊 MMA / UFC" },
+  { value: "Boxing", label: "🥊 Boxing" },
+  { value: "Esports", label: "🎮 Esports" },
+  { value: "Horse Racing", label: "🐎 Horse Racing" },
+  { value: "Cricket", label: "🏏 Cricket" },
+  { value: "Rugby", label: "🏉 Rugby" },
+  { value: "Volleyball", label: "🏐 Volleyball" },
+  { value: "Motorsports", label: "🏎️ Motorsports" },
+  { value: "Table Tennis", label: "🏓 Table Tennis" },
+  { value: "Parlay", label: "🎟️ Parlay" },
+  { value: "Casino", label: "🎰 Casino" },
+  { value: "Other", label: "📌 Other" },
 ];
 
 const TEAM_OPTIONS = {
@@ -76,7 +91,6 @@ const TEAM_OPTIONS = {
     { value: "Utah Jazz", label: "Jazz" },
     { value: "Washington Wizards", label: "Wizards" },
   ],
-
   Football: [
     { value: "Arizona Cardinals", label: "Cardinals" },
     { value: "Atlanta Falcons", label: "Falcons" },
@@ -111,7 +125,6 @@ const TEAM_OPTIONS = {
     { value: "Tennessee Titans", label: "Titans" },
     { value: "Washington Commanders", label: "Commanders" },
   ],
-
   Baseball: [
     { value: "Arizona Diamondbacks", label: "Diamondbacks" },
     { value: "Atlanta Braves", label: "Braves" },
@@ -143,6 +156,72 @@ const TEAM_OPTIONS = {
     { value: "Texas Rangers", label: "Rangers" },
     { value: "Toronto Blue Jays", label: "Blue Jays" },
     { value: "Washington Nationals", label: "Nationals" },
+  ],
+  Hockey: [
+    { value: "Anaheim Ducks", label: "Ducks" },
+    { value: "Boston Bruins", label: "Bruins" },
+    { value: "Buffalo Sabres", label: "Sabres" },
+    { value: "Calgary Flames", label: "Flames" },
+    { value: "Carolina Hurricanes", label: "Hurricanes" },
+    { value: "Chicago Blackhawks", label: "Blackhawks" },
+    { value: "Colorado Avalanche", label: "Avalanche" },
+    { value: "Columbus Blue Jackets", label: "Blue Jackets" },
+    { value: "Dallas Stars", label: "Stars" },
+    { value: "Detroit Red Wings", label: "Red Wings" },
+    { value: "Edmonton Oilers", label: "Oilers" },
+    { value: "Florida Panthers", label: "Panthers" },
+    { value: "Los Angeles Kings", label: "Kings" },
+    { value: "Minnesota Wild", label: "Wild" },
+    { value: "Montreal Canadiens", label: "Canadiens" },
+    { value: "Nashville Predators", label: "Predators" },
+    { value: "New Jersey Devils", label: "Devils" },
+    { value: "New York Islanders", label: "Islanders" },
+    { value: "New York Rangers", label: "Rangers" },
+    { value: "Ottawa Senators", label: "Senators" },
+    { value: "Philadelphia Flyers", label: "Flyers" },
+    { value: "Pittsburgh Penguins", label: "Penguins" },
+    { value: "San Jose Sharks", label: "Sharks" },
+    { value: "Seattle Kraken", label: "Kraken" },
+    { value: "St. Louis Blues", label: "Blues" },
+    { value: "Tampa Bay Lightning", label: "Lightning" },
+    { value: "Toronto Maple Leafs", label: "Maple Leafs" },
+    { value: "Utah Mammoth", label: "Mammoth" },
+    { value: "Vancouver Canucks", label: "Canucks" },
+    { value: "Vegas Golden Knights", label: "Golden Knights" },
+    { value: "Washington Capitals", label: "Capitals" },
+    { value: "Winnipeg Jets", label: "Jets" },
+  ],
+  Soccer: [
+    { value: "Atlanta United FC", label: "United FC" },
+    { value: "Austin FC", label: "Austin FC" },
+    { value: "CF Montréal", label: "CF Montréal" },
+    { value: "Charlotte FC", label: "Charlotte FC" },
+    { value: "Chicago Fire FC", label: "Fire FC" },
+    { value: "Colorado Rapids", label: "Rapids" },
+    { value: "Columbus Crew", label: "Crew" },
+    { value: "D.C. United", label: "D.C. United" },
+    { value: "FC Cincinnati", label: "FC Cincinnati" },
+    { value: "FC Dallas", label: "FC Dallas" },
+    { value: "Houston Dynamo FC", label: "Dynamo FC" },
+    { value: "Inter Miami CF", label: "Inter Miami CF" },
+    { value: "LA Galaxy", label: "Galaxy" },
+    { value: "Los Angeles FC", label: "LAFC" },
+    { value: "Minnesota United FC", label: "United FC" },
+    { value: "Nashville SC", label: "Nashville SC" },
+    { value: "New England Revolution", label: "Revolution" },
+    { value: "New York City FC", label: "City FC" },
+    { value: "New York Red Bulls", label: "Red Bulls" },
+    { value: "Orlando City SC", label: "City SC" },
+    { value: "Philadelphia Union", label: "Union" },
+    { value: "Portland Timbers", label: "Timbers" },
+    { value: "Real Salt Lake", label: "Real Salt Lake" },
+    { value: "San Diego FC", label: "San Diego FC" },
+    { value: "San Jose Earthquakes", label: "Earthquakes" },
+    { value: "Seattle Sounders FC", label: "Sounders FC" },
+    { value: "Sporting Kansas City", label: "Sporting KC" },
+    { value: "St. Louis City SC", label: "City SC" },
+    { value: "Toronto FC", label: "Toronto FC" },
+    { value: "Vancouver Whitecaps FC", label: "Whitecaps FC" },
   ],
 };
 
@@ -263,9 +342,17 @@ function getSportLabel(value) {
 }
 
 function getTeamLabel(sportValue, teamValue) {
-  const teams = TEAM_OPTIONS[sportValue] || [];
-  const team = teams.find((t) => t.value === teamValue);
-  return team?.label || teamValue || "No Team";
+  const value = teamValue ?? sportValue;
+
+  if (!value) return "No Team";
+
+  const teams = sportValue && teamValue
+    ? TEAM_OPTIONS[sportValue] || []
+    : Object.values(TEAM_OPTIONS).flat();
+
+  const team = teams.find((t) => t.value === value);
+
+  return team?.label || value || "No Team";
 }
 
 function getTeam(bet) {
@@ -807,7 +894,7 @@ const chartSegments = useMemo(() => {
               rows={[...teamStats].sort((a, b) => b.pnl - a.pnl)}
               mode="profit"
               firstColumnLabel="Team"
-              formatName={(name) => name}
+              formatName={(name) => getTeamLabel(name)}
             />
           </div>
 
