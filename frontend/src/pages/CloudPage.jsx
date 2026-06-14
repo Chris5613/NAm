@@ -353,6 +353,7 @@ export default function CloudPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editingBetId, setEditingBetId] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState("all");
+  const [activeView, setActiveView] = useState("dashboard");
   const [showHidden, setShowHidden] = useState(false);
   const [form, setForm] = useState(() => emptyForm());
   const [calendarMonthKey, setCalendarMonthKey] = useState(() => getCurrentMonthKey());
@@ -662,6 +663,32 @@ const chartSegments = useMemo(() => {
             </div>
 
             <div className="flex items-center gap-2">
+              <div className="flex h-9 overflow-hidden rounded-md border border-border/40 bg-background">
+                <button
+                  type="button"
+                  onClick={() => setActiveView("dashboard")}
+                  className={`px-3 text-xs font-semibold transition-colors ${
+                    activeView === "dashboard"
+                      ? "bg-slate-100 text-slate-950"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                  }`}
+                >
+                  Dashboard
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveView("calendar")}
+                  className={`px-3 text-xs font-semibold transition-colors ${
+                    activeView === "calendar"
+                      ? "bg-slate-100 text-slate-950"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary/60"
+                  }`}
+                >
+                  Calendar
+                </button>
+              </div>
+
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
@@ -729,7 +756,7 @@ const chartSegments = useMemo(() => {
             <StatCard label="Total Bets" value={String(stats.total)} />
           </div>
 
-          <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_390px] gap-6 items-start">
+          {activeView === "dashboard" ? (
             <div className="space-y-6">
               <Card className="border-border/40 bg-secondary/20">
             <CardContent className="p-5">
@@ -957,18 +984,20 @@ const chartSegments = useMemo(() => {
             )}
           </div>
             </div>
-
-            <CalendarSidePanel
-              monthKey={calendarMonthKey}
-              bets={calendarBets}
-              onPreviousMonth={() =>
-                setCalendarMonthKey((prev) => moveMonthKey(prev, -1))
-              }
-              onNextMonth={() =>
-                setCalendarMonthKey((prev) => moveMonthKey(prev, 1))
-              }
-            />
-          </div>
+          ) : (
+            <div className="max-w-5xl mx-auto">
+              <CalendarSidePanel
+                monthKey={calendarMonthKey}
+                bets={calendarBets}
+                onPreviousMonth={() =>
+                  setCalendarMonthKey((prev) => moveMonthKey(prev, -1))
+                }
+                onNextMonth={() =>
+                  setCalendarMonthKey((prev) => moveMonthKey(prev, 1))
+                }
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -1256,7 +1285,7 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
 
 
   return (
-    <Card className="border-border/40 bg-secondary/20 2xl:sticky 2xl:top-6">
+    <Card className="border-border/40 bg-secondary/20">
       <CardContent className="p-5 space-y-5">
         <div className="flex items-center justify-between gap-3">
           <button
