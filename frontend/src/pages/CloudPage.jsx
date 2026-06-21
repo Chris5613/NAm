@@ -803,30 +803,6 @@ const chartSegments = useMemo(() => {
             </CardContent>
           </Card>
 
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-            <CloudStatsTable
-              title="Win Rate by Sport"
-              rows={[...categoryStats].sort((a, b) => b.winRate - a.winRate)}
-              mode="winRate"
-              firstColumnLabel="Sport"
-              formatName={getSportLabel}
-            />
-
-            <CloudStatsTable
-              title="Profit by Sport"
-              rows={[...categoryStats].sort((a, b) => b.pnl - a.pnl)}
-              mode="profit"
-              firstColumnLabel="Sport"
-              formatName={getSportLabel}
-            />
-
-<CloudStatsTable
-  title="Profit by Team"
-  rows={[...teamStats].sort((a, b) => b.pnl - a.pnl)}
-  mode="teamProfit"
-/>
-          </div>
-
           <div>
             <div className="flex items-center justify-between gap-3 mb-3">
               <p className="text-sm font-semibold text-white">Bets</p>
