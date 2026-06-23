@@ -21,6 +21,7 @@ import {
   Pencil,
   Eye,
   EyeOff,
+  Clock,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -294,18 +295,38 @@ function getCategory(bet) {
   return bet.category?.trim() || "Uncategorized";
 }
 
-function isBetWin(bet) {
+function getBetStatus(bet) {
   const result = String(bet.result || "").toLowerCase();
 
-  if (result === "win" || result === "won") return true;
-  if (result === "loss" || result === "lost") return false;
+  if (result === "win" || result === "won") return "win";
+  if (result === "loss" || result === "lost") return "loss";
+  if (result === "pending") return "pending";
+  if (result === "in_progress" || result === "in progress") return "in_progress";
 
   const titleText = `${bet.title || ""} ${bet.note || ""}`.toLowerCase();
 
-  if (titleText.includes("won")) return true;
-  if (titleText.includes("lost") || titleText.includes("loss")) return false;
+  if (titleText.includes("won")) return "win";
+  if (titleText.includes("lost") || titleText.includes("loss")) return "loss";
 
-  return Number(bet.amount) > 0;
+  return Number(bet.amount) >= 0 ? "win" : "loss";
+}
+
+function isBetWin(bet) {
+  const status = getBetStatus(bet);
+
+  if (status === "win") return true;
+  if (status === "loss") return false;
+
+  return null;
+}
+
+function getStatusLabel(status) {
+  if (status === "win") return "Win";
+  if (status === "loss") return "Loss";
+  if (status === "pending") return "Pending";
+  if (status === "in_progress") return "In Progress";
+
+  return "Pending";
 }
 
 function buildGroupStats(bets, getKey) {
@@ -329,9 +350,9 @@ function buildGroupStats(bets, getKey) {
     groups[key].wagered += Math.abs(amount);
     groups[key].pnl += amount;
 
-    if (won) {
+    if (won === true) {
       groups[key].wins += 1;
-    } else {
+    } else if (won === false) {
       groups[key].losses += 1;
     }
   });
@@ -400,9 +421,11 @@ export default function CloudPage() {
       wagered += Math.abs(amount);
       netPnl += amount;
 
-if (isBetWin(bet)) {
+const won = isBetWin(bet);
+
+if (won === true) {
   wins += 1;
-} else {
+} else if (won === false) {
   losses += 1;
 }
     });
@@ -425,12 +448,15 @@ if (isBetWin(bet)) {
     chronological.forEach((bet) => {
       const won = isBetWin(bet);
 
-      if (won) {
+      if (won === true) {
         runningWin += 1;
         runningLoss = 0;
-      } else {
+      } else if (won === false) {
         runningLoss += 1;
         runningWin = 0;
+      } else {
+        runningWin = 0;
+        runningLoss = 0;
       }
 
       longestWinStreak = Math.max(longestWinStreak, runningWin);
@@ -440,7 +466,7 @@ if (isBetWin(bet)) {
 for (let i = chronological.length - 1; i >= 0; i -= 1) {
   const bet = chronological[i];
 
-  if (isBetWin(bet)) {
+  if (isBetWin(bet) === true) {
     currentWinStreak += 1;
   } else {
     break;
@@ -533,8 +559,8 @@ const chartSegments = useMemo(() => {
     setForm({
       title: bet.title || "",
       matchup: bet.matchup || "",
-      amount: String(Math.abs(Number(bet.amount) || 0)),
-      result: Number(bet.amount) >= 0 ? "win" : "loss",
+      amount: String(Math.abs(Number(bet.stake ?? bet.amount) || 0)),
+      result: bet.result || (Number(bet.amount) >= 0 ? "win" : "loss"),
       date: bet.date || new Date().toISOString().slice(0, 10),
       category: bet.category || "",
       team: bet.team || "",
@@ -565,7 +591,11 @@ const chartSegments = useMemo(() => {
     }
 
     const finalAmount =
-      form.result === "loss" ? -Math.abs(amountRaw) : Math.abs(amountRaw);
+      form.result === "loss"
+        ? -Math.abs(amountRaw)
+        : form.result === "win"
+          ? Math.abs(amountRaw)
+          : 0;
 
     if (isEditing) {
       const next = bets.map((bet) =>
@@ -575,6 +605,7 @@ const chartSegments = useMemo(() => {
               title: form.title.trim(),
               matchup: form.matchup.trim(),
               amount: finalAmount,
+              stake: Math.abs(amountRaw),
               result: form.result,
               date: form.date,
               category: form.category.trim(),
@@ -598,6 +629,7 @@ const chartSegments = useMemo(() => {
       title: form.title.trim(),
       matchup: form.matchup.trim(),
       amount: finalAmount,
+      stake: Math.abs(amountRaw),
       result: form.result,
       date: form.date,
       category: form.category.trim(),
@@ -828,6 +860,9 @@ const chartSegments = useMemo(() => {
               <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2">
                 {visibleBets.map((bet) => {
                   const won = isBetWin(bet);
+                  const status = getBetStatus(bet);
+                  const statusLabel = getStatusLabel(status);
+                  const isPending = status === "pending" || status === "in_progress";
 
                   return (
                     <div
@@ -835,37 +870,48 @@ const chartSegments = useMemo(() => {
                       className={`rounded-lg border p-4 bg-secondary/40 ${
                         bet.hidden ? "opacity-50" : ""
                       } ${
-                        won
+                        won === true
                           ? "border-emerald-500/40"
-                          : "border-rose-500/40"
+                          : won === false
+                            ? "border-rose-500/40"
+                            : "border-amber-400/40"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <div
                             className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              won
+                              won === true
                                 ? "bg-emerald-500/10 text-emerald-300"
-                                : "bg-rose-500/10 text-rose-300"
+                                : won === false
+                                  ? "bg-rose-500/10 text-rose-300"
+                                  : "bg-amber-500/10 text-amber-300"
                             }`}
                           >
-                            {won ? (
+                            {won === true ? (
                               <TrendingUp className="w-5 h-5" />
-                            ) : (
+                            ) : won === false ? (
                               <TrendingDown className="w-5 h-5" />
+                            ) : (
+                              <Clock className="w-5 h-5" />
                             )}
                           </div>
 
                           <div className="min-w-0">
                             <p className="text-sm font-bold text-white">
-                              Cloud {won ? "won" : "lost"}{" "}
+                              Cloud {isPending ? statusLabel.toLowerCase() : won ? "won" : "lost"}{" "}
                               <span
                                 className={
-                                  won ? "text-emerald-300" : "text-rose-300"
+                                  won === true
+                                    ? "text-emerald-300"
+                                    : won === false
+                                      ? "text-rose-300"
+                                      : "text-amber-300"
                                 }
                               >
-                                {won ? "+" : "-"}
-                                {formatCurrency(Math.abs(bet.amount))}
+                                {isPending
+                                  ? `${formatCurrency(bet.stake ?? 0)} stake`
+                                  : `${won ? "+" : "-"}${formatCurrency(Math.abs(bet.amount))}`}
                               </span>
                             </p>
 
@@ -890,12 +936,14 @@ const chartSegments = useMemo(() => {
                         <div className="flex items-center gap-2">
                           <span
                             className={`text-xs font-mono px-3 py-1 rounded border ${
-                              won
+                              won === true
                                 ? "border-emerald-500/40 text-emerald-300"
-                                : "border-rose-500/40 text-rose-300"
+                                : won === false
+                                  ? "border-rose-500/40 text-rose-300"
+                                  : "border-amber-400/40 text-amber-300"
                             }`}
                           >
-                            {won ? "Win" : "Loss"}
+                            {statusLabel}
                           </span>
 
                           <button
@@ -1122,6 +1170,44 @@ const chartSegments = useMemo(() => {
                   <TrendingDown className="w-4 h-4 mr-2" />
                   Loss
                 </Button>
+
+                <Button
+                  type="button"
+                  variant={form.result === "pending" ? "default" : "outline"}
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      result: "pending",
+                    }))
+                  }
+                  className={
+                    form.result === "pending"
+                      ? "bg-amber-300 text-slate-950 hover:bg-amber-200"
+                      : "border-slate-600/60 bg-[#0A0F1D] text-white hover:bg-[#111A2E]"
+                  }
+                >
+                  <Clock className="w-4 h-4 mr-2" />
+                  Pending
+                </Button>
+
+                <Button
+                  type="button"
+                  variant={form.result === "in_progress" ? "default" : "outline"}
+                  onClick={() =>
+                    setForm((prev) => ({
+                      ...prev,
+                      result: "in_progress",
+                    }))
+                  }
+                  className={
+                    form.result === "in_progress"
+                      ? "bg-sky-300 text-slate-950 hover:bg-sky-200"
+                      : "border-slate-600/60 bg-[#0A0F1D] text-white hover:bg-[#111A2E]"
+                  }
+                >
+                  <Clock className="w-4 h-4 mr-2" />
+                  In Progress
+                </Button>
               </div>
             </div>
 
@@ -1193,9 +1279,11 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
       map[dateKey].pnl += amount;
       map[dateKey].bets.push(bet);
 
-      if (isBetWin(bet)) {
+      const won = isBetWin(bet);
+
+      if (won === true) {
         map[dateKey].wins += 1;
-      } else {
+      } else if (won === false) {
         map[dateKey].losses += 1;
       }
     });
@@ -1209,9 +1297,11 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
         const amount = Number(bet.amount) || 0;
         acc.pnl += amount;
 
-        if (isBetWin(bet)) {
+        const won = isBetWin(bet);
+
+        if (won === true) {
           acc.wins += 1;
-        } else {
+        } else if (won === false) {
           acc.losses += 1;
         }
 
@@ -1349,12 +1439,19 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
           ) : (
             activeStats.bets.map((bet) => {
               const won = isBetWin(bet);
+              const status = getBetStatus(bet);
+              const statusLabel = getStatusLabel(status);
+              const isPending = status === "pending" || status === "in_progress";
 
               return (
                 <div
                   key={bet.id}
                   className={`rounded-lg border bg-secondary/40 p-3 flex items-center justify-between gap-3 ${
-                    won ? "border-emerald-500/40" : "border-rose-500/40"
+                    won === true
+                      ? "border-emerald-500/40"
+                      : won === false
+                        ? "border-rose-500/40"
+                        : "border-amber-400/40"
                   }`}
                 >
                   <div className="min-w-0">
@@ -1370,15 +1467,20 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
                   <div className="text-right shrink-0">
                     <p
                       className={`font-mono text-sm font-bold ${
-                        won ? "text-emerald-300" : "text-rose-300"
+                        won === true
+                          ? "text-emerald-300"
+                          : won === false
+                            ? "text-rose-300"
+                            : "text-amber-300"
                       }`}
                     >
-                      {Number(bet.amount) >= 0 ? "+" : ""}
-                      {formatCurrency(Number(bet.amount) || 0)}
+                      {isPending
+                        ? `${formatCurrency(bet.stake ?? 0)} stake`
+                        : `${Number(bet.amount) >= 0 ? "+" : ""}${formatCurrency(Number(bet.amount) || 0)}`}
                     </p>
 
                     <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {won ? "Won" : "Lost"}
+                      {statusLabel}
                     </p>
                   </div>
                 </div>
