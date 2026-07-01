@@ -21,7 +21,7 @@ const NAV_ITEMS = [
   { path: "/integrations", label: "Integrations", icon: Zap },
   { path: "/unity-devices", label: "Unity Devices", icon: Cable },
  // { path: "/tello-dashboard", label: "Tello Dashboard", icon: Smartphone },
-  // { path: "/rollercoin-calculator", label: "Rollercoin", icon: Squirrel },
+  { path: "/rollercoin-calculator", label: "Rollercoin", icon: Squirrel },
   { path: "/cloud", label: "Gamble", icon: Volleyball },
 ];
 
