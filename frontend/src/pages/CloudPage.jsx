@@ -36,6 +36,90 @@ import { toast } from "sonner";
 
 const CLOUD_BETS_KEY = "cloud_manual_bets";
 
+function getMockDate(daysAgo) {
+  const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
+  return date.toISOString().slice(0, 10);
+}
+
+const MOCK_BETS = [
+  {
+    id: "mock-celtics-spread",
+    title: "Celtics -4.5",
+    matchup: "Boston Celtics vs. New York Knicks",
+    amount: 47.5,
+    stake: 50,
+    result: "win",
+    date: getMockDate(1),
+    category: "Basketball",
+    team: "Boston Celtics",
+    sportsbook: "DraftKings",
+    note: "Covered late in the fourth quarter.",
+    created_at: "2026-08-12T18:00:00.000Z",
+    hidden: false,
+  },
+  {
+    id: "mock-dodgers-moneyline",
+    title: "Dodgers Moneyline",
+    matchup: "Los Angeles Dodgers vs. San Diego Padres",
+    amount: -35,
+    stake: 35,
+    result: "loss",
+    date: getMockDate(3),
+    category: "Baseball",
+    team: "Los Angeles Dodgers",
+    sportsbook: "FanDuel",
+    note: "Bullpen gave up the lead in the eighth.",
+    created_at: "2026-08-10T21:00:00.000Z",
+    hidden: false,
+  },
+  {
+    id: "mock-chiefs-parlay",
+    title: "Chiefs & over 47.5",
+    matchup: "Kansas City Chiefs vs. Buffalo Bills",
+    amount: 82.5,
+    stake: 30,
+    result: "win",
+    date: getMockDate(5),
+    category: "Parlay",
+    team: "Kansas City Chiefs",
+    sportsbook: "BetMGM",
+    note: "Two-leg same-game parlay.",
+    created_at: "2026-08-08T19:00:00.000Z",
+    hidden: false,
+  },
+  {
+    id: "mock-mariners-total",
+    title: "Mariners vs. Astros under 7.5",
+    matchup: "Seattle Mariners vs. Houston Astros",
+    amount: 40,
+    stake: 40,
+    result: "win",
+    date: getMockDate(7),
+    category: "Baseball",
+    team: "Seattle Mariners",
+    sportsbook: "Caesars",
+    note: "Pitching duel from the first inning.",
+    created_at: "2026-08-06T20:00:00.000Z",
+    hidden: false,
+  },
+  {
+    id: "mock-lakers-futures",
+    title: "Lakers conference futures",
+    matchup: "Western Conference futures",
+    amount: 0,
+    stake: 25,
+    result: "pending",
+    date: getMockDate(9),
+    category: "Basketball",
+    team: "Los Angeles Lakers",
+    sportsbook: "DraftKings",
+    note: "Season-long futures position.",
+    created_at: "2026-08-04T16:00:00.000Z",
+    hidden: false,
+  },
+];
+
 const SPORTS = [
   { value: "", label: "Select sport" },
   { value: "Basketball", label: "🏀 Basketball" },
@@ -165,9 +249,9 @@ const TEAM_OPTIONS = {
 function getSavedBets() {
   try {
     const saved = JSON.parse(localStorage.getItem(CLOUD_BETS_KEY) || "[]");
-    return Array.isArray(saved) ? saved : [];
+    return Array.isArray(saved) && saved.length > 0 ? saved : MOCK_BETS;
   } catch {
-    return [];
+    return MOCK_BETS;
   }
 }
 
@@ -374,7 +458,6 @@ export default function CloudPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [editingBetId, setEditingBetId] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState("all");
-  const [showHidden, setShowHidden] = useState(false);
   const [form, setForm] = useState(() => emptyForm());
   const [calendarMonthKey, setCalendarMonthKey] = useState(() => getCurrentMonthKey());
 
@@ -404,12 +487,6 @@ export default function CloudPage() {
     return sorted.filter((bet) => getBetMonthKey(bet) === selectedMonth);
   }, [bets, selectedMonth]);
 
-  const visibleBets = useMemo(() => {
-    return filteredBets.filter((bet) => showHidden || !bet.hidden);
-  }, [filteredBets, showHidden]);
-
-  const hiddenCount = filteredBets.filter((bet) => bet.hidden).length;
-
   const stats = useMemo(() => {
     let wins = 0;
     let losses = 0;
@@ -431,10 +508,6 @@ if (won === true) {
     });
 
     const total = wins + losses;
-    const winRate = total > 0 ? (wins / total) * 100 : 0;
-    const roi = wagered > 0 ? (netPnl / wagered) * 100 : 0;
-    const avgBetSize = total > 0 ? wagered / total : 0;
-
     const chronological = [...filteredBets].sort(
       (a, b) => getBetDateTime(a) - getBetDateTime(b)
     );
@@ -479,9 +552,6 @@ for (let i = chronological.length - 1; i >= 0; i -= 1) {
       total,
       wagered,
       netPnl,
-      winRate,
-      roi,
-      avgBetSize,
       currentWinStreak,
       longestWinStreak,
       longestLossStreak,
@@ -550,24 +620,6 @@ const chartSegments = useMemo(() => {
   const openAddModal = () => {
     setEditingBetId(null);
     setForm(emptyForm());
-    setAddOpen(true);
-  };
-
-  const openEditModal = (bet) => {
-    setEditingBetId(bet.id);
-
-    setForm({
-      title: bet.title || "",
-      matchup: bet.matchup || "",
-      amount: String(Math.abs(Number(bet.stake ?? bet.amount) || 0)),
-      result: bet.result || (Number(bet.amount) >= 0 ? "win" : "loss"),
-      date: bet.date || new Date().toISOString().slice(0, 10),
-      category: bet.category || "",
-      team: bet.team || "",
-      sportsbook: bet.sportsbook || "",
-      note: bet.note || "",
-    });
-
     setAddOpen(true);
   };
 
@@ -648,35 +700,10 @@ const chartSegments = useMemo(() => {
     toast.success("Bet added");
   };
 
-  const handleDeleteBet = (id) => {
-    const next = bets.filter((bet) => bet.id !== id);
-
-    setBets(next);
-    saveBets(next);
-
-    toast.success("Bet removed");
-  };
-
-  const toggleHideBet = (id) => {
-    const next = bets.map((bet) =>
-      bet.id === id
-        ? {
-            ...bet,
-            hidden: !bet.hidden,
-          }
-        : bet
-    );
-
-    setBets(next);
-    saveBets(next);
-
-    toast.success("Bet updated");
-  };
-
   return (
 <div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
-  <Card className="w-full min-h-[calc(100vh-4rem)] rounded-none border-0 bg-card shadow-none">
-        <CardContent className="p-8 space-y-6">
+    <Card className="w-full rounded-none border-0 bg-card shadow-none">
+      <CardContent className="p-8 pb-4 space-y-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="w-14 h-14 rounded-full bg-violet-600 flex items-center justify-center shadow-[0_0_22px_rgba(124,58,237,0.35)]">
@@ -727,30 +754,13 @@ const chartSegments = useMemo(() => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <StatCard
               label="Net P/L"
               value={`${stats.netPnl >= 0 ? "+" : ""}${formatCurrency(
                 stats.netPnl
               )}`}
               positive={stats.netPnl >= 0}
-            />
-
-            <StatCard
-              label="Win Rate"
-              value={formatPercent(stats.winRate)}
-              positive={stats.winRate >= 50}
-            />
-
-            <StatCard
-              label="ROI"
-              value={`${stats.roi >= 0 ? "+" : ""}${formatPercent(stats.roi)}`}
-              positive={stats.roi >= 0}
-            />
-
-            <StatCard
-              label="Avg Bet Size"
-              value={formatCurrency(stats.avgBetSize)}
             />
 
             <StatCard
@@ -761,9 +771,8 @@ const chartSegments = useMemo(() => {
             <StatCard label="Total Bets" value={String(stats.total)} />
           </div>
 
-          <div className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_390px] gap-6 items-start">
-            <div className="space-y-6">
-              <Card className="border-border/40 bg-secondary/20">
+          <div className="space-y-6">
+            <Card className="border-border/40 bg-secondary/20">
             <CardContent className="p-5">
               <p className="text-sm font-semibold text-muted-foreground mb-4">
                 P/L Progression
@@ -833,154 +842,7 @@ const chartSegments = useMemo(() => {
                 )}
               </div>
             </CardContent>
-          </Card>
-
-          <div>
-            <div className="flex items-center justify-between gap-3 mb-3">
-              <p className="text-sm font-semibold text-white">Bets</p>
-
-              {hiddenCount > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowHidden((prev) => !prev)}
-                  className="border-border/40"
-                >
-                  {showHidden ? "Hide hidden" : `Show hidden (${hiddenCount})`}
-                </Button>
-              )}
-            </div>
-
-            {visibleBets.length === 0 ? (
-              <div className="rounded-lg border border-border/40 bg-secondary/30 p-8 text-center">
-                <p className="text-sm text-muted-foreground">No visible bets.</p>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[420px] overflow-y-auto pr-2">
-                {visibleBets.map((bet) => {
-                  const won = isBetWin(bet);
-                  const status = getBetStatus(bet);
-                  const statusLabel = getStatusLabel(status);
-                  const isPending = status === "pending" || status === "in_progress";
-
-                  return (
-                    <div
-                      key={bet.id}
-                      className={`rounded-lg border p-4 bg-secondary/40 ${
-                        bet.hidden ? "opacity-50" : ""
-                      } ${
-                        won === true
-                          ? "border-emerald-500/40"
-                          : won === false
-                            ? "border-rose-500/40"
-                            : "border-amber-400/40"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div
-                            className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                              won === true
-                                ? "bg-emerald-500/10 text-emerald-300"
-                                : won === false
-                                  ? "bg-rose-500/10 text-rose-300"
-                                  : "bg-amber-500/10 text-amber-300"
-                            }`}
-                          >
-                            {won === true ? (
-                              <TrendingUp className="w-5 h-5" />
-                            ) : won === false ? (
-                              <TrendingDown className="w-5 h-5" />
-                            ) : (
-                              <Clock className="w-5 h-5" />
-                            )}
-                          </div>
-
-                          <div className="min-w-0">
-                            <p className="text-sm font-bold text-white">
-                              Cloud {isPending ? statusLabel.toLowerCase() : won ? "won" : "lost"}{" "}
-                              <span
-                                className={
-                                  won === true
-                                    ? "text-emerald-300"
-                                    : won === false
-                                      ? "text-rose-300"
-                                      : "text-amber-300"
-                                }
-                              >
-                                {isPending
-                                  ? `${formatCurrency(bet.stake ?? 0)} stake`
-                                  : `${won ? "+" : "-"}${formatCurrency(Math.abs(bet.amount))}`}
-                              </span>
-                            </p>
-
-                            <p className="text-xs text-slate-300 truncate mt-1">
-                              {bet.title}
-                              {bet.matchup ? ` · ${bet.matchup}` : ""}
-                            </p>
-
-                            <p className="text-[11px] text-slate-300 mt-1">
-                              {bet.date}
-                              {getCategory(bet) !== "Uncategorized"
-                                ? ` · ${getSportLabel(getCategory(bet))}`
-                                : ""}
-                              {getTeam(bet) !== "No Team"
-                                ? ` · ${getTeamLabel(getTeam(bet))}`
-                                : ""}
-                              {bet.note ? ` · ${bet.note}` : ""}
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`text-xs font-mono px-3 py-1 rounded border ${
-                              won === true
-                                ? "border-emerald-500/40 text-emerald-300"
-                                : won === false
-                                  ? "border-rose-500/40 text-rose-300"
-                                  : "border-amber-400/40 text-amber-300"
-                            }`}
-                          >
-                            {statusLabel}
-                          </span>
-
-                          <button
-                            onClick={() => openEditModal(bet)}
-                            className="text-muted-foreground hover:text-foreground p-1"
-                            title="Edit bet"
-                          >
-                            <Pencil className="w-4 h-4" />
-                          </button>
-
-                          <button
-                            onClick={() => toggleHideBet(bet.id)}
-                            className="text-muted-foreground hover:text-foreground p-1"
-                            title={bet.hidden ? "Unhide bet" : "Hide bet"}
-                          >
-                            {bet.hidden ? (
-                              <Eye className="w-4 h-4" />
-                            ) : (
-                              <EyeOff className="w-4 h-4" />
-                            )}
-                          </button>
-
-                          <button
-                            onClick={() => handleDeleteBet(bet.id)}
-                            className="text-muted-foreground hover:text-rose-400 p-1"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-            </div>
+            </Card>
 
             <CalendarSidePanel
               monthKey={calendarMonthKey}
@@ -1322,7 +1184,7 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
 
 
   return (
-    <Card className="border-border/40 bg-secondary/20 2xl:sticky 2xl:top-6">
+    <Card className="w-full border-border/40 bg-secondary/20">
       <CardContent className="p-5 space-y-5">
         <div className="flex items-center justify-between gap-3">
           <button
@@ -1375,7 +1237,7 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
         <div className="grid grid-cols-7 gap-2">
           {days.map((day, index) => {
             if (!day) {
-              return <div key={`empty-${index}`} className="aspect-square" />;
+              return <div key={`empty-${index}`} className="h-12" />;
             }
 
             const dayStats = dailyStats[day.dateKey];
@@ -1388,7 +1250,7 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
                 key={day.dateKey}
                 type="button"
                 onClick={() => setSelectedDate(day.dateKey)}
-                className={`aspect-square rounded-lg border p-1 flex flex-col items-center justify-center transition-colors ${
+                className={`h-12 rounded-lg border p-1 flex flex-col items-center justify-center transition-colors ${
                   isSelected
                     ? "border-violet-500 bg-violet-500/10"
                     : hasBets
