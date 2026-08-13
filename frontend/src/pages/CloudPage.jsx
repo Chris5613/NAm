@@ -1184,7 +1184,7 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
 
 
   return (
-    <Card className="w-full border-border/40 bg-secondary/20">
+    <Card className="w-full max-w-5xl mx-auto border-border/40 bg-secondary/20">
       <CardContent className="p-5 space-y-5">
         <div className="flex items-center justify-between gap-3">
           <button
