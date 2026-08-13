@@ -27,7 +27,6 @@ import {
   ResponsiveContainer,
   LineChart,
   Line,
-  XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
@@ -802,17 +801,6 @@ const chartSegments = useMemo(() => {
                       margin={{ top: 10, right: 20, left: 10, bottom: 5 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#1E293B" />
-
-                      <XAxis
-                        dataKey="label"
-                        stroke="#CBD5E1"
-                        fontSize={10}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={(value, index) =>
-                          chartSegments.data[index]?.date || value
-                        }
-                      />
 
                       <YAxis
                         stroke="#CBD5E1"
