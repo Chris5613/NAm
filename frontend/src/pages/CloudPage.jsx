@@ -623,6 +623,22 @@ const chartSegments = useMemo(() => {
     setAddOpen(true);
   };
 
+  const openEditModal = (bet) => {
+    setEditingBetId(bet.id);
+    setForm({
+      title: bet.title || "",
+      matchup: bet.matchup || "",
+      amount: String(Math.abs(Number(bet.stake ?? bet.amount) || 0)),
+      result: bet.result || (Number(bet.amount) >= 0 ? "win" : "loss"),
+      date: bet.date || new Date().toISOString().slice(0, 10),
+      category: bet.category || "",
+      team: bet.team || "",
+      sportsbook: bet.sportsbook || "",
+      note: bet.note || "",
+    });
+    setAddOpen(true);
+  };
+
   const closeModal = () => {
     setAddOpen(false);
     setEditingBetId(null);
@@ -847,6 +863,7 @@ const chartSegments = useMemo(() => {
             <CalendarSidePanel
               monthKey={calendarMonthKey}
               bets={calendarBets}
+              onEditBet={openEditModal}
               onPreviousMonth={() =>
                 setCalendarMonthKey((prev) => moveMonthKey(prev, -1))
               }
@@ -1113,7 +1130,13 @@ const chartSegments = useMemo(() => {
 }
 
 
-function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
+function CalendarSidePanel({
+  monthKey,
+  bets,
+  onEditBet,
+  onPreviousMonth,
+  onNextMonth,
+}) {
   const [selectedDate, setSelectedDate] = useState(null);
 
   useEffect(() => {
@@ -1308,6 +1331,15 @@ function CalendarSidePanel({ monthKey, bets, onPreviousMonth, onNextMonth }) {
               return (
                 <div
                   key={bet.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onEditBet(bet)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onEditBet(bet);
+                    }
+                  }}
                   className={`rounded-lg border bg-secondary/40 p-3 flex items-center justify-between gap-3 ${
                     won === true
                       ? "border-emerald-500/40"
