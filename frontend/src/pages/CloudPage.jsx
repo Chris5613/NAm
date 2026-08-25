@@ -32,8 +32,16 @@ import {
   CartesianGrid,
 } from "recharts";
 import { toast } from "sonner";
+import MlbSlate from "@/components/MlbSlate";
+import { formatFirstPitch } from "@/lib/mlb-api";
 
 const CLOUD_BETS_KEY = "cloud_manual_bets";
+
+const VIEWS = [
+  { value: "slate", label: "Slate" },
+  { value: "bets", label: "Bets" },
+  { value: "trends", label: "Trends" },
+];
 
 function getMockDate(daysAgo) {
   const date = new Date();
@@ -454,6 +462,7 @@ function buildGroupStats(bets, getKey) {
 
 export default function CloudPage() {
   const [bets, setBets] = useState(() => getSavedBets());
+  const [view, setView] = useState("slate");
   const [addOpen, setAddOpen] = useState(false);
   const [editingBetId, setEditingBetId] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState("all");
@@ -622,6 +631,20 @@ const chartSegments = useMemo(() => {
     setAddOpen(true);
   };
 
+  const openAddModalFromGame = (game) => {
+    setEditingBetId(null);
+    setForm({
+      ...emptyForm(),
+      title: `${game.away.name} @ ${game.home.name}`,
+      matchup: `${game.away.pitcher.name} vs ${game.home.pitcher.name} · ${formatFirstPitch(game.gameDate)}`,
+      result: "pending",
+      date: String(game.gameDate || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+      category: "Baseball",
+      team: game.home.name,
+    });
+    setAddOpen(true);
+  };
+
   const openEditModal = (bet) => {
     setEditingBetId(bet.id);
     setForm({
@@ -736,6 +759,25 @@ const chartSegments = useMemo(() => {
             </div>
 
             <div className="flex items-center gap-2">
+              <div className="inline-flex rounded-md border border-border/40 bg-secondary/30 p-1">
+                {VIEWS.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setView(option.value)}
+                    className={`px-3 h-7 rounded text-xs font-medium transition-colors ${
+                      view === option.value
+                        ? "bg-slate-100 text-slate-950"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
               <select
                 value={selectedMonth}
                 onChange={(e) => setSelectedMonth(e.target.value)}
@@ -769,24 +811,9 @@ const chartSegments = useMemo(() => {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-            <StatCard
-              label="Net P/L"
-              value={`${stats.netPnl >= 0 ? "+" : ""}${formatCurrency(
-                stats.netPnl
-              )}`}
-              positive={stats.netPnl >= 0}
-            />
+          {view === "slate" && <MlbSlate onAddBet={openAddModalFromGame} />}
 
-            <StatCard
-              label="Total Wagered"
-              value={formatCurrency(stats.wagered)}
-            />
-
-            <StatCard label="Total Bets" value={String(stats.total)} />
-          </div>
-
-          <div className="space-y-6">
+          {view === "trends" && (
             <Card className="border-border/40 bg-secondary/20">
             <CardContent className="p-5">
               <p className="text-sm font-semibold text-muted-foreground mb-4">
@@ -847,7 +874,9 @@ const chartSegments = useMemo(() => {
               </div>
             </CardContent>
             </Card>
+          )}
 
+          {view === "bets" && (
             <CalendarSidePanel
               monthKey={calendarMonthKey}
               bets={calendarBets}
@@ -859,7 +888,7 @@ const chartSegments = useMemo(() => {
                 setCalendarMonthKey((prev) => moveMonthKey(prev, 1))
               }
             />
-          </div>
+          )}
         </CardContent>
       </Card>
 
