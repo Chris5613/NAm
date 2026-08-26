@@ -472,45 +472,72 @@ function getTeamLogoByName(teamName) {
 }
 
 function getBetTeamNames(bet) {
-  const text = `${bet.title || ""} ${bet.matchup || ""}`;
+  if (bet?.awayTeam && bet?.homeTeam) {
+    return [bet.awayTeam, bet.homeTeam];
+  }
+
+  const text = `${bet?.title || ""} ${bet?.matchup || ""}`;
 
   const candidates = [
-    "Mariners",
-    "Astros",
-    "Dodgers",
-    "Red Sox",
-    "Yankees",
-    "Braves",
-    "Rangers",
-    "Phillies",
-    "Tigers",
-    "Rays",
-    "Blue Jays",
-    "Mets",
-    "Padres",
-    "Orioles",
-    "Brewers",
-    "Cubs",
-    "White Sox",
-    "Guardians",
-    "Twins",
-    "Athletics",
-    "Angels",
-    "Royals",
-    "Diamondbacks",
-    "Giants",
-    "Cardinals",
-    "Reds",
-    "Rockies",
-    "Marlins",
-    "Nationals",
-    "Pirates",
+    "Arizona Diamondbacks", "Diamondbacks", "D-backs",
+    "Atlanta Braves", "Braves",
+    "Baltimore Orioles", "Orioles",
+    "Boston Red Sox", "Red Sox",
+    "Chicago Cubs", "Cubs",
+    "Chicago White Sox", "White Sox",
+    "Cincinnati Reds", "Reds",
+    "Cleveland Guardians", "Guardians",
+    "Colorado Rockies", "Rockies",
+    "Detroit Tigers", "Tigers",
+    "Houston Astros", "Astros",
+    "Kansas City Royals", "Royals",
+    "Los Angeles Angels", "Angels",
+    "Los Angeles Dodgers", "Dodgers",
+    "Miami Marlins", "Marlins",
+    "Milwaukee Brewers", "Brewers",
+    "Minnesota Twins", "Twins",
+    "New York Mets", "Mets",
+    "New York Yankees", "Yankees",
+    "Oakland Athletics", "Athletics", "A's",
+    "Philadelphia Phillies", "Phillies",
+    "Pittsburgh Pirates", "Pirates",
+    "San Diego Padres", "Padres",
+    "San Francisco Giants", "Giants",
+    "Seattle Mariners", "Mariners",
+    "St. Louis Cardinals", "Cardinals",
+    "Tampa Bay Rays", "Rays",
+    "Texas Rangers", "Rangers",
+    "Toronto Blue Jays", "Blue Jays",
+    "Washington Nationals", "Nationals",
   ];
 
-  const found = candidates.filter((team) => text.toLowerCase().includes(team.toLowerCase()));
+  const lowerText = text.toLowerCase();
+  const matches = [];
 
-  if (found.length >= 2) return found.slice(0, 2);
-  if (found.length === 1) return [found[0], ""];
+  for (const cand of candidates) {
+    const pos = lowerText.indexOf(cand.toLowerCase());
+    if (pos !== -1) {
+      matches.push({ name: cand, pos });
+    }
+  }
+
+  matches.sort((a, b) => a.pos - b.pos);
+
+  const nonOverlapping = [];
+  for (const m of matches) {
+    const isSub = nonOverlapping.some(
+      (existing) =>
+        m.pos >= existing.pos &&
+        m.pos + m.name.length <= existing.pos + existing.name.length
+    );
+    if (!isSub) {
+      nonOverlapping.push(m);
+    }
+  }
+
+  const teamNames = nonOverlapping.map((m) => m.name);
+  if (teamNames.length >= 2) return teamNames.slice(0, 2);
+  if (teamNames.length === 1) return [teamNames[0], ""];
   return ["", ""];
 }
 

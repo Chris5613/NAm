@@ -266,7 +266,7 @@ export async function findGameForMatchup({
   gameNumber,
 }) {
   const dateKey = String(date || "").slice(0, 10);
-  if (!dateKey || !awayTeam || !homeTeam) return null;
+  if (!dateKey || (!awayTeam && !homeTeam)) return null;
 
   const url = `${STATS_API}/schedule?sportId=1&date=${dateKey}`;
   const data = await getJson(url);
@@ -275,11 +275,22 @@ export async function findGameForMatchup({
 
   const targetNumber = Number(gameNumber) || 1;
 
-  const byTeams = games.filter((game) => {
+  let byTeams = games.filter((game) => {
     const away = game?.teams?.away?.team?.name;
     const home = game?.teams?.home?.team?.name;
     return teamsMatch(away, awayTeam) && teamsMatch(home, homeTeam);
   });
+
+  if (byTeams.length === 0) {
+    byTeams = games.filter((game) => {
+      const away = game?.teams?.away?.team?.name;
+      const home = game?.teams?.home?.team?.name;
+      return (
+        (teamsMatch(away, awayTeam) || teamsMatch(home, awayTeam)) &&
+        (teamsMatch(away, homeTeam) || teamsMatch(home, homeTeam))
+      );
+    });
+  }
 
   const matched =
     byTeams.find((game) => Number(game?.gameNumber || 1) === targetNumber) ||
