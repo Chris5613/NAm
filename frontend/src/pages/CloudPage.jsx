@@ -951,8 +951,7 @@ const chartSegments = useMemo(() => {
 
             try {
               const feed = await fetchGameFeed(leg.gamePk);
-              const scoreData = feed?.liveData || feed?.gameData || feed;
-              const legResult = gradeFirstInningBet(scoreData, leg.title);
+              const legResult = gradeFirstInningBet(feed, leg.title);
 
               if (legResult === "win" || legResult === "loss") {
                 legs[i] = { ...leg, result: legResult };
@@ -994,9 +993,8 @@ const chartSegments = useMemo(() => {
 
         try {
           const feed = await fetchGameFeed(gamePk);
-          const scoreData = feed?.liveData || feed?.gameData || feed;
           const betType = getBetTypeLabel(bet.title);
-          const result = gradeFirstInningBet(scoreData, betType);
+          const result = gradeFirstInningBet(feed, betType);
 
           if (result === "win" || result === "loss") {
             const betIndex = nextBets.findIndex((item) => item.id === bet.id);
