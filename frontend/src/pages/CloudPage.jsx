@@ -1508,6 +1508,8 @@ const chartSegments = useMemo(() => {
               monthKey={calendarMonthKey}
               bets={calendarBets}
               onEditBet={openEditModal}
+              onRefreshPending={() => refreshPendingGrades(true)}
+              refreshingPending={isRefreshingPending}
               onPreviousMonth={() =>
                 setCalendarMonthKey((prev) => moveMonthKey(prev, -1))
               }
@@ -1943,6 +1945,8 @@ function CalendarSidePanel({
   monthKey,
   bets,
   onEditBet,
+  onRefreshPending,
+  refreshingPending,
   onPreviousMonth,
   onNextMonth,
 }) {
@@ -2021,14 +2025,27 @@ function CalendarSidePanel({
     <Card className="w-full max-w-5xl mx-auto border-border/40 bg-secondary/20">
       <CardContent className="p-5 space-y-5">
         <div className="flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={onPreviousMonth}
-            className="w-9 h-9 rounded-lg border border-border/40 bg-secondary/40 text-xl font-bold text-foreground hover:bg-secondary"
-            aria-label="Previous month"
-          >
-            &lt;
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onPreviousMonth}
+              className="w-9 h-9 rounded-lg border border-border/40 bg-secondary/40 text-xl font-bold text-foreground hover:bg-secondary"
+              aria-label="Previous month"
+            >
+              &lt;
+            </button>
+
+            <button
+              type="button"
+              onClick={onRefreshPending}
+              disabled={refreshingPending}
+              className="w-9 h-9 rounded-lg border border-border/40 bg-secondary/40 text-foreground hover:bg-secondary disabled:opacity-60"
+              aria-label="Refresh pending bets"
+              title="Refresh pending bets"
+            >
+              <RefreshCw className={`h-4 w-4 mx-auto ${refreshingPending ? "animate-spin" : ""}`} />
+            </button>
+          </div>
 
           <h2 className="flex-1 text-center text-2xl font-bold tracking-wide text-foreground">
             {formatMonthLabel(monthKey)}
