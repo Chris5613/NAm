@@ -50,6 +50,7 @@ import { toast } from "sonner";
 import MlbSlate from "@/components/MlbSlate";
 import {
   fetchGameFeed,
+  findGameForMatchup,
   fetchTodaySlate,
   formatFirstPitch,
   gradeFirstInningBet,
@@ -947,14 +948,49 @@ const chartSegments = useMemo(() => {
           for (let i = 0; i < legs.length; i += 1) {
             const leg = legs[i];
             if (String(leg.result || "pending").toLowerCase() !== "pending") continue;
-            if (!leg.gamePk) continue;
+
+            let gamePk = leg.gamePk;
+
+            if (!gamePk) {
+              try {
+                const resolved = await findGameForMatchup({
+                  date: leg.firstPitch || bet.date,
+                  awayTeam: leg.awayTeam,
+                  homeTeam: leg.homeTeam,
+                  gameNumber: leg.gameNumber,
+                });
+
+                if (resolved?.gamePk) {
+                  gamePk = resolved.gamePk;
+                  legs[i] = {
+                    ...leg,
+                    gamePk,
+                    gameNumber: resolved.gameNumber || leg.gameNumber || 1,
+                    doubleHeader:
+                      typeof resolved.doubleHeader === "boolean"
+                        ? resolved.doubleHeader
+                        : Boolean(leg.doubleHeader),
+                    status:
+                      resolved.abstractStatus ||
+                      resolved.detailedStatus ||
+                      leg.status ||
+                      "Scheduled",
+                  };
+                  legsChanged = true;
+                }
+              } catch {
+                // keep pending if schedule lookup fails
+              }
+            }
+
+            if (!gamePk) continue;
 
             try {
-              const feed = await fetchGameFeed(leg.gamePk);
+              const feed = await fetchGameFeed(gamePk);
               const legResult = gradeFirstInningBet(feed, leg.title);
 
               if (legResult === "win" || legResult === "loss") {
-                legs[i] = { ...leg, result: legResult };
+                legs[i] = { ...legs[i], result: legResult };
                 legsChanged = true;
               }
             } catch {
@@ -988,7 +1024,46 @@ const chartSegments = useMemo(() => {
           continue;
         }
 
-        const gamePk = bet.mlbGamePk || bet.gamePk || bet.game_id || bet.gameId;
+        let gamePk = bet.mlbGamePk || bet.gamePk || bet.game_id || bet.gameId;
+
+        if (!gamePk) {
+          try {
+            const [awayTeam, homeTeam] = getBetTeamNames(bet);
+            const resolved = await findGameForMatchup({
+              date: bet.date,
+              awayTeam,
+              homeTeam,
+              gameNumber: bet.gameNumber,
+            });
+
+            if (resolved?.gamePk) {
+              gamePk = resolved.gamePk;
+              const betIndex = nextBets.findIndex((item) => item.id === bet.id);
+              if (betIndex >= 0) {
+                nextBets[betIndex] = {
+                  ...nextBets[betIndex],
+                  mlbGamePk: gamePk,
+                  gamePk,
+                  gameStatus:
+                    resolved.abstractStatus ||
+                    resolved.detailedStatus ||
+                    bet.gameStatus ||
+                    "Scheduled",
+                  gameNumber: resolved.gameNumber || bet.gameNumber || 1,
+                  doubleHeader:
+                    typeof resolved.doubleHeader === "boolean"
+                      ? resolved.doubleHeader
+                      : Boolean(bet.doubleHeader),
+                  updated_at: new Date().toISOString(),
+                };
+                updated = true;
+              }
+            }
+          } catch {
+            // keep pending if schedule lookup fails
+          }
+        }
+
         if (!gamePk) continue;
 
         try {

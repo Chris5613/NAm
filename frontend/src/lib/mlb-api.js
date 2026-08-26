@@ -217,3 +217,53 @@ export async function fetchGameFeed(gamePk) {
 
   throw lastError || new Error("No MLB game feed found");
 }
+
+function normalizeTeamName(name) {
+  return String(name || "")
+    .toLowerCase()
+    .replace(/\./g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export async function findGameForMatchup({
+  date,
+  awayTeam,
+  homeTeam,
+  gameNumber,
+}) {
+  const dateKey = String(date || "").slice(0, 10);
+  if (!dateKey || !awayTeam || !homeTeam) return null;
+
+  const url = `${STATS_API}/schedule?sportId=1&date=${dateKey}`;
+  const data = await getJson(url);
+  const games = data?.dates?.[0]?.games || [];
+  if (games.length === 0) return null;
+
+  const awayKey = normalizeTeamName(awayTeam);
+  const homeKey = normalizeTeamName(homeTeam);
+  const targetNumber = Number(gameNumber) || 1;
+
+  const byTeams = games.filter((game) => {
+    const away = normalizeTeamName(game?.teams?.away?.team?.name);
+    const home = normalizeTeamName(game?.teams?.home?.team?.name);
+    return away === awayKey && home === homeKey;
+  });
+
+  const matched =
+    byTeams.find((game) => Number(game?.gameNumber || 1) === targetNumber) ||
+    byTeams[0] ||
+    null;
+
+  if (!matched) return null;
+
+  return {
+    gamePk: String(matched.gamePk),
+    gameNumber: matched.gameNumber || 1,
+    doubleHeader:
+      matched.doubleHeader === true || matched.doubleHeader === "Y",
+    abstractStatus: matched?.status?.abstractGameState || "",
+    detailedStatus: matched?.status?.detailedState || "",
+    gameDate: matched.gameDate,
+  };
+}
