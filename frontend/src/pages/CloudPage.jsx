@@ -1770,7 +1770,11 @@ const chartSegments = useMemo(() => {
           role="dialog"
           aria-modal="false"
           aria-label="Bet slip"
-          className="fixed inset-y-0 right-0 z-50 flex h-screen w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card text-foreground shadow-2xl"
+          className={`fixed inset-y-0 right-0 z-50 flex h-screen w-full flex-col overflow-y-auto border-l border-border bg-card text-foreground shadow-2xl transition-[max-width] duration-200 ${
+            form.betMode === "single" && form.singleBets.length > 1
+              ? "max-w-xl"
+              : "max-w-md"
+          }`}
         >
           <button
             type="button"
@@ -1874,7 +1878,17 @@ const chartSegments = useMemo(() => {
                 <Label className="text-xs font-bold uppercase text-muted-foreground">First inning pick</Label>
 
                 {form.singleBets.length > 0 ? (
-                  <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                  <div
+                    className="space-y-2 overflow-y-auto pr-1"
+                    style={{
+                      maxHeight:
+                        form.singleBets.length > 3
+                          ? "min(62vh, 42rem)"
+                          : form.singleBets.length > 1
+                            ? "min(54vh, 34rem)"
+                            : "18rem",
+                    }}
+                  >
                     {form.singleBets.map((single, index) => (
                       <div key={single.id} className="rounded-md border border-border/40 bg-background/50 p-3">
                         <div className="mb-2 flex items-center gap-2">
