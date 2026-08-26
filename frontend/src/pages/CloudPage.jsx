@@ -363,6 +363,8 @@ function gameToSingle(game, title = "NRFI") {
 
   return {
     ...gameToLeg(game, title),
+    amount: "",
+    odds: "",
     matchup: `${awayTeam} @ ${homeTeam} · ${awayPitcher} vs ${homePitcher} · ${formatFirstPitch(game?.gameDate)}`,
     date: String(game?.gameDate || "").slice(0, 10) || getPstDateString(),
     team: homeTeam,
@@ -383,6 +385,8 @@ function formToSingle(form) {
     doubleHeader: Boolean(form.doubleHeader),
     title: getBetTypeLabel(form.title),
     result: "pending",
+    amount: form.amount || "",
+    odds: form.odds || "",
     matchup: form.matchup || "",
     date: form.date || getPstDateString(),
     team: form.team || form.homeTeam || "",
@@ -1318,17 +1322,17 @@ const chartSegments = useMemo(() => {
   };
 
   const handleSaveBet = () => {
-    const amountRaw = Number(form.amount);
-    const normalizedOdds = String(form.odds || "").trim();
-
-    if (!Number.isFinite(amountRaw) || amountRaw <= 0) {
-      toast.error("Enter a valid amount");
-      return;
-    }
-
     const savedDate = form.date || getPstDateString();
 
     if (form.betMode === "parlay") {
+      const amountRaw = Number(form.amount);
+      const normalizedOdds = String(form.odds || "").trim();
+
+      if (!Number.isFinite(amountRaw) || amountRaw <= 0) {
+        toast.error("Enter a valid amount");
+        return;
+      }
+
       if (form.legs.length < 2) {
         toast.error("Add at least two legs to a parlay");
         return;
@@ -1419,8 +1423,20 @@ const chartSegments = useMemo(() => {
     const betType = getBetTypeLabel(singleSelections[0]?.title || form.title);
     const finalAmount = 0;
     const activeSingle = singleSelections[0] || {};
+    const singleAmountRaw = Number(activeSingle.amount ?? form.amount);
+    const singleOdds = String(activeSingle.odds ?? form.odds ?? "").trim();
     const gamePk = String(activeSingle.gamePk || form.gamePk || "");
     const inferredMatchup = String(activeSingle.matchup || form.matchup || "").trim();
+
+    const invalidSingle = singleSelections.find((single) => {
+      const amount = Number(single.amount ?? form.amount);
+      return !Number.isFinite(amount) || amount <= 0;
+    });
+
+    if (invalidSingle) {
+      toast.error("Enter an amount for every single");
+      return;
+    }
 
     if (isEditing) {
       const next = bets.map((bet) =>
@@ -1437,8 +1453,8 @@ const chartSegments = useMemo(() => {
               gameNumber: form.gameNumber || 1,
               doubleHeader: Boolean(form.doubleHeader),
               amount: finalAmount,
-              stake: Math.abs(amountRaw),
-              odds: normalizedOdds,
+              stake: Math.abs(singleAmountRaw),
+              odds: singleOdds,
               mlbGamePk: gamePk,
               result: "pending",
               date: savedDate,
@@ -1474,8 +1490,8 @@ const chartSegments = useMemo(() => {
       gameNumber: single.gameNumber || 1,
       doubleHeader: Boolean(single.doubleHeader),
       amount: finalAmount,
-      stake: Math.abs(amountRaw),
-      odds: normalizedOdds,
+      stake: Math.abs(Number(single.amount) || 0),
+      odds: String(single.odds || "").trim(),
       mlbGamePk: String(single.gamePk || ""),
       gamePk: String(single.gamePk || ""),
       result: "pending",
@@ -1910,6 +1926,34 @@ const chartSegments = useMemo(() => {
                             YRFI
                           </Button>
                         </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground">
+                              Amount
+                            </Label>
+                            <Input
+                              type="number"
+                              step="any"
+                              value={single.amount || ""}
+                              onChange={(e) => updateSingle(single.id, { amount: e.target.value })}
+                              placeholder="25.00"
+                              className="h-9 border-border bg-background font-mono text-foreground"
+                            />
+                          </div>
+
+                          <div className="space-y-1">
+                            <Label className="text-[10px] font-bold uppercase text-muted-foreground">
+                              Odds
+                            </Label>
+                            <Input
+                              value={single.odds || ""}
+                              onChange={(e) => updateSingle(single.id, { odds: e.target.value })}
+                              placeholder="+120 or -110"
+                              className="h-9 border-border bg-background font-mono text-foreground"
+                            />
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2150,6 +2194,7 @@ const chartSegments = useMemo(() => {
               </div>
             )}
 
+            {(form.betMode === "parlay" || form.singleBets.length === 0) && (
             <div className="grid grid-cols-1 gap-3">
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase text-muted-foreground">
@@ -2189,6 +2234,7 @@ const chartSegments = useMemo(() => {
                 />
               </div>
             </div>
+            )}
 
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase text-muted-foreground">Date</Label>
