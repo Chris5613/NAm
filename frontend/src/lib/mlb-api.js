@@ -109,6 +109,9 @@ export async function fetchTodaySlate(dateKey = getTodayDateKey()) {
       id: String(game.gamePk),
       gameDate: game.gameDate,
       status: game.status?.detailedState || "",
+      abstractStatus: game.status?.abstractGameState || "",
+      gameNumber: game.gameNumber || 1,
+      doubleHeader: game.doubleHeader === true || game.doubleHeader === "Y",
       venue: game.venue?.name || "",
       away: {
         ...mapTeam(game.teams?.away),
@@ -131,4 +134,86 @@ export function formatFirstPitch(gameDate) {
     minute: "2-digit",
     timeZoneName: "short",
   });
+}
+
+export function getFirstInningRuns(game) {
+  const innings =
+    game?.linescore?.innings ||
+    game?.liveData?.linescore?.innings ||
+    game?.innings ||
+    [];
+
+  const firstInning = innings[0];
+  if (!firstInning || firstInning?.away?.runs == null || firstInning?.home?.runs == null) {
+    return null;
+  }
+
+  const awayRuns = Number(
+    firstInning?.away?.runs ??
+      firstInning?.away_team_runs ??
+      firstInning?.awayScore ??
+      0
+  );
+  const homeRuns = Number(
+    firstInning?.home?.runs ??
+      firstInning?.home_team_runs ??
+      firstInning?.homeScore ??
+      0
+  );
+
+  return awayRuns + homeRuns;
+}
+
+export function isFirstInningComplete(game) {
+  const linescore = game?.linescore || game?.liveData?.linescore || {};
+  const innings = linescore.innings || game?.innings || [];
+  const firstInning = innings[0];
+
+  if (!firstInning || firstInning?.away?.runs == null || firstInning?.home?.runs == null) {
+    return false;
+  }
+
+  const currentInning = Number(linescore.currentInning);
+  const gameState = String(
+    game?.gameData?.status?.abstractGameState || game?.status?.abstractGameState || ""
+  ).toLowerCase();
+
+  return gameState === "final" || currentInning > 1 || !Number.isFinite(currentInning);
+}
+
+export function gradeFirstInningBet(game, betType) {
+  if (!isFirstInningComplete(game)) return null;
+
+  const normalizedType = String(betType || "NRFI").trim().toUpperCase();
+  const runs = getFirstInningRuns(game);
+
+  if (runs == null) return null;
+
+  if (normalizedType === "YRFI") {
+    return runs > 0 ? "win" : "loss";
+  }
+
+  return runs === 0 ? "win" : "loss";
+}
+
+export async function fetchGameFeed(gamePk) {
+  if (!gamePk) return null;
+
+  const urls = [
+    `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`,
+    `https://statsapi.mlb.com/api/v1/game/${gamePk}/feed/live`,
+  ];
+
+  let lastError;
+
+  for (const url of urls) {
+    try {
+      const data = await getJson(url);
+      return data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("No MLB game feed found");
 }

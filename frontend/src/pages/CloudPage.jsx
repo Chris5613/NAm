@@ -8,9 +8,20 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  Command,
+  CommandEmpty,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Plus,
   Trash2,
@@ -22,6 +33,7 @@ import {
   Eye,
   EyeOff,
   Clock,
+  Info,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -33,98 +45,20 @@ import {
 } from "recharts";
 import { toast } from "sonner";
 import MlbSlate from "@/components/MlbSlate";
-import { formatFirstPitch } from "@/lib/mlb-api";
+import {
+  fetchGameFeed,
+  fetchTodaySlate,
+  formatFirstPitch,
+  gradeFirstInningBet,
+} from "@/lib/mlb-api";
 
 const CLOUD_BETS_KEY = "cloud_manual_bets";
+const CLOUD_BANKROLL_KEY = "cloud_starting_bankroll";
 
 const VIEWS = [
   { value: "slate", label: "Slate" },
-  { value: "bets", label: "Bets" },
+  { value: "bets", label: "Plays" },
   { value: "trends", label: "Trends" },
-];
-
-function getMockDate(daysAgo) {
-  const date = new Date();
-  date.setDate(date.getDate() - daysAgo);
-  return date.toISOString().slice(0, 10);
-}
-
-const MOCK_BETS = [
-  {
-    id: "mock-celtics-spread",
-    title: "Celtics -4.5",
-    matchup: "Boston Celtics vs. New York Knicks",
-    amount: 47.5,
-    stake: 50,
-    result: "win",
-    date: getMockDate(1),
-    category: "Basketball",
-    team: "Boston Celtics",
-    sportsbook: "DraftKings",
-    note: "Covered late in the fourth quarter.",
-    created_at: "2026-08-12T18:00:00.000Z",
-    hidden: false,
-  },
-  {
-    id: "mock-dodgers-moneyline",
-    title: "Dodgers Moneyline",
-    matchup: "Los Angeles Dodgers vs. San Diego Padres",
-    amount: -35,
-    stake: 35,
-    result: "loss",
-    date: getMockDate(3),
-    category: "Baseball",
-    team: "Los Angeles Dodgers",
-    sportsbook: "FanDuel",
-    note: "Bullpen gave up the lead in the eighth.",
-    created_at: "2026-08-10T21:00:00.000Z",
-    hidden: false,
-  },
-  {
-    id: "mock-chiefs-parlay",
-    title: "Chiefs & over 47.5",
-    matchup: "Kansas City Chiefs vs. Buffalo Bills",
-    amount: 82.5,
-    stake: 30,
-    result: "win",
-    date: getMockDate(5),
-    category: "Parlay",
-    team: "Kansas City Chiefs",
-    sportsbook: "BetMGM",
-    note: "Two-leg same-game parlay.",
-    created_at: "2026-08-08T19:00:00.000Z",
-    hidden: false,
-  },
-  {
-    id: "mock-mariners-total",
-    title: "Mariners vs. Astros under 7.5",
-    matchup: "Seattle Mariners vs. Houston Astros",
-    amount: 40,
-    stake: 40,
-    result: "win",
-    date: getMockDate(7),
-    category: "Baseball",
-    team: "Seattle Mariners",
-    sportsbook: "Caesars",
-    note: "Pitching duel from the first inning.",
-    created_at: "2026-08-06T20:00:00.000Z",
-    hidden: false,
-  },
-  {
-    id: "mock-lakers-futures",
-    title: "Lakers conference futures",
-    matchup: "Western Conference futures",
-    amount: 0,
-    stake: 25,
-    result: "pending",
-    date: getMockDate(9),
-    category: "Basketball",
-    team: "Los Angeles Lakers",
-    sportsbook: "DraftKings",
-    note: "Season-long futures position.",
-    created_at: "2026-08-04T16:00:00.000Z",
-    hidden: false,
-  },
 ];
 
 const SPORTS = [
@@ -256,9 +190,11 @@ const TEAM_OPTIONS = {
 function getSavedBets() {
   try {
     const saved = JSON.parse(localStorage.getItem(CLOUD_BETS_KEY) || "[]");
-    return Array.isArray(saved) && saved.length > 0 ? saved : MOCK_BETS;
+    return Array.isArray(saved)
+      ? saved.filter((bet) => !String(bet?.id || "").startsWith("mock-"))
+      : [];
   } catch {
-    return MOCK_BETS;
+    return [];
   }
 }
 
@@ -286,8 +222,41 @@ function formatPercent(value) {
   return `${n.toFixed(1)}%`;
 }
 
+function calculateProfit(stake, odds) {
+  const wager = Math.abs(Number(stake) || 0);
+  const normalizedOdds = String(odds || "").trim().replace(/^\+/, "");
+  const americanOdds = Number(normalizedOdds);
+
+  if (!wager || !Number.isFinite(americanOdds) || americanOdds === 0) return 0;
+
+  return americanOdds > 0
+    ? (wager * americanOdds) / 100
+    : (wager * 100) / Math.abs(americanOdds);
+}
+
 function formatRecord(wins, losses) {
   return `${wins}W · ${losses}L`;
+}
+
+export function getPstDateString(date = new Date()) {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
+  return `${year}-${month}-${day}`;
+}
+
+export function getBetTypeLabel(value) {
+  const normalized = String(value || "NRFI").trim().toUpperCase();
+  return normalized === "YRFI" ? "YRFI" : "NRFI";
 }
 
 function getCurrentMonthKey() {
@@ -350,17 +319,53 @@ function getBetDateTime(bet) {
   return new Date(bet.date || bet.created_at || 0).getTime();
 }
 
+function emptyLeg() {
+  return {
+    id: crypto.randomUUID(),
+    gamePk: "",
+    awayTeam: "",
+    homeTeam: "",
+    gameStatus: "Scheduled",
+    gameNumber: 1,
+    doubleHeader: false,
+    awayTeam: "",
+    homeTeam: "",
+    firstPitch: "",
+    title: "NRFI",
+    result: "pending",
+  };
+}
+
+function gameToLeg(game, title = "NRFI") {
+  return {
+    id: crypto.randomUUID(),
+    gamePk: String(game?.id || game?.gamePk || ""),
+    awayTeam: game?.away?.name || "",
+    homeTeam: game?.home?.name || "",
+    firstPitch: game?.gameDate || "",
+    status: game?.abstractStatus || game?.status || "Scheduled",
+    gameNumber: game?.gameNumber || 1,
+    doubleHeader: Boolean(game?.doubleHeader),
+    title,
+    result: "pending",
+  };
+}
+
 function emptyForm() {
   return {
-    title: "",
+    betMode: "single",
+    title: "NRFI",
     matchup: "",
+    gamePk: "",
     amount: "",
-    result: "win",
-    date: new Date().toISOString().slice(0, 10),
+    odds: "",
+    result: "pending",
+    date: getPstDateString(),
     category: "",
     team: "",
     sportsbook: "",
     note: "",
+    legs: [],
   };
 }
 
@@ -382,6 +387,14 @@ function getTeam(bet) {
   return bet.team?.trim() || "No Team";
 }
 
+function getBetParticipants(bet) {
+  if (Array.isArray(bet.legs) && bet.legs.length > 0) {
+    return bet.legs.flatMap((leg) => [leg.awayTeam, leg.homeTeam]).filter(Boolean);
+  }
+
+  return [bet.awayTeam, bet.homeTeam, bet.team].filter(Boolean);
+}
+
 function getCategory(bet) {
   return bet.category?.trim() || "Uncategorized";
 }
@@ -400,6 +413,101 @@ function getBetStatus(bet) {
   if (titleText.includes("lost") || titleText.includes("loss")) return "loss";
 
   return Number(bet.amount) >= 0 ? "win" : "loss";
+}
+
+function normalizeTeamName(team) {
+  return String(team || "").trim();
+}
+
+function getTeamLogoByName(teamName) {
+  const normalized = normalizeTeamName(teamName);
+  if (!normalized) return null;
+
+  const map = {
+    "Seattle Mariners": "https://www.mlbstatic.com/team-logos/136.svg",
+    "Houston Astros": "https://www.mlbstatic.com/team-logos/118.svg",
+    "Los Angeles Dodgers": "https://www.mlbstatic.com/team-logos/119.svg",
+    "Boston Red Sox": "https://www.mlbstatic.com/team-logos/111.svg",
+    "New York Yankees": "https://www.mlbstatic.com/team-logos/147.svg",
+    "Atlanta Braves": "https://www.mlbstatic.com/team-logos/144.svg",
+    "Texas Rangers": "https://www.mlbstatic.com/team-logos/140.svg",
+    "Philadelphia Phillies": "https://www.mlbstatic.com/team-logos/121.svg",
+    "Detroit Tigers": "https://www.mlbstatic.com/team-logos/116.svg",
+    "Tampa Bay Rays": "https://www.mlbstatic.com/team-logos/139.svg",
+    "Toronto Blue Jays": "https://www.mlbstatic.com/team-logos/141.svg",
+    "New York Mets": "https://www.mlbstatic.com/team-logos/121.svg",
+    "San Diego Padres": "https://www.mlbstatic.com/team-logos/135.svg",
+    "Baltimore Orioles": "https://www.mlbstatic.com/team-logos/110.svg",
+    "Milwaukee Brewers": "https://www.mlbstatic.com/team-logos/158.svg",
+    "Chicago Cubs": "https://www.mlbstatic.com/team-logos/112.svg",
+    "Chicago White Sox": "https://www.mlbstatic.com/team-logos/145.svg",
+    "Cleveland Guardians": "https://www.mlbstatic.com/team-logos/114.svg",
+    "Minnesota Twins": "https://www.mlbstatic.com/team-logos/142.svg",
+    "Oakland Athletics": "https://www.mlbstatic.com/team-logos/133.svg",
+    "Los Angeles Angels": "https://www.mlbstatic.com/team-logos/108.svg",
+    "Kansas City Royals": "https://www.mlbstatic.com/team-logos/118.svg",
+    "Arizona Diamondbacks": "https://www.mlbstatic.com/team-logos/109.svg",
+    "San Francisco Giants": "https://www.mlbstatic.com/team-logos/137.svg",
+    "St. Louis Cardinals": "https://www.mlbstatic.com/team-logos/138.svg",
+    "Cincinnati Reds": "https://www.mlbstatic.com/team-logos/113.svg",
+    "Colorado Rockies": "https://www.mlbstatic.com/team-logos/115.svg",
+    "Miami Marlins": "https://www.mlbstatic.com/team-logos/146.svg",
+    "Washington Nationals": "https://www.mlbstatic.com/team-logos/120.svg",
+    "Pittsburgh Pirates": "https://www.mlbstatic.com/team-logos/134.svg",
+    "Seattle Mariners": "https://www.mlbstatic.com/team-logos/136.svg",
+    "Houston Astros": "https://www.mlbstatic.com/team-logos/118.svg",
+  };
+
+  const direct = map[normalized];
+  if (direct) return direct;
+
+  return Object.entries(map).find(([team]) =>
+    normalized.toLowerCase().includes(team.toLowerCase()) ||
+    team.toLowerCase().includes(normalized.toLowerCase())
+  )?.[1] || null;
+}
+
+function getBetTeamNames(bet) {
+  const text = `${bet.title || ""} ${bet.matchup || ""}`;
+
+  const candidates = [
+    "Mariners",
+    "Astros",
+    "Dodgers",
+    "Red Sox",
+    "Yankees",
+    "Braves",
+    "Rangers",
+    "Phillies",
+    "Tigers",
+    "Rays",
+    "Blue Jays",
+    "Mets",
+    "Padres",
+    "Orioles",
+    "Brewers",
+    "Cubs",
+    "White Sox",
+    "Guardians",
+    "Twins",
+    "Athletics",
+    "Angels",
+    "Royals",
+    "Diamondbacks",
+    "Giants",
+    "Cardinals",
+    "Reds",
+    "Rockies",
+    "Marlins",
+    "Nationals",
+    "Pirates",
+  ];
+
+  const found = candidates.filter((team) => text.toLowerCase().includes(team.toLowerCase()));
+
+  if (found.length >= 2) return found.slice(0, 2);
+  if (found.length === 1) return [found[0], ""];
+  return ["", ""];
 }
 
 function isBetWin(bet) {
@@ -465,17 +573,40 @@ export default function CloudPage() {
   const [view, setView] = useState("slate");
   const [addOpen, setAddOpen] = useState(false);
   const [editingBetId, setEditingBetId] = useState(null);
-  const [selectedMonth, setSelectedMonth] = useState("all");
   const [form, setForm] = useState(() => emptyForm());
   const [calendarMonthKey, setCalendarMonthKey] = useState(() => getCurrentMonthKey());
+  const [slateGames, setSlateGames] = useState([]);
+  const [slateLoading, setSlateLoading] = useState(false);
+  const [gamePickerLegId, setGamePickerLegId] = useState(null);
+  const [startingBankroll, setStartingBankroll] = useState(() => {
+    const saved = Number(localStorage.getItem(CLOUD_BANKROLL_KEY));
+    return Number.isFinite(saved) && saved >= 0 ? saved : 0;
+  });
 
   const isEditing = !!editingBetId;
   const availableTeams = TEAM_OPTIONS[form.category] || [];
 
-  const monthOptions = useMemo(() => {
-    const months = [...new Set(bets.map(getBetMonthKey).filter(Boolean))];
-    return months.sort((a, b) => b.localeCompare(a));
-  }, [bets]);
+  useEffect(() => {
+    if (!addOpen || form.betMode !== "parlay" || slateGames.length > 0) return;
+
+    let cancelled = false;
+    setSlateLoading(true);
+
+    fetchTodaySlate()
+      .then((games) => {
+        if (!cancelled) setSlateGames(games);
+      })
+      .catch(() => {
+        if (!cancelled) setSlateGames([]);
+      })
+      .finally(() => {
+        if (!cancelled) setSlateLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [addOpen, form.betMode, slateGames.length]);
 
   const filteredBets = useMemo(() => {
     const sorted = [...bets].sort((a, b) => {
@@ -490,10 +621,8 @@ export default function CloudPage() {
       );
     });
 
-    if (selectedMonth === "all") return sorted;
-
-    return sorted.filter((bet) => getBetMonthKey(bet) === selectedMonth);
-  }, [bets, selectedMonth]);
+    return sorted;
+  }, [bets]);
 
   const stats = useMemo(() => {
     let wins = 0;
@@ -609,16 +738,111 @@ const chartSegments = useMemo(() => {
   };
 }, [filteredBets]);
 
+  const trendStats = useMemo(() => {
+    const settledBets = filteredBets.filter((bet) => {
+      const status = getBetStatus(bet);
+      return status === "win" || status === "loss";
+    });
+    const pendingBets = filteredBets.filter((bet) => getBetStatus(bet) === "pending");
+    const getStake = (bet) => Math.abs(Number(bet.stake ?? bet.amount) || 0);
+    const getProfit = (bet) => Number(bet.amount) || 0;
+    const settledStake = settledBets.reduce((sum, bet) => sum + getStake(bet), 0);
+    const settledPnl = settledBets.reduce((sum, bet) => sum + getProfit(bet), 0);
+    const wins = settledBets.filter((bet) => isBetWin(bet) === true);
+    const losses = settledBets.filter((bet) => isBetWin(bet) === false);
+
+    let runningPnl = 0;
+    let peakPnl = 0;
+    let maxDrawdown = 0;
+    [...settledBets]
+      .sort((a, b) => getBetDateTime(a) - getBetDateTime(b))
+      .forEach((bet) => {
+        runningPnl += getProfit(bet);
+        peakPnl = Math.max(peakPnl, runningPnl);
+        maxDrawdown = Math.max(maxDrawdown, peakPnl - runningPnl);
+      });
+
+    const typeStats = ["NRFI", "YRFI"].map((type) => {
+      const typeBets = settledBets.filter((bet) => {
+        if (Array.isArray(bet.legs) && bet.legs.length > 0) {
+          return bet.legs.some((leg) => getBetTypeLabel(leg.title) === type);
+        }
+        return getBetTypeLabel(bet.title) === type;
+      });
+      const typeWins = typeBets.filter((bet) => isBetWin(bet) === true).length;
+      const typeStake = typeBets.reduce((sum, bet) => sum + getStake(bet), 0);
+      const typePnl = typeBets.reduce((sum, bet) => sum + getProfit(bet), 0);
+
+      return {
+        type,
+        count: typeBets.length,
+        wins: typeWins,
+        losses: typeBets.length - typeWins,
+        pnl: typePnl,
+        roi: typeStake > 0 ? (typePnl / typeStake) * 100 : 0,
+      };
+    });
+
+    return {
+      settled: settledBets.length,
+      pending: pendingBets.length,
+      totalStake: filteredBets.reduce((sum, bet) => sum + getStake(bet), 0),
+      settledStake,
+      settledPnl,
+      winRate: settledBets.length > 0 ? (wins.length / settledBets.length) * 100 : 0,
+      roi: settledStake > 0 ? (settledPnl / settledStake) * 100 : 0,
+      averageStake: filteredBets.length > 0
+        ? filteredBets.reduce((sum, bet) => sum + getStake(bet), 0) / filteredBets.length
+        : 0,
+      averageWin: wins.length > 0
+        ? wins.reduce((sum, bet) => sum + getProfit(bet), 0) / wins.length
+        : 0,
+      averageLoss: losses.length > 0
+        ? losses.reduce((sum, bet) => sum + getProfit(bet), 0) / losses.length
+        : 0,
+      bestWin: wins.length > 0 ? Math.max(...wins.map(getProfit)) : 0,
+      worstLoss: losses.length > 0 ? Math.min(...losses.map(getProfit)) : 0,
+      maxDrawdown,
+      typeStats,
+    };
+  }, [filteredBets]);
+
   const categoryStats = useMemo(() => {
     return buildGroupStats(filteredBets, getCategory);
   }, [filteredBets]);
 
   const teamStats = useMemo(() => {
-    return buildGroupStats(
-      filteredBets.filter((bet) => getTeam(bet) !== "No Team"),
-      getTeam
-    );
+    const groups = {};
+
+    filteredBets.forEach((bet) => {
+      const participants = [...new Set(getBetParticipants(bet))];
+      const won = isBetWin(bet);
+      const amount = Number(bet.amount) || 0;
+      const stake = Math.abs(Number(bet.stake ?? bet.amount) || 0);
+
+      participants.forEach((team) => {
+        if (!groups[team]) groups[team] = { name: team, wins: 0, losses: 0, wagered: 0, pnl: 0 };
+        groups[team].wagered += stake;
+        groups[team].pnl += amount;
+        if (won === true) groups[team].wins += 1;
+        if (won === false) groups[team].losses += 1;
+      });
+    });
+
+    return Object.values(groups)
+      .map((group) => ({
+        ...group,
+        total: group.wins + group.losses,
+        winRate: group.wins + group.losses > 0 ? (group.wins / (group.wins + group.losses)) * 100 : 0,
+        roi: group.wagered > 0 ? (group.pnl / group.wagered) * 100 : 0,
+      }))
+      .filter((group) => group.total > 0)
+      .sort((a, b) => b.pnl - a.pnl);
   }, [filteredBets]);
+
+  useEffect(() => {
+    localStorage.setItem(CLOUD_BANKROLL_KEY, String(startingBankroll));
+  }, [startingBankroll]);
 
 
   const calendarBets = useMemo(() => {
@@ -632,31 +856,213 @@ const chartSegments = useMemo(() => {
   };
 
   const openAddModalFromGame = (game) => {
+    const awayTeam = game?.away?.name || "";
+    const homeTeam = game?.home?.name || "";
+    const awayPitcher = game?.away?.pitcher?.name || "TBD";
+    const homePitcher = game?.home?.pitcher?.name || "TBD";
+
+    const newLeg = gameToLeg(game);
+
+    if (addOpen && form.betMode === "parlay") {
+      if (form.legs.some((leg) => String(leg.gamePk) === newLeg.gamePk)) return;
+      setForm((prev) => ({ ...prev, legs: [...prev.legs, newLeg] }));
+      return;
+    }
+
+    if (addOpen && form.gamePk) {
+      const existingLeg = {
+        ...gameToLeg(
+          {
+            id: form.gamePk,
+            gameDate: form.date,
+            away: { name: form.awayTeam },
+            home: { name: form.homeTeam },
+          },
+          form.title
+        ),
+        id: crypto.randomUUID(),
+      };
+
+      setForm((prev) => ({
+        ...prev,
+        betMode: "parlay",
+        legs: [...(prev.legs || []), existingLeg, newLeg],
+      }));
+      return;
+    }
+
     setEditingBetId(null);
     setForm({
       ...emptyForm(),
-      title: `${game.away.name} @ ${game.home.name}`,
-      matchup: `${game.away.pitcher.name} vs ${game.home.pitcher.name} · ${formatFirstPitch(game.gameDate)}`,
+      title: "NRFI",
+      matchup: `${awayTeam} @ ${homeTeam} · ${awayPitcher} vs ${homePitcher} · ${formatFirstPitch(game.gameDate)}`,
+      gamePk: newLeg.gamePk,
+      awayTeam,
+      homeTeam,
+      gameStatus: game.abstractStatus || game.status || "Scheduled",
+      gameNumber: game.gameNumber || 1,
+      doubleHeader: Boolean(game.doubleHeader),
       result: "pending",
       date: String(game.gameDate || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
       category: "Baseball",
-      team: game.home.name,
+      team: homeTeam,
     });
     setAddOpen(true);
   };
 
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+
+    const refreshPendingGrades = async () => {
+      const pendingBets = bets.filter((bet) => {
+        if (String(bet.result || "").toLowerCase() !== "pending") return false;
+        if (Array.isArray(bet.legs) && bet.legs.length > 0) return true;
+        return !!(bet.mlbGamePk || bet.gamePk || bet.game_id || bet.gameId);
+      });
+
+      if (pendingBets.length === 0) return;
+
+      const nextBets = [...bets];
+      let updated = false;
+
+      for (const bet of pendingBets) {
+        if (Array.isArray(bet.legs) && bet.legs.length > 0) {
+          const legs = [...bet.legs];
+          let legsChanged = false;
+
+          for (let i = 0; i < legs.length; i += 1) {
+            const leg = legs[i];
+            if (String(leg.result || "pending").toLowerCase() !== "pending") continue;
+            if (!leg.gamePk) continue;
+
+            try {
+              const feed = await fetchGameFeed(leg.gamePk);
+              const scoreData = feed?.liveData || feed?.gameData || feed;
+              const legResult = gradeFirstInningBet(scoreData, leg.title);
+
+              if (legResult === "win" || legResult === "loss") {
+                legs[i] = { ...leg, result: legResult };
+                legsChanged = true;
+              }
+            } catch {
+              // leave leg pending until the score is available
+            }
+          }
+
+          if (!legsChanged) continue;
+
+          const anyLoss = legs.some((leg) => leg.result === "loss");
+          const allWin = legs.every((leg) => leg.result === "win");
+          const overallResult = anyLoss ? "loss" : allWin ? "win" : "pending";
+
+          const betIndex = nextBets.findIndex((item) => item.id === bet.id);
+          if (betIndex >= 0) {
+            nextBets[betIndex] = {
+              ...nextBets[betIndex],
+              legs,
+              result: overallResult,
+              amount:
+                overallResult === "win"
+                  ? calculateProfit(bet.stake || bet.amount, bet.odds)
+                  : overallResult === "loss"
+                    ? -Math.abs(Number(bet.stake || bet.amount) || 0)
+                    : 0,
+              updated_at: new Date().toISOString(),
+            };
+            updated = true;
+          }
+
+          continue;
+        }
+
+        const gamePk = bet.mlbGamePk || bet.gamePk || bet.game_id || bet.gameId;
+        if (!gamePk) continue;
+
+        try {
+          const feed = await fetchGameFeed(gamePk);
+          const scoreData = feed?.liveData || feed?.gameData || feed;
+          const betType = getBetTypeLabel(bet.title);
+          const result = gradeFirstInningBet(scoreData, betType);
+
+          if (result === "win" || result === "loss") {
+            const betIndex = nextBets.findIndex((item) => item.id === bet.id);
+            if (betIndex >= 0) {
+              nextBets[betIndex] = {
+                ...nextBets[betIndex],
+                result,
+                amount:
+                  result === "win"
+                    ? calculateProfit(bet.stake || bet.amount, bet.odds)
+                    : -Math.abs(Number(bet.stake || bet.amount) || 0),
+                updated_at: new Date().toISOString(),
+              };
+              updated = true;
+            }
+          }
+        } catch {
+          // skip unresolved live feeds until the game advances or the score is available
+        }
+      }
+
+      if (!cancelled && updated) {
+        setBets(nextBets);
+        saveBets(nextBets);
+      }
+    };
+
+    refreshPendingGrades();
+    timer = setInterval(refreshPendingGrades, 15000);
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, [bets]);
+
   const openEditModal = (bet) => {
     setEditingBetId(bet.id);
+
+    if (Array.isArray(bet.legs) && bet.legs.length > 0) {
+      setForm({
+        ...emptyForm(),
+        betMode: "parlay",
+        amount: String(Math.abs(Number(bet.stake ?? bet.amount) || 0)),
+        odds: bet.odds || "",
+        date: bet.date || getPstDateString(),
+        legs: bet.legs.map((leg) => ({
+          id: leg.id || crypto.randomUUID(),
+          gamePk: leg.gamePk || "",
+          awayTeam: leg.awayTeam || "",
+          homeTeam: leg.homeTeam || "",
+          firstPitch: leg.firstPitch || "",
+          status: leg.status || "Scheduled",
+          gameNumber: leg.gameNumber || 1,
+          doubleHeader: Boolean(leg.doubleHeader),
+          title: getBetTypeLabel(leg.title),
+          result: leg.result || "pending",
+        })),
+      });
+      setAddOpen(true);
+      return;
+    }
+
     setForm({
+      ...emptyForm(),
+      betMode: "single",
       title: bet.title || "",
       matchup: bet.matchup || "",
+      gamePk: String(bet.mlbGamePk || bet.gamePk || bet.game_id || bet.gameId || ""),
+      awayTeam: bet.awayTeam || "",
+      homeTeam: bet.homeTeam || "",
+      gameStatus: bet.gameStatus || "Scheduled",
+      gameNumber: bet.gameNumber || 1,
+      doubleHeader: Boolean(bet.doubleHeader),
       amount: String(Math.abs(Number(bet.stake ?? bet.amount) || 0)),
-      result: bet.result || (Number(bet.amount) >= 0 ? "win" : "loss"),
-      date: bet.date || new Date().toISOString().slice(0, 10),
+      odds: bet.odds || "",
+      date: bet.date || getPstDateString(),
       category: bet.category || "",
       team: bet.team || "",
-      sportsbook: bet.sportsbook || "",
-      note: bet.note || "",
     });
     setAddOpen(true);
   };
@@ -664,44 +1070,156 @@ const chartSegments = useMemo(() => {
   const closeModal = () => {
     setAddOpen(false);
     setEditingBetId(null);
+    setGamePickerLegId(null);
     setForm(emptyForm());
+  };
+
+  const clearSlip = () => {
+    setEditingBetId(null);
+    setForm(emptyForm());
+  };
+
+  const addLeg = () => {
+    setForm((prev) => ({ ...prev, legs: [...prev.legs, emptyLeg()] }));
+  };
+
+  const removeLeg = (legId) => {
+    setForm((prev) => ({
+      ...prev,
+      legs: prev.legs.filter((leg) => leg.id !== legId),
+    }));
+  };
+
+  const updateLeg = (legId, updates) => {
+    setForm((prev) => ({
+      ...prev,
+      legs: prev.legs.map((leg) => (leg.id === legId ? { ...leg, ...updates } : leg)),
+    }));
   };
 
   const handleSaveBet = () => {
     const amountRaw = Number(form.amount);
-
-    if (!form.title.trim()) {
-      toast.error("Enter a bet title");
-      return;
-    }
+    const normalizedOdds = String(form.odds || "").trim();
 
     if (!Number.isFinite(amountRaw) || amountRaw <= 0) {
       toast.error("Enter a valid amount");
       return;
     }
 
-    const finalAmount =
-      form.result === "loss"
-        ? -Math.abs(amountRaw)
-        : form.result === "win"
-          ? Math.abs(amountRaw)
-          : 0;
+    const savedDate = form.date || getPstDateString();
+
+    if (form.betMode === "parlay") {
+      if (form.legs.length < 2) {
+        toast.error("Add at least two legs to a parlay");
+        return;
+      }
+
+      if (form.legs.some((leg) => !leg.gamePk)) {
+        toast.error("Select a game for every leg");
+        return;
+      }
+
+      const legs = form.legs.map((leg) => ({
+        id: leg.id,
+        gamePk: leg.gamePk,
+        awayTeam: leg.awayTeam,
+        homeTeam: leg.homeTeam,
+        firstPitch: leg.firstPitch,
+        status: leg.status || "Scheduled",
+        gameNumber: leg.gameNumber || 1,
+        doubleHeader: Boolean(leg.doubleHeader),
+        title: getBetTypeLabel(leg.title),
+        result: "pending",
+      }));
+
+      const matchup = legs
+        .map((leg) => `${leg.awayTeam} @ ${leg.homeTeam} (${leg.title})`)
+        .join(" | ");
+
+      if (isEditing) {
+        const next = bets.map((bet) =>
+          bet.id === editingBetId
+            ? {
+                ...bet,
+                title: "Parlay",
+                isParlay: true,
+                legs,
+                matchup,
+                amount: 0,
+                stake: Math.abs(amountRaw),
+                odds: normalizedOdds,
+                result: "pending",
+                date: savedDate,
+                category: "Parlay",
+                updated_at: new Date().toISOString(),
+              }
+            : bet
+        );
+
+        setBets(next);
+        saveBets(next);
+        closeModal();
+        toast.success("Parlay updated");
+        return;
+      }
+
+      const nextBet = {
+        id: crypto.randomUUID(),
+        title: "Parlay",
+        isParlay: true,
+        legs,
+        matchup,
+        amount: 0,
+        stake: Math.abs(amountRaw),
+        odds: normalizedOdds,
+        result: "pending",
+        date: savedDate,
+        category: "Parlay",
+        team: "",
+        sportsbook: "",
+        note: "",
+        created_at: new Date().toISOString(),
+        hidden: false,
+      };
+
+      const next = [nextBet, ...bets];
+
+      setBets(next);
+      saveBets(next);
+      closeModal();
+      toast.success("Parlay added");
+      return;
+    }
+
+    const betType = getBetTypeLabel(form.title);
+    const finalAmount = 0;
+    const gamePk = String(form.gamePk || "");
+    const inferredMatchup = String(form.matchup || "").trim();
 
     if (isEditing) {
       const next = bets.map((bet) =>
         bet.id === editingBetId
           ? {
               ...bet,
-              title: form.title.trim(),
-              matchup: form.matchup.trim(),
+              title: betType,
+              isParlay: false,
+              legs: [],
+              matchup: inferredMatchup || bet.matchup || "",
+              awayTeam: String(form.awayTeam || ""),
+              homeTeam: String(form.homeTeam || ""),
+              gameStatus: form.gameStatus || "Scheduled",
+              gameNumber: form.gameNumber || 1,
+              doubleHeader: Boolean(form.doubleHeader),
               amount: finalAmount,
               stake: Math.abs(amountRaw),
-              result: form.result,
-              date: form.date,
-              category: form.category.trim(),
-              team: form.team.trim(),
-              sportsbook: form.sportsbook.trim(),
-              note: form.note.trim(),
+              odds: normalizedOdds,
+              mlbGamePk: gamePk,
+              result: "pending",
+              date: savedDate,
+              category: "NRFI/YRFI",
+              team: bet.team || "",
+              sportsbook: "",
+              note: "",
               updated_at: new Date().toISOString(),
             }
           : bet
@@ -716,16 +1234,23 @@ const chartSegments = useMemo(() => {
 
     const nextBet = {
       id: crypto.randomUUID(),
-      title: form.title.trim(),
-      matchup: form.matchup.trim(),
+      title: betType,
+      matchup: inferredMatchup,
+      awayTeam: String(form.awayTeam || "").trim(),
+      homeTeam: String(form.homeTeam || "").trim(),
+      gameStatus: form.gameStatus || "Scheduled",
+      gameNumber: form.gameNumber || 1,
+      doubleHeader: Boolean(form.doubleHeader),
       amount: finalAmount,
       stake: Math.abs(amountRaw),
-      result: form.result,
-      date: form.date,
-      category: form.category.trim(),
-      team: form.team.trim(),
-      sportsbook: form.sportsbook.trim(),
-      note: form.note.trim(),
+      odds: normalizedOdds,
+      mlbGamePk: gamePk,
+      result: "pending",
+      date: savedDate,
+      category: "NRFI/YRFI",
+      team: String(form.team || "").trim(),
+      sportsbook: "",
+      note: "",
       created_at: new Date().toISOString(),
       hidden: false,
     };
@@ -742,80 +1267,148 @@ const chartSegments = useMemo(() => {
 <div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
     <Card className="w-full rounded-none border-0 bg-card shadow-none">
       <CardContent className="p-8 pb-4 space-y-6">
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-full bg-violet-600 flex items-center justify-center shadow-[0_0_22px_rgba(124,58,237,0.35)]">
-                <span className="text-2xl font-bold text-white">C</span>
-              </div>
-
-              <div>
-                <h1 className="text-2xl font-bold tracking-tight text-white">
-                  Cloud
-                </h1>
-                <p className="text-xs text-slate-300 mt-1">
-                  Manual bet tracker
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <div className="inline-flex rounded-md border border-border/40 bg-secondary/30 p-1">
-                {VIEWS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => setView(option.value)}
-                    className={`px-3 h-7 rounded text-xs font-medium transition-colors ${
-                      view === option.value
-                        ? "bg-slate-100 text-slate-950"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="h-9 rounded-md border border-border/40 bg-background px-3 text-xs font-mono text-foreground outline-none"
-              >
-                <option value="all">All Months</option>
-
-                {monthOptions.map((monthKey) => (
-                  <option key={monthKey} value={monthKey}>
-                    {formatMonthLabel(monthKey)}
-                  </option>
-                ))}
-              </select>
-
-              <Button
-                size="sm"
-                onClick={openAddModal}
-                className="bg-slate-100 text-slate-950 hover:bg-white"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Bet
-              </Button>
-
-              <Button
-                size="icon"
-                variant="ghost"
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <X className="w-5 h-5" />
-              </Button>
+          <div className="flex justify-center">
+            <div className="inline-flex rounded-md border border-border/40 bg-secondary/30 p-1">
+              {VIEWS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setView(option.value)}
+                  className={`px-3 h-7 rounded text-xs font-medium transition-colors ${
+                    view === option.value
+                      ? "bg-slate-100 text-slate-950"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
 
           {view === "slate" && <MlbSlate onAddBet={openAddModalFromGame} />}
 
           {view === "trends" && (
-            <Card className="border-border/40 bg-secondary/20">
-            <CardContent className="p-5">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StatCard label="Settled" value={trendStats.settled} />
+                <StatCard label="Pending" value={trendStats.pending} />
+                <StatCard
+                  label="Win Rate"
+                  value={formatPercent(trendStats.winRate)}
+                  positive={trendStats.winRate >= 50}
+                />
+                <StatCard
+                  label="ROI"
+                  value={`${trendStats.roi >= 0 ? "+" : ""}${formatPercent(trendStats.roi)}`}
+                  positive={trendStats.roi >= 0}
+                />
+              </div>
+
+              <Card className="border-border/40 bg-secondary/20">
+                <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-muted-foreground">Bankroll Tracker</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Set your starting bankroll to track current balance.</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 sm:min-w-[280px]">
+                    <div>
+                      <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Starting bankroll</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={startingBankroll}
+                        onChange={(event) => setStartingBankroll(Number(event.target.value) || 0)}
+                        className="mt-1 border-border bg-background font-mono text-foreground"
+                      />
+                    </div>
+                    <div>
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Current bankroll</p>
+                      <p className={`mt-2 font-mono text-lg font-bold ${startingBankroll + trendStats.settledPnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                        {formatCurrency(startingBankroll + trendStats.settledPnl)}
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StatCard label="Total Staked" value={formatCurrency(trendStats.totalStake)} />
+                <StatCard label="Average Stake" value={formatCurrency(trendStats.averageStake)} />
+                <StatCard
+                  label="Average Win"
+                  value={`+${formatCurrency(trendStats.averageWin)}`}
+                  positive
+                />
+                <StatCard
+                  label="Average Loss"
+                  value={formatCurrency(trendStats.averageLoss)}
+                  positive={false}
+                />
+              </div>
+
+              <Card className="border-border/40 bg-secondary/20">
+                <CardContent className="p-5">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-muted-foreground">Performance by Pick</p>
+                    <span className="text-xs text-muted-foreground">Settled plays</span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    {trendStats.typeStats.map((row) => (
+                      <div key={row.type} className="rounded-lg border border-border/40 bg-background/40 p-3">
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-foreground">{row.type}</span>
+                          <span className="font-mono text-xs text-muted-foreground">{row.count} plays</span>
+                        </div>
+                        <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
+                          <div>
+                            <span className="block text-muted-foreground">Record</span>
+                            <span className="font-mono text-foreground">{row.wins}W · {row.losses}L</span>
+                          </div>
+                          <div>
+                            <span className="block text-muted-foreground">P/L</span>
+                            <span className={`font-mono ${row.pnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                              {row.pnl >= 0 ? "+" : ""}{formatCurrency(row.pnl)}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-muted-foreground">ROI</span>
+                            <span className={`font-mono ${row.roi >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                              {row.roi >= 0 ? "+" : ""}{formatPercent(row.roi)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <CloudStatsTable
+                  title="Best Teams"
+                  rows={teamStats.slice(0, 5)}
+                  mode="teamProfit"
+                  firstColumnLabel="Team"
+                />
+                <CloudStatsTable
+                  title="Worst Teams"
+                  rows={[...teamStats].sort((a, b) => a.pnl - b.pnl).slice(0, 5)}
+                  mode="teamProfit"
+                  firstColumnLabel="Team"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                <StatCard label="Best Win" value={`+${formatCurrency(trendStats.bestWin)}`} positive />
+                <StatCard label="Worst Loss" value={formatCurrency(trendStats.worstLoss)} positive={false} />
+                <StatCard label="Max Drawdown" value={`-${formatCurrency(trendStats.maxDrawdown)}`} positive={false} />
+                <StatCard label="Settled P/L" value={`${trendStats.settledPnl >= 0 ? "+" : ""}${formatCurrency(trendStats.settledPnl)}`} positive={trendStats.settledPnl >= 0} />
+              </div>
+
+              <Card className="border-border/40 bg-secondary/20">
+              <CardContent className="p-5">
               <p className="text-sm font-semibold text-muted-foreground mb-4">
                 P/L Progression
               </p>
@@ -872,8 +1465,9 @@ const chartSegments = useMemo(() => {
                   </div>
                 )}
               </div>
-            </CardContent>
-            </Card>
+              </CardContent>
+              </Card>
+            </div>
           )}
 
           {view === "bets" && (
@@ -892,59 +1486,305 @@ const chartSegments = useMemo(() => {
         </CardContent>
       </Card>
 
-      <Dialog
-        open={addOpen}
-        onOpenChange={(open) => (open ? setAddOpen(true) : closeModal())}
-      >
-        <DialogContent className="bg-card border-border sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-foreground">
-              {isEditing ? "Edit Cloud Bet" : "Add Cloud Bet"}
-            </DialogTitle>
-
-            <DialogDescription className="text-muted-foreground">
-              {isEditing
-                ? "Update this manual bet."
-                : "Manually enter a win or loss."}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label className="text-foreground">Bet title</Label>
-
-              <Input
-                value={form.title}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    title: e.target.value,
-                  }))
-                }
-                placeholder="Example: Yuta Tomida Set 2"
-                className="bg-background border-border"
-              />
+      {addOpen ? (
+        <div
+          role="dialog"
+          aria-modal="false"
+          aria-label="Bet slip"
+          className="fixed inset-y-0 right-0 z-50 flex h-screen w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card text-foreground shadow-2xl"
+        >
+          <button
+            type="button"
+            aria-label="Close bet slip"
+            onClick={closeModal}
+            className="absolute right-4 top-4 z-10 rounded-sm p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <div className="flex items-center justify-between border-b border-border/40 px-5 py-4 pr-14 text-left">
+            <div>
+              <h2 className="text-xl font-black uppercase leading-none tracking-tight text-foreground">
+                Bet Slip
+              </h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {form.betMode === "parlay" ? "Parlay" : "Singles"}
+              </p>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-foreground">Matchup or details</Label>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={clearSlip}
+                className="text-xs font-medium text-muted-foreground hover:text-foreground"
+              >
+                Clear All
+              </button>
+              <Info className="h-5 w-5 text-blue-600" />
+            </div>
+          </div>
 
-              <Input
-                value={form.matchup}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    matchup: e.target.value,
-                  }))
-                }
-                placeholder="Example: Sora Fukuda vs Yuta Tomida"
-                className="bg-background border-border"
-              />
+          <div className="space-y-4 p-4">
+            <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
+              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
+                {form.betMode === "parlay" ? form.legs.length : 1}
+              </span>
+              <p className="text-sm font-bold uppercase text-foreground">
+                {form.betMode === "parlay" ? "Parlay" : "Singles"}
+              </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="hidden">
+              <p className="text-sm text-muted-foreground">
+                {form.betMode === "parlay"
+                  ? "Build your ticket by adding two or more first-inning selections."
+                  : isEditing
+                    ? "Update this manual bet."
+                    : "Manually enter a win or loss."}
+              </p>
+            </div>
+
+            {form.betMode === "single" ? (
               <div className="space-y-2">
-                <Label className="text-foreground">Amount</Label>
+                <Label className="text-xs font-bold uppercase text-muted-foreground">First inning pick</Label>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={getBetTypeLabel(form.title) === "NRFI" ? "default" : "outline"}
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        title: "NRFI",
+                      }))
+                    }
+                    className={
+                      getBetTypeLabel(form.title) === "NRFI"
+                        ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                        : "border-border/60 bg-secondary/30 text-foreground hover:bg-secondary"
+                    }
+                  >
+                    NRFI
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant={getBetTypeLabel(form.title) === "YRFI" ? "default" : "outline"}
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        title: "YRFI",
+                      }))
+                    }
+                    className={
+                      getBetTypeLabel(form.title) === "YRFI"
+                        ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                        : "border-border/60 bg-secondary/30 text-foreground hover:bg-secondary"
+                    }
+                  >
+                    YRFI
+                  </Button>
+                </div>
+
+                {form.gamePk ? (
+                  <div className="mt-3 rounded-md border border-border/40 bg-background/50 p-3">
+                    <div className="flex items-center gap-2">
+                      {[form.awayTeam, form.homeTeam].map((team) => {
+                        const logo = getTeamLogoByName(team);
+                        return logo ? (
+                          <img key={team} src={logo} alt={team} className="h-7 w-7 rounded-full bg-secondary object-contain p-0.5" />
+                        ) : null;
+                      })}
+                      <span className={`ml-auto text-[10px] font-semibold uppercase ${form.gameStatus === "Final" ? "text-muted-foreground" : form.gameStatus === "Live" ? "text-rose-300" : "text-emerald-300"}`}>
+                        {form.gameStatus || "Scheduled"}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-xs font-medium text-foreground">{form.awayTeam} @ {form.homeTeam}</p>
+                    {form.doubleHeader ? <p className="mt-1 text-[10px] text-muted-foreground">Doubleheader · Game {form.gameNumber}</p> : null}
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="overflow-hidden rounded-lg border border-border/50 bg-[#0A0F1D]">
+                <div className="flex items-center justify-between border-b border-border/40 bg-secondary/40 px-4 py-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Parlay selections</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {form.legs.length} selections · all must win
+                    </p>
+                  </div>
+
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={addLeg}
+                    className="h-8 border-border/60 bg-transparent text-foreground hover:bg-secondary"
+                  >
+                    <Plus className="mr-1 h-4 w-4" />
+                    Add Leg
+                  </Button>
+                </div>
+
+                {slateLoading ? (
+                  <p className="px-4 py-3 text-xs text-muted-foreground">Loading available games...</p>
+                ) : null}
+
+                <div className="max-h-72 space-y-2 overflow-y-auto p-3">
+                  {form.legs.map((leg, index) => (
+                    <div
+                      key={leg.id}
+                      className="rounded-md border border-border/40 bg-background/50"
+                    >
+                      <div className="flex items-start gap-3 p-3">
+                        <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white">
+                          {index + 1}
+                        </div>
+
+                        <div className="min-w-0 flex-1 space-y-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                              First inning
+                            </span>
+
+                            <span className="font-mono text-xs font-bold text-foreground">
+                              {leg.title}
+                            </span>
+                          </div>
+
+                          {leg.gamePk ? (
+                            <div className="flex items-center gap-2">
+                              <div className="flex -space-x-1">
+                                {[leg.awayTeam, leg.homeTeam].map((team) => {
+                                  const logo = getTeamLogoByName(team);
+                                  return logo ? (
+                                    <img key={team} src={logo} alt={team} className="h-6 w-6 rounded-full bg-secondary object-contain p-0.5 ring-1 ring-background" />
+                                  ) : null;
+                                })}
+                              </div>
+                              <span className={`text-[10px] font-semibold uppercase ${leg.status === "Final" ? "text-muted-foreground" : leg.status === "Live" ? "text-rose-300" : "text-emerald-300"}`}>
+                                {leg.status || "Scheduled"}
+                              </span>
+                              {leg.doubleHeader ? <span className="text-[10px] text-muted-foreground">Game {leg.gameNumber}</span> : null}
+                            </div>
+                          ) : null}
+
+                          <Popover
+                            open={gamePickerLegId === leg.id}
+                            onOpenChange={(open) =>
+                              setGamePickerLegId(open ? leg.id : null)
+                            }
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                className="h-auto min-h-9 w-full justify-between border-border/40 bg-background px-3 py-2 text-left text-xs font-medium text-foreground"
+                              >
+                                <span className="truncate">
+                                  {leg.gamePk
+                                    ? `${leg.awayTeam} @ ${leg.homeTeam}`
+                                    : "Select game"}
+                                </span>
+                                <span className="ml-2 text-muted-foreground">⌄</span>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-[min(22rem,calc(100vw-2rem))] border-border bg-card p-0"
+                              align="start"
+                            >
+                              <Command>
+                                <CommandInput placeholder="Search teams..." />
+                                <CommandList>
+                                  <CommandEmpty>No games found.</CommandEmpty>
+                                  {slateGames.map((game) => (
+                                    <CommandItem
+                                      key={game.id}
+                                      value={`${game.away.name} ${game.home.name}`}
+                                      onSelect={() => {
+                                        updateLeg(leg.id, {
+                                          gamePk: String(game.id),
+                                          awayTeam: game.away.name,
+                                          homeTeam: game.home.name,
+                                          firstPitch: game.gameDate,
+                                          status: game.abstractStatus || game.status || "Scheduled",
+                                          gameNumber: game.gameNumber || 1,
+                                          doubleHeader: Boolean(game.doubleHeader),
+                                        });
+                                        setGamePickerLegId(null);
+                                      }}
+                                      className="flex-col items-start gap-0.5 py-2.5"
+                                    >
+                                      <span className="font-medium">
+                                        {game.away.name} @ {game.home.name}
+                                      </span>
+                                      <span className="text-[11px] text-muted-foreground">
+                                        {formatFirstPitch(game.gameDate)}
+                                      </span>
+                                    </CommandItem>
+                                  ))}
+                                </CommandList>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={leg.title === "NRFI" ? "default" : "outline"}
+                              onClick={() => updateLeg(leg.id, { title: "NRFI" })}
+                              className={leg.title === "NRFI" ? "h-8 bg-emerald-600 text-white hover:bg-emerald-500" : "h-8 border-border/60 bg-transparent text-foreground hover:bg-secondary"}
+                            >
+                              NRFI
+                            </Button>
+
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={leg.title === "YRFI" ? "default" : "outline"}
+                              onClick={() => updateLeg(leg.id, { title: "YRFI" })}
+                              className={leg.title === "YRFI" ? "h-8 bg-emerald-600 text-white hover:bg-emerald-500" : "h-8 border-border/60 bg-transparent text-foreground hover:bg-secondary"}
+                            >
+                              YRFI
+                            </Button>
+                          </div>
+                        </div>
+
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          disabled={form.legs.length <= 2}
+                          onClick={() => removeLeg(leg.id)}
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 border-t border-border/40 bg-secondary/30 p-3">
+                  <div>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Stake</p>
+                    <p className="mt-1 font-mono text-sm font-semibold text-foreground">
+                      {form.amount ? `$${Number(form.amount).toFixed(2)}` : "$0.00"}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Combined odds</p>
+                    <p className="mt-1 font-mono text-sm font-semibold text-foreground">{form.odds || "-"}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-2">
+                <Label className="text-xs font-bold uppercase text-muted-foreground">
+                  {form.betMode === "parlay" ? "Total Amount" : "Amount"}
+                </Label>
 
                 <Input
                   type="number"
@@ -956,192 +1796,64 @@ const chartSegments = useMemo(() => {
                       amount: e.target.value,
                     }))
                   }
-                  placeholder="458.34"
-                  className="bg-background border-border font-mono"
+                  placeholder="25.00"
+                  className="border-border bg-background font-mono text-foreground"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label className="text-foreground">Date</Label>
+                <Label className="text-xs font-bold uppercase text-muted-foreground">
+                  {form.betMode === "parlay" ? "Combined Odds" : "Odds"}
+                </Label>
 
                 <Input
-                  type="date"
-                  value={form.date}
+                  value={form.odds}
                   onChange={(e) =>
                     setForm((prev) => ({
                       ...prev,
-                      date: e.target.value,
+                      odds: e.target.value,
                     }))
                   }
-                  className="bg-background border-border font-mono"
+                  placeholder="+120 or -110"
+                  className="border-border bg-background font-mono text-foreground"
                 />
               </div>
             </div>
 
             <div className="space-y-2">
-              <Label className="text-foreground">Sport</Label>
-
-              <select
-                value={form.category}
-                onChange={(e) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    category: e.target.value,
-                    team: "",
-                  }))
-                }
-                className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none"
-              >
-                {SPORTS.map((sport) => (
-                  <option key={sport.value || "empty"} value={sport.value}>
-                    {sport.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {availableTeams.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-foreground">Team</Label>
-
-                <select
-                  value={form.team}
-                  onChange={(e) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      team: e.target.value,
-                    }))
-                  }
-                  className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none"
-                >
-                  <option value="">Select team</option>
-
-                  {availableTeams.map((team) => (
-                    <option key={team.value} value={team.value}>
-                      {team.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label className="text-foreground">Result</Label>
-
-              <div className="grid grid-cols-2 gap-2">
-                <Button
-                  type="button"
-                  variant={form.result === "win" ? "default" : "outline"}
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      result: "win",
-                    }))
-                  }
-                  className={
-                    form.result === "win"
-                      ? "bg-emerald-400 text-slate-950 hover:bg-emerald-300"
-                      : "border-slate-600/60 bg-[#0A0F1D] text-white hover:bg-[#111A2E]"
-                  }
-                >
-                  <Trophy className="w-4 h-4 mr-2" />
-                  Win
-                </Button>
-
-                <Button
-                  type="button"
-                  variant={form.result === "loss" ? "default" : "outline"}
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      result: "loss",
-                    }))
-                  }
-                  className={
-                    form.result === "loss"
-                      ? "bg-rose-400 text-slate-950 hover:bg-rose-300"
-                      : "border-slate-600/60 bg-[#0A0F1D] text-white hover:bg-[#111A2E]"
-                  }
-                >
-                  <TrendingDown className="w-4 h-4 mr-2" />
-                  Loss
-                </Button>
-
-                <Button
-                  type="button"
-                  variant={form.result === "pending" ? "default" : "outline"}
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      result: "pending",
-                    }))
-                  }
-                  className={
-                    form.result === "pending"
-                      ? "bg-amber-300 text-slate-950 hover:bg-amber-200"
-                      : "border-slate-600/60 bg-[#0A0F1D] text-white hover:bg-[#111A2E]"
-                  }
-                >
-                  <Clock className="w-4 h-4 mr-2" />
-                  Pending
-                </Button>
-
-                <Button
-                  type="button"
-                  variant={form.result === "in_progress" ? "default" : "outline"}
-                  onClick={() =>
-                    setForm((prev) => ({
-                      ...prev,
-                      result: "in_progress",
-                    }))
-                  }
-                  className={
-                    form.result === "in_progress"
-                      ? "bg-sky-300 text-slate-950 hover:bg-sky-200"
-                      : "border-slate-600/60 bg-[#0A0F1D] text-white hover:bg-[#111A2E]"
-                  }
-                >
-                  <Clock className="w-4 h-4 mr-2" />
-                  In Progress
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-foreground">Note</Label>
-
+              <Label className="text-xs font-bold uppercase text-muted-foreground">Date</Label>
               <Input
-                value={form.note}
+                type="date"
+                value={form.date || getPstDateString()}
                 onChange={(e) =>
                   setForm((prev) => ({
                     ...prev,
-                    note: e.target.value,
+                    date: e.target.value,
                   }))
                 }
-                placeholder="Optional"
-                className="bg-background border-border"
+                className="border-border bg-background font-mono text-foreground"
               />
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-auto border-t border-border/40 bg-secondary/30 p-4">
             <Button
               variant="outline"
               onClick={closeModal}
-              className="border-border/40"
+              className="border-border/60 bg-transparent text-foreground hover:bg-secondary"
             >
               Cancel
             </Button>
 
             <Button
               onClick={handleSaveBet}
-              className="bg-slate-100 text-slate-950 hover:bg-white"
+              className="bg-emerald-500 text-slate-950 hover:bg-emerald-400"
             >
               {isEditing ? "Save Changes" : "Save Bet"}
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1155,9 +1867,11 @@ function CalendarSidePanel({
   onNextMonth,
 }) {
   const [selectedDate, setSelectedDate] = useState(null);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   useEffect(() => {
     setSelectedDate(null);
+    setDetailsOpen(false);
   }, [monthKey]);
 
   const days = useMemo(() => getCalendarDays(monthKey), [monthKey]);
@@ -1289,7 +2003,10 @@ function CalendarSidePanel({
               <button
                 key={day.dateKey}
                 type="button"
-                onClick={() => setSelectedDate(day.dateKey)}
+                onClick={() => {
+                  setSelectedDate(day.dateKey);
+                  setDetailsOpen(true);
+                }}
                 className={`h-12 rounded-lg border p-1 flex flex-col items-center justify-center transition-colors ${
                   isSelected
                     ? "border-violet-500 bg-violet-500/10"
@@ -1319,86 +2036,162 @@ function CalendarSidePanel({
 
         <div className="h-px bg-border/50" />
 
-        <div className="flex items-center justify-between">
-          <p className="text-lg font-bold tracking-[0.2em] text-violet-400 uppercase">
-            {new Date(`${activeDate}T00:00:00`).toLocaleDateString("en-US", {
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
+        <Dialog open={detailsOpen} onOpenChange={(open) => setDetailsOpen(open)}>
+          <DialogContent className="bg-card border-border max-w-xl">
+            <DialogHeader>
+              <DialogTitle className="text-foreground">
+                {selectedDate
+                  ? new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-US", {
+                      month: "long",
+                      day: "numeric",
+                      year: "numeric",
+                    })
+                  : "Plays"}
+              </DialogTitle>
+            </DialogHeader>
 
-          <p className="font-mono text-sm font-bold text-muted-foreground">
-            {formatRecord(activeStats.wins, activeStats.losses)} · {activeStats.pnl >= 0 ? "+" : ""}
-            {formatCurrency(activeStats.pnl)}
-          </p>
-        </div>
-
-        <div className="space-y-2 max-h-[260px] overflow-y-auto pr-1">
-          {activeStats.bets.length === 0 ? (
-            <div className="rounded-lg border border-border/40 bg-secondary/30 p-4 text-center text-sm text-muted-foreground">
-              No bets on this day.
+            <div className="mb-3 grid grid-cols-2 gap-2">
+              <div className="rounded-lg border border-border/40 bg-secondary/30 p-2">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Total P/L</p>
+                <p className={`mt-1 font-mono text-base font-bold ${activeStats.pnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                  {activeStats.pnl >= 0 ? "+" : ""}{formatCurrency(activeStats.pnl)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-border/40 bg-secondary/30 p-2">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Record</p>
+                <p className="mt-1 font-mono text-base font-bold text-foreground">
+                  {activeStats.wins} - {activeStats.losses}
+                </p>
+              </div>
             </div>
-          ) : (
-            activeStats.bets.map((bet) => {
-              const won = isBetWin(bet);
-              const status = getBetStatus(bet);
-              const statusLabel = getStatusLabel(status);
-              const isPending = status === "pending" || status === "in_progress";
 
-              return (
-                <div
-                  key={bet.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => onEditBet(bet)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      onEditBet(bet);
-                    }
-                  }}
-                  className={`rounded-lg border bg-secondary/40 p-3 flex items-center justify-between gap-3 ${
-                    won === true
-                      ? "border-emerald-500/40"
-                      : won === false
-                        ? "border-rose-500/40"
-                        : "border-amber-400/40"
-                  }`}
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-bold text-foreground truncate">
-                      {bet.title}
-                    </p>
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {activeStats.bets.length === 0 ? (
+                <div className="rounded-lg border border-border/40 bg-secondary/30 p-4 text-center text-sm text-muted-foreground">
+                  No plays on this date.
+                </div>
+              ) : (
+                activeStats.bets.map((bet) => {
+                  const won = isBetWin(bet);
+                  const status = getBetStatus(bet);
+                  const statusLabel = getStatusLabel(status);
+                  const stake = Math.abs(Number(bet.stake ?? bet.amount) || 0);
+                  const isParlay = Array.isArray(bet.legs) && bet.legs.length > 0;
+                  const [teamA, teamB] = isParlay ? [] : getBetTeamNames(bet);
+                  const teamAImage = teamA ? getTeamLogoByName(teamA) : null;
+                  const teamBImage = teamB ? getTeamLogoByName(teamB) : null;
 
-                    <p className="text-xs text-muted-foreground truncate mt-1">
-                      {bet.matchup || (getTeam(bet) !== "No Team" ? getTeamLabel(getTeam(bet)) : getSportLabel(getCategory(bet)))}
-                    </p>
-                  </div>
-
-                  <div className="text-right shrink-0">
-                    <p
-                      className={`font-mono text-sm font-bold ${
+                  return (
+                    <div
+                      key={bet.id}
+                      className={`rounded-xl border bg-secondary/40 p-3 ${
                         won === true
-                          ? "text-emerald-300"
+                          ? "border-emerald-500/40"
                           : won === false
-                            ? "text-rose-300"
-                            : "text-amber-300"
+                            ? "border-rose-500/40"
+                            : "border-amber-400/40"
                       }`}
                     >
-                      {isPending
-                        ? `${formatCurrency(bet.stake ?? 0)} stake`
-                        : `${Number(bet.amount) >= 0 ? "+" : ""}${formatCurrency(Number(bet.amount) || 0)}`}
-                    </p>
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {isParlay ? (
+                            <div className="flex -space-x-2">
+                              {bet.legs.slice(0, 4).flatMap((leg) => [leg.awayTeam, leg.homeTeam])
+                                .map(getTeamLogoByName)
+                                .filter(Boolean)
+                                .slice(0, 4)
+                                .map((src, idx) => (
+                                  <img
+                                    key={`${bet.id}-logo-${idx}`}
+                                    src={src}
+                                    alt=""
+                                    className="w-7 h-7 rounded-full object-contain bg-secondary/80 p-0.5 ring-2 ring-secondary/40"
+                                  />
+                                ))}
+                            </div>
+                          ) : (
+                            <>
+                              {teamAImage ? (
+                                <img src={teamAImage} alt={teamA} className="w-8 h-8 rounded-full object-contain bg-secondary/80 p-0.5" />
+                              ) : null}
+                              {teamBImage ? (
+                                <img src={teamBImage} alt={teamB} className="w-8 h-8 rounded-full object-contain bg-secondary/80 p-0.5" />
+                              ) : null}
+                            </>
+                          )}
+                          <p className="text-sm font-bold text-foreground truncate">
+                            {isParlay ? `Parlay (${bet.legs.length} legs)` : bet.title}
+                          </p>
+                        </div>
+                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                          {statusLabel}
+                        </span>
+                      </div>
 
-                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                      {statusLabel}
-                    </p>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
+                      {isParlay ? (
+                        <div className="mt-2 space-y-1.5">
+                          {bet.legs.map((leg) => {
+                            const legWon =
+                              leg.result === "win" ? true : leg.result === "loss" ? false : null;
+
+                            return (
+                              <div
+                                key={leg.id}
+                                className="flex items-center justify-between gap-2 rounded-md bg-background/40 px-2 py-1"
+                              >
+                                <span className="truncate text-xs text-muted-foreground">
+                                  {leg.awayTeam} @ {leg.homeTeam}
+                                  <span className="ml-1 font-mono text-foreground">{leg.title}</span>
+                                </span>
+                                <span
+                                  className={`text-[10px] uppercase tracking-wider font-mono ${
+                                    legWon === true
+                                      ? "text-emerald-300"
+                                      : legWon === false
+                                        ? "text-rose-300"
+                                        : "text-amber-300"
+                                  }`}
+                                >
+                                  {legWon === true ? "Win" : legWon === false ? "Loss" : "Pending"}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      ) : bet.matchup ? (
+                        <p className="mt-2 text-xs text-muted-foreground truncate">{bet.matchup}</p>
+                      ) : null}
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider">Odds</span>
+                          <span className="font-mono text-foreground">{bet.odds || "-"}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider">Amount</span>
+                          <span className="font-mono text-foreground">{formatCurrency(stake)}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider">Result</span>
+                          <span className={`font-mono ${won === true ? "text-emerald-300" : won === false ? "text-rose-300" : "text-amber-300"}`}>
+                            {won === true ? "Win" : won === false ? "Loss" : "Pending"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider">P/L</span>
+                          <span className={`font-mono ${Number(bet.amount) >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                            {Number(bet.amount) >= 0 ? "+" : "-"}
+                            {formatCurrency(Math.abs(Number(bet.amount) || 0))}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

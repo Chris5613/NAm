@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Calendar } from "@/components/ui/calendar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Plus, RefreshCw, CalendarDays } from "lucide-react";
 import {
   fetchTodaySlate,
@@ -21,6 +27,17 @@ function TeamLogo({ teamId, name }) {
       loading="lazy"
     />
   );
+}
+
+function dateKeyToDate(dateKey) {
+  return new Date(`${dateKey}T12:00:00`);
+}
+
+function dateToDateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function PitcherLine({ side, team }) {
@@ -89,6 +106,18 @@ function GameCard({ game, onAddBet }) {
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${
+              game.abstractStatus === "Final"
+                ? "bg-slate-700 text-slate-200"
+                : game.abstractStatus === "Live"
+                  ? "bg-rose-500/20 text-rose-300"
+                  : "bg-emerald-500/15 text-emerald-300"
+            }`}>
+              {game.abstractStatus === "Final" ? "Final" : game.abstractStatus === "Live" ? "Live" : "Scheduled"}
+            </span>
+            {game.doubleHeader ? (
+              <span className="text-[10px] font-mono text-muted-foreground">Game {game.gameNumber}</span>
+            ) : null}
             <span className="text-sm font-mono text-muted-foreground whitespace-nowrap">
               {formatFirstPitch(game.gameDate)}
             </span>
@@ -119,19 +148,21 @@ export default function MlbSlate({ onAddBet }) {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [selectedDate, setSelectedDate] = useState(() => getTodayDateKey());
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      setGames(await fetchTodaySlate());
+      setGames(await fetchTodaySlate(selectedDate));
     } catch {
-      setError("Could not load today's MLB slate.");
+      setError("Could not load the MLB slate for this date.");
       setGames([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     load();
@@ -142,7 +173,29 @@ export default function MlbSlate({ onAddBet }) {
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <CalendarDays className="w-4 h-4" />
-          <span className="font-mono">{getTodayDateKey()}</span>
+          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                className="h-8 border-border/40 bg-background px-2 font-mono text-xs text-foreground"
+              >
+                {selectedDate}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto border-border bg-card p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dateKeyToDate(selectedDate)}
+                onSelect={(date) => {
+                  if (!date) return;
+                  setSelectedDate(dateToDateKey(date));
+                  setCalendarOpen(false);
+                }}
+                initialFocus
+              />
+            </PopoverContent>
+          </Popover>
           <span>·</span>
           <span>{games.length} games</span>
         </div>
