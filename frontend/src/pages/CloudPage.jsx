@@ -26,6 +26,8 @@ import {
   Plus,
   Trash2,
   X,
+  Minimize2,
+  Maximize2,
   TrendingUp,
   TrendingDown,
   Trophy,
@@ -572,6 +574,7 @@ export default function CloudPage() {
   const [bets, setBets] = useState(() => getSavedBets());
   const [view, setView] = useState("slate");
   const [addOpen, setAddOpen] = useState(false);
+  const [slipMinimized, setSlipMinimized] = useState(false);
   const [editingBetId, setEditingBetId] = useState(null);
   const [form, setForm] = useState(() => emptyForm());
   const [calendarMonthKey, setCalendarMonthKey] = useState(() => getCurrentMonthKey());
@@ -852,6 +855,7 @@ const chartSegments = useMemo(() => {
   const openAddModal = () => {
     setEditingBetId(null);
     setForm(emptyForm());
+    setSlipMinimized(false);
     setAddOpen(true);
   };
 
@@ -865,6 +869,7 @@ const chartSegments = useMemo(() => {
 
     if (addOpen && form.betMode === "parlay") {
       if (form.legs.some((leg) => String(leg.gamePk) === newLeg.gamePk)) return;
+      setSlipMinimized(false);
       setForm((prev) => ({ ...prev, legs: [...prev.legs, newLeg] }));
       return;
     }
@@ -883,6 +888,7 @@ const chartSegments = useMemo(() => {
         id: crypto.randomUUID(),
       };
 
+      setSlipMinimized(false);
       setForm((prev) => ({
         ...prev,
         betMode: "parlay",
@@ -907,6 +913,7 @@ const chartSegments = useMemo(() => {
       category: "Baseball",
       team: homeTeam,
     });
+    setSlipMinimized(false);
     setAddOpen(true);
   };
 
@@ -1043,6 +1050,7 @@ const chartSegments = useMemo(() => {
           result: leg.result || "pending",
         })),
       });
+      setSlipMinimized(false);
       setAddOpen(true);
       return;
     }
@@ -1064,11 +1072,13 @@ const chartSegments = useMemo(() => {
       category: bet.category || "",
       team: bet.team || "",
     });
+    setSlipMinimized(false);
     setAddOpen(true);
   };
 
   const closeModal = () => {
     setAddOpen(false);
+    setSlipMinimized(false);
     setEditingBetId(null);
     setGamePickerLegId(null);
     setForm(emptyForm());
@@ -1486,13 +1496,36 @@ const chartSegments = useMemo(() => {
         </CardContent>
       </Card>
 
-      {addOpen ? (
+      {addOpen && slipMinimized ? (
+        <button
+          type="button"
+          onClick={() => setSlipMinimized(false)}
+          className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-md border border-border/60 bg-card/95 px-3 py-2 text-left text-foreground shadow-xl backdrop-blur"
+          aria-label="Expand bet slip"
+        >
+          <Maximize2 className="h-4 w-4 text-emerald-400" />
+          <span className="text-xs font-semibold uppercase tracking-wide">Bet Slip</span>
+          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+            {form.betMode === "parlay" ? form.legs.length : 1}
+          </span>
+        </button>
+      ) : null}
+
+      {addOpen && !slipMinimized ? (
         <div
           role="dialog"
           aria-modal="false"
           aria-label="Bet slip"
           className="fixed inset-y-0 right-0 z-50 flex h-screen w-full max-w-md flex-col overflow-y-auto border-l border-border bg-card text-foreground shadow-2xl"
         >
+          <button
+            type="button"
+            aria-label="Minimize bet slip"
+            onClick={() => setSlipMinimized(true)}
+            className="absolute right-14 top-4 z-10 rounded-sm p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+          >
+            <Minimize2 className="h-4 w-4" />
+          </button>
           <button
             type="button"
             aria-label="Close bet slip"
