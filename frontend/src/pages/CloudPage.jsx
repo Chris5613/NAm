@@ -574,7 +574,7 @@ export default function CloudPage() {
   const [bets, setBets] = useState(() => getSavedBets());
   const [view, setView] = useState("slate");
   const [addOpen, setAddOpen] = useState(false);
-  const [slipMinimized, setSlipMinimized] = useState(false);
+  const [slipMinimized, setSlipMinimized] = useState(true);
   const [editingBetId, setEditingBetId] = useState(null);
   const [form, setForm] = useState(() => emptyForm());
   const [calendarMonthKey, setCalendarMonthKey] = useState(() => getCurrentMonthKey());
@@ -855,7 +855,7 @@ const chartSegments = useMemo(() => {
   const openAddModal = () => {
     setEditingBetId(null);
     setForm(emptyForm());
-    setSlipMinimized(false);
+    setSlipMinimized(true);
     setAddOpen(true);
   };
 
@@ -869,7 +869,7 @@ const chartSegments = useMemo(() => {
 
     if (addOpen && form.betMode === "parlay") {
       if (form.legs.some((leg) => String(leg.gamePk) === newLeg.gamePk)) return;
-      setSlipMinimized(false);
+      setSlipMinimized(true);
       setForm((prev) => ({ ...prev, legs: [...prev.legs, newLeg] }));
       return;
     }
@@ -888,7 +888,7 @@ const chartSegments = useMemo(() => {
         id: crypto.randomUUID(),
       };
 
-      setSlipMinimized(false);
+      setSlipMinimized(true);
       setForm((prev) => ({
         ...prev,
         betMode: "parlay",
@@ -913,7 +913,7 @@ const chartSegments = useMemo(() => {
       category: "Baseball",
       team: homeTeam,
     });
-    setSlipMinimized(false);
+    setSlipMinimized(true);
     setAddOpen(true);
   };
 
@@ -1050,7 +1050,7 @@ const chartSegments = useMemo(() => {
           result: leg.result || "pending",
         })),
       });
-      setSlipMinimized(false);
+      setSlipMinimized(true);
       setAddOpen(true);
       return;
     }
@@ -1072,13 +1072,13 @@ const chartSegments = useMemo(() => {
       category: bet.category || "",
       team: bet.team || "",
     });
-    setSlipMinimized(false);
+    setSlipMinimized(true);
     setAddOpen(true);
   };
 
   const closeModal = () => {
     setAddOpen(false);
-    setSlipMinimized(false);
+    setSlipMinimized(true);
     setEditingBetId(null);
     setGamePickerLegId(null);
     setForm(emptyForm());
