@@ -355,6 +355,40 @@ function gameToLeg(game, title = "NRFI") {
   };
 }
 
+function gameToSingle(game, title = "NRFI") {
+  const awayTeam = game?.away?.name || "";
+  const homeTeam = game?.home?.name || "";
+  const awayPitcher = game?.away?.pitcher?.name || "TBD";
+  const homePitcher = game?.home?.pitcher?.name || "TBD";
+
+  return {
+    ...gameToLeg(game, title),
+    matchup: `${awayTeam} @ ${homeTeam} · ${awayPitcher} vs ${homePitcher} · ${formatFirstPitch(game?.gameDate)}`,
+    date: String(game?.gameDate || "").slice(0, 10) || getPstDateString(),
+    team: homeTeam,
+  };
+}
+
+function formToSingle(form) {
+  if (!form.gamePk && !form.awayTeam && !form.homeTeam) return null;
+
+  return {
+    id: crypto.randomUUID(),
+    gamePk: String(form.gamePk || ""),
+    awayTeam: form.awayTeam || "",
+    homeTeam: form.homeTeam || "",
+    firstPitch: form.date || "",
+    status: form.gameStatus || "Scheduled",
+    gameNumber: form.gameNumber || 1,
+    doubleHeader: Boolean(form.doubleHeader),
+    title: getBetTypeLabel(form.title),
+    result: "pending",
+    matchup: form.matchup || "",
+    date: form.date || getPstDateString(),
+    team: form.team || form.homeTeam || "",
+  };
+}
+
 function emptyForm() {
   return {
     betMode: "single",
@@ -369,6 +403,7 @@ function emptyForm() {
     team: "",
     sportsbook: "",
     note: "",
+    singleBets: [],
     legs: [],
   };
 }
@@ -896,6 +931,7 @@ const chartSegments = useMemo(() => {
     const homePitcher = game?.home?.pitcher?.name || "TBD";
 
     const newLeg = gameToLeg(game);
+    const newSingle = gameToSingle(game);
 
     if (addOpen && form.betMode === "parlay") {
       if (form.legs.some((leg) => String(leg.gamePk) === newLeg.gamePk)) return;
@@ -904,25 +940,24 @@ const chartSegments = useMemo(() => {
       return;
     }
 
-    if (addOpen && form.gamePk) {
-      const existingLeg = {
-        ...gameToLeg(
-          {
-            id: form.gamePk,
-            gameDate: form.date,
-            away: { name: form.awayTeam },
-            home: { name: form.homeTeam },
-          },
-          form.title
-        ),
-        id: crypto.randomUUID(),
-      };
-
+    if (addOpen) {
       setSlipMinimized(true);
       setForm((prev) => ({
         ...prev,
-        betMode: "parlay",
-        legs: [...(prev.legs || []), existingLeg, newLeg],
+        betMode: "single",
+        singleBets: [
+          ...(
+            prev.singleBets?.length
+              ? prev.singleBets
+              : formToSingle(prev)
+                ? [formToSingle(prev)]
+                : []
+          ),
+          newSingle,
+        ].filter(
+          (single, index, singles) =>
+            singles.findIndex((item) => String(item.gamePk) === String(single.gamePk)) === index
+        ),
       }));
       return;
     }
@@ -942,6 +977,7 @@ const chartSegments = useMemo(() => {
       date: String(game.gameDate || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
       category: "Baseball",
       team: homeTeam,
+      singleBets: [newSingle],
     });
     setSlipMinimized(true);
     setAddOpen(true);
@@ -1216,6 +1252,37 @@ const chartSegments = useMemo(() => {
     setForm(emptyForm());
   };
 
+  const setSlipBetMode = (mode) => {
+    setForm((prev) => {
+      if (mode === "parlay") {
+        const singles = prev.singleBets?.length
+          ? prev.singleBets
+          : formToSingle(prev)
+            ? [formToSingle(prev)]
+            : [];
+
+        return {
+          ...prev,
+          betMode: "parlay",
+          legs: singles.length > 0 ? singles.map((single) => ({ ...single })) : prev.legs,
+        };
+      }
+
+      return {
+        ...prev,
+        betMode: "single",
+        singleBets: prev.singleBets?.length
+          ? prev.singleBets
+          : prev.legs.map((leg) => ({
+              ...leg,
+              matchup: `${leg.awayTeam} @ ${leg.homeTeam}`,
+              date: prev.date || getPstDateString(),
+              team: leg.homeTeam || "",
+            })),
+      };
+    });
+  };
+
   const addLeg = () => {
     setForm((prev) => ({ ...prev, legs: [...prev.legs, emptyLeg()] }));
   };
@@ -1231,6 +1298,22 @@ const chartSegments = useMemo(() => {
     setForm((prev) => ({
       ...prev,
       legs: prev.legs.map((leg) => (leg.id === legId ? { ...leg, ...updates } : leg)),
+    }));
+  };
+
+  const removeSingle = (singleId) => {
+    setForm((prev) => ({
+      ...prev,
+      singleBets: prev.singleBets.filter((single) => single.id !== singleId),
+    }));
+  };
+
+  const updateSingle = (singleId, updates) => {
+    setForm((prev) => ({
+      ...prev,
+      singleBets: prev.singleBets.map((single) =>
+        single.id === singleId ? { ...single, ...updates } : single
+      ),
     }));
   };
 
@@ -1328,10 +1411,16 @@ const chartSegments = useMemo(() => {
       return;
     }
 
-    const betType = getBetTypeLabel(form.title);
+    const singleSelections = form.singleBets?.length
+      ? form.singleBets
+      : formToSingle(form)
+        ? [formToSingle(form)]
+        : [];
+    const betType = getBetTypeLabel(singleSelections[0]?.title || form.title);
     const finalAmount = 0;
-    const gamePk = String(form.gamePk || "");
-    const inferredMatchup = String(form.matchup || "").trim();
+    const activeSingle = singleSelections[0] || {};
+    const gamePk = String(activeSingle.gamePk || form.gamePk || "");
+    const inferredMatchup = String(activeSingle.matchup || form.matchup || "").trim();
 
     if (isEditing) {
       const next = bets.map((bet) =>
@@ -1369,35 +1458,42 @@ const chartSegments = useMemo(() => {
       return;
     }
 
-    const nextBet = {
+    if (singleSelections.length === 0) {
+      toast.error("Add at least one game");
+      return;
+    }
+
+    const createdAt = new Date().toISOString();
+    const nextSingleBets = singleSelections.map((single) => ({
       id: crypto.randomUUID(),
-      title: betType,
-      matchup: inferredMatchup,
-      awayTeam: String(form.awayTeam || "").trim(),
-      homeTeam: String(form.homeTeam || "").trim(),
-      gameStatus: form.gameStatus || "Scheduled",
-      gameNumber: form.gameNumber || 1,
-      doubleHeader: Boolean(form.doubleHeader),
+      title: getBetTypeLabel(single.title),
+      matchup: String(single.matchup || `${single.awayTeam} @ ${single.homeTeam}`).trim(),
+      awayTeam: String(single.awayTeam || "").trim(),
+      homeTeam: String(single.homeTeam || "").trim(),
+      gameStatus: single.status || single.gameStatus || "Scheduled",
+      gameNumber: single.gameNumber || 1,
+      doubleHeader: Boolean(single.doubleHeader),
       amount: finalAmount,
       stake: Math.abs(amountRaw),
       odds: normalizedOdds,
-      mlbGamePk: gamePk,
+      mlbGamePk: String(single.gamePk || ""),
+      gamePk: String(single.gamePk || ""),
       result: "pending",
-      date: savedDate,
+      date: single.date || savedDate,
       category: "NRFI/YRFI",
-      team: String(form.team || "").trim(),
+      team: String(single.team || single.homeTeam || "").trim(),
       sportsbook: "",
       note: "",
-      created_at: new Date().toISOString(),
+      created_at: createdAt,
       hidden: false,
-    };
+    }));
 
-    const next = [nextBet, ...bets];
+    const next = [...nextSingleBets, ...bets];
 
     setBets(next);
     saveBets(next);
     closeModal();
-    toast.success("Bet added");
+    toast.success(nextSingleBets.length > 1 ? "Singles added" : "Bet added");
   };
 
   return (
@@ -1647,7 +1743,7 @@ const chartSegments = useMemo(() => {
             <Maximize2 className="h-4 w-4 text-emerald-400" />
             <span className="text-xs font-semibold uppercase tracking-wide">Bet Slip</span>
             <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-              {form.betMode === "parlay" ? form.legs.length : 1}
+              {form.betMode === "parlay" ? form.legs.length : form.singleBets.length || 1}
             </span>
           </button>
         </div>
@@ -1712,11 +1808,39 @@ const chartSegments = useMemo(() => {
           <div className="space-y-4 p-4">
             <div className="flex items-center gap-2 border-b border-slate-200 pb-3">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-sm font-bold text-white">
-                {form.betMode === "parlay" ? form.legs.length : 1}
+                {form.betMode === "parlay" ? form.legs.length : form.singleBets.length || 1}
               </span>
               <p className="text-sm font-bold uppercase text-foreground">
                 {form.betMode === "parlay" ? "Parlay" : "Singles"}
               </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={form.betMode === "single" ? "default" : "outline"}
+                onClick={() => setSlipBetMode("single")}
+                className={
+                  form.betMode === "single"
+                    ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                    : "border-border/60 bg-secondary/30 text-foreground hover:bg-secondary"
+                }
+              >
+                Singles
+              </Button>
+
+              <Button
+                type="button"
+                variant={form.betMode === "parlay" ? "default" : "outline"}
+                onClick={() => setSlipBetMode("parlay")}
+                className={
+                  form.betMode === "parlay"
+                    ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                    : "border-border/60 bg-secondary/30 text-foreground hover:bg-secondary"
+                }
+              >
+                Parlay
+              </Button>
             </div>
 
             <div className="hidden">
@@ -1733,61 +1857,121 @@ const chartSegments = useMemo(() => {
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase text-muted-foreground">First inning pick</Label>
 
-                <div className="grid grid-cols-2 gap-2">
-                  <Button
-                    type="button"
-                    variant={getBetTypeLabel(form.title) === "NRFI" ? "default" : "outline"}
-                    onClick={() =>
-                      setForm((prev) => ({
-                        ...prev,
-                        title: "NRFI",
-                      }))
-                    }
-                    className={
-                      getBetTypeLabel(form.title) === "NRFI"
-                        ? "bg-emerald-600 text-white hover:bg-emerald-500"
-                        : "border-border/60 bg-secondary/30 text-foreground hover:bg-secondary"
-                    }
-                  >
-                    NRFI
-                  </Button>
+                {form.singleBets.length > 0 ? (
+                  <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    {form.singleBets.map((single, index) => (
+                      <div key={single.id} className="rounded-md border border-border/40 bg-background/50 p-3">
+                        <div className="mb-2 flex items-center gap-2">
+                          <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-600 text-[11px] font-bold text-white">
+                            {index + 1}
+                          </span>
 
-                  <Button
-                    type="button"
-                    variant={getBetTypeLabel(form.title) === "YRFI" ? "default" : "outline"}
-                    onClick={() =>
-                      setForm((prev) => ({
-                        ...prev,
-                        title: "YRFI",
-                      }))
-                    }
-                    className={
-                      getBetTypeLabel(form.title) === "YRFI"
-                        ? "bg-emerald-600 text-white hover:bg-emerald-500"
-                        : "border-border/60 bg-secondary/30 text-foreground hover:bg-secondary"
-                    }
-                  >
-                    YRFI
-                  </Button>
-                </div>
+                          <div className="flex -space-x-1">
+                            {[single.awayTeam, single.homeTeam].map((team) => {
+                              const logo = getTeamLogoByName(team);
+                              return logo ? (
+                                <img key={team} src={logo} alt={team} className="h-6 w-6 rounded-full bg-secondary object-contain p-0.5 ring-1 ring-background" />
+                              ) : null;
+                            })}
+                          </div>
 
-                {form.gamePk ? (
-                  <div className="mt-3 rounded-md border border-border/40 bg-background/50 p-3">
-                    <div className="flex items-center gap-2">
-                      {[form.awayTeam, form.homeTeam].map((team) => {
-                        const logo = getTeamLogoByName(team);
-                        return logo ? (
-                          <img key={team} src={logo} alt={team} className="h-7 w-7 rounded-full bg-secondary object-contain p-0.5" />
-                        ) : null;
-                      })}
-                      <span className={`ml-auto text-[10px] font-semibold uppercase ${form.gameStatus === "Final" ? "text-muted-foreground" : form.gameStatus === "Live" ? "text-rose-300" : "text-emerald-300"}`}>
-                        {form.gameStatus || "Scheduled"}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-xs font-medium text-foreground">{form.awayTeam} @ {form.homeTeam}</p>
-                    {form.doubleHeader ? <p className="mt-1 text-[10px] text-muted-foreground">Doubleheader · Game {form.gameNumber}</p> : null}
+                          <p className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+                            {single.awayTeam} @ {single.homeTeam}
+                          </p>
+
+                          <button
+                            type="button"
+                            onClick={() => removeSingle(single.id)}
+                            className="text-muted-foreground hover:text-foreground"
+                            aria-label="Remove single"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={getBetTypeLabel(single.title) === "NRFI" ? "default" : "outline"}
+                            onClick={() => updateSingle(single.id, { title: "NRFI" })}
+                            className={getBetTypeLabel(single.title) === "NRFI" ? "h-8 bg-emerald-600 text-white hover:bg-emerald-500" : "h-8 border-border/60 bg-transparent text-foreground hover:bg-secondary"}
+                          >
+                            NRFI
+                          </Button>
+
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={getBetTypeLabel(single.title) === "YRFI" ? "default" : "outline"}
+                            onClick={() => updateSingle(single.id, { title: "YRFI" })}
+                            className={getBetTypeLabel(single.title) === "YRFI" ? "h-8 bg-emerald-600 text-white hover:bg-emerald-500" : "h-8 border-border/60 bg-transparent text-foreground hover:bg-secondary"}
+                          >
+                            YRFI
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ) : null}
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Button
+                        type="button"
+                        variant={getBetTypeLabel(form.title) === "NRFI" ? "default" : "outline"}
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            title: "NRFI",
+                          }))
+                        }
+                        className={
+                          getBetTypeLabel(form.title) === "NRFI"
+                            ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                            : "border-border/60 bg-secondary/30 text-foreground hover:bg-secondary"
+                        }
+                      >
+                        NRFI
+                      </Button>
+
+                      <Button
+                        type="button"
+                        variant={getBetTypeLabel(form.title) === "YRFI" ? "default" : "outline"}
+                        onClick={() =>
+                          setForm((prev) => ({
+                            ...prev,
+                            title: "YRFI",
+                          }))
+                        }
+                        className={
+                          getBetTypeLabel(form.title) === "YRFI"
+                            ? "bg-emerald-600 text-white hover:bg-emerald-500"
+                            : "border-border/60 bg-secondary/30 text-foreground hover:bg-secondary"
+                        }
+                      >
+                        YRFI
+                      </Button>
+                    </div>
+
+                    {form.gamePk ? (
+                      <div className="mt-3 rounded-md border border-border/40 bg-background/50 p-3">
+                        <div className="flex items-center gap-2">
+                          {[form.awayTeam, form.homeTeam].map((team) => {
+                            const logo = getTeamLogoByName(team);
+                            return logo ? (
+                              <img key={team} src={logo} alt={team} className="h-7 w-7 rounded-full bg-secondary object-contain p-0.5" />
+                            ) : null;
+                          })}
+                          <span className={`ml-auto text-[10px] font-semibold uppercase ${form.gameStatus === "Final" ? "text-muted-foreground" : form.gameStatus === "Live" ? "text-rose-300" : "text-emerald-300"}`}>
+                            {form.gameStatus || "Scheduled"}
+                          </span>
+                        </div>
+                        <p className="mt-2 text-xs font-medium text-foreground">{form.awayTeam} @ {form.homeTeam}</p>
+                        {form.doubleHeader ? <p className="mt-1 text-[10px] text-muted-foreground">Doubleheader · Game {form.gameNumber}</p> : null}
+                      </div>
+                    ) : null}
+                  </>
+                )}
               </div>
             ) : (
               <div className="overflow-hidden rounded-lg border border-border/50 bg-[#0A0F1D]">
