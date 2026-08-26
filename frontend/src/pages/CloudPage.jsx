@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,7 @@ import {
   EyeOff,
   Clock,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import {
   ResponsiveContainer,
@@ -575,6 +576,7 @@ export default function CloudPage() {
   const [view, setView] = useState("slate");
   const [addOpen, setAddOpen] = useState(false);
   const [slipMinimized, setSlipMinimized] = useState(true);
+  const [isRefreshingPending, setIsRefreshingPending] = useState(false);
   const [editingBetId, setEditingBetId] = useState(null);
   const [form, setForm] = useState(() => emptyForm());
   const [calendarMonthKey, setCalendarMonthKey] = useState(() => getCurrentMonthKey());
@@ -917,18 +919,22 @@ const chartSegments = useMemo(() => {
     setAddOpen(true);
   };
 
-  useEffect(() => {
-    let cancelled = false;
-    let timer = null;
+  const refreshPendingGrades = useCallback(async (showToast = false) => {
+      if (isRefreshingPending) return;
+      setIsRefreshingPending(true);
 
-    const refreshPendingGrades = async () => {
+      try {
+
       const pendingBets = bets.filter((bet) => {
         if (String(bet.result || "").toLowerCase() !== "pending") return false;
         if (Array.isArray(bet.legs) && bet.legs.length > 0) return true;
         return !!(bet.mlbGamePk || bet.gamePk || bet.game_id || bet.gameId);
       });
 
-      if (pendingBets.length === 0) return;
+      if (pendingBets.length === 0) {
+        if (showToast) toast.message("No pending bets to refresh");
+        return;
+      }
 
       const nextBets = [...bets];
       let updated = false;
@@ -1012,20 +1018,37 @@ const chartSegments = useMemo(() => {
         }
       }
 
-      if (!cancelled && updated) {
+      if (updated) {
         setBets(nextBets);
         saveBets(nextBets);
       }
+
+      if (showToast) {
+        toast.success(updated ? "Pending bets refreshed" : "No grade updates yet");
+      }
+
+      } finally {
+        setIsRefreshingPending(false);
+      }
+    }, [bets, isRefreshingPending]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer = null;
+
+    const runRefresh = async () => {
+      if (cancelled) return;
+      await refreshPendingGrades(false);
     };
 
-    refreshPendingGrades();
-    timer = setInterval(refreshPendingGrades, 15000);
+    runRefresh();
+    timer = setInterval(runRefresh, 15000);
 
     return () => {
       cancelled = true;
       if (timer) clearInterval(timer);
     };
-  }, [bets]);
+  }, [refreshPendingGrades]);
 
   const openEditModal = (bet) => {
     setEditingBetId(bet.id);
@@ -1497,18 +1520,31 @@ const chartSegments = useMemo(() => {
       </Card>
 
       {addOpen && slipMinimized ? (
-        <button
-          type="button"
-          onClick={() => setSlipMinimized(false)}
-          className="fixed bottom-4 right-4 z-50 flex items-center gap-2 rounded-md border border-border/60 bg-card/95 px-3 py-2 text-left text-foreground shadow-xl backdrop-blur"
-          aria-label="Expand bet slip"
-        >
-          <Maximize2 className="h-4 w-4 text-emerald-400" />
-          <span className="text-xs font-semibold uppercase tracking-wide">Bet Slip</span>
-          <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
-            {form.betMode === "parlay" ? form.legs.length : 1}
-          </span>
-        </button>
+        <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => refreshPendingGrades(true)}
+            disabled={isRefreshingPending}
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-border/60 bg-card/95 text-foreground shadow-xl backdrop-blur hover:bg-secondary disabled:opacity-60"
+            aria-label="Refresh pending bets"
+            title="Refresh pending bets"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshingPending ? "animate-spin" : ""}`} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSlipMinimized(false)}
+            className="flex items-center gap-2 rounded-md border border-border/60 bg-card/95 px-3 py-2 text-left text-foreground shadow-xl backdrop-blur"
+            aria-label="Expand bet slip"
+          >
+            <Maximize2 className="h-4 w-4 text-emerald-400" />
+            <span className="text-xs font-semibold uppercase tracking-wide">Bet Slip</span>
+            <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[10px] font-bold text-white">
+              {form.betMode === "parlay" ? form.legs.length : 1}
+            </span>
+          </button>
+        </div>
       ) : null}
 
       {addOpen && !slipMinimized ? (
@@ -1545,6 +1581,17 @@ const chartSegments = useMemo(() => {
             </div>
 
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => refreshPendingGrades(true)}
+                disabled={isRefreshingPending}
+                className="rounded-sm p-1 text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-60"
+                aria-label="Refresh pending bets"
+                title="Refresh pending bets"
+              >
+                <RefreshCw className={`h-4 w-4 ${isRefreshingPending ? "animate-spin" : ""}`} />
+              </button>
+
               <button
                 type="button"
                 onClick={clearSlip}
