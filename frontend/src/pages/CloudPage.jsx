@@ -929,7 +929,11 @@ const chartSegments = useMemo(() => {
       const pendingBets = bets.filter((bet) => {
         if (String(bet.result || "").toLowerCase() !== "pending") return false;
         if (Array.isArray(bet.legs) && bet.legs.length > 0) return true;
-        return !!(bet.mlbGamePk || bet.gamePk || bet.game_id || bet.gameId);
+
+        if (bet.mlbGamePk || bet.gamePk || bet.game_id || bet.gameId) return true;
+
+        const [awayTeam, homeTeam] = getBetTeamNames(bet);
+        return Boolean(bet.date && awayTeam && homeTeam);
       });
 
       if (pendingBets.length === 0) {

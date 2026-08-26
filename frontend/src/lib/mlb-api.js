@@ -221,9 +221,42 @@ export async function fetchGameFeed(gamePk) {
 function normalizeTeamName(name) {
   return String(name || "")
     .toLowerCase()
+    .replace(/'/g, "")
     .replace(/\./g, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function getTeamKeys(name) {
+  const normalized = normalizeTeamName(name);
+  if (!normalized) return [];
+
+  if (normalized.includes("red sox")) return ["red sox"];
+  if (normalized.includes("white sox")) return ["white sox"];
+
+  const parts = normalized.split(" ").filter(Boolean);
+  const last = parts[parts.length - 1] || normalized;
+
+  const keys = [normalized, last];
+
+  if (normalized === "as" || normalized === "athletics") {
+    keys.push("oakland athletics");
+    keys.push("athletics");
+  }
+
+  return [...new Set(keys)];
+}
+
+function teamsMatch(a, b) {
+  const aKeys = getTeamKeys(a);
+  const bKeys = getTeamKeys(b);
+  if (aKeys.length === 0 || bKeys.length === 0) return false;
+
+  return aKeys.some((aKey) =>
+    bKeys.some((bKey) =>
+      aKey === bKey || aKey.includes(bKey) || bKey.includes(aKey)
+    )
+  );
 }
 
 export async function findGameForMatchup({
@@ -240,14 +273,12 @@ export async function findGameForMatchup({
   const games = data?.dates?.[0]?.games || [];
   if (games.length === 0) return null;
 
-  const awayKey = normalizeTeamName(awayTeam);
-  const homeKey = normalizeTeamName(homeTeam);
   const targetNumber = Number(gameNumber) || 1;
 
   const byTeams = games.filter((game) => {
-    const away = normalizeTeamName(game?.teams?.away?.team?.name);
-    const home = normalizeTeamName(game?.teams?.home?.team?.name);
-    return away === awayKey && home === homeKey;
+    const away = game?.teams?.away?.team?.name;
+    const home = game?.teams?.home?.team?.name;
+    return teamsMatch(away, awayTeam) && teamsMatch(home, homeTeam);
   });
 
   const matched =
