@@ -58,6 +58,7 @@ import {
 
 const CLOUD_BETS_KEY = "cloud_manual_bets";
 const CLOUD_BANKROLL_KEY = "cloud_starting_bankroll";
+const CLOUD_WITHDRAWALS_KEY = "cloud_withdrawals";
 
 const VIEWS = [
   { value: "slate", label: "Slate" },
@@ -654,6 +655,10 @@ export default function CloudPage() {
     const saved = Number(localStorage.getItem(CLOUD_BANKROLL_KEY));
     return Number.isFinite(saved) && saved >= 0 ? saved : 0;
   });
+  const [withdrawals, setWithdrawals] = useState(() => {
+    const saved = Number(localStorage.getItem(CLOUD_WITHDRAWALS_KEY));
+    return Number.isFinite(saved) && saved >= 0 ? saved : 0;
+  });
 
   const isEditing = !!editingBetId;
   const availableTeams = TEAM_OPTIONS[form.category] || [];
@@ -915,6 +920,10 @@ const chartSegments = useMemo(() => {
   useEffect(() => {
     localStorage.setItem(CLOUD_BANKROLL_KEY, String(startingBankroll));
   }, [startingBankroll]);
+
+  useEffect(() => {
+    localStorage.setItem(CLOUD_WITHDRAWALS_KEY, String(withdrawals));
+  }, [withdrawals]);
 
 
   const calendarBets = useMemo(() => {
@@ -1565,12 +1574,12 @@ const chartSegments = useMemo(() => {
               </div>
 
               <Card className="border-border/40 bg-secondary/20">
-                <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-end sm:justify-between">
+                <CardContent className="space-y-4 p-5">
                   <div>
                     <p className="text-sm font-semibold text-muted-foreground">Bankroll Tracker</p>
-                    <p className="mt-1 text-xs text-muted-foreground">Set your starting bankroll to track current balance.</p>
+                    <p className="mt-1 text-xs text-muted-foreground">Track deposits, withdrawals, and your current balance.</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 sm:min-w-[280px]">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <div>
                       <Label className="text-[10px] uppercase tracking-wider text-muted-foreground">Starting bankroll</Label>
                       <Input
@@ -1583,9 +1592,22 @@ const chartSegments = useMemo(() => {
                       />
                     </div>
                     <div>
+                      <Label htmlFor="withdrawals-input" className="text-[10px] uppercase tracking-wider text-muted-foreground">Withdrawals</Label>
+                      <Input
+                        id="withdrawals-input"
+                        type="number"
+                        min="0"
+                        step="any"
+                        value={withdrawals}
+                        onChange={(event) => setWithdrawals(Number(event.target.value) || 0)}
+                        placeholder="0.00"
+                        className="mt-1 border-border bg-background font-mono text-foreground"
+                      />
+                    </div>
+                    <div>
                       <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Current bankroll</p>
-                      <p className={`mt-2 font-mono text-lg font-bold ${startingBankroll + trendStats.settledPnl >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
-                        {formatCurrency(startingBankroll + trendStats.settledPnl)}
+                      <p className={`mt-2 font-mono text-lg font-bold ${startingBankroll + trendStats.settledPnl - withdrawals >= 0 ? "text-emerald-300" : "text-rose-300"}`}>
+                        {formatCurrency(startingBankroll + trendStats.settledPnl - withdrawals)}
                       </p>
                     </div>
                   </div>
