@@ -2292,7 +2292,7 @@ function CalendarSidePanel({
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-12">
+        <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-6 lg:grid-cols-12">
           {monthTiles.map((month) => {
             const isActive = month.key === monthKey;
             const hasResults = month.wins > 0 || month.losses > 0;
@@ -2303,17 +2303,17 @@ function CalendarSidePanel({
                 key={month.key}
                 type="button"
                 onClick={() => onSelectMonth(month.key)}
-                className={`min-w-0 rounded-md border px-1.5 py-2.5 text-center transition-colors ${
+                className={`min-w-0 rounded-md border px-2 py-3 text-center transition-colors ${
                   isActive
                     ? "border-emerald-400/70 bg-emerald-500/10"
                     : "border-border/40 bg-secondary/30 hover:bg-secondary/60"
                 }`}
               >
-                <span className="block text-[10px] uppercase text-muted-foreground">
+                <span className="block text-xs uppercase text-muted-foreground">
                   {month.label}
                 </span>
                 <span
-                  className={`mt-1 block truncate text-[10px] font-mono font-semibold ${
+                  className={`mt-1 block truncate text-xs font-mono font-semibold ${
                     hasResults
                       ? isPositive
                         ? "text-emerald-300"
