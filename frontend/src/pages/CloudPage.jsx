@@ -948,13 +948,11 @@ const chartSegments = useMemo(() => {
 
     if (addOpen && form.betMode === "parlay") {
       if (form.legs.some((leg) => String(leg.gamePk) === newLeg.gamePk)) return;
-      setSlipMinimized(true);
       setForm((prev) => ({ ...prev, legs: [...prev.legs, newLeg] }));
       return;
     }
 
     if (addOpen) {
-      setSlipMinimized(true);
       setForm((prev) => ({
         ...prev,
         betMode: "single",
