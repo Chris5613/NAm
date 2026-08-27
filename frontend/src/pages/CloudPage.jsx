@@ -2238,16 +2238,23 @@ function CalendarSidePanel({
     return months;
   }, [allBets, monthKey]);
 
+  const yearlyPnl = useMemo(() => {
+    const year = monthKey.slice(0, 4);
+    return allBets
+      .filter((bet) => getBetMonthKey(bet).startsWith(year))
+      .reduce((total, bet) => total + (Number(bet.amount) || 0), 0);
+  }, [allBets, monthKey]);
+
 
   return (
-    <Card className="w-full max-w-5xl mx-auto border-border/40 bg-secondary/20">
-      <CardContent className="p-5 space-y-5">
+    <Card className="w-full max-w-6xl mx-auto border-border/40 bg-secondary/20">
+      <CardContent className="p-6 space-y-6">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onPreviousMonth}
-              className="w-9 h-9 rounded-lg border border-border/40 bg-secondary/40 text-xl font-bold text-foreground hover:bg-secondary"
+              className="w-10 h-10 rounded-lg border border-border/40 bg-secondary/40 text-2xl font-bold text-foreground hover:bg-secondary"
               aria-label="Previous month"
             >
               &lt;
@@ -2257,7 +2264,7 @@ function CalendarSidePanel({
               type="button"
               onClick={onRefreshPending}
               disabled={refreshingPending}
-              className="w-9 h-9 rounded-lg border border-border/40 bg-secondary/40 text-foreground hover:bg-secondary disabled:opacity-60"
+              className="w-10 h-10 rounded-lg border border-border/40 bg-secondary/40 text-foreground hover:bg-secondary disabled:opacity-60"
               aria-label="Refresh pending bets"
               title="Refresh pending bets"
             >
@@ -2265,21 +2272,31 @@ function CalendarSidePanel({
             </button>
           </div>
 
-          <h2 className="flex-1 text-center text-2xl font-bold tracking-wide text-foreground">
-            {formatMonthLabel(monthKey)}
-          </h2>
+          <div className="flex-1 text-center">
+            <h2 className="text-3xl font-bold tracking-wide text-foreground">
+              {formatMonthLabel(monthKey)}
+            </h2>
+            <p
+              className={`mt-1 font-mono text-xs font-semibold ${
+                yearlyPnl >= 0 ? "text-emerald-300" : "text-rose-300"
+              }`}
+            >
+              {monthKey.slice(0, 4)} Yearly P/L: {yearlyPnl >= 0 ? "+" : ""}
+              {formatCurrency(yearlyPnl)}
+            </p>
+          </div>
 
           <button
             type="button"
             onClick={onNextMonth}
-            className="w-9 h-9 rounded-lg border border-border/40 bg-secondary/40 text-xl font-bold text-foreground hover:bg-secondary"
+              className="w-10 h-10 rounded-lg border border-border/40 bg-secondary/40 text-2xl font-bold text-foreground hover:bg-secondary"
             aria-label="Next month"
           >
             &gt;
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-12">
+        <div className="grid grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-12">
           {monthTiles.map((month) => {
             const isActive = month.key === monthKey;
             const hasResults = month.wins > 0 || month.losses > 0;
@@ -2290,7 +2307,7 @@ function CalendarSidePanel({
                 key={month.key}
                 type="button"
                 onClick={() => onSelectMonth(month.key)}
-                className={`min-w-0 rounded-md border px-1 py-2 text-center transition-colors ${
+                className={`min-w-0 rounded-md border px-1.5 py-2.5 text-center transition-colors ${
                   isActive
                     ? "border-emerald-400/70 bg-emerald-500/10"
                     : "border-border/40 bg-secondary/30 hover:bg-secondary/60"
@@ -2335,16 +2352,16 @@ function CalendarSidePanel({
         </div>
 
 
-        <div className="grid grid-cols-7 gap-2 text-center text-xs uppercase tracking-wider text-muted-foreground">
+        <div className="grid grid-cols-7 gap-2.5 text-center text-sm uppercase tracking-wider text-muted-foreground">
           {['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'].map((day) => (
             <span key={day}>{day}</span>
           ))}
         </div>
 
-        <div className="grid grid-cols-7 gap-2">
+        <div className="grid grid-cols-7 gap-2.5">
           {days.map((day, index) => {
             if (!day) {
-              return <div key={`empty-${index}`} className="h-12" />;
+              return <div key={`empty-${index}`} className="h-16" />;
             }
 
             const dayStats = dailyStats[day.dateKey];
@@ -2360,7 +2377,7 @@ function CalendarSidePanel({
                   setSelectedDate(day.dateKey);
                   setDetailsOpen(true);
                 }}
-                className={`h-12 rounded-lg border p-1 flex flex-col items-center justify-center transition-colors ${
+                className={`h-16 rounded-lg border p-1.5 flex flex-col items-center justify-center transition-colors ${
                   isSelected
                     ? "border-violet-500 bg-violet-500/10"
                     : hasBets
@@ -2370,7 +2387,7 @@ function CalendarSidePanel({
                       : "border-transparent bg-secondary/40 hover:bg-secondary/60"
                 }`}
               >
-                <span className="text-sm font-bold text-foreground">{day.day}</span>
+                <span className="text-base font-bold text-foreground">{day.day}</span>
 
                 {hasBets && (
                   <span
