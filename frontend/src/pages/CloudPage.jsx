@@ -1753,10 +1753,12 @@ const chartSegments = useMemo(() => {
             <CalendarSidePanel
               monthKey={calendarMonthKey}
               bets={calendarBets}
+              allBets={bets}
               onEditBet={openEditModal}
               onDeleteBet={deleteBet}
               onRefreshPending={() => refreshPendingGrades(true)}
               refreshingPending={isRefreshingPending}
+              onSelectMonth={setCalendarMonthKey}
               onPreviousMonth={() =>
                 setCalendarMonthKey((prev) => moveMonthKey(prev, -1))
               }
@@ -2323,10 +2325,12 @@ const chartSegments = useMemo(() => {
 function CalendarSidePanel({
   monthKey,
   bets,
+  allBets,
   onEditBet,
   onDeleteBet,
   onRefreshPending,
   refreshingPending,
+  onSelectMonth,
   onPreviousMonth,
   onNextMonth,
 }) {
@@ -2400,6 +2404,36 @@ function CalendarSidePanel({
     bets: [],
   };
 
+  const monthTiles = useMemo(() => {
+    const year = Number(monthKey.slice(0, 4));
+    const months = Array.from({ length: 12 }, (_, index) => {
+      const monthNumber = String(index + 1).padStart(2, "0");
+      const key = `${year}-${monthNumber}`;
+      const monthBets = allBets.filter((bet) => getBetMonthKey(bet) === key);
+
+      return monthBets.reduce(
+        (summary, bet) => {
+          summary.pnl += Number(bet.amount) || 0;
+          const won = isBetWin(bet);
+          if (won === true) summary.wins += 1;
+          if (won === false) summary.losses += 1;
+          return summary;
+        },
+        {
+          key,
+          label: new Date(year, index, 1).toLocaleDateString("en-US", {
+            month: "short",
+          }),
+          wins: 0,
+          losses: 0,
+          pnl: 0,
+        }
+      );
+    });
+
+    return months;
+  }, [allBets, monthKey]);
+
 
   return (
     <Card className="w-full max-w-5xl mx-auto border-border/40 bg-secondary/20">
@@ -2439,6 +2473,44 @@ function CalendarSidePanel({
           >
             &gt;
           </button>
+        </div>
+
+        <div className="grid grid-cols-4 gap-1.5 sm:grid-cols-6 lg:grid-cols-12">
+          {monthTiles.map((month) => {
+            const isActive = month.key === monthKey;
+            const hasResults = month.wins > 0 || month.losses > 0;
+            const isPositive = month.pnl >= 0;
+
+            return (
+              <button
+                key={month.key}
+                type="button"
+                onClick={() => onSelectMonth(month.key)}
+                className={`min-w-0 rounded-md border px-1 py-2 text-center transition-colors ${
+                  isActive
+                    ? "border-emerald-400/70 bg-emerald-500/10"
+                    : "border-border/40 bg-secondary/30 hover:bg-secondary/60"
+                }`}
+              >
+                <span className="block text-[10px] uppercase text-muted-foreground">
+                  {month.label}
+                </span>
+                <span
+                  className={`mt-1 block truncate text-[10px] font-mono font-semibold ${
+                    hasResults
+                      ? isPositive
+                        ? "text-emerald-300"
+                        : "text-rose-300"
+                      : "text-muted-foreground"
+                  }`}
+                >
+                  {hasResults
+                    ? `${month.pnl >= 0 ? "+" : ""}${formatCurrency(month.pnl).replace(".00", "")}`
+                    : "-"}
+                </span>
+              </button>
+            );
+          })}
         </div>
 
         <div className="h-px bg-border/50" />
