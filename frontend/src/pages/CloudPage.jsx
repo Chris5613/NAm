@@ -53,6 +53,7 @@ import {
   findGameForMatchup,
   fetchTodaySlate,
   formatFirstPitch,
+  getPacificDateKey,
   gradeFirstInningBet,
 } from "@/lib/mlb-api";
 
@@ -264,7 +265,7 @@ export function getBetTypeLabel(value) {
 }
 
 function getCurrentMonthKey() {
-  return new Date().toISOString().slice(0, 7);
+  return getPstDateString().slice(0, 7);
 }
 
 function moveMonthKey(monthKey, amount) {
@@ -366,7 +367,7 @@ function gameToSingle(game, title = "NRFI") {
     amount: "",
     odds: "",
     matchup: `${awayTeam} @ ${homeTeam} · ${awayPitcher} vs ${homePitcher} · ${formatFirstPitch(game?.gameDate)}`,
-    date: String(game?.gameDate || "").slice(0, 10) || getPstDateString(),
+    date: getPacificDateKey(game?.gameDate) || getPstDateString(),
     team: homeTeam,
   };
 }
@@ -984,7 +985,7 @@ const chartSegments = useMemo(() => {
       gameNumber: game.gameNumber || 1,
       doubleHeader: Boolean(game.doubleHeader),
       result: "pending",
-      date: String(game.gameDate || "").slice(0, 10) || new Date().toISOString().slice(0, 10),
+      date: getPacificDateKey(game.gameDate) || getPstDateString(),
       category: "Baseball",
       team: homeTeam,
       singleBets: [newSingle],

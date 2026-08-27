@@ -1,12 +1,31 @@
 // MLB StatsAPI client — public, no key required, sends CORS headers.
 const STATS_API = "https://statsapi.mlb.com/api/v1";
 
-export function getTodayDateKey() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
+export function getPacificDateKey(value = new Date()) {
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return value;
+  }
+
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+
   return `${year}-${month}-${day}`;
+}
+
+export function getTodayDateKey() {
+  return getPacificDateKey();
 }
 
 async function getJson(url) {
@@ -265,7 +284,7 @@ export async function findGameForMatchup({
   homeTeam,
   gameNumber,
 }) {
-  const dateKey = String(date || "").slice(0, 10);
+  const dateKey = getPacificDateKey(date);
   if (!dateKey || (!awayTeam && !homeTeam)) return null;
 
   const url = `${STATS_API}/schedule?sportId=1&date=${dateKey}`;

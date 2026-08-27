@@ -1,7 +1,14 @@
 import {
   gradeFirstInningBet,
+  getPacificDateKey,
   getFirstInningRuns,
 } from "./mlb-api";
+
+describe("MLB date keys", () => {
+  it("keeps late Pacific games on the Pacific calendar day", () => {
+    expect(getPacificDateKey("2026-08-28T01:40:00Z")).toBe("2026-08-27");
+  });
+});
 
 describe("first inning grading", () => {
   it("returns zero runs for a scoreless first inning", () => {
