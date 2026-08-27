@@ -2,26 +2,15 @@ import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   DollarSign,
-  BarChart3,
   Bitcoin,
   Volleyball,
-  Pickaxe,
-  Zap,
-  Smartphone,
-  Cable,
   ChevronLeft,
   ChevronRight,
-  Squirrel,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
-  { path: "/investments", label: "Investment Overview", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
-  { path: "/integrations", label: "Integrations", icon: Zap },
- // { path: "/unity-devices", label: "Unity Devices", icon: Cable },
- // { path: "/tello-dashboard", label: "Tello Dashboard", icon: Smartphone },
- // { path: "/rollercoin-calculator", label: "Rollercoin", icon: Squirrel },
   { path: "/cloud", label: "Gamble", icon: Volleyball },
 ];
 
