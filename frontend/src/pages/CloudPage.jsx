@@ -1531,7 +1531,7 @@ const chartSegments = useMemo(() => {
   return (
 <div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
     <Card className="w-full rounded-none border-0 bg-card shadow-none">
-      <CardContent className="p-8 pb-4 space-y-6">
+      <CardContent className="p-8 pb-4 pt-2 space-y-6">
           <div className="flex justify-center">
             <div className="inline-flex rounded-md border border-border/40 bg-secondary/30 p-1">
               {VIEWS.map((option) => (
