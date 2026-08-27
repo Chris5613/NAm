@@ -2277,8 +2277,10 @@ function CalendarSidePanel({
               {formatMonthLabel(monthKey)}
             </h2>
             <p className="mt-1 font-mono text-xs font-semibold text-white">
-              {monthKey.slice(0, 4)} Yearly P/L: {yearlyPnl >= 0 ? "+" : ""}
-              {formatCurrency(yearlyPnl)}
+              {monthKey.slice(0, 4)} Yearly P/L:{" "}
+              <span className={yearlyPnl >= 0 ? "text-emerald-300" : "text-rose-300"}>
+                {yearlyPnl >= 0 ? "+" : ""}{formatCurrency(yearlyPnl)}
+              </span>
             </p>
           </div>
 
