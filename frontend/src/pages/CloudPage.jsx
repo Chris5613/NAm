@@ -1256,6 +1256,16 @@ const chartSegments = useMemo(() => {
     setForm(emptyForm());
   };
 
+  const deleteBet = (bet) => {
+    const label = bet.title || bet.matchup || "this play";
+    if (!window.confirm(`Delete ${label}?`)) return;
+
+    const next = bets.filter((item) => item.id !== bet.id);
+    setBets(next);
+    saveBets(next);
+    toast.success("Play deleted");
+  };
+
   const setSlipBetMode = (mode) => {
     setForm((prev) => {
       if (mode === "parlay") {
@@ -1724,6 +1734,7 @@ const chartSegments = useMemo(() => {
               monthKey={calendarMonthKey}
               bets={calendarBets}
               onEditBet={openEditModal}
+              onDeleteBet={deleteBet}
               onRefreshPending={() => refreshPendingGrades(true)}
               refreshingPending={isRefreshingPending}
               onPreviousMonth={() =>
@@ -2293,6 +2304,7 @@ function CalendarSidePanel({
   monthKey,
   bets,
   onEditBet,
+  onDeleteBet,
   onRefreshPending,
   refreshingPending,
   onPreviousMonth,
@@ -2568,9 +2580,29 @@ function CalendarSidePanel({
                             {isParlay ? `Parlay (${bet.legs.length} legs)` : bet.title}
                           </p>
                         </div>
-                        <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                          {statusLabel}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                            {statusLabel}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => onEditBet(bet)}
+                            className="rounded-sm p-1 text-muted-foreground hover:bg-secondary hover:text-foreground"
+                            aria-label={`Edit ${bet.title || "play"}`}
+                            title="Edit play"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteBet(bet)}
+                            className="rounded-sm p-1 text-muted-foreground hover:bg-rose-500/10 hover:text-rose-300"
+                            aria-label={`Delete ${bet.title || "play"}`}
+                            title="Delete play"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
 
                       {isParlay ? (
