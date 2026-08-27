@@ -2276,11 +2276,7 @@ function CalendarSidePanel({
             <h2 className="text-3xl font-bold tracking-wide text-foreground">
               {formatMonthLabel(monthKey)}
             </h2>
-            <p
-              className={`mt-1 font-mono text-xs font-semibold ${
-                yearlyPnl >= 0 ? "text-emerald-300" : "text-rose-300"
-              }`}
-            >
+            <p className="mt-1 font-mono text-xs font-semibold text-white">
               {monthKey.slice(0, 4)} Yearly P/L: {yearlyPnl >= 0 ? "+" : ""}
               {formatCurrency(yearlyPnl)}
             </p>
