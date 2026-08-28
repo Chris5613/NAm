@@ -25,7 +25,7 @@ import AddProjectDialog from "@/components/AddProjectDialog";
 import EditProjectDialog from "@/components/EditProjectDialog";
 import TransactionsDialog from "@/components/TransactionsDialog";
 import { coinGeckoApi } from "@/lib/external-apis";
-import { applyDailyAccruals, getDailyReturnValue, normalizeDailyReturns } from "@/lib/projectDailyReturns";
+import { getDailyReturnValue, normalizeDailyReturns } from "@/lib/projectDailyReturns";
 
 const CHART_COLORS = [
   "#10B981",
@@ -349,31 +349,6 @@ export default function InvestmentOverview() {
   }, [fetchProjects]);
 
   useEffect(() => {
-    if (!projects.length) return;
-
-    const nextProjects = applyDailyAccruals(projects, trxPrice, new Date());
-    const changed = nextProjects.some((project, index) => {
-      const current = projects[index];
-      return project.earned !== current.earned || project.last_accrued_at !== current.last_accrued_at;
-    });
-
-    if (!changed) return;
-
-    const persisted = nextProjects.map((project) => ({
-      ...project,
-      earned: Number(project.earned) || 0,
-      last_accrued_at: project.last_accrued_at || new Date().toISOString(),
-    }));
-
-    const baseProjects = JSON.parse(localStorage.getItem("networth_projects") || "[]");
-    const nextById = new Map(persisted.map((project) => [project.id, project]));
-    const merged = baseProjects.map((project) => nextById.get(project.id) || project);
-
-    localStorage.setItem("networth_projects", JSON.stringify(merged));
-    setProjects(merged);
-  }, [projects, trxPrice]);
-
-  useEffect(() => {
     const refresh = () => {
       fetchProjects();
     };
@@ -573,7 +548,9 @@ const events = [
 
   const monthlyBreakdown = useMemo(() => {
     const monthEarnedByProject = {};
-    activeProjects.forEach((p) => {
+    const monthProjects = [...activeProjects, ...inactiveProjects];
+
+    monthProjects.forEach((p) => {
       const txns = Array.isArray(p.transactions) ? p.transactions : [];
       const earningTxns = txns.filter(
         (t) => (t.type === "earning" || !t.type || t.type === "earned") && Number(t.amount) > 0
@@ -597,7 +574,7 @@ const events = [
     const monthTotal = Object.values(monthEarnedByProject).reduce((sum, val) => sum + val, 0);
 
     if (monthTotal > 0) {
-      return activeProjects
+      return monthProjects
         .map((project) => {
           const monthly = monthEarnedByProject[project.id] || 0;
           return {
@@ -626,7 +603,7 @@ const events = [
       })
       .filter((row) => row.monthly > 0)
       .sort((a, b) => b.monthly - a.monthly);
-  }, [activeProjects, selectedMonthKey, totals.per_month, dailyReturns]);
+  }, [activeProjects, inactiveProjects, selectedMonthKey, totals.per_month, dailyReturns]);
 
   const topEarner = monthlyBreakdown[0] || null;
 
@@ -1043,9 +1020,18 @@ const events = [
                         className="w-3 h-3 rounded-sm shrink-0"
                         style={{ backgroundColor: CHART_COLORS[index % CHART_COLORS.length] }}
                       />
-                      <span className="text-sm font-medium text-foreground truncate">
-                        {row.project.name}
-                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-medium text-foreground truncate">
+                            {row.project.name}
+                          </span>
+                          {isInactiveProject(row.project) && (
+                            <span className="text-[9px] uppercase tracking-wide px-1.5 py-0.5 rounded bg-secondary text-muted-foreground border border-border/40">
+                              historic
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
                     <div className="text-right shrink-0">
                       <span className="font-mono text-xs font-semibold text-foreground">
