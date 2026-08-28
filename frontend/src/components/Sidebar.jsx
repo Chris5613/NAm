@@ -2,6 +2,7 @@ import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import {
   DollarSign,
+  BarChart3,
   Bitcoin,
   Volleyball,
   ChevronLeft,
@@ -10,6 +11,7 @@ import {
 
 const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
+  { path: "/investments", label: "Monthly Earners", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
   { path: "/cloud", label: "Gamble", icon: Volleyball },
 ];

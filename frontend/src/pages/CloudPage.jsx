@@ -1552,8 +1552,6 @@ const chartSegments = useMemo(() => {
             </div>
           </div>
 
-          {view === "slate" && <MlbSlate onAddBet={openAddModalFromGame} />}
-
           {view === "bets" && (
             <CalendarSidePanel
               monthKey={calendarMonthKey}
@@ -1572,6 +1570,8 @@ const chartSegments = useMemo(() => {
               }
             />
           )}
+
+          {view === "slate" && <MlbSlate onAddBet={openAddModalFromGame} />}
         </CardContent>
       </Card>
 

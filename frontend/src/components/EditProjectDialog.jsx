@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { projectsApi } from "@/lib/api";
+import { coinGeckoApi } from "@/lib/external-apis";
 import { toast } from "sonner";
 import {
   Dialog,
@@ -11,7 +12,15 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Plus, X } from "lucide-react";
+
+function formatPreviewCurrency(val) {
+  const n = parseFloat(val) || 0;
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(n);
+}
 
 export default function EditProjectDialog({
   project,
@@ -25,36 +34,38 @@ export default function EditProjectDialog({
     invested: project.invested?.toString() || "",
     earned: project.earned?.toString() || "",
     per_day: project.per_day?.toString() || "",
-    per_week: project.per_week?.toString() || "",
-    per_month: project.per_month?.toString() || "",
-    per_year: project.per_year?.toString() || "",
+    apy: project.apy?.toString() || "",
+    daily_trx: project.daily_trx?.toString() || "",
     inactive: project.inactive === true || project.is_inactive === true,
   });
 
-  const [categories, setCategories] = useState(project.categories || []);
-  const [newCat, setNewCat] = useState({ name: "", earned: "" });
+  const [trxPrice, setTrxPrice] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const addCategory = () => {
-    if (!newCat.name) return;
+  useEffect(() => {
+    coinGeckoApi.getPrice("tron").then((price) => {
+      if (price > 0) setTrxPrice(price);
+    }).catch(() => {});
+  }, []);
 
-    setCategories([
-      ...categories,
-      {
-        name: newCat.name,
-        earned: parseFloat(newCat.earned) || 0,
-      },
-    ]);
+  const investedNum = parseFloat(form.invested) || 0;
+  const apyNum = parseFloat(form.apy) || 0;
+  const dailyTrxNum = parseFloat(form.daily_trx) || 0;
 
-    setNewCat({ name: "", earned: "" });
-  };
+  const calculatedPerDayFromTrx = dailyTrxNum > 0 && trxPrice ? dailyTrxNum * trxPrice : 0;
+  const calculatedPerDayFromApy = investedNum > 0 && apyNum > 0 ? (investedNum * (apyNum / 100)) / 365 : 0;
 
-  const removeCategory = (idx) => {
-    setCategories(categories.filter((_, i) => i !== idx));
-  };
+  const perDayNum = parseFloat(form.per_day) || calculatedPerDayFromTrx || calculatedPerDayFromApy;
+  const perWeek = perDayNum * 7;
+  const perMonth = perDayNum * 30;
+  const perYear = perDayNum * 365;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!form.name) {
+      toast.error("Project name is required");
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -63,12 +74,13 @@ export default function EditProjectDialog({
         icon_url: form.icon_url || null,
         invested: parseFloat(form.invested) || 0,
         earned: parseFloat(form.earned) || 0,
-        per_day: parseFloat(form.per_day) || 0,
-        per_week: parseFloat(form.per_week) || 0,
-        per_month: parseFloat(form.per_month) || 0,
-        per_year: parseFloat(form.per_year) || 0,
+        apy: parseFloat(form.apy) || null,
+        daily_trx: parseFloat(form.daily_trx) || null,
+        per_day: perDayNum,
+        per_week: perWeek,
+        per_month: perMonth,
+        per_year: perYear,
         inactive: !!form.inactive,
-        categories,
       });
 
       toast.success(`${form.name} updated`);
@@ -83,13 +95,13 @@ export default function EditProjectDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="bg-card border-border sm:max-w-lg max-h-[90vh] overflow-y-auto"
+        className="bg-card border-border sm:max-w-md max-h-[90vh] overflow-y-auto"
         data-testid="edit-project-dialog"
       >
         <DialogHeader>
-          <DialogTitle>Edit Project</DialogTitle>
+          <DialogTitle>Edit Earner</DialogTitle>
           <DialogDescription>
-            Update project details and categories
+            Update earner details and daily returns
           </DialogDescription>
         </DialogHeader>
 
@@ -104,7 +116,7 @@ export default function EditProjectDialog({
             )}
 
             <div className="flex-1 space-y-2">
-              <Label>Project Name</Label>
+              <Label>Name</Label>
 
               <Input
                 value={form.name}
@@ -175,75 +187,88 @@ export default function EditProjectDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <Label>Per Day ($)</Label>
-
+              <Label>Daily TRX Reward (optional)</Label>
               <Input
                 type="number"
                 step="any"
-                value={form.per_day}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    per_day: e.target.value,
-                  })
-                }
+                placeholder="e.g. 50"
+                value={form.daily_trx}
+                onChange={(e) => setForm({ ...form, daily_trx: e.target.value })}
+                data-testid="edit-project-input-dailytrx"
                 className="bg-background border-border font-mono"
               />
+              {trxPrice && dailyTrxNum > 0 && (
+                <p className="text-[10px] text-emerald-400 font-mono">
+                  ≈ {formatPreviewCurrency(dailyTrxNum * trxPrice)}/day (@ ${trxPrice.toFixed(4)}/TRX)
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
-              <Label>Per Week ($)</Label>
-
+              <Label>APY %</Label>
               <Input
                 type="number"
                 step="any"
-                value={form.per_week}
+                placeholder="e.g. 5.5"
+                value={form.apy}
                 onChange={(e) =>
                   setForm({
                     ...form,
-                    per_week: e.target.value,
+                    apy: e.target.value,
                   })
                 }
-                className="bg-background border-border font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Per Month ($)</Label>
-
-              <Input
-                type="number"
-                step="any"
-                value={form.per_month}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    per_month: e.target.value,
-                  })
-                }
-                className="bg-background border-border font-mono"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label>Per Year ($)</Label>
-
-              <Input
-                type="number"
-                step="any"
-                value={form.per_year}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    per_year: e.target.value,
-                  })
-                }
+                data-testid="edit-project-input-apy"
                 className="bg-background border-border font-mono"
               />
             </div>
           </div>
+
+          <div className="space-y-2">
+            <Label>Per Day ($) {calculatedPerDayFromTrx > 0 && !form.per_day ? "(auto from TRX)" : calculatedPerDayFromApy > 0 && !form.per_day ? "(auto from APY)" : ""}</Label>
+            <Input
+              type="number"
+              step="any"
+              placeholder={calculatedPerDayFromTrx > 0 ? calculatedPerDayFromTrx.toFixed(2) : calculatedPerDayFromApy > 0 ? calculatedPerDayFromApy.toFixed(2) : "0.00"}
+              value={form.per_day}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  per_day: e.target.value,
+                })
+              }
+              className="bg-background border-border font-mono"
+            />
+          </div>
+
+          {perDayNum > 0 && (
+            <div className="rounded-lg border border-border/40 bg-secondary/30 p-3 space-y-1.5">
+              <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-semibold">
+                Auto-calculated Projections
+              </p>
+              <div className="grid grid-cols-3 gap-2 text-center pt-1">
+                <div className="rounded bg-background/50 p-2">
+                  <span className="block text-[10px] text-muted-foreground uppercase">Per Week</span>
+                  <span className="font-mono text-xs font-semibold text-foreground">
+                    {formatPreviewCurrency(perWeek)}
+                  </span>
+                </div>
+                <div className="rounded bg-background/50 p-2">
+                  <span className="block text-[10px] text-muted-foreground uppercase">Per Month</span>
+                  <span className="font-mono text-xs font-semibold text-emerald-400">
+                    {formatPreviewCurrency(perMonth)}
+                  </span>
+                </div>
+                <div className="rounded bg-background/50 p-2">
+                  <span className="block text-[10px] text-muted-foreground uppercase">Per Year</span>
+                  <span className="font-mono text-xs font-semibold text-foreground">
+                    {formatPreviewCurrency(perYear)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="flex items-center gap-2 rounded-md border border-border/40 bg-secondary/20 p-3">
             <input
@@ -262,81 +287,6 @@ export default function EditProjectDialog({
             <Label htmlFor="inactive-project" className="text-sm">
               Inactive
             </Label>
-          </div>
-
-          <div className="space-y-3 pt-2 border-t border-border/40">
-            <Label>Earning Categories</Label>
-
-            {categories.length > 0 && (
-              <div className="space-y-1">
-                {categories.map((cat, idx) => (
-                  <div
-                    key={idx}
-                    className="flex items-center justify-between bg-secondary/50 rounded-md px-3 py-2"
-                  >
-                    <span className="text-sm text-foreground">
-                      {cat.name}
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs text-muted-foreground">
-                        ${(cat.earned || 0).toFixed(2)}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => removeCategory(idx)}
-                        className="text-rose-400 hover:text-rose-300"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="flex items-end gap-2">
-              <div className="flex-1 space-y-1">
-                <Input
-                  placeholder="Category name"
-                  value={newCat.name}
-                  onChange={(e) =>
-                    setNewCat({
-                      ...newCat,
-                      name: e.target.value,
-                    })
-                  }
-                  className="bg-background border-border text-sm"
-                />
-              </div>
-
-              <div className="w-28 space-y-1">
-                <Input
-                  type="number"
-                  step="any"
-                  placeholder="Earned"
-                  value={newCat.earned}
-                  onChange={(e) =>
-                    setNewCat({
-                      ...newCat,
-                      earned: e.target.value,
-                    })
-                  }
-                  className="bg-background border-border font-mono text-sm"
-                />
-              </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addCategory}
-                className="border-border/40"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </Button>
-            </div>
           </div>
 
           <Button
