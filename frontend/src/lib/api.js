@@ -264,7 +264,11 @@ export const projectsApi = {
             ...item,
             ...data,
             last_accrued_at:
-              data?.last_accrued_at ?? item.last_accrued_at ?? ((data?.apy ?? item.apy || data?.daily_trx ?? item.daily_trx) ? new Date().toISOString() : null),
+              data?.last_accrued_at ??
+              item.last_accrued_at ??
+              (((data?.apy ?? item.apy) || (data?.daily_trx ?? item.daily_trx))
+                ? new Date().toISOString()
+                : null),
           })
         : item
     );
