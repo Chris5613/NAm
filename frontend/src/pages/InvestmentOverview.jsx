@@ -212,6 +212,15 @@ function formatMonthLabel(monthKey) {
 
 const MONTHLY_EARNERS_ORDER_KEY = "monthly_earners_custom_order_v1";
 
+function getMonthKeyFromDate(dateStr) {
+  if (!dateStr) return "";
+  const str = String(dateStr);
+  if (str.length >= 7 && str.includes("-")) {
+    return str.slice(0, 7);
+  }
+  return "";
+}
+
 export default function InvestmentOverview() {
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -420,15 +429,40 @@ const events = [
 
   const totalPnl = totals.earned - totals.invested;
 
+  const actualEarningsByMonth = useMemo(() => {
+    const map = {};
+
+    projects.forEach((p) => {
+      const txns = Array.isArray(p.transactions) ? p.transactions : [];
+      const earningTxns = txns.filter(
+        (t) => (t.type === "earning" || !t.type || t.type === "earned") && Number(t.amount) > 0
+      );
+
+      if (earningTxns.length > 0) {
+        earningTxns.forEach((t) => {
+          const mKey = getMonthKeyFromDate(t.date || t.created_at || t.source_date);
+          if (mKey) {
+            map[mKey] = (map[mKey] || 0) + (Number(t.amount) || 0);
+          }
+        });
+      } else if (Number(p.earned) > 0) {
+        const mKey = getMonthKeyFromDate(p.created_at || p.date || p.updated_at) || getCurrentMonthKey();
+        map[mKey] = (map[mKey] || 0) + (Number(p.earned) || 0);
+      }
+    });
+
+    return map;
+  }, [projects]);
+
   const selectedMonthSummary = useMemo(() => {
-    const monthTotal = totals.per_month;
+    const monthTotal = actualEarningsByMonth[selectedMonthKey] || totals.per_month;
     const totalValue = Number(monthTotal) || 0;
 
     return {
       monthTotal: totalValue,
       yearTotal: Number(totals.per_year) || 0,
     };
-  }, [totals.per_month, totals.per_year]);
+  }, [selectedMonthKey, actualEarningsByMonth, totals.per_month, totals.per_year]);
 
   const monthTiles = useMemo(() => {
     const year = Number(selectedMonthKey.slice(0, 4));
@@ -436,32 +470,75 @@ const events = [
     return Array.from({ length: 12 }, (_, index) => {
       const monthNumber = String(index + 1).padStart(2, "0");
       const key = `${year}-${monthNumber}`;
+      const totalEarned = actualEarningsByMonth[key] || 0;
 
       return {
         key,
         label: new Date(year, index, 1).toLocaleDateString("en-US", {
           month: "short",
         }),
-        total: Number(totals.per_month) || 0,
+        total: totalEarned,
         isSelected: key === selectedMonthKey,
       };
     });
-  }, [selectedMonthKey, totals.per_month]);
+  }, [selectedMonthKey, actualEarningsByMonth]);
 
-  const monthlyBreakdown = [...activeProjects]
-    .map((project) => {
-      const daily = getDailyAmount(project);
-      const monthly = daily * 30;
+  const monthlyBreakdown = useMemo(() => {
+    const monthEarnedByProject = {};
+    activeProjects.forEach((p) => {
+      const txns = Array.isArray(p.transactions) ? p.transactions : [];
+      const earningTxns = txns.filter(
+        (t) => (t.type === "earning" || !t.type || t.type === "earned") && Number(t.amount) > 0
+      );
 
-      return {
-        project,
-        daily,
-        monthly,
-        share: totals.per_month > 0 ? (monthly / totals.per_month) * 100 : 0,
-      };
-    })
-    .filter((row) => row.monthly > 0)
-    .sort((a, b) => b.monthly - a.monthly);
+      if (earningTxns.length > 0) {
+        earningTxns.forEach((t) => {
+          const mKey = getMonthKeyFromDate(t.date || t.created_at || t.source_date);
+          if (mKey === selectedMonthKey) {
+            monthEarnedByProject[p.id] = (monthEarnedByProject[p.id] || 0) + (Number(t.amount) || 0);
+          }
+        });
+      } else if (Number(p.earned) > 0) {
+        const mKey = getMonthKeyFromDate(p.created_at || p.date || p.updated_at) || getCurrentMonthKey();
+        if (mKey === selectedMonthKey) {
+          monthEarnedByProject[p.id] = (monthEarnedByProject[p.id] || 0) + (Number(p.earned) || 0);
+        }
+      }
+    });
+
+    const monthTotal = Object.values(monthEarnedByProject).reduce((sum, val) => sum + val, 0);
+
+    if (monthTotal > 0) {
+      return activeProjects
+        .map((project) => {
+          const monthly = monthEarnedByProject[project.id] || 0;
+          return {
+            project,
+            daily: monthly / 30,
+            monthly,
+            share: (monthly / monthTotal) * 100,
+          };
+        })
+        .filter((row) => row.monthly > 0)
+        .sort((a, b) => b.monthly - a.monthly);
+    }
+
+    const projectedTotal = totals.per_month;
+    return activeProjects
+      .map((project) => {
+        const daily = getDailyAmount(project);
+        const monthly = daily * 30;
+
+        return {
+          project,
+          daily,
+          monthly,
+          share: projectedTotal > 0 ? (monthly / projectedTotal) * 100 : 0,
+        };
+      })
+      .filter((row) => row.monthly > 0)
+      .sort((a, b) => b.monthly - a.monthly);
+  }, [activeProjects, selectedMonthKey, totals.per_month, dailyReturns]);
 
   const topEarner = monthlyBreakdown[0] || null;
 
@@ -829,11 +906,10 @@ const events = [
                   </span>
                   <span
                     className={`mt-1 block truncate text-xs font-mono font-semibold ${
-                      month.total >= 0 ? "text-emerald-300" : "text-rose-300"
+                      month.total > 0 ? "text-emerald-300" : "text-muted-foreground"
                     }`}
                   >
-                    {month.total >= 0 ? "+" : ""}
-                    {formatCurrency(month.total).replace(".00", "")}
+                    {month.total > 0 ? `+${formatCurrency(month.total).replace(".00", "")}` : "$0"}
                   </span>
                 </button>
               ))}
