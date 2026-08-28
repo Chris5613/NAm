@@ -467,13 +467,36 @@ const events = [
     return getDailyReturnValue(project, dailyReturns, trxPrice);
   };
 
+  const getProjectEarningsTotal = (project) => {
+    const txns = Array.isArray(project?.transactions) ? project.transactions : [];
+    const earnings = txns.filter(
+      (t) => (t.type === "earning" || !t.type || t.type === "earned") && Number(t.amount) > 0
+    );
+
+    const txnTotal = earnings.reduce((sum, txn) => sum + (Number(txn.amount) || 0), 0);
+    if (txnTotal > 0) return txnTotal;
+    if (project && Number(project.earned) > 0) return Number(project.earned) || 0;
+    return Number(project?.earned) || 0;
+  };
+
+  const getProjectInvestedTotal = (project) => {
+    const txns = Array.isArray(project?.transactions) ? project.transactions : [];
+    const investments = txns.filter((t) => t.type === "investment" && Number(t.amount) > 0);
+
+    const txnTotal = investments.reduce((sum, txn) => sum + (Number(txn.amount) || 0), 0);
+    if (txnTotal > 0) return txnTotal;
+    return Number(project?.invested) || 0;
+  };
+
   const totals = projects.reduce(
     (acc, p) => {
       const daily = getDailyAmount(p);
+      const earned = getProjectEarningsTotal(p);
+      const invested = getProjectInvestedTotal(p);
 
       return {
-        invested: acc.invested + (Number(p.invested) || 0),
-        earned: acc.earned + (Number(p.earned) || 0),
+        invested: acc.invested + invested,
+        earned: acc.earned + earned,
         per_day: acc.per_day + daily,
         per_week: acc.per_week + daily * 7,
         per_month: acc.per_month + daily * 30,
@@ -508,9 +531,9 @@ const events = [
             map[mKey] = (map[mKey] || 0) + (Number(t.amount) || 0);
           }
         });
-      } else if (Number(p.earned) > 0) {
+      } else if (Number(getProjectEarningsTotal(p)) > 0) {
         const mKey = getMonthKeyFromDate(p.created_at || p.date || p.updated_at) || getCurrentMonthKey();
-        map[mKey] = (map[mKey] || 0) + (Number(p.earned) || 0);
+        map[mKey] = (map[mKey] || 0) + (Number(getProjectEarningsTotal(p)) || 0);
       }
     });
 
@@ -610,7 +633,9 @@ const events = [
   function getRoiDays(project) {
     if (isInactiveProject(project)) return null;
 
-    const remaining = (Number(project.invested) || 0) - (Number(project.earned) || 0);
+    const invested = getProjectInvestedTotal(project);
+    const earned = getProjectEarningsTotal(project);
+    const remaining = invested - earned;
 
     const daily = getDailyReturnValue(project, dailyReturns, trxPrice);
 
@@ -625,8 +650,8 @@ const events = [
     const config = CATEGORY_CONFIGS[categoryKey] || CATEGORY_CONFIGS.other;
     const CategoryIcon = config.icon;
 
-    const invested = Number(project.invested) || 0;
-    const earned = Number(project.earned) || 0;
+    const invested = getProjectInvestedTotal(project);
+    const earned = getProjectEarningsTotal(project);
     const pnl = earned - invested;
     const apy = Number(project.apy) || (invested > 0 && project.per_day > 0 ? ((project.per_day * 365) / invested) * 100 : null);
     const dailyTrx = Number(project.daily_trx) || 0;
@@ -816,7 +841,9 @@ const events = [
   };
 
   const renderInactiveProjectCard = (project) => {
-    const pnl = (Number(project.earned) || 0) - (Number(project.invested) || 0);
+    const invested = getProjectInvestedTotal(project);
+    const earned = getProjectEarningsTotal(project);
+    const pnl = earned - invested;
 
     return (
       <Card
@@ -861,7 +888,7 @@ const events = [
               <div className="text-right">
                 <p className="text-xs text-muted-foreground">Earned</p>
                 <p className="font-mono text-sm text-muted-foreground">
-                  {formatCurrency(project.earned)}
+                  {formatCurrency(getProjectEarningsTotal(project))}
                 </p>
               </div>
 

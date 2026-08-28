@@ -64,14 +64,17 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
         notes: form.notes || null,
         date: form.date || null,
       });
-      // Update project earned/invested to reflect the manual transaction
+
+      const freshProjects = (await projectsApi.getAll()).data || [];
+      const currentProject = freshProjects.find((p) => p.id === project.id) || project;
+
       if (form.type === "earning") {
         await projectsApi.update(project.id, {
-          earned: Math.max(0, (Number(project.earned) || 0) + amount),
+          earned: Math.max(0, (Number(currentProject.earned) || 0) + amount),
         });
       } else if (form.type === "investment") {
         await projectsApi.update(project.id, {
-          invested: Math.max(0, (Number(project.invested) || 0) + amount),
+          invested: Math.max(0, (Number(currentProject.invested) || 0) + amount),
         });
       }
       toast.success(`${form.type === "earning" ? "Earning" : "Investment"} of $${form.amount} added`);
