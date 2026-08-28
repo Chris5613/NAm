@@ -246,7 +246,11 @@ export const projectsApi = {
   getAll: async () => toResponse(normalizeItems(storage.getProjects())),
 
   create: async (data) => {
-    const project = normalizeId({ ...data, transactions: [] });
+    const project = normalizeId({
+      ...data,
+      transactions: [],
+      last_accrued_at: data?.last_accrued_at || (data?.apy || data?.daily_trx ? new Date().toISOString() : null),
+    });
     const all = normalizeItems(storage.getProjects());
     storage.setProjects([...all, project]);
     return toResponse(project);
@@ -255,7 +259,14 @@ export const projectsApi = {
   update: async (id, data) => {
     const all = normalizeItems(storage.getProjects());
     const updated = all.map((item) =>
-      item.id === id ? normalizeId({ ...item, ...data }) : item
+      item.id === id
+        ? normalizeId({
+            ...item,
+            ...data,
+            last_accrued_at:
+              data?.last_accrued_at ?? item.last_accrued_at ?? ((data?.apy ?? item.apy || data?.daily_trx ?? item.daily_trx) ? new Date().toISOString() : null),
+          })
+        : item
     );
     storage.setProjects(updated);
     return toResponse(updated.find((item) => item.id === id) || null);

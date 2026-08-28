@@ -24,6 +24,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import AddProjectDialog from "@/components/AddProjectDialog";
 import EditProjectDialog from "@/components/EditProjectDialog";
 import TransactionsDialog from "@/components/TransactionsDialog";
+import { coinGeckoApi } from "@/lib/external-apis";
+import { applyDailyAccruals, getDailyReturnValue, normalizeDailyReturns } from "@/lib/projectDailyReturns";
 
 const CHART_COLORS = [
   "#10B981",
@@ -107,7 +109,51 @@ const MOCK_EARNERS = [
   },
 ];
 
+function normalizeProjectCategoryKey(rawValue = "") {
+  const value = String(rawValue || "").trim().toLowerCase();
+  if (!value) return null;
+
+  const cryptoKeys = [
+    "crypto",
+    "crypto staking",
+    "staking",
+    "eth staking",
+    "solana staking",
+    "btc",
+    "trx",
+    "trx rewards",
+  ];
+  const stocksKeys = [
+    "stocks",
+    "stock",
+    "stocks & index",
+    "index fund",
+    "equity",
+    "dividend",
+    "etf",
+    "s&p",
+  ];
+  const realEstateKeys = ["real estate", "reit", "property", "rental"];
+  const lendingKeys = ["lending", "defi lending", "aave", "yield", "compound", "savings", "bank"];
+  const miningKeys = ["mining", "hardware / mining", "hardware", "device", "acurast", "nosana", "roller", "unity", "phone farm"];
+  const otherKeys = ["alternative yield", "other"];
+
+  if (cryptoKeys.some((key) => value.includes(key))) return "crypto";
+  if (stocksKeys.some((key) => value.includes(key))) return "stocks";
+  if (realEstateKeys.some((key) => value.includes(key))) return "real_estate";
+  if (lendingKeys.some((key) => value.includes(key))) return "lending";
+  if (miningKeys.some((key) => value.includes(key))) return "mining";
+  if (otherKeys.some((key) => value.includes(key))) return "other";
+
+  return null;
+}
+
 function getProjectCategory(project) {
+  const override = normalizeProjectCategoryKey(
+    project?.custom_tag || project?.tag_label || project?.category_label || project?.category
+  );
+  if (override) return override;
+
   const cat = (project?.category || "").toLowerCase();
   const name = (project?.name || "").toLowerCase();
 
@@ -127,6 +173,13 @@ function getProjectCategory(project) {
     return "stocks";
   }
   return "other";
+}
+
+function getDisplayCategoryLabel(project) {
+  const customLabel = (project?.custom_tag || project?.tag_label || project?.category_label || "").trim();
+  if (customLabel) return customLabel;
+
+  return CATEGORY_CONFIGS[getProjectCategory(project)]?.label || CATEGORY_CONFIGS.other.label;
 }
 
 const CATEGORY_CONFIGS = {
@@ -230,6 +283,7 @@ export default function InvestmentOverview() {
   const [selectedMonthKey, setSelectedMonthKey] = useState(() => getCurrentMonthKey());
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [draggedIndex, setDraggedIndex] = useState(null);
+  const [trxPrice, setTrxPrice] = useState(null);
   const [customOrder, setCustomOrder] = useState(() => {
     try {
       const saved = localStorage.getItem(MONTHLY_EARNERS_ORDER_KEY);
@@ -241,8 +295,13 @@ export default function InvestmentOverview() {
 
   const [dailyReturns, setDailyReturns] = useState(() => {
     const saved = localStorage.getItem("projectDailyReturns");
-    return saved ? JSON.parse(saved) : {};
+    const parsed = saved ? JSON.parse(saved) : {};
+    return normalizeDailyReturns(parsed, []);
   });
+
+  useEffect(() => {
+    setDailyReturns((prev) => normalizeDailyReturns(prev, projects));
+  }, [projects]);
 
   const fetchProjects = useCallback(async () => {
     try {
@@ -253,6 +312,14 @@ export default function InvestmentOverview() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  useEffect(() => {
+    coinGeckoApi.getPrice("tron")
+      .then((price) => {
+        if (price > 0) setTrxPrice(price);
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -282,6 +349,31 @@ export default function InvestmentOverview() {
   }, [fetchProjects]);
 
   useEffect(() => {
+    if (!projects.length) return;
+
+    const nextProjects = applyDailyAccruals(projects, trxPrice, new Date());
+    const changed = nextProjects.some((project, index) => {
+      const current = projects[index];
+      return project.earned !== current.earned || project.last_accrued_at !== current.last_accrued_at;
+    });
+
+    if (!changed) return;
+
+    const persisted = nextProjects.map((project) => ({
+      ...project,
+      earned: Number(project.earned) || 0,
+      last_accrued_at: project.last_accrued_at || new Date().toISOString(),
+    }));
+
+    const baseProjects = JSON.parse(localStorage.getItem("networth_projects") || "[]");
+    const nextById = new Map(persisted.map((project) => [project.id, project]));
+    const merged = baseProjects.map((project) => nextById.get(project.id) || project);
+
+    localStorage.setItem("networth_projects", JSON.stringify(merged));
+    setProjects(merged);
+  }, [projects, trxPrice]);
+
+  useEffect(() => {
     const refresh = () => {
       fetchProjects();
     };
@@ -306,7 +398,8 @@ const events = [
   useEffect(() => {
     const refreshDailyReturns = () => {
       const saved = localStorage.getItem("projectDailyReturns");
-      setDailyReturns(saved ? JSON.parse(saved) : {});
+      const parsed = saved ? JSON.parse(saved) : {};
+      setDailyReturns(normalizeDailyReturns(parsed, projects));
     };
 
     window.addEventListener("project-daily-returns-updated", refreshDailyReturns);
@@ -396,12 +489,7 @@ const events = [
 
   const getDailyAmount = (project) => {
     if (isInactiveProject(project)) return 0;
-
-    const tableDaily = Number(dailyReturns?.[project.name]);
-
-    return Number.isFinite(tableDaily) && tableDaily > 0
-      ? tableDaily
-      : Number(project.per_day) || 0;
+    return getDailyReturnValue(project, dailyReturns, trxPrice);
   };
 
   const totals = projects.reduce(
@@ -547,11 +635,7 @@ const events = [
 
     const remaining = (Number(project.invested) || 0) - (Number(project.earned) || 0);
 
-    const tableDaily = Number(dailyReturns?.[project.name]);
-    const daily =
-      Number.isFinite(tableDaily) && tableDaily > 0
-        ? tableDaily
-        : Number(project.per_day) || 0;
+    const daily = getDailyReturnValue(project, dailyReturns, trxPrice);
 
     if (daily <= 0) return null;
     if (remaining <= 0) return 0;
@@ -617,7 +701,7 @@ const events = [
                 <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                   <span className={`inline-flex items-center gap-1 text-[10px] font-medium uppercase px-2 py-0.5 rounded-full border ${config.badgeBg}`}>
                     <CategoryIcon className="w-3 h-3" strokeWidth={2} />
-                    {config.label}
+                    {getDisplayCategoryLabel(project)}
                   </span>
 
                   {dailyTrx > 0 && (

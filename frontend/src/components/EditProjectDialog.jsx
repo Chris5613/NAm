@@ -31,6 +31,7 @@ export default function EditProjectDialog({
   const [form, setForm] = useState({
     name: project.name || "",
     icon_url: project.icon_url || "",
+    custom_tag: project.custom_tag || project.tag_label || project.category_label || "",
     invested: project.invested?.toString() || "",
     earned: project.earned?.toString() || "",
     per_day: project.per_day?.toString() || "",
@@ -72,6 +73,7 @@ export default function EditProjectDialog({
       await projectsApi.update(project.id, {
         name: form.name,
         icon_url: form.icon_url || null,
+        custom_tag: (form.custom_tag || "").trim() || null,
         invested: parseFloat(form.invested) || 0,
         earned: parseFloat(form.earned) || 0,
         apy: parseFloat(form.apy) || null,
@@ -145,6 +147,23 @@ export default function EditProjectDialog({
                 })
               }
               data-testid="edit-project-input-icon"
+              className="bg-background border-border text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tag / Label Override (optional)</Label>
+
+            <Input
+              placeholder="e.g. TRX Rewards, Dividend Growth, BTC Staking"
+              value={form.custom_tag}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  custom_tag: e.target.value,
+                })
+              }
+              data-testid="edit-project-input-custom-tag"
               className="bg-background border-border text-sm"
             />
           </div>

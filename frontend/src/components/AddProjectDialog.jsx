@@ -26,6 +26,7 @@ export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
   const [form, setForm] = useState({
     name: "",
     icon_url: "",
+    custom_tag: "",
     invested: "",
     earned: "",
     per_day: "",
@@ -65,6 +66,7 @@ export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
       await projectsApi.create({
         name: form.name,
         icon_url: form.icon_url || null,
+        custom_tag: (form.custom_tag || "").trim() || null,
         invested: parseFloat(form.invested) || 0,
         earned: parseFloat(form.earned) || 0,
         apy: parseFloat(form.apy) || null,
@@ -75,7 +77,7 @@ export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
         per_year: perYear,
       });
       toast.success(`${form.name} added`);
-      setForm({ name: "", icon_url: "", invested: "", earned: "", per_day: "", apy: "", daily_trx: "" });
+      setForm({ name: "", icon_url: "", custom_tag: "", invested: "", earned: "", per_day: "", apy: "", daily_trx: "" });
       onCreated();
     } catch {
       toast.error("Failed to add project");
@@ -122,6 +124,17 @@ export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
               value={form.icon_url}
               onChange={(e) => setForm({ ...form, icon_url: e.target.value })}
               data-testid="project-input-icon"
+              className="bg-background border-border text-sm"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Tag / Label Override (optional)</Label>
+            <Input
+              placeholder="e.g. TRX Rewards, Dividend Growth, BTC Staking"
+              value={form.custom_tag}
+              onChange={(e) => setForm({ ...form, custom_tag: e.target.value })}
+              data-testid="project-input-custom-tag"
               className="bg-background border-border text-sm"
             />
           </div>

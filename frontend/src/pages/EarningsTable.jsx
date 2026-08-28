@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
+import { coinGeckoApi } from "@/lib/external-apis";
+import { getDailyReturnValue, normalizeDailyReturns, setDailyReturn } from "@/lib/projectDailyReturns";
 
 function formatUsd(value) {
   const n = Number(value) || 0;
@@ -8,28 +10,36 @@ function formatUsd(value) {
 function EarningsTable({ projects = [] }) {
   const [dailyReturns, setDailyReturns] = useState(() => {
     const saved = localStorage.getItem("projectDailyReturns");
-    return saved ? JSON.parse(saved) : {};
+    const parsed = saved ? JSON.parse(saved) : {};
+    return normalizeDailyReturns(parsed, []);
   });
+  const [trxPrice, setTrxPrice] = useState(null);
+
+  useEffect(() => {
+    coinGeckoApi.getPrice("tron")
+      .then((price) => {
+        if (price > 0) setTrxPrice(price);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    setDailyReturns((prev) => normalizeDailyReturns(prev, projects));
+  }, [projects]);
 
   const visibleProjects = useMemo(() => {
     return [...projects]
       .filter((project) => project?.name)
       .sort((a, b) => {
-        const aDaily =
-          Number(dailyReturns?.[a.name]) || Number(a.per_day) || 0;
-
-        const bDaily =
-          Number(dailyReturns?.[b.name]) || Number(b.per_day) || 0;
+        const aDaily = getDailyReturnValue(a, dailyReturns, trxPrice);
+        const bDaily = getDailyReturnValue(b, dailyReturns, trxPrice);
 
         return bDaily - aDaily;
       });
   }, [projects, dailyReturns]);
 
-  const updateDaily = (projectName, value) => {
-    setDailyReturns((prev) => ({
-      ...prev,
-      [projectName]: Number(value) || 0,
-    }));
+  const updateDaily = (project, value) => {
+    setDailyReturns((prev) => setDailyReturn(project, prev, value));
   };
 
   useEffect(() => {
@@ -59,10 +69,7 @@ function EarningsTable({ projects = [] }) {
 
           <tbody>
             {visibleProjects.map((project) => {
-              const daily =
-                Number(dailyReturns?.[project.name]) ||
-                Number(project.per_day) ||
-                0;
+              const daily = getDailyReturnValue(project, dailyReturns, trxPrice);
 
               const weekly = daily * 7;
               const monthly = daily * 30;
@@ -86,7 +93,7 @@ function EarningsTable({ projects = [] }) {
                         step="0.01"
                         value={daily}
                         onChange={(e) =>
-                          updateDaily(project.name, e.target.value)
+                          updateDaily(project, e.target.value)
                         }
                         className="w-full rounded-md border-0 bg-[#111] py-2 pl-7 pr-3 text-sm text-white shadow-none outline-none ring-0 focus:border-0 focus:bg-[#151515] focus:outline-none focus:ring-0"
                       />
