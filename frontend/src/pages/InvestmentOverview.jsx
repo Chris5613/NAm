@@ -666,7 +666,6 @@ const events = [
     const earned = getProjectEarningsTotal(project);
     const pnl = earned - invested;
     const apy = Number(project.apy) || (invested > 0 && project.per_day > 0 ? ((project.per_day * 365) / invested) * 100 : null);
-    const dailyTrx = Number(project.daily_trx) || 0;
     const daily = getDailyAmount(project);
     const monthly = daily * 30;
     const roiDays = getRoiDays(project);
@@ -731,12 +730,6 @@ const events = [
                       </button>
                     )}
                   </span>
-
-                  {dailyTrx > 0 && (
-                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-red-500/15 text-red-400 border border-red-500/40">
-                      ⚡ {dailyTrx} TRX/day
-                    </span>
-                  )}
 
                   {apy !== null && apy > 0 && (
                     <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/40">
