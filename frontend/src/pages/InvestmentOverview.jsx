@@ -310,8 +310,19 @@ function formatMonthLabel(monthKey) {
 }
 
 const MONTHLY_EARNERS_ORDER_KEY = "monthly_earners_custom_order_v1";
-const MONTHLY_EARNERS_SLOTS_KEY = "monthly_earners_slot_positions_v1";
-const BOARD_TRAILING_EMPTY_SLOTS = 3;
+const BOARD_COLUMNS = 3;
+
+function getMinimumBoardSlotCount(projectCount) {
+  if (projectCount <= 0) return BOARD_COLUMNS;
+
+  const roundedToRow = Math.ceil(projectCount / BOARD_COLUMNS) * BOARD_COLUMNS;
+
+  // If a row is completely full, keep one extra empty row available so a
+  // project can always be moved into a blank slot without collapsing the board.
+  return projectCount % BOARD_COLUMNS === 0
+    ? roundedToRow + BOARD_COLUMNS
+    : roundedToRow;
+}
 
 function getMonthKeyFromDate(dateStr) {
   if (!dateStr) return "";
@@ -330,26 +341,14 @@ export default function InvestmentOverview() {
   const [txnProject, setTxnProject] = useState(null);
   const [selectedMonthKey, setSelectedMonthKey] = useState(() => getCurrentMonthKey());
   const [categoryFilter, setCategoryFilter] = useState("all");
-  const [draggedSlot, setDraggedSlot] = useState(null);
+  const [draggedIndex, setDraggedIndex] = useState(null);
   const [trxPrice, setTrxPrice] = useState(null);
-  // Magnet-board slot positions: { [projectId]: slotIndex }. Unlike the old
-  // ordered-list approach, a slot with no project just renders empty — cards
-  // never auto-compact to fill a gap. Migrates the old ordered-array format
-  // (if present) into slot indices on first load.
-  const [slotAssignments, setSlotAssignments] = useState(() => {
+  const [customOrder, setCustomOrder] = useState(() => {
     try {
-      const saved = localStorage.getItem(MONTHLY_EARNERS_SLOTS_KEY);
-      if (saved) return JSON.parse(saved);
-      const legacyOrder = localStorage.getItem(MONTHLY_EARNERS_ORDER_KEY);
-      if (legacyOrder) {
-        const ids = JSON.parse(legacyOrder);
-        const migrated = {};
-        ids.forEach((id, idx) => { migrated[String(id)] = idx; });
-        return migrated;
-      }
-      return {};
+      const saved = localStorage.getItem(MONTHLY_EARNERS_ORDER_KEY);
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      return {};
+      return [];
     }
   });
 
@@ -454,6 +453,23 @@ const events = [
   const handleDelete = async (project) => {
     try {
       await projectsApi.delete(project.id);
+
+      // Preserve the board position. Deleting a project turns only that slot
+      // into an empty space instead of shifting every project after it.
+      setCustomOrder((prev) => {
+        const nextSlots = (Array.isArray(prev) ? prev : []).map((slot) =>
+          slot != null && String(slot) === String(project.id) ? null : slot
+        );
+
+        try {
+          localStorage.setItem(MONTHLY_EARNERS_ORDER_KEY, JSON.stringify(nextSlots));
+        } catch {
+          // ignore localStorage write failures
+        }
+
+        return nextSlots;
+      });
+
       toast.success(`${project.name} deleted`);
       fetchProjects();
     } catch {
@@ -477,44 +493,81 @@ const events = [
 
   const activeProjects = useMemo(
     () => projects.filter((p) => !isInactiveProject(p)),
-    [projects],
+    [projects]
   );
 
-  // Ensure every active project has a board slot. New/unassigned projects
-  // drop into the lowest-numbered free slot (relative to ALL active
-  // projects' assignments, not just the current filter) so positions stay
-  // consistent across filter tabs. Persists immediately so it's stable.
+  // Convert the old flat order into a fixed-slot board and keep it synchronized
+  // with the projects that currently exist. Missing/deleted IDs become nulls,
+  // while newly-created projects fill the first available empty slot.
   useEffect(() => {
-    const activeIds = new Set(activeProjects.map((p) => String(p.id)));
-    const occupied = new Set(
-      Object.entries(slotAssignments)
-        .filter(([id]) => activeIds.has(id))
-        .map(([, slot]) => slot),
-    );
+    if (loading) return;
 
-    const unassigned = activeProjects.filter((p) => slotAssignments[String(p.id)] == null);
-    if (unassigned.length === 0) return;
+    const activeIds = activeProjects.map((project) => String(project.id));
+    const activeIdSet = new Set(activeIds);
 
-    const next = { ...slotAssignments };
-    let candidate = 0;
-    for (const project of unassigned) {
-      while (occupied.has(candidate)) candidate += 1;
-      next[String(project.id)] = candidate;
-      occupied.add(candidate);
-    }
+    setCustomOrder((prev) => {
+      const previousSlots = Array.isArray(prev) ? prev : [];
+      const seen = new Set();
 
-    setSlotAssignments(next);
-    try {
-      localStorage.setItem(MONTHLY_EARNERS_SLOTS_KEY, JSON.stringify(next));
-    } catch {
-      // ignore
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeProjects]);
+      const nextSlots = previousSlots.map((slot) => {
+        if (slot == null) return null;
+
+        const id = String(slot);
+        if (!activeIdSet.has(id) || seen.has(id)) return null;
+
+        seen.add(id);
+        return id;
+      });
+
+      // Add projects that are not yet represented on the board. New projects
+      // occupy the first blank slot instead of forcing existing cards to move.
+      activeIds.forEach((id) => {
+        if (seen.has(id)) return;
+
+        const emptyIndex = nextSlots.findIndex((slot) => slot == null);
+        if (emptyIndex >= 0) {
+          nextSlots[emptyIndex] = id;
+        } else {
+          nextSlots.push(id);
+        }
+        seen.add(id);
+      });
+
+      const minimumSlots = getMinimumBoardSlotCount(activeProjects.length);
+      while (nextSlots.length < minimumSlots) nextSlots.push(null);
+      while (nextSlots.length % BOARD_COLUMNS !== 0) nextSlots.push(null);
+
+      // Always keep at least one blank target available. If every slot is full,
+      // append one new three-slot row. Existing positions are never compacted.
+      if (nextSlots.length > 0 && nextSlots.every((slot) => slot != null)) {
+        nextSlots.push(...Array(BOARD_COLUMNS).fill(null));
+      }
+
+      const changed =
+        previousSlots.length !== nextSlots.length ||
+        previousSlots.some((slot, index) => slot !== nextSlots[index]);
+
+      if (!changed) return prev;
+
+      try {
+        localStorage.setItem(MONTHLY_EARNERS_ORDER_KEY, JSON.stringify(nextSlots));
+      } catch {
+        // ignore localStorage write failures
+      }
+
+      return nextSlots;
+    });
+  }, [activeProjects, loading]);
+
+  const projectById = useMemo(
+    () => new Map(activeProjects.map((project) => [String(project.id), project])),
+    [activeProjects]
+  );
 
   const handleDragStart = (e, slotIndex) => {
-    setDraggedSlot(slotIndex);
+    setDraggedIndex(slotIndex);
     e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", String(slotIndex));
   };
 
   const handleDragOver = (e) => {
@@ -522,33 +575,40 @@ const events = [
     e.dataTransfer.dropEffect = "move";
   };
 
-  const handleDrop = (e, targetSlot, board) => {
+  const handleDrop = (e, targetIndex) => {
     e.preventDefault();
-    if (draggedSlot === null || draggedSlot === targetSlot) {
-      setDraggedSlot(null);
+
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
       return;
     }
 
-    const sourceProject = board[draggedSlot];
-    const targetProject = board[targetSlot];
-    if (!sourceProject) {
-      setDraggedSlot(null);
-      return;
-    }
+    setCustomOrder((prev) => {
+      const nextSlots = [...(Array.isArray(prev) ? prev : [])];
 
-    const next = { ...slotAssignments, [String(sourceProject.id)]: targetSlot };
-    if (targetProject) {
-      next[String(targetProject.id)] = draggedSlot;
-    }
+      while (nextSlots.length <= Math.max(draggedIndex, targetIndex)) {
+        nextSlots.push(null);
+      }
 
-    setSlotAssignments(next);
-    try {
-      localStorage.setItem(MONTHLY_EARNERS_SLOTS_KEY, JSON.stringify(next));
-      toast.success("Board updated");
-    } catch {
-      // ignore
-    }
-    setDraggedSlot(null);
+      const draggedProjectId = nextSlots[draggedIndex];
+      if (draggedProjectId == null) return prev;
+
+      // Swap when dropping on another project, or simply move when dropping
+      // onto an empty slot. Either way, no unrelated project changes position.
+      const targetProjectId = nextSlots[targetIndex] ?? null;
+      nextSlots[targetIndex] = draggedProjectId;
+      nextSlots[draggedIndex] = targetProjectId;
+
+      try {
+        localStorage.setItem(MONTHLY_EARNERS_ORDER_KEY, JSON.stringify(nextSlots));
+      } catch {
+        // ignore localStorage write failures
+      }
+
+      return nextSlots;
+    });
+
+    setDraggedIndex(null);
   };
   const inactiveProjects = projects.filter((p) => isInactiveProject(p));
 
@@ -565,22 +625,6 @@ const events = [
     if (categoryFilter === "all") return activeProjects;
     return activeProjects.filter((p) => getProjectCategory(p) === categoryFilter);
   }, [activeProjects, categoryFilter]);
-
-  // Fixed-position board: index = slot number, value = project or null.
-  // Slots are absolute (not re-packed), so filtering by category just shows
-  // gaps where non-matching projects live \u2014 nothing auto-fills a hole.
-  const board = useMemo(() => {
-    const bySlot = new Map();
-    let maxSlot = -1;
-    filteredProjects.forEach((project) => {
-      const slot = slotAssignments[String(project.id)];
-      if (slot == null) return;
-      bySlot.set(slot, project);
-      if (slot > maxSlot) maxSlot = slot;
-    });
-    const totalSlots = maxSlot + 1 + BOARD_TRAILING_EMPTY_SLOTS;
-    return Array.from({ length: totalSlots }, (_, slot) => bySlot.get(slot) || null);
-  }, [filteredProjects, slotAssignments]);
 
   const getDailyAmount = useCallback((project) => {
     if (isInactiveProject(project)) return 0;
@@ -777,7 +821,7 @@ const events = [
     return Math.ceil(remaining / daily);
   }
 
-  const renderUniqueProjectCard = (project, slotIndex) => {
+  const renderUniqueProjectCard = (project, index) => {
     const categoryKey = getProjectCategory(project);
     const config = CATEGORY_CONFIGS[categoryKey] || CATEGORY_CONFIGS.other;
     const CategoryIcon = config.icon;
@@ -808,17 +852,20 @@ const events = [
       <Card
         key={project.id}
         draggable
-        onDragStart={(e) => handleDragStart(e, slotIndex)}
+        onDragStart={(e) => handleDragStart(e, index)}
+        onDragEnd={() => setDraggedIndex(null)}
         onDragOver={handleDragOver}
-        onDrop={(e) => handleDrop(e, slotIndex, board)}
-        className={`relative overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing hover:scale-[1.01] h-full flex flex-col ${config.cardBg} ${
-          draggedSlot === slotIndex ? "opacity-40 border-dashed border-emerald-400" : ""
+        onDrop={(e) => handleDrop(e, index)}
+        className={`relative overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing hover:scale-[1.01] ${config.cardBg} ${
+          index < 3 ? "h-[410px]" : ""
+        } ${
+          draggedIndex === index ? "opacity-40 border-dashed border-emerald-400" : ""
         }`}
         data-testid={`project-box-${project.id}`}
       >
         <div className={`h-1 w-full ${config.progressBg}`} />
 
-        <CardContent className="p-5 space-y-4 flex flex-col flex-1">
+        <CardContent className="p-5 space-y-4">
           {/* Header row */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -1093,84 +1140,67 @@ const events = [
             </div>
           )}
 
-          {/* Pinned to the bottom so it lines up across cards in the same
-              row regardless of how much variable content (e.g. Kryptex's
-              device list) sits above it. */}
-          <div className="mt-auto space-y-4">
-            {/* Financial Metrics */}
-            <div className={`grid gap-2 text-center ${categoryKey === "lending" ? "grid-cols-2" : "grid-cols-3"}`}>
-              <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
-                <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
-                  {isJupiterLoop ? "Starting Equity" : isLuloLending ? "Principal" : categoryKey === "lending" ? "Balance" : "Invested"}
-                </p>
-                <p className="font-mono text-xs font-bold text-foreground mt-0.5">
-                  {formatCurrency(invested)}
-                </p>
-              </div>
-
-              <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
-                <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
-                  {isJupiterLoop ? "APY Earned" : isLuloLending ? "Interest Earned" : "Earned"}
-                </p>
-                <p className="font-mono text-xs font-bold text-foreground mt-0.5">
-                  {isJupiterLoop || isLuloLending ? formatApyEarned(earned) : formatCurrency(earned)}
-                </p>
-              </div>
-
-              {categoryKey !== "lending" && (
-                <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
-                  <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
-                    {isJupiterLoop ? "Position P&L" : "Net P&L"}
-                  </p>
-                  <p
-                    className={`font-mono text-xs font-bold mt-0.5 ${
-                      displayedPnl >= 0 ? "text-emerald-400" : "text-rose-400"
-                    }`}
-                  >
-                    {displayedPnl >= 0 ? "+" : ""}
-                    {formatCurrency(displayedPnl)}
-                    {isJupiterLoop && invested > 0 && (
-                      <span className="ml-1 text-[9px] opacity-80">
-                        ({pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%)
-                      </span>
-                    )}
-                  </p>
-                </div>
-              )}
+          {/* Financial Metrics */}
+          <div className={`grid gap-2 text-center ${categoryKey === "lending" ? "grid-cols-2" : "grid-cols-3"}`}>
+            <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
+              <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
+                {isJupiterLoop ? "Starting Equity" : isLuloLending ? "Principal" : categoryKey === "lending" ? "Balance" : "Invested"}
+              </p>
+              <p className="font-mono text-xs font-bold text-foreground mt-0.5">
+                {formatCurrency(invested)}
+              </p>
             </div>
 
-            {/* Capital Recovery Progress */}
-            <div className="space-y-1 pt-0.5">
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="text-muted-foreground font-mono">Capital Recovered</span>
-                <span className="font-mono font-semibold text-foreground">
-                  {recoveryPct.toFixed(1)}%
-                </span>
+            <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
+              <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
+                {isJupiterLoop ? "APY Earned" : isLuloLending ? "Interest Earned" : "Earned"}
+              </p>
+              <p className="font-mono text-xs font-bold text-foreground mt-0.5">
+                {isJupiterLoop || isLuloLending ? formatApyEarned(earned) : formatCurrency(earned)}
+              </p>
+            </div>
+
+            {categoryKey !== "lending" && (
+              <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
+                <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
+                  {isJupiterLoop ? "Position P&L" : "Net P&L"}
+                </p>
+                <p
+                  className={`font-mono text-xs font-bold mt-0.5 ${
+                    displayedPnl >= 0 ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  {displayedPnl >= 0 ? "+" : ""}
+                  {formatCurrency(displayedPnl)}
+                  {isJupiterLoop && invested > 0 && (
+                    <span className="ml-1 text-[9px] opacity-80">
+                      ({pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%)
+                    </span>
+                  )}
+                </p>
               </div>
-              <div className="h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-300 ${config.progressBg}`}
-                  style={{ width: `${recoveryPct}%` }}
-                />
-              </div>
+            )}
+          </div>
+
+          {/* Capital Recovery Progress */}
+          <div className="space-y-1 pt-0.5">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="text-muted-foreground font-mono">Capital Recovered</span>
+              <span className="font-mono font-semibold text-foreground">
+                {recoveryPct.toFixed(1)}%
+              </span>
+            </div>
+            <div className="h-1.5 w-full rounded-full bg-secondary/60 overflow-hidden">
+              <div
+                className={`h-full rounded-full transition-all duration-300 ${config.progressBg}`}
+                style={{ width: `${recoveryPct}%` }}
+              />
             </div>
           </div>
         </CardContent>
       </Card>
     );
   };
-
-  const renderEmptySlot = (slotIndex) => (
-    <div
-      key={`empty-slot-${slotIndex}`}
-      onDragOver={handleDragOver}
-      onDrop={(e) => handleDrop(e, slotIndex, board)}
-      className="min-h-[220px] rounded-xl border-2 border-dashed border-border/30 hover:border-emerald-400/40 transition-colors flex items-center justify-center"
-      data-testid={`project-slot-empty-${slotIndex}`}
-    >
-      <span className="text-xs text-muted-foreground/50 font-mono">Drop here</span>
-    </div>
-  );
 
   const renderInactiveProjectCard = (project) => {
     const invested = getProjectInvestedTotal(project);
@@ -1466,10 +1496,51 @@ const events = [
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
-            {board.map((project, slotIndex) =>
-              project ? renderUniqueProjectCard(project, slotIndex) : renderEmptySlot(slotIndex)
-            )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-start">
+            {customOrder.map((projectId, slotIndex) => {
+              const project = projectId != null ? projectById.get(String(projectId)) : null;
+              const matchesFilter =
+                project &&
+                (categoryFilter === "all" || getProjectCategory(project) === categoryFilter);
+
+              // A project hidden by the current filter still owns its physical
+              // board position. Render a blank spacer so other cards do not move.
+              if (project && !matchesFilter) {
+                return (
+                  <div
+                    key={`filtered-slot-${slotIndex}`}
+                    className="min-h-[260px] rounded-xl border border-transparent"
+                    aria-hidden="true"
+                  />
+                );
+              }
+
+              if (project) {
+                return renderUniqueProjectCard(project, slotIndex);
+              }
+
+              const isDropTarget = draggedIndex !== null;
+
+              return (
+                <div
+                  key={`empty-slot-${slotIndex}`}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, slotIndex)}
+                  className={`min-h-[260px] rounded-xl border border-dashed transition-all duration-200 flex items-center justify-center ${
+                    isDropTarget
+                      ? "border-emerald-400/50 bg-emerald-500/[0.04]"
+                      : "border-border/15 bg-card/[0.08]"
+                  }`}
+                  data-testid={`empty-project-slot-${slotIndex}`}
+                >
+                  {isDropTarget && (
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-emerald-400/70">
+                      Drop here
+                    </span>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
