@@ -19,6 +19,8 @@ import {
   Filter,
   CheckCircle2,
   GripVertical,
+  X,
+  CalendarClock,
 } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import AddProjectDialog from "@/components/AddProjectDialog";
@@ -396,6 +398,16 @@ const events = [
     }
   };
 
+  const handleClearTag = async (project) => {
+    try {
+      await projectsApi.update(project.id, { custom_tag: null });
+      toast.success("Tag removed");
+      fetchProjects();
+    } catch {
+      toast.error("Failed to remove tag");
+    }
+  };
+
   const toggleExpand = (id) => {
     setExpandedId(expandedId === id ? null : id);
   };
@@ -704,6 +716,20 @@ const events = [
                   <span className={`inline-flex items-center gap-1 text-[10px] font-medium uppercase px-2 py-0.5 rounded-full border ${config.badgeBg}`}>
                     <CategoryIcon className="w-3 h-3" strokeWidth={2} />
                     {getDisplayCategoryLabel(project)}
+                    {(project.custom_tag || project.tag_label || project.category_label) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleClearTag(project);
+                        }}
+                        className="ml-1 -mr-0.5 hover:text-rose-400"
+                        aria-label="Remove custom tag"
+                        title="Remove custom tag"
+                      >
+                        <X className="w-2.5 h-2.5" strokeWidth={2.5} />
+                      </button>
+                    )}
                   </span>
 
                   {dailyTrx > 0 && (
@@ -1086,10 +1112,28 @@ const events = [
                 { id: "stocks", label: "Stocks & Index", count: categoryCounts.stocks || 0 },
                 { id: "real_estate", label: "Real Estate", count: categoryCounts.real_estate || 0 },
                 { id: "lending", label: "DeFi Lending", count: categoryCounts.lending || 0 },
+                { id: "monthly_rate", label: "Monthly", count: null },
                 { id: "mining", label: "Hardware / Mining", count: categoryCounts.mining || 0 },
               ]
-                .filter((item) => item.id === "all" || item.count > 0)
+                .filter((item) => item.id === "all" || item.id === "monthly_rate" || item.count > 0)
                 .map((tab) => {
+                  if (tab.id === "monthly_rate") {
+                    return (
+                      <div
+                        key={tab.id}
+                        className="flex items-center gap-1.5 shrink-0 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5"
+                        data-testid="current-monthly-rate-card"
+                        title={`${formatCurrency(totals.per_day)} per day`}
+                      >
+                        <CalendarClock className="w-3.5 h-3.5 text-emerald-400" strokeWidth={1.75} />
+                        <span className="text-xs text-muted-foreground">Monthly</span>
+                        <span className="font-mono text-xs font-bold text-emerald-400" data-testid="current-monthly-rate-value">
+                          {formatCurrency(totals.per_month)}
+                        </span>
+                      </div>
+                    );
+                  }
+
                   const isActive = categoryFilter === tab.id;
                   return (
                     <button
