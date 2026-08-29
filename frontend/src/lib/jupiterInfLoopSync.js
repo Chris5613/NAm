@@ -1,4 +1,5 @@
 import { INF_MINT, SOL_MINT } from "./infYieldSync";
+import { withCorsProxy } from "./cors-proxy";
 
 const JUPITER_LEND_POSITIONS_URL = "https://lite-api.jup.ag/lend/v1/borrow/positions";
 const FLUID_BORROWING_URL = "https://api.solana.fluid.io/v2/main/borrowing";
@@ -55,11 +56,15 @@ export async function getJupiterInfLoopSnapshot(walletAddress, positionId) {
   let pnlPercentage = null;
 
   try {
-    const pnlResponse = await fetch(
+    // Fluid's PnL endpoint sends no Access-Control-Allow-Origin header, so a
+    // direct browser fetch is silently blocked by CORS on any deployed
+    // origin (it only "works" from tools that don't enforce CORS, like curl
+    // or Node). Route it through the same proxy fallback used elsewhere.
+    const pnlResponse = await withCorsProxy(
       `${FLUID_BORROWING_URL}/vaults/${position.vaultId}/nfts/${position.id}/pnl`
     );
-    if (pnlResponse.ok) {
-      const pnl = await pnlResponse.json();
+    const pnl = pnlResponse.data;
+    if (pnl) {
       ({ pnlUsd, pnlPercentage } = parseFluidPnl(pnl, borrowToken));
     }
   } catch {

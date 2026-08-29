@@ -140,6 +140,15 @@ export async function applyRollerCoinBalanceUpdate({
     action,
   });
 
+  const projectName =
+    config.project_name ||
+    ROLLERCOIN_PROJECT_NAME_DEFAULT;
+
+  // Created up front (not just on the earning branch) so the project shows
+  // on Monthly Earners immediately, even before the first TRX increase.
+  const project =
+    await findOrCreateProject(projectName);
+
   if (
     action === "no_change" ||
     Math.abs(deltaTrx) < AMOUNT_EPSILON
@@ -169,6 +178,7 @@ export async function applyRollerCoinBalanceUpdate({
       action: "no_change",
       baseline_before: baselineBefore,
       baseline_after: baselineBefore,
+      project_id: project.id,
     };
   }
 
@@ -199,6 +209,7 @@ export async function applyRollerCoinBalanceUpdate({
       action: "withdrawal",
       baseline_before: baselineBefore,
       baseline_after: nextBalance,
+      project_id: project.id,
     };
   }
 
@@ -221,13 +232,6 @@ export async function applyRollerCoinBalanceUpdate({
 
   const deltaUsd =
     Number((deltaTrx * trxPrice).toFixed(6));
-
-  const projectName =
-    config.project_name ||
-    ROLLERCOIN_PROJECT_NAME_DEFAULT;
-
-  const project =
-    await findOrCreateProject(projectName);
 
   const categoryName =
     label || "RollerCoin";
