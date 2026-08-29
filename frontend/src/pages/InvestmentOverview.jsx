@@ -811,7 +811,7 @@ const events = [
         onDragStart={(e) => handleDragStart(e, slotIndex)}
         onDragOver={handleDragOver}
         onDrop={(e) => handleDrop(e, slotIndex, board)}
-        className={`relative overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing hover:scale-[1.01] h-full min-h-[520px] flex flex-col ${config.cardBg} ${
+        className={`relative overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing hover:scale-[1.01] h-full flex flex-col ${config.cardBg} ${
           draggedSlot === slotIndex ? "opacity-40 border-dashed border-emerald-400" : ""
         }`}
         data-testid={`project-box-${project.id}`}
