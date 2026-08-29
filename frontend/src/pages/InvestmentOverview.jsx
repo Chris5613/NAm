@@ -832,6 +832,115 @@ const events = [
     const isJupiterLoop = project.yield_tracking === "jupiter_inf_loop";
     const isLuloLending = project.yield_tracking === "lulo_lending";
     const isKryptex = project.yield_tracking === "kryptex";
+    const isRollerCoin = String(project.name || "").trim().toLowerCase() === "rollercoin";
+
+    const rollerCoinTransactions = isRollerCoin && Array.isArray(project.transactions)
+      ? project.transactions.filter((txn) => {
+          const type = String(txn?.type || "").toLowerCase();
+          return (!type || type === "earning" || type === "earned") &&
+            Number(txn?.source_trx_delta || 0) > 0;
+        })
+      : [];
+
+    const rollerCoinTodayKey = new Date().toLocaleDateString("en-CA");
+    const rollerCoinMonthKey = rollerCoinTodayKey.slice(0, 7);
+
+    const rollerCoinTodayTrx = rollerCoinTransactions.reduce((sum, txn) => {
+      const date = String(txn?.date || txn?.source_date || txn?.created_at || "").slice(0, 10);
+      return date === rollerCoinTodayKey
+        ? sum + (Number(txn?.source_trx_delta) || 0)
+        : sum;
+    }, 0);
+
+    const rollerCoinMonthTransactions = rollerCoinTransactions.filter((txn) => {
+      const date = String(txn?.date || txn?.source_date || txn?.created_at || "").slice(0, 10);
+      return date.startsWith(rollerCoinMonthKey);
+    });
+
+    const rollerCoinMonthTrx = rollerCoinMonthTransactions.reduce(
+      (sum, txn) => sum + (Number(txn?.source_trx_delta) || 0),
+      0
+    );
+
+    const rollerCoinActiveDays = new Set(
+      rollerCoinMonthTransactions.map((txn) =>
+        String(txn?.date || txn?.source_date || txn?.created_at || "").slice(0, 10)
+      )
+    ).size;
+
+    const rollerCoinAverageTrx =
+      rollerCoinActiveDays > 0 ? rollerCoinMonthTrx / rollerCoinActiveDays : 0;
+
+    const unityProjectName = String(project.name || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "");
+
+    const unityYieldTracking = String(project.yield_tracking || "")
+      .trim()
+      .toLowerCase();
+
+    const unityCategoryText = Array.isArray(project.categories)
+      ? project.categories
+          .map((category) => String(category?.name || "").toLowerCase())
+          .join(" ")
+      : "";
+
+    const isUnityNetwork =
+      unityProjectName === "unitynetwork" ||
+      unityProjectName === "phonefarm" ||
+      unityYieldTracking.includes("unity") ||
+      unityCategoryText.includes("phone rental") ||
+      unityCategoryText.includes("unity");
+
+    const unityTransactions =
+      isUnityNetwork && Array.isArray(project.transactions)
+        ? project.transactions.filter((txn) => {
+            const type = String(txn?.type || "").toLowerCase();
+            return !type || type === "earning" || type === "earned";
+          })
+        : [];
+
+    const unityTodayKey = new Date().toLocaleDateString("en-CA");
+    const unityMonthKey = unityTodayKey.slice(0, 7);
+
+    const unityMonthTransactions = unityTransactions.filter((txn) => {
+      const date = String(
+        txn?.date || txn?.source_date || txn?.created_at || ""
+      ).slice(0, 10);
+      return date.startsWith(unityMonthKey);
+    });
+
+    const unityMonthEarned = unityMonthTransactions.reduce(
+      (sum, txn) => sum + (Number(txn?.amount) || 0),
+      0
+    );
+
+    const unityActiveDays = new Set(
+      unityMonthTransactions
+        .filter((txn) => (Number(txn?.amount) || 0) > 0)
+        .map((txn) =>
+          String(
+            txn?.date || txn?.source_date || txn?.created_at || ""
+          ).slice(0, 10)
+        )
+    ).size;
+
+    const unityAverageActiveDay =
+      unityActiveDays > 0 ? unityMonthEarned / unityActiveDays : 0;
+
+    const unityLatestSync =
+      unityTransactions
+        .map((txn) => txn?.updated_at || txn?.created_at || null)
+        .filter(Boolean)
+        .sort()
+        .pop() || null;
+
+    const unityRentalStatus =
+      Number(project.per_day || 0) > 0 || unityMonthEarned > 0
+        ? "Active"
+        : "Idle";
+
     const jupiterCollateralUsd = (Number(project.jupiter_collateral_inf) || 0) * (Number(project.jupiter_inf_usd) || 0);
     const jupiterDebtUsd = (Number(project.jupiter_borrowed_sol) || 0) * (Number(project.jupiter_sol_usd) || 0);
     const pnl = isJupiterLoop
@@ -1112,6 +1221,86 @@ const events = [
             </div>
           )}
 
+          {isRollerCoin && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
+                  Today Earned
+                </span>
+                <span className="font-mono text-emerald-400">
+                  {rollerCoinTodayTrx.toFixed(4)} TRX
+                </span>
+              </div>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
+                  This Month
+                </span>
+                <span className="font-mono text-foreground">
+                  {rollerCoinMonthTrx.toFixed(4)} TRX
+                </span>
+              </div>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
+                  Avg / Active Day
+                </span>
+                <span className="font-mono text-foreground">
+                  {rollerCoinAverageTrx.toFixed(4)} TRX
+                </span>
+              </div>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
+                  TRX Price
+                </span>
+                <span className="font-mono text-foreground">
+                  {trxPrice > 0 ? formatCurrency(trxPrice) : "—"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isUnityNetwork && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
+                  This Month
+                </span>
+                <span className="font-mono text-emerald-400">
+                  {formatCurrency(unityMonthEarned)}
+                </span>
+              </div>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
+                  Active Days
+                </span>
+                <span className="font-mono text-foreground">
+                  {unityActiveDays}
+                </span>
+              </div>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
+                  Avg / Active Day
+                </span>
+                <span className="font-mono text-foreground">
+                  {formatCurrency(unityAverageActiveDay)}
+                </span>
+              </div>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
+                  Last Sync
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {unityLatestSync ? formatSyncTime(unityLatestSync) : "—"}
+                </span>
+              </div>
+            </div>
+          )}
+
           {isKryptex && Array.isArray(project.kryptex_miners) && project.kryptex_miners.length > 0 && (
             <div className="space-y-2 text-xs">
               <div className="grid grid-cols-2 gap-2">
@@ -1142,17 +1331,23 @@ const events = [
                         {formatCurrency(miner.profitability_usd_day)}/d
                       </span>
                     </div>
-                    <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap text-[9px] font-mono text-muted-foreground">
-                      {!String(miner.algorithm || "").toLowerCase().includes("randomx") && (
+                    {!String(miner.algorithm || "").toLowerCase().includes("randomx") && (
+                      <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap text-[9px] font-mono text-muted-foreground">
                         <span>{formatHashrate(miner.hashrate)}</span>
-                      )}
-                      {miner.temperature_c != null && <span className="text-orange-400/80">{miner.temperature_c}°C</span>}
-                      {miner.power_w != null && <span className="text-yellow-400/80">{miner.power_w}W</span>}
-                      {miner.fan_percent != null && <span>{miner.fan_percent}% fan</span>}
-                      {!String(miner.algorithm || "").toLowerCase().includes("randomx") && (
-                        <span>Shares {miner.accepted_shares}/{miner.rejected_shares}</span>
-                      )}
-                    </div>
+                        {miner.temperature_c != null && (
+                          <span className="text-orange-400/80">{miner.temperature_c}°C</span>
+                        )}
+                        {miner.power_w != null && (
+                          <span className="text-yellow-400/80">{miner.power_w}W</span>
+                        )}
+                        {miner.fan_percent != null && (
+                          <span>{miner.fan_percent}% fan</span>
+                        )}
+                        <span>
+                          Shares {miner.accepted_shares}/{miner.rejected_shares}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
