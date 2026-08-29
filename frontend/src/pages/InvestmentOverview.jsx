@@ -818,7 +818,7 @@ const events = [
       >
         <div className={`h-1 w-full ${config.progressBg}`} />
 
-        <CardContent className="p-5 space-y-4 flex flex-col flex-1">
+        <CardContent className="p-5 pb-28 space-y-4">
           {/* Header row */}
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3 min-w-0">
@@ -1096,7 +1096,7 @@ const events = [
           {/* Pinned to the bottom so it lines up across cards in the same
               row regardless of how much variable content (e.g. Kryptex's
               device list) sits above it. */}
-          <div className="mt-auto space-y-4">
+          <div className="absolute bottom-0 left-0 right-0 p-5 space-y-4">
             {/* Financial Metrics */}
             <div className={`grid gap-2 text-center ${categoryKey === "lending" ? "grid-cols-2" : "grid-cols-3"}`}>
               <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
