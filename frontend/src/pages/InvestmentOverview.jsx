@@ -818,9 +818,11 @@ const events = [
           </div>
 
           {/* Financial Metrics */}
-          <div className="grid grid-cols-3 gap-2 text-center">
+          <div className={`grid gap-2 text-center ${categoryKey === "lending" ? "grid-cols-2" : "grid-cols-3"}`}>
             <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
-              <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">Invested</p>
+              <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
+                {categoryKey === "lending" ? "Balance" : "Invested"}
+              </p>
               <p className="font-mono text-xs font-bold text-foreground mt-0.5">
                 {formatCurrency(invested)}
               </p>
@@ -833,17 +835,19 @@ const events = [
               </p>
             </div>
 
-            <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
-              <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">Net P&L</p>
-              <p
-                className={`font-mono text-xs font-bold mt-0.5 ${
-                  pnl >= 0 ? "text-emerald-400" : "text-rose-400"
-                }`}
-              >
-                {pnl >= 0 ? "+" : ""}
-                {formatCurrency(pnl)}
-              </p>
-            </div>
+            {categoryKey !== "lending" && (
+              <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
+                <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">Net P&L</p>
+                <p
+                  className={`font-mono text-xs font-bold mt-0.5 ${
+                    pnl >= 0 ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  {pnl >= 0 ? "+" : ""}
+                  {formatCurrency(pnl)}
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Capital Recovery Progress */}
@@ -1112,8 +1116,8 @@ const events = [
                 { id: "stocks", label: "Stocks & Index", count: categoryCounts.stocks || 0 },
                 { id: "real_estate", label: "Real Estate", count: categoryCounts.real_estate || 0 },
                 { id: "lending", label: "DeFi Lending", count: categoryCounts.lending || 0 },
-                { id: "monthly_rate", label: "Monthly", count: null },
                 { id: "mining", label: "Hardware / Mining", count: categoryCounts.mining || 0 },
+                { id: "monthly_rate", label: "Monthly", count: null },
               ]
                 .filter((item) => item.id === "all" || item.id === "monthly_rate" || item.count > 0)
                 .map((tab) => {
