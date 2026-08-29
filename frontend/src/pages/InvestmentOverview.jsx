@@ -857,7 +857,7 @@ const events = [
         onDragOver={handleDragOver}
         onDrop={(e) => handleDrop(e, index)}
         className={`relative overflow-hidden transition-all duration-200 cursor-grab active:cursor-grabbing hover:scale-[1.01] ${config.cardBg} ${
-          index < 3 ? "h-[410px]" : ""
+          index < 3 ? "self-stretch" : ""
         } ${
           draggedIndex === index ? "opacity-40 border-dashed border-emerald-400" : ""
         }`}
@@ -1021,44 +1021,56 @@ const events = [
           )}
 
           {isJupiterLoop && (
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Collateral</span>
-                <span className="font-mono text-foreground">
-                  {Number(project.jupiter_collateral_inf || 0).toFixed(4)} INF
-                </span>
-                <span className="block font-mono text-muted-foreground">
-                  {formatCurrency(jupiterCollateralUsd)} supplied
-                </span>
-                <span className="block font-mono text-emerald-400">
-                  {Number(project.jupiter_supply_apy || 0).toFixed(2)}% APY
-                </span>
+            <div className="space-y-1.5 text-xs">
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-start justify-between gap-3">
+                <div>
+                  <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Collateral</span>
+                  <span className="font-mono text-foreground">
+                    {Number(project.jupiter_collateral_inf || 0).toFixed(4)} INF
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="block font-mono text-muted-foreground">
+                    {formatCurrency(jupiterCollateralUsd)} supplied
+                  </span>
+                  <span className="block font-mono text-emerald-400">
+                    {Number(project.jupiter_supply_apy || 0).toFixed(2)}% APY
+                  </span>
+                </div>
               </div>
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Debt</span>
-                <span className="font-mono text-foreground">
-                  {Number(project.jupiter_borrowed_sol || 0).toFixed(4)} SOL
-                </span>
-                <span className="block font-mono text-muted-foreground">
-                  {formatCurrency(jupiterDebtUsd)} borrowed
-                </span>
-                <span className="block font-mono text-amber-400">
-                  {Number(project.jupiter_borrow_apy || 0).toFixed(2)}% APY
-                </span>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-start justify-between gap-3">
+                <div>
+                  <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Debt</span>
+                  <span className="font-mono text-foreground">
+                    {Number(project.jupiter_borrowed_sol || 0).toFixed(4)} SOL
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="block font-mono text-muted-foreground">
+                    {formatCurrency(jupiterDebtUsd)} borrowed
+                  </span>
+                  <span className="block font-mono text-amber-400">
+                    {Number(project.jupiter_borrow_apy || 0).toFixed(2)}% APY
+                  </span>
+                </div>
               </div>
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Net Equity</span>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-center justify-between gap-3">
+                <span className="text-[9px] uppercase font-semibold text-muted-foreground">Net Equity</span>
                 <span className="font-mono text-foreground">
                   {formatCurrency(project.jupiter_net_equity_usd)}
                 </span>
               </div>
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Net APY</span>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-center justify-between gap-3">
+                <span className="text-[9px] uppercase font-semibold text-muted-foreground">Net APY</span>
                 <span className="font-mono text-lime-300">
                   {Number(project.jupiter_net_apy || 0) >= 0 ? "+" : ""}{Number(project.jupiter_net_apy || 0).toFixed(2)}%
                 </span>
               </div>
-              <div className="col-span-2 flex items-center justify-between px-1 text-[9px] uppercase text-muted-foreground">
+
+              <div className="flex items-center justify-between px-1 text-[9px] uppercase text-muted-foreground">
                 <span>Jupiter sync</span>
                 <span className="font-mono normal-case">{formatSyncTime(project.jupiter_last_synced_at)}</span>
               </div>
@@ -1066,26 +1078,34 @@ const events = [
           )}
 
           {isLuloLending && (
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Live Balance</span>
+            <div className="space-y-1.5 text-xs">
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-center justify-between gap-3">
+                <span className="text-[9px] uppercase font-semibold text-muted-foreground">Live Balance</span>
                 <span className="font-mono text-foreground">{formatCurrency(project.lulo_total_balance_usd)}</span>
               </div>
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Current APY</span>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-center justify-between gap-3">
+                <span className="text-[9px] uppercase font-semibold text-muted-foreground">Current APY</span>
                 <span className="font-mono text-emerald-400">{Number(project.lulo_weighted_apy || 0).toFixed(2)}%</span>
               </div>
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">USDC</span>
-                <span className="font-mono text-foreground">{formatCurrency(project.lulo_usdc_balance_usd)}</span>
-                <span className="block font-mono text-emerald-400">{Number(project.lulo_regular_apy || 0).toFixed(2)}% APY</span>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-start justify-between gap-3">
+                <span className="text-[9px] uppercase font-semibold text-muted-foreground">USDC</span>
+                <div className="text-right">
+                  <span className="block font-mono text-foreground">{formatCurrency(project.lulo_usdc_balance_usd)}</span>
+                  <span className="block font-mono text-emerald-400">{Number(project.lulo_regular_apy || 0).toFixed(2)}% APY</span>
+                </div>
               </div>
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">USDS</span>
-                <span className="font-mono text-foreground">{formatCurrency(project.lulo_usds_balance_usd)}</span>
-                <span className="block font-mono text-emerald-400">{Number(project.lulo_usds_apy || 0).toFixed(2)}% APY</span>
+
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-start justify-between gap-3">
+                <span className="text-[9px] uppercase font-semibold text-muted-foreground">USDS</span>
+                <div className="text-right">
+                  <span className="block font-mono text-foreground">{formatCurrency(project.lulo_usds_balance_usd)}</span>
+                  <span className="block font-mono text-emerald-400">{Number(project.lulo_usds_apy || 0).toFixed(2)}% APY</span>
+                </div>
               </div>
-              <div className="col-span-2 flex items-center justify-between px-1 text-[9px] uppercase text-muted-foreground">
+
+              <div className="flex items-center justify-between px-1 text-[9px] uppercase text-muted-foreground">
                 <span>Lulo sync</span>
                 <span className="font-mono normal-case">{formatSyncTime(project.lulo_last_synced_at)}</span>
               </div>
@@ -1123,11 +1143,15 @@ const events = [
                       </span>
                     </div>
                     <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap text-[9px] font-mono text-muted-foreground">
-                      <span>{formatHashrate(miner.hashrate)}</span>
+                      {!String(miner.algorithm || "").toLowerCase().includes("randomx") && (
+                        <span>{formatHashrate(miner.hashrate)}</span>
+                      )}
                       {miner.temperature_c != null && <span className="text-orange-400/80">{miner.temperature_c}°C</span>}
                       {miner.power_w != null && <span className="text-yellow-400/80">{miner.power_w}W</span>}
                       {miner.fan_percent != null && <span>{miner.fan_percent}% fan</span>}
-                      <span>Shares {miner.accepted_shares}/{miner.rejected_shares}</span>
+                      {!String(miner.algorithm || "").toLowerCase().includes("randomx") && (
+                        <span>Shares {miner.accepted_shares}/{miner.rejected_shares}</span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1509,7 +1533,7 @@ const events = [
                 return (
                   <div
                     key={`filtered-slot-${slotIndex}`}
-                    className="min-h-[260px] rounded-xl border border-transparent"
+                    className={`min-h-[260px] rounded-xl border border-transparent ${slotIndex < 3 ? "self-stretch" : ""}`}
                     aria-hidden="true"
                   />
                 );
@@ -1527,6 +1551,8 @@ const events = [
                   onDragOver={handleDragOver}
                   onDrop={(e) => handleDrop(e, slotIndex)}
                   className={`min-h-[260px] rounded-xl border border-dashed transition-all duration-200 flex items-center justify-center ${
+                    slotIndex < 3 ? "self-stretch " : ""
+                  }${
                     isDropTarget
                       ? "border-emerald-400/50 bg-emerald-500/[0.04]"
                       : "border-border/15 bg-card/[0.08]"
