@@ -85,6 +85,69 @@ function toDayKey(date) {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
 }
 
+function nextDayKey(dayKey) {
+  const [year, month, day] = dayKey.split("-").map(Number);
+  const next = new Date(year, month - 1, day + 1, 12);
+  return toDayKey(next);
+}
+
+export function applyApyTransactionAccruals(projects = [], now = new Date()) {
+  const currentDayKey = toDayKey(now);
+
+  return projects.map((project) => {
+    if (
+      project?.yield_tracking === "sanctum_inf" ||
+      project?.yield_tracking === "jupiter_inf_loop" ||
+      project?.yield_tracking === "lulo_lending"
+    ) {
+      return project;
+    }
+
+    const invested = Number(project?.invested) || 0;
+    const apy = Number(project?.apy) || 0;
+    const dailyAmount = (invested * (apy / 100)) / 365;
+    const lastDayKey = toDayKey(project?.last_accrued_at);
+
+    if (!(dailyAmount > 0) || !currentDayKey) return project;
+
+    if (project?.inactive === true || project?.is_inactive === true || !lastDayKey) {
+      return { ...project, last_accrued_at: now.toISOString() };
+    }
+
+    const transactions = [...(project.transactions || [])];
+    const accruedDates = new Set(
+      transactions
+        .filter((transaction) => transaction.source === "apy" && transaction.source_date)
+        .map((transaction) => transaction.source_date)
+    );
+    let earnedDelta = 0;
+
+    for (let dayKey = nextDayKey(lastDayKey); dayKey <= currentDayKey; dayKey = nextDayKey(dayKey)) {
+      if (accruedDates.has(dayKey)) continue;
+
+      const amount = Number(dailyAmount.toFixed(6));
+      transactions.push({
+        type: "earning",
+        amount,
+        category: "APY",
+        notes: `APY daily accrual (${dayKey})`,
+        date: dayKey,
+        source: "apy",
+        source_date: dayKey,
+      });
+      accruedDates.add(dayKey);
+      earnedDelta += amount;
+    }
+
+    return {
+      ...project,
+      transactions,
+      earned: (Number(project.earned) || 0) + earnedDelta,
+      last_accrued_at: now.toISOString(),
+    };
+  });
+}
+
 export function applyDailyAccrual(project, trxPrice = null, now = new Date()) {
   const rate = getAutoCalculatedDailyReturn(project, trxPrice);
   if (!(rate > 0)) {

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   BarChart,
   Bar,
@@ -74,7 +74,7 @@ export default function UnityDevicesPage() {
   const getDeviceId = (device) =>
     String(device.license_id || device.device_id || device.id || "unknown");
 
-  const normalizePayload = (payload = {}) => {
+  const normalizePayload = useCallback((payload = {}) => {
     const basePayload = payload?.combined_payload || payload;
 
     const accountList = Array.isArray(basePayload.accounts)
@@ -109,9 +109,9 @@ export default function UnityDevicesPage() {
       accounts: accountList,
       summary: basePayload,
     };
-  };
+  }, []);
 
-  const applyPayload = (payload) => {
+  const applyPayload = useCallback((payload) => {
     console.log("[UNITY PAGE] raw payload:", payload);
 
     const normalized = normalizePayload(payload);
@@ -149,7 +149,7 @@ export default function UnityDevicesPage() {
     setSummary(normalized.summary);
     setLastSync(new Date());
     setSyncing(false);
-  };
+  }, [normalizePayload]);
 
   const getPayloadFromSyncResult = (result) => {
     return (
@@ -168,7 +168,7 @@ export default function UnityDevicesPage() {
     if (saved) {
       applyPayload(saved);
     }
-  }, []);
+  }, [applyPayload]);
 
   useEffect(() => {
     const handleMessage = (event) => {
@@ -193,7 +193,7 @@ export default function UnityDevicesPage() {
     );
 
     return () => window.removeEventListener("message", handleMessage);
-  }, []);
+  }, [applyPayload]);
 
   const syncExtension = async () => {
     setSyncing(true);
@@ -310,20 +310,16 @@ export default function UnityDevicesPage() {
     setStoredJson(HIDDEN_DEVICES_KEY, next);
   };
 
-  const getDeviceLabel = (device) => {
+  const getDeviceGroup = useCallback((device) => {
     const deviceId = getDeviceId(device);
-    return String(deviceLabels[deviceId] || "").trim();
-  };
-
-  const getDeviceGroup = (device) => {
-    const label = getDeviceLabel(device);
+    const label = String(deviceLabels[deviceId] || "").trim();
     const lowerLabel = label.toLowerCase();
 
     if (!label) return "Other";
     if (lowerLabel.includes("iphone")) return "iPhones";
 
     return "Androids";
-  };
+  }, [deviceLabels]);
 
   const visibleDevices = useMemo(() => {
     return devices.filter((device) => {
@@ -359,7 +355,7 @@ export default function UnityDevicesPage() {
         );
       })
       .sort((a, b) => Number(b.amount_usd || 0) - Number(a.amount_usd || 0));
-  }, [visibleDevices, search, deviceLabels, deviceLeases]);
+  }, [visibleDevices, search, deviceLabels, deviceLeases, getDeviceGroup]);
 
   const balanceUsd = Number(summary?.balance_usd || 0);
   const lifetimeUsd = Number(summary?.lifetime_usd || 0);

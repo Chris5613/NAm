@@ -13,6 +13,8 @@ export const STORAGE_KEYS = {
   GOMINING_SYNCED: 'networth_gomining_synced',
   NOSANA_CONFIG: 'networth_nosana_config',
   NOSANA_SYNCED_DATES: 'networth_nosana_synced_dates',
+  KRYPTEX_CONFIG: 'networth_kryptex_config',
+  KRYPTEX_EXTENSION: 'networth_kryptex_extension',
   ROLLERCOIN_CONFIG: 'networth_rollercoin_config',
   ACURAST_CONFIG: 'networth_acurast_config',
   UNITY_NETWORK_CONFIG: 'networth_unity_network_config',
@@ -104,6 +106,17 @@ export const localStorage = {
   // throughout the day).
   getNosanaSyncedDates: () => localStorage.get(STORAGE_KEYS.NOSANA_SYNCED_DATES) || {},
   setNosanaSyncedDates: (map) => localStorage.set(STORAGE_KEYS.NOSANA_SYNCED_DATES, map),
+
+  // Kryptex Desktop local-service integration. The total USD balance is used
+  // as a delta baseline; latest_status contains read-only miner telemetry.
+  getKryptexConfig: () => localStorage.get(STORAGE_KEYS.KRYPTEX_CONFIG) || null,
+  setKryptexConfig: (config) => localStorage.set(STORAGE_KEYS.KRYPTEX_CONFIG, config),
+
+  // Kryptex browser-extension bridge state — lets the deployed site receive
+  // local Kryptex data without a backend (extension has host_permissions for
+  // 127.0.0.1:8107, which the page itself cannot reach directly).
+  getKryptexExtension: () => localStorage.get(STORAGE_KEYS.KRYPTEX_EXTENSION) || null,
+  setKryptexExtension: (state) => localStorage.set(STORAGE_KEYS.KRYPTEX_EXTENSION, state),
 
   // RollerCoin is manual — there's no public API, so the user types their
   // current TRX balance in periodically. We track:

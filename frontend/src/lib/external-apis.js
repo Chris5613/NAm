@@ -417,7 +417,9 @@ return {
 
 // Jupiter Price API
 const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY?.trim();
-const JUPITER_PRICE_BASE = "https://api.jup.ag/price/v3";
+const JUPITER_PRICE_BASE = JUPITER_API_KEY
+  ? "https://api.jup.ag/price/v3"
+  : "https://lite-api.jup.ag/price/v3";
 
 export const jupiterPriceApi = {
   getPrices: async (mints = []) => {

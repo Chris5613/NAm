@@ -20,6 +20,8 @@ import {
   runTodayOnlyMigrationIfNeeded,
 } from "@/lib/nosanaSync";
 import { runAcurastUsdToAcuMigrationIfNeeded } from "@/lib/acurastSync";
+import { syncKryptex } from "@/lib/kryptexSync";
+import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
 import { installExtensionListener } from "@/lib/unityNetworkExtensionSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
 import TelloDashboard from "./pages/TelloDashboard";
@@ -32,6 +34,8 @@ let dailySnapshotAttempted = false;
 let nosanaSchedulerStarted = false;
 let demoBootstrapAttempted = false;
 let unityExtensionListenerStarted = false;
+let kryptexSchedulerStarted = false;
+let kryptexExtensionListenerStarted = false;
 
 function App() {
   // Daily auto-snapshot: on first mount each calendar day, append a net-worth
@@ -114,6 +118,24 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (kryptexSchedulerStarted) return;
+    kryptexSchedulerStarted = true;
+
+    const runOnce = async () => {
+      const config = storage.getKryptexConfig();
+      if (!config?.enabled) return;
+      await syncKryptex({ silent: true });
+    };
+
+    const startupId = setTimeout(runOnce, 4000);
+    const intervalId = setInterval(runOnce, 60_000);
+    return () => {
+      clearTimeout(startupId);
+      clearInterval(intervalId);
+    };
+  }, []);
+
   // Unity Nodes Chrome-extension listener — registers a window.postMessage
   // handler so the extension's content script can push earnings to us in
   // real time. Pure client-side: no polling, no backend hop. The extension
@@ -123,6 +145,14 @@ function App() {
     if (unityExtensionListenerStarted) return;
     unityExtensionListenerStarted = true;
     installExtensionListener();
+  }, []);
+
+  // Kryptex browser-extension bridge — works on the deployed site with no
+  // backend, since the extension itself reaches 127.0.0.1:8107 locally.
+  useEffect(() => {
+    if (kryptexExtensionListenerStarted) return;
+    kryptexExtensionListenerStarted = true;
+    installKryptexExtensionListener();
   }, []);
 
   return (

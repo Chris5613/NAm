@@ -61,6 +61,24 @@ function formatCurrency(value) {
   }).format(value);
 }
 
+function formatApyEarned(value) {
+  const amount = Number(value) || 0;
+  if (Math.abs(amount) >= 0.01 || amount === 0) return formatCurrency(amount);
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  }).format(amount);
+}
+
+function formatSyncTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Pending";
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" });
+}
+
 function isInactiveProject(project) {
   return project?.inactive === true || project?.is_inactive === true;
 }
@@ -68,6 +86,32 @@ function isInactiveProject(project) {
 function formatPercent(value) {
   const n = Number(value) || 0;
   return `${n.toFixed(1)}%`;
+}
+
+function formatHashrate(value) {
+  const units = ["H/s", "kH/s", "MH/s", "GH/s", "TH/s", "PH/s"];
+  let amount = Number(value) || 0;
+  let unitIndex = 0;
+  while (amount >= 1000 && unitIndex < units.length - 1) {
+    amount /= 1000;
+    unitIndex += 1;
+  }
+  return `${amount.toLocaleString("en-US", { maximumFractionDigits: 2 })} ${units[unitIndex]}`;
+}
+
+function isEarningTransaction(transaction) {
+  const amount = Number(transaction?.amount);
+  const isEarningType = transaction?.type === "earning" || !transaction?.type || transaction?.type === "earned";
+  if (!isEarningType || !Number.isFinite(amount)) return false;
+  return transaction.source === "jupiter_inf_loop" ? amount !== 0 : amount > 0;
+}
+
+function getLatestTrackedYieldAmount(project) {
+  const transactions = Array.isArray(project?.transactions) ? project.transactions : [];
+  const latest = transactions
+    .filter((transaction) => transaction.source === "inf_yield" || transaction.source === "jupiter_inf_loop" || transaction.source === "lulo_yield")
+    .sort((a, b) => String(b.source_date || b.date || "").localeCompare(String(a.source_date || a.date || "")))[0];
+  return Number(latest?.amount) || 0;
 }
 
 const MONTHLY_EARNERS_SEED_FLAG = "monthly_earners_demo_seeded";
@@ -307,7 +351,7 @@ export default function InvestmentOverview() {
 
   const fetchProjects = useCallback(async () => {
     try {
-      const res = await projectsApi.getAll();
+      const res = await projectsApi.accrueApyTransactions();
       setProjects(res.data || []);
     } catch {
       toast.error("Failed to load projects");
@@ -326,6 +370,11 @@ export default function InvestmentOverview() {
 
   useEffect(() => {
     fetchProjects();
+  }, [fetchProjects]);
+
+  useEffect(() => {
+    const intervalId = window.setInterval(fetchProjects, 60 * 1000);
+    return () => window.clearInterval(intervalId);
   }, [fetchProjects]);
 
   // One-time seed of mock crypto/stock/lending earners so the page isn't
@@ -386,7 +435,7 @@ const events = [
       window.removeEventListener("project-daily-returns-updated", refreshDailyReturns);
       window.removeEventListener("storage", refreshDailyReturns);
     };
-  }, []);
+  }, [projects]);
 
   const handleDelete = async (project) => {
     try {
@@ -474,21 +523,34 @@ const events = [
     return activeProjects.filter((p) => getProjectCategory(p) === categoryFilter);
   }, [activeProjects, categoryFilter]);
 
-  const getDailyAmount = (project) => {
+  const getDailyAmount = useCallback((project) => {
     if (isInactiveProject(project)) return 0;
+    if (project?.yield_tracking === "lulo_lending") {
+      const balance = Number(project.lulo_total_balance_usd) || 0;
+      const apy = Number(project.lulo_weighted_apy) || 0;
+      return (balance * (apy / 100)) / 365;
+    }
+    if (project?.yield_tracking === "jupiter_inf_loop") {
+      const collateralUsd = (Number(project.jupiter_collateral_inf) || 0) * (Number(project.jupiter_inf_usd) || 0);
+      const debtUsd = (Number(project.jupiter_borrowed_sol) || 0) * (Number(project.jupiter_sol_usd) || 0);
+      const annualSupplyYield = collateralUsd * ((Number(project.jupiter_supply_apy) || 0) / 100);
+      const annualBorrowCost = debtUsd * ((Number(project.jupiter_borrow_apy) || 0) / 100);
+      return (annualSupplyYield - annualBorrowCost) / 365;
+    }
+    if (project?.yield_tracking === "sanctum_inf") {
+      return getLatestTrackedYieldAmount(project);
+    }
     return getDailyReturnValue(project, dailyReturns, trxPrice);
-  };
+  }, [dailyReturns, trxPrice]);
 
   const getProjectEarningsTotal = (project) => {
     const txns = Array.isArray(project?.transactions) ? project.transactions : [];
-    const earnings = txns.filter(
-      (t) => (t.type === "earning" || !t.type || t.type === "earned") && Number(t.amount) > 0
-    );
+    const earnings = txns.filter(isEarningTransaction);
 
     const txnTotal = earnings.reduce((sum, txn) => sum + (Number(txn.amount) || 0), 0);
-    if (txnTotal > 0) return txnTotal;
-    if (project && Number(project.earned) > 0) return Number(project.earned) || 0;
-    return Number(project?.earned) || 0;
+    const earnedTotal = Number(project?.earned) || 0;
+    if (earnedTotal > 0) return earnedTotal;
+    return txnTotal;
   };
 
   const getProjectInvestedTotal = (project) => {
@@ -532,9 +594,7 @@ const events = [
 
     projects.forEach((p) => {
       const txns = Array.isArray(p.transactions) ? p.transactions : [];
-      const earningTxns = txns.filter(
-        (t) => (t.type === "earning" || !t.type || t.type === "earned") && Number(t.amount) > 0
-      );
+      const earningTxns = txns.filter(isEarningTransaction);
 
       if (earningTxns.length > 0) {
         earningTxns.forEach((t) => {
@@ -587,9 +647,7 @@ const events = [
 
     monthProjects.forEach((p) => {
       const txns = Array.isArray(p.transactions) ? p.transactions : [];
-      const earningTxns = txns.filter(
-        (t) => (t.type === "earning" || !t.type || t.type === "earned") && Number(t.amount) > 0
-      );
+      const earningTxns = txns.filter(isEarningTransaction);
 
       if (earningTxns.length > 0) {
         earningTxns.forEach((t) => {
@@ -608,7 +666,7 @@ const events = [
 
     const monthTotal = Object.values(monthEarnedByProject).reduce((sum, val) => sum + val, 0);
 
-    if (monthTotal > 0) {
+    if (monthTotal !== 0) {
       return monthProjects
         .map((project) => {
           const monthly = monthEarnedByProject[project.id] || 0;
@@ -619,7 +677,7 @@ const events = [
             share: (monthly / monthTotal) * 100,
           };
         })
-        .filter((row) => row.monthly > 0)
+        .filter((row) => row.monthly !== 0)
         .sort((a, b) => b.monthly - a.monthly);
     }
 
@@ -638,7 +696,7 @@ const events = [
       })
       .filter((row) => row.monthly > 0)
       .sort((a, b) => b.monthly - a.monthly);
-  }, [activeProjects, inactiveProjects, selectedMonthKey, totals.per_month, dailyReturns]);
+  }, [activeProjects, inactiveProjects, selectedMonthKey, totals.per_month, getDailyAmount]);
 
   const topEarner = monthlyBreakdown[0] || null;
 
@@ -664,8 +722,20 @@ const events = [
 
     const invested = getProjectInvestedTotal(project);
     const earned = getProjectEarningsTotal(project);
-    const pnl = earned - invested;
-    const apy = Number(project.apy) || (invested > 0 && project.per_day > 0 ? ((project.per_day * 365) / invested) * 100 : null);
+    const isInfTracking = project.yield_tracking === "sanctum_inf";
+    const isJupiterLoop = project.yield_tracking === "jupiter_inf_loop";
+    const isLuloLending = project.yield_tracking === "lulo_lending";
+    const isKryptex = project.yield_tracking === "kryptex";
+    const jupiterCollateralUsd = (Number(project.jupiter_collateral_inf) || 0) * (Number(project.jupiter_inf_usd) || 0);
+    const jupiterDebtUsd = (Number(project.jupiter_borrowed_sol) || 0) * (Number(project.jupiter_sol_usd) || 0);
+    const pnl = isJupiterLoop
+      ? (Number(project.jupiter_net_equity_usd) || 0) - invested
+      : earned - invested;
+    const displayedPnl = isJupiterLoop ? Number(project.jupiter_position_pnl_usd) || 0 : pnl;
+    const pnlPercent = invested > 0 ? (displayedPnl / invested) * 100 : 0;
+    const apy = isLuloLending
+      ? Number(project.lulo_weighted_apy) || null
+      : Number(project.apy) || (invested > 0 && project.per_day > 0 ? ((project.per_day * 365) / invested) * 100 : null);
     const daily = getDailyAmount(project);
     const monthly = daily * 30;
     const roiDays = getRoiDays(project);
@@ -738,6 +808,20 @@ const events = [
                     </span>
                   )}
 
+                  {isInfTracking && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/40">
+                      <Coins className="w-3 h-3" strokeWidth={2} />
+                      {Number(project.inf_amount || 0).toLocaleString(undefined, { maximumFractionDigits: 6 })} INF
+                    </span>
+                  )}
+
+                  {isJupiterLoop && (
+                    <span className="inline-flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-lime-500/15 text-lime-300 border border-lime-500/40">
+                      <Coins className="w-3 h-3" strokeWidth={2} />
+                      Jupiter #{project.jupiter_position_id}
+                    </span>
+                  )}
+
                   {roiDays !== null && (
                     <span
                       className={`inline-flex items-center gap-1 text-[10px] font-mono px-2 py-0.5 rounded-full ${
@@ -802,7 +886,7 @@ const events = [
           <div className="rounded-lg bg-secondary/30 border border-border/30 p-2.5 flex items-center justify-between">
             <span className="text-xs text-muted-foreground font-medium flex items-center gap-1.5">
               <ArrowUpRight className="w-3.5 h-3.5 text-emerald-400" />
-              Return
+              {isJupiterLoop ? "Net Return" : "Return"}
             </span>
             <div className="font-mono text-xs text-right">
               <span className="font-semibold text-emerald-400">{formatCurrency(daily)}/day</span>
@@ -810,11 +894,148 @@ const events = [
             </div>
           </div>
 
+          {isInfTracking && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">INF / SOL</span>
+                <span className="font-mono text-foreground">
+                  {Number(project.inf_last_rate || 0) > 0 ? Number(project.inf_last_rate).toFixed(8) : "Syncing"}
+                </span>
+              </div>
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Rate Source</span>
+                <span className="font-mono text-foreground">
+                  {project.inf_last_rate_source === "jupiter_market_ratio" ? "Jupiter" : "Pending"}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {isJupiterLoop && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Collateral</span>
+                <span className="font-mono text-foreground">
+                  {Number(project.jupiter_collateral_inf || 0).toFixed(4)} INF
+                </span>
+                <span className="block font-mono text-muted-foreground">
+                  {formatCurrency(jupiterCollateralUsd)} supplied
+                </span>
+                <span className="block font-mono text-emerald-400">
+                  {Number(project.jupiter_supply_apy || 0).toFixed(2)}% APY
+                </span>
+              </div>
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Debt</span>
+                <span className="font-mono text-foreground">
+                  {Number(project.jupiter_borrowed_sol || 0).toFixed(4)} SOL
+                </span>
+                <span className="block font-mono text-muted-foreground">
+                  {formatCurrency(jupiterDebtUsd)} borrowed
+                </span>
+                <span className="block font-mono text-amber-400">
+                  {Number(project.jupiter_borrow_apy || 0).toFixed(2)}% APY
+                </span>
+              </div>
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Net Equity</span>
+                <span className="font-mono text-foreground">
+                  {formatCurrency(project.jupiter_net_equity_usd)}
+                </span>
+              </div>
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Net APY</span>
+                <span className="font-mono text-lime-300">
+                  {Number(project.jupiter_net_apy || 0) >= 0 ? "+" : ""}{Number(project.jupiter_net_apy || 0).toFixed(2)}%
+                </span>
+              </div>
+              <div className="col-span-2 flex items-center justify-between px-1 text-[9px] uppercase text-muted-foreground">
+                <span>Jupiter sync</span>
+                <span className="font-mono normal-case">{formatSyncTime(project.jupiter_last_synced_at)}</span>
+              </div>
+            </div>
+          )}
+
+          {isLuloLending && (
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Live Balance</span>
+                <span className="font-mono text-foreground">{formatCurrency(project.lulo_total_balance_usd)}</span>
+              </div>
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Current APY</span>
+                <span className="font-mono text-emerald-400">{Number(project.lulo_weighted_apy || 0).toFixed(2)}%</span>
+              </div>
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">USDC</span>
+                <span className="font-mono text-foreground">{formatCurrency(project.lulo_usdc_balance_usd)}</span>
+                <span className="block font-mono text-emerald-400">{Number(project.lulo_regular_apy || 0).toFixed(2)}% APY</span>
+              </div>
+              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">USDS</span>
+                <span className="font-mono text-foreground">{formatCurrency(project.lulo_usds_balance_usd)}</span>
+                <span className="block font-mono text-emerald-400">{Number(project.lulo_usds_apy || 0).toFixed(2)}% APY</span>
+              </div>
+              <div className="col-span-2 flex items-center justify-between px-1 text-[9px] uppercase text-muted-foreground">
+                <span>Lulo sync</span>
+                <span className="font-mono normal-case">{formatSyncTime(project.lulo_last_synced_at)}</span>
+              </div>
+            </div>
+          )}
+
+          {isKryptex && Array.isArray(project.kryptex_miners) && project.kryptex_miners.length > 0 && (
+            <div className="space-y-2 text-xs">
+              <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
+                  <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Withdrawable</span>
+                  <span className="font-mono text-foreground">{formatCurrency(project.kryptex_withdrawable_usd)}</span>
+                </div>
+                <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
+                  <span className="block text-[9px] uppercase font-semibold text-muted-foreground">Active Devices</span>
+                  <span className="font-mono text-foreground">{project.kryptex_miners.length}</span>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                {project.kryptex_miners.map((miner) => (
+                  <div
+                    key={`${miner.device}-${miner.coin}-${miner.algorithm}`}
+                    className="rounded-md border border-border/20 bg-secondary/20 p-2"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[11px] font-semibold text-foreground truncate">{miner.device}</p>
+                        <p className="text-[9px] font-mono text-muted-foreground uppercase">
+                          {miner.coin} · {miner.algorithm} · {miner.miner}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-mono text-emerald-400 whitespace-nowrap">
+                        {formatCurrency(miner.profitability_usd_day)}/d
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-x-3 gap-y-1 flex-wrap text-[9px] font-mono text-muted-foreground">
+                      <span>{formatHashrate(miner.hashrate)}</span>
+                      {miner.temperature_c != null && <span className="text-orange-400/80">{miner.temperature_c}°C</span>}
+                      {miner.power_w != null && <span className="text-yellow-400/80">{miner.power_w}W</span>}
+                      {miner.fan_percent != null && <span>{miner.fan_percent}% fan</span>}
+                      <span>Shares {miner.accepted_shares}/{miner.rejected_shares}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between px-1 text-[9px] uppercase text-muted-foreground">
+                <span>Kryptex sync</span>
+                <span className="font-mono normal-case">{formatSyncTime(project.kryptex_last_synced_at)}</span>
+              </div>
+            </div>
+          )}
+
           {/* Financial Metrics */}
           <div className={`grid gap-2 text-center ${categoryKey === "lending" ? "grid-cols-2" : "grid-cols-3"}`}>
             <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
               <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
-                {categoryKey === "lending" ? "Balance" : "Invested"}
+                {isJupiterLoop ? "Starting Equity" : isLuloLending ? "Principal" : categoryKey === "lending" ? "Balance" : "Invested"}
               </p>
               <p className="font-mono text-xs font-bold text-foreground mt-0.5">
                 {formatCurrency(invested)}
@@ -822,22 +1043,31 @@ const events = [
             </div>
 
             <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
-              <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">Earned</p>
+              <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
+                {isJupiterLoop ? "APY Earned" : isLuloLending ? "Interest Earned" : "Earned"}
+              </p>
               <p className="font-mono text-xs font-bold text-foreground mt-0.5">
-                {formatCurrency(earned)}
+                {isJupiterLoop || isLuloLending ? formatApyEarned(earned) : formatCurrency(earned)}
               </p>
             </div>
 
             {categoryKey !== "lending" && (
               <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
-                <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">Net P&L</p>
+                <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
+                  {isJupiterLoop ? "Position P&L" : "Net P&L"}
+                </p>
                 <p
                   className={`font-mono text-xs font-bold mt-0.5 ${
-                    pnl >= 0 ? "text-emerald-400" : "text-rose-400"
+                    displayedPnl >= 0 ? "text-emerald-400" : "text-rose-400"
                   }`}
                 >
-                  {pnl >= 0 ? "+" : ""}
-                  {formatCurrency(pnl)}
+                  {displayedPnl >= 0 ? "+" : ""}
+                  {formatCurrency(displayedPnl)}
+                  {isJupiterLoop && invested > 0 && (
+                    <span className="ml-1 text-[9px] opacity-80">
+                      ({pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%)
+                    </span>
+                  )}
                 </p>
               </div>
             )}

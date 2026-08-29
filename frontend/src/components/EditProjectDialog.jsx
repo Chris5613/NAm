@@ -12,6 +12,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 
 function formatPreviewCurrency(val) {
   const n = parseFloat(val) || 0;
@@ -37,6 +40,11 @@ export default function EditProjectDialog({
     per_day: project.per_day?.toString() || "",
     apy: project.apy?.toString() || "",
     daily_trx: project.daily_trx?.toString() || "",
+    yield_tracking: project.yield_tracking || "standard",
+    inf_amount: project.inf_amount?.toString() || "",
+    jupiter_wallet_address: project.jupiter_wallet_address || "",
+    jupiter_position_id: project.jupiter_position_id?.toString() || "",
+    lulo_wallet_address: project.lulo_wallet_address || "",
     inactive: project.inactive === true || project.is_inactive === true,
   });
 
@@ -52,11 +60,17 @@ export default function EditProjectDialog({
   const investedNum = parseFloat(form.invested) || 0;
   const apyNum = parseFloat(form.apy) || 0;
   const dailyTrxNum = parseFloat(form.daily_trx) || 0;
+  const isInfTracking = form.yield_tracking === "sanctum_inf";
+  const isJupiterLoop = form.yield_tracking === "jupiter_inf_loop";
+  const isLuloLending = form.yield_tracking === "lulo_lending";
+  const isAutomaticYield = isInfTracking || isJupiterLoop || isLuloLending;
 
   const calculatedPerDayFromTrx = dailyTrxNum > 0 && trxPrice ? dailyTrxNum * trxPrice : 0;
   const calculatedPerDayFromApy = investedNum > 0 && apyNum > 0 ? (investedNum * (apyNum / 100)) / 365 : 0;
 
-  const perDayNum = parseFloat(form.per_day) || calculatedPerDayFromTrx || calculatedPerDayFromApy;
+  const perDayNum = isAutomaticYield
+    ? 0
+    : parseFloat(form.per_day) || calculatedPerDayFromTrx || calculatedPerDayFromApy;
   const perWeek = perDayNum * 7;
   const perMonth = perDayNum * 30;
   const perYear = perDayNum * 365;
@@ -65,6 +79,22 @@ export default function EditProjectDialog({
     e.preventDefault();
     if (!form.name) {
       toast.error("Project name is required");
+      return;
+    }
+    if (isInfTracking && !(parseFloat(form.inf_amount) > 0)) {
+      toast.error("INF quantity must be greater than 0");
+      return;
+    }
+    if (isJupiterLoop && (!form.jupiter_wallet_address.trim() || !form.jupiter_position_id.trim())) {
+      toast.error("Jupiter wallet address and position ID are required");
+      return;
+    }
+    if (isJupiterLoop && !(parseFloat(form.invested) > 0)) {
+      toast.error("Starting equity must be greater than 0");
+      return;
+    }
+    if (isLuloLending && !form.lulo_wallet_address.trim()) {
+      toast.error("Lulo wallet address is required");
       return;
     }
     setSubmitting(true);
@@ -76,8 +106,23 @@ export default function EditProjectDialog({
         custom_tag: (form.custom_tag || "").trim() || null,
         invested: parseFloat(form.invested) || 0,
         earned: parseFloat(form.earned) || 0,
-        apy: parseFloat(form.apy) || null,
-        daily_trx: parseFloat(form.daily_trx) || null,
+        apy: isAutomaticYield ? null : parseFloat(form.apy) || null,
+        daily_trx: isAutomaticYield ? null : parseFloat(form.daily_trx) || null,
+        yield_tracking: isInfTracking ? "sanctum_inf" : isJupiterLoop ? "jupiter_inf_loop" : isLuloLending ? "lulo_lending" : null,
+        inf_amount: isInfTracking ? parseFloat(form.inf_amount) : null,
+        jupiter_wallet_address: isJupiterLoop ? form.jupiter_wallet_address.trim() : null,
+        jupiter_position_id: isJupiterLoop ? form.jupiter_position_id.trim() : null,
+        jupiter_initial_earned: isJupiterLoop
+          ? project.yield_tracking === "jupiter_inf_loop"
+            ? Number(project.jupiter_initial_earned) || 0
+            : parseFloat(form.earned) || 0
+          : null,
+        lulo_wallet_address: isLuloLending ? form.lulo_wallet_address.trim() : null,
+        lulo_initial_earned: isLuloLending
+          ? project.yield_tracking === "lulo_lending"
+            ? project.lulo_initial_earned
+            : null
+          : undefined,
         per_day: perDayNum,
         per_week: perWeek,
         per_month: perMonth,
@@ -168,6 +213,75 @@ export default function EditProjectDialog({
             />
           </div>
 
+          <div className="space-y-2">
+            <Label>Yield Tracking</Label>
+            <Select
+              value={form.yield_tracking}
+              onValueChange={(value) => setForm({ ...form, yield_tracking: value })}
+            >
+              <SelectTrigger className="bg-background border-border" data-testid="edit-project-yield-tracking">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-card border-border">
+                <SelectItem value="standard">Standard / APY</SelectItem>
+                <SelectItem value="sanctum_inf">Sanctum INF Liquid Staking</SelectItem>
+                <SelectItem value="jupiter_inf_loop">Jupiter INF Loop</SelectItem>
+                <SelectItem value="lulo_lending">Lulo Lending</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isInfTracking && (
+            <div className="space-y-2">
+              <Label>INF Quantity</Label>
+              <Input
+                type="number"
+                step="any"
+                min="0"
+                value={form.inf_amount}
+                onChange={(e) => setForm({ ...form, inf_amount: e.target.value })}
+                data-testid="edit-project-input-inf-amount"
+                className="bg-background border-border font-mono"
+              />
+            </div>
+          )}
+
+          {isJupiterLoop && (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Jupiter Wallet Address</Label>
+                <Input
+                  value={form.jupiter_wallet_address}
+                  onChange={(e) => setForm({ ...form, jupiter_wallet_address: e.target.value })}
+                  data-testid="edit-project-input-jupiter-wallet"
+                  className="bg-background border-border font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Jupiter Position ID</Label>
+                <Input
+                  inputMode="numeric"
+                  value={form.jupiter_position_id}
+                  onChange={(e) => setForm({ ...form, jupiter_position_id: e.target.value })}
+                  data-testid="edit-project-input-jupiter-position"
+                  className="bg-background border-border font-mono"
+                />
+              </div>
+            </div>
+          )}
+
+          {isLuloLending && (
+            <div className="space-y-2">
+              <Label>Lulo Wallet Address</Label>
+              <Input
+                value={form.lulo_wallet_address}
+                onChange={(e) => setForm({ ...form, lulo_wallet_address: e.target.value })}
+                data-testid="edit-project-input-lulo-wallet"
+                className="bg-background border-border font-mono text-xs"
+              />
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Total Invested ($)</Label>
@@ -206,7 +320,7 @@ export default function EditProjectDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          {!isAutomaticYield && <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Daily TRX Reward (optional)</Label>
               <Input
@@ -242,9 +356,9 @@ export default function EditProjectDialog({
                 className="bg-background border-border font-mono"
               />
             </div>
-          </div>
+          </div>}
 
-          <div className="space-y-2">
+          {!isAutomaticYield && <div className="space-y-2">
             <Label>Per Day ($) {calculatedPerDayFromTrx > 0 && !form.per_day ? "(auto from TRX)" : calculatedPerDayFromApy > 0 && !form.per_day ? "(auto from APY)" : ""}</Label>
             <Input
               type="number"
@@ -259,7 +373,7 @@ export default function EditProjectDialog({
               }
               className="bg-background border-border font-mono"
             />
-          </div>
+          </div>}
 
           {perDayNum > 0 && (
             <div className="rounded-lg border border-border/40 bg-secondary/30 p-3 space-y-1.5">

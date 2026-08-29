@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Kryptex Earnings Tracker",
+  "version": "1.0.0",
+  "description": "Reads local Kryptex Desktop mining data (balance + active CPU/GPU miners) and pushes it into your Net Worth Tracker dashboard, even when the dashboard is deployed remotely.",
+  "permissions": ["storage", "alarms"],
+  "host_permissions": ["http://127.0.0.1:8107/*"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://nam-qyn8.onrender.com/*",
+        "http://localhost:3000/*"
+      ],
+      "js": ["content-script.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

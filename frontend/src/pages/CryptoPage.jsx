@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { walletsApi, tokenPrefsApi, customTokensApi, cryptoCacheApi } from "@/lib/api";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { toast } from "sonner";
@@ -316,7 +316,10 @@ export default function CryptoPage() {
 
 
   const lastSyncedRef = useRef(null);
-  const allDefiPositions = [...defiPositions, ...manualDefiPositions];
+  const allDefiPositions = useMemo(
+    () => [...defiPositions, ...manualDefiPositions],
+    [defiPositions, manualDefiPositions]
+  );
 
   const fetchWallets = useCallback(async () => {
     try {
@@ -594,10 +597,13 @@ if (total > 0) {
     });
   });
 
-  const hiddenSymbols = new Set(
-    Object.entries(tokenPrefs)
-      .filter(([, p]) => p.hidden)
-      .map(([s]) => s)
+  const hiddenSymbols = useMemo(
+    () => new Set(
+      Object.entries(tokenPrefs)
+        .filter(([, p]) => p.hidden)
+        .map(([s]) => s)
+    ),
+    [tokenPrefs]
   );
 
   const visibleTotal = allTokensRaw
@@ -860,6 +866,7 @@ useEffect(() => {
     tokenPrefs,
     defiPositions,
     manualDefiPositions,
+    allDefiPositions,
     hiddenSymbols,
     sortedChains,
   ]);

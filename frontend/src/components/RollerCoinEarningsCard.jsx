@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { localStorage as storage } from "@/lib/localStorage";
 import {
   applyRollerCoinBalanceUpdate,
@@ -92,7 +92,7 @@ const [trxPrice, setTrxPrice] = useState(0);
   const [balanceInput, setBalanceInput] = useState("");
 const [updatingBalance, setUpdatingBalance] = useState(false);
 
-  const [tickKey, setTickKey] = useState(0);
+  const [, setTickKey] = useState(0);
 
   const [extPayload, setExtPayload] =
     useState(null);
@@ -256,10 +256,7 @@ if (!cancelled) setTrxPrice(p);
 
   const isConfigured = !!config?.enabled;
 
-  const stale = useMemo(
-    () => isRollerCoinStale(config),
-    [config, tickKey]
-  );
+  const stale = isRollerCoinStale(config);
 
   const hasExtensionData = !!extPayload;
 

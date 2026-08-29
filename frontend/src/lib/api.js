@@ -7,6 +7,10 @@ import {
   bitcoinApi,
 } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
+import { applyApyTransactionAccruals } from "./projectDailyReturns";
+import { applyInfYieldSnapshot, getInfYieldSnapshot } from "./infYieldSync";
+import { applyJupiterInfLoopSnapshot, getJupiterInfLoopSnapshot } from "./jupiterInfLoopSync";
+import { applyLuloYieldSnapshot, getLuloYieldSnapshot } from "./luloYieldSync";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -245,6 +249,53 @@ for (const asset of stockAssets) {
 export const projectsApi = {
   getAll: async () => toResponse(normalizeItems(storage.getProjects())),
 
+  accrueApyTransactions: async (now = new Date()) => {
+    const projects = normalizeItems(storage.getProjects());
+    let accrued = applyApyTransactionAccruals(projects, now);
+
+    if (accrued.some((project) => project.yield_tracking === "sanctum_inf")) {
+      try {
+        const snapshot = await getInfYieldSnapshot();
+        accrued = applyInfYieldSnapshot(accrued, snapshot, now);
+      } catch (error) {
+        console.warn("INF yield sync failed:", error);
+      }
+    }
+
+    accrued = await Promise.all(accrued.map(async (project) => {
+      if (project.yield_tracking !== "jupiter_inf_loop") return project;
+      try {
+        const snapshot = await getJupiterInfLoopSnapshot(
+          project.jupiter_wallet_address,
+          project.jupiter_position_id
+        );
+        return applyJupiterInfLoopSnapshot(project, snapshot, now);
+      } catch (error) {
+        console.warn(`Jupiter INF loop sync failed for ${project.name}:`, error);
+        return project;
+      }
+    }));
+
+    accrued = await Promise.all(accrued.map(async (project) => {
+      if (project.yield_tracking !== "lulo_lending") return project;
+      try {
+        const snapshot = await getLuloYieldSnapshot(project.lulo_wallet_address);
+        return applyLuloYieldSnapshot(project, snapshot, now);
+      } catch (error) {
+        console.warn(`Lulo lending sync failed for ${project.name}:`, error);
+        return project;
+      }
+    }));
+
+    accrued = accrued.map((project) => ({
+      ...project,
+      transactions: normalizeItems(project.transactions || []),
+    }));
+
+    storage.setProjects(accrued);
+    return toResponse(accrued);
+  },
+
   create: async (data) => {
     const project = normalizeId({
       ...data,
@@ -456,6 +507,14 @@ export const projectsApi = {
       }
     }
 
+    if (removed?.source === "kryptex") {
+      const config = storage.getKryptexConfig();
+      const baselineBefore = Number(removed.source_balance_before);
+      if (config && Number.isFinite(baselineBefore)) {
+        storage.setKryptexConfig({ ...config, baseline_balance_usd: baselineBefore });
+      }
+    }
+
     if (removed?.source === "rollercoin") {
       const rc = storage.getRollerCoinConfig();
 
@@ -511,6 +570,7 @@ export const projectsApi = {
         removed?.source === "clore" ||
         removed?.source === "gomining" ||
         removed?.source === "nosana" ||
+        removed?.source === "kryptex" ||
         removed?.source === "rollercoin" ||
         removed?.source === "acurast" ||
         removed?.source === "unity_network" ||

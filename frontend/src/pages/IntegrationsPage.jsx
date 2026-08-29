@@ -10,6 +10,7 @@ import RollerCoinEarningsCard from "@/components/RollerCoinEarningsCard";
 import AcurastEarningsCard from "@/components/AcurastEarningsCard";
 import UnityNetworkEarningsCard from "@/components/UnityNetworkEarningsCard";
 import GoMiningEarningsCard from "@/components/GoMiningEarningsCard";
+import KryptexEarningsCard from "@/components/KryptexEarningsCard";
 import {
   AddIntegrationDialog,
   CustomIntegrationCard,
@@ -58,6 +59,7 @@ export default function IntegrationsPage() {
           manual sync, and daily-history where relevant. */}
       <div className="space-y-4">
         <NosanaEarningsCard />
+        <KryptexEarningsCard />
          {/*<UnityNetworkEarningsCard />*/}
         <RollerCoinEarningsCard />
         {/* <AcurastEarningsCard /> */}

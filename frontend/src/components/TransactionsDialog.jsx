@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { projectsApi } from "@/lib/api";
 import { toast } from "sonner";
 import {
@@ -31,13 +31,7 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
   });
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (open && project) {
-      loadTransactions();
-    }
-  }, [open, project]);
-
-  const loadTransactions = async () => {
+  const loadTransactions = useCallback(async () => {
     try {
       const res = await projectsApi.getTransactions(project.id);
       setTransactions(res.data || []);
@@ -46,7 +40,13 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
     } finally {
       setLoading(false);
     }
-  };
+  }, [project?.id]);
+
+  useEffect(() => {
+    if (open && project) {
+      loadTransactions();
+    }
+  }, [open, project, loadTransactions]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

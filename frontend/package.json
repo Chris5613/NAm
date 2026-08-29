@@ -57,7 +57,9 @@
     "zod": "^3.24.4"
   },
   "scripts": {
-    "start": "craco start",
+    "start": "concurrently -k -n backend,frontend \"python -m uvicorn backend.server:app --app-dir .. --host 127.0.0.1 --port 8001\" \"craco start\"",
+    "start:frontend": "craco start",
+    "start:backend": "python -m uvicorn backend.server:app --app-dir .. --host 127.0.0.1 --port 8001",
     "build": "craco build",
     "test": "craco test"
   },
@@ -79,6 +81,7 @@
     "@emergentbase/visual-edits": "https://assets.emergent.sh/npm/emergentbase-visual-edits-1.0.8.tgz",
     "@eslint/js": "9.23.0",
     "autoprefixer": "^10.4.20",
+    "concurrently": "^10.0.5",
     "es-abstract": "^1.24.2",
     "eslint": "9.23.0",
     "eslint-plugin-import": "2.31.0",
