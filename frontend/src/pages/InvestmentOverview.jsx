@@ -711,7 +711,7 @@ const events = [
                   {project.name}
                 </h3>
 
-                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                <div className="flex items-center gap-1.5 mt-1 flex-nowrap overflow-x-auto scrollbar-none max-w-full pb-0.5">
                   <span className={`inline-flex items-center gap-1 text-[10px] font-medium uppercase px-2 py-0.5 rounded-full border ${config.badgeBg}`}>
                     <CategoryIcon className="w-3 h-3" strokeWidth={2} />
                     {getDisplayCategoryLabel(project)}
