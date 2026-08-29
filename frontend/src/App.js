@@ -7,8 +7,6 @@ import InvestmentOverview from "@/pages/InvestmentOverview";
 import CryptoPage from "@/pages/CryptoPage";
 import GoMiningPage from "@/pages/GoMiningPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
-import PhoneList from "@/pages/PhoneList";
-import UnityDevicesPage from "@/pages/UnityDevicesPage";
 import CloudPage from "@/pages/CloudPage";
 import { Toaster } from "@/components/ui/sonner";
 import { netWorthApi } from "@/lib/api";
@@ -24,7 +22,6 @@ import { syncKryptex } from "@/lib/kryptexSync";
 import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
 import { installExtensionListener } from "@/lib/unityNetworkExtensionSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
-import TelloDashboard from "./pages/TelloDashboard";
 import RollercoinCalculator from "./pages/RollercoinCalculator";
 
 
@@ -167,9 +164,6 @@ function App() {
               <Route path="/crypto" element={<CryptoPage />} />
               <Route path="/gomining" element={<GoMiningPage />} />
               <Route path="/integrations" element={<IntegrationsPage />} />
-              <Route path="/phone-list" element={<PhoneList />} />
-              <Route path="/unity-devices" element={<UnityDevicesPage />} />
-              <Route path="/tello-dashboard" element={<TelloDashboard />} />
               <Route path="/rollercoin-calculator" element={<RollercoinCalculator />} />
               <Route path="/cloud" element={<CloudPage />} />
             </Routes>
