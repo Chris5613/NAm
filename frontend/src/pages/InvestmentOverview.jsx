@@ -540,6 +540,9 @@ const events = [
     if (project?.yield_tracking === "sanctum_inf") {
       return getLatestTrackedYieldAmount(project);
     }
+    if (project?.yield_tracking === "kryptex") {
+      return Number(project.kryptex_profitability_usd_day) || 0;
+    }
     return getDailyReturnValue(project, dailyReturns, trxPrice);
   }, [dailyReturns, trxPrice]);
 
