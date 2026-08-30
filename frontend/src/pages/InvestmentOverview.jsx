@@ -1360,7 +1360,7 @@ const events = [
           )}
 
           {/* Financial Metrics */}
-          <div className={`grid gap-2 text-center ${categoryKey === "lending" ? "grid-cols-2" : "grid-cols-3"}`}>
+          <div className={`grid gap-2 text-center ${isLuloLending || categoryKey === "lending" ? "grid-cols-2" : "grid-cols-3"}`}>
             <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
               <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
                 {isJupiterLoop ? "Starting Equity" : isLuloLending ? "Principal" : categoryKey === "lending" ? "Balance" : "Invested"}
@@ -1379,7 +1379,7 @@ const events = [
               </p>
             </div>
 
-            {categoryKey !== "lending" && (
+            {!isLuloLending && categoryKey !== "lending" && (
               <div className="p-2 rounded-md bg-secondary/20 border border-border/20">
                 <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
                   {isJupiterLoop ? "Position P&L" : "Net P&L"}
