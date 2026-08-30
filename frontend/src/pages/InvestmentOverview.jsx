@@ -943,11 +943,29 @@ const events = [
 
     const jupiterCollateralUsd = (Number(project.jupiter_collateral_inf) || 0) * (Number(project.jupiter_inf_usd) || 0);
     const jupiterDebtUsd = (Number(project.jupiter_borrowed_sol) || 0) * (Number(project.jupiter_sol_usd) || 0);
+    const jupiterNetEquityUsd = Number(project.jupiter_net_equity_usd) || 0;
+
+    const jupiterAnnualSupplyYield =
+      jupiterCollateralUsd * ((Number(project.jupiter_supply_apy) || 0) / 100);
+
+    const jupiterAnnualBorrowCost =
+      jupiterDebtUsd * ((Number(project.jupiter_borrow_apy) || 0) / 100);
+
+    const jupiterLiveNetApy =
+      jupiterNetEquityUsd > 0
+        ? ((jupiterAnnualSupplyYield - jupiterAnnualBorrowCost) / jupiterNetEquityUsd) * 100
+        : 0;
+
     const pnl = isJupiterLoop
-      ? (Number(project.jupiter_net_equity_usd) || 0) - invested
+      ? jupiterNetEquityUsd - invested
       : earned - invested;
-    const displayedPnl = isJupiterLoop ? Number(project.jupiter_position_pnl_usd) || 0 : pnl;
-    const pnlPercent = invested > 0 ? (displayedPnl / invested) * 100 : 0;
+
+    // jupiter_position_pnl_usd in the current sync can remain stale while the
+    // collateral/debt/equity values refresh, so do not present it as live P&L.
+    const displayedPnl = isJupiterLoop ? null : pnl;
+    const pnlPercent = displayedPnl != null && invested > 0
+      ? (displayedPnl / invested) * 100
+      : 0;
     const apy = isLuloLending
       ? Number(project.lulo_weighted_apy) || null
       : Number(project.apy) || (invested > 0 && project.per_day > 0 ? ((project.per_day * 365) / invested) * 100 : null);
@@ -1175,7 +1193,7 @@ const events = [
               <div className="rounded-md bg-secondary/20 border border-border/20 p-2 flex items-center justify-between gap-3">
                 <span className="text-[9px] uppercase font-semibold text-muted-foreground">Net APY</span>
                 <span className="font-mono text-lime-300">
-                  {Number(project.jupiter_net_apy || 0) >= 0 ? "+" : ""}{Number(project.jupiter_net_apy || 0).toFixed(2)}%
+                  {jupiterLiveNetApy >= 0 ? "+" : ""}{jupiterLiveNetApy.toFixed(2)}%
                 </span>
               </div>
 
@@ -1384,19 +1402,23 @@ const events = [
                 <p className="text-[9px] uppercase font-semibold tracking-wider text-muted-foreground">
                   {isJupiterLoop ? "Position P&L" : "Net P&L"}
                 </p>
-                <p
-                  className={`font-mono text-xs font-bold mt-0.5 ${
-                    displayedPnl >= 0 ? "text-emerald-400" : "text-rose-400"
-                  }`}
-                >
-                  {displayedPnl >= 0 ? "+" : ""}
-                  {formatCurrency(displayedPnl)}
-                  {isJupiterLoop && invested > 0 && (
-                    <span className="ml-1 text-[9px] opacity-80">
-                      ({pnlPercent >= 0 ? "+" : ""}{pnlPercent.toFixed(2)}%)
-                    </span>
-                  )}
-                </p>
+                {isJupiterLoop ? (
+                  <p
+                    className="font-mono text-xs font-semibold mt-0.5 text-muted-foreground"
+                    title="The current Jupiter sync is not refreshing the platform Position P&L field reliably."
+                  >
+                    —
+                  </p>
+                ) : (
+                  <p
+                    className={`font-mono text-xs font-bold mt-0.5 ${
+                      displayedPnl >= 0 ? "text-emerald-400" : "text-rose-400"
+                    }`}
+                  >
+                    {displayedPnl >= 0 ? "+" : ""}
+                    {formatCurrency(displayedPnl)}
+                  </p>
+                )}
               </div>
             )}
           </div>

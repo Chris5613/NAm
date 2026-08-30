@@ -120,13 +120,27 @@ export function applyJupiterInfLoopSnapshot(project, snapshot, now = new Date())
     jupiter_sol_usd: solUsd,
     jupiter_last_rate: currentRate,
     jupiter_last_synced_at: now.toISOString(),
-    jupiter_position_pnl_usd: positionPnlUsd,
-    jupiter_position_pnl_percentage: positionPnlPercentage,
+    // Prefer Fluid's authoritative live position P&L whenever the endpoint
+    // returns it. The old code always saved netEquity - startingEquity here,
+    // which is why the dashboard could show +$29 while Jupiter showed +$1.xx.
+    jupiter_position_pnl_usd: hasAuthoritativePnl
+      ? authoritativePnl
+      : positionPnlUsd,
+    jupiter_position_pnl_percentage: hasAuthoritativePnl
+      ? (Number.isFinite(Number(snapshot.pnlPercentage))
+          ? Number(snapshot.pnlPercentage)
+          : 0)
+      : positionPnlPercentage,
+
     jupiter_apy_earned_usd: hasAuthoritativePnl ? authoritativePnl : null,
     jupiter_apy_earned_percentage: hasAuthoritativePnl
-      ? Number(snapshot.pnlPercentage) || 0
+      ? (Number.isFinite(Number(snapshot.pnlPercentage))
+          ? Number(snapshot.pnlPercentage)
+          : 0)
       : null,
-    jupiter_pnl_source: hasAuthoritativePnl ? "fluid_position_stats" : project.jupiter_pnl_source,
+    jupiter_pnl_source: hasAuthoritativePnl
+      ? "fluid_position_stats"
+      : "net_equity_fallback",
   };
 
   let transactions = [...(project.transactions || [])];
