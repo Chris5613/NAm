@@ -56,19 +56,80 @@ export async function getJupiterInfLoopSnapshot(walletAddress, positionId) {
   let pnlPercentage = null;
 
   try {
-    // Fluid's PnL endpoint sends no Access-Control-Allow-Origin header, so a
-    // direct browser fetch is silently blocked by CORS on any deployed
-    // origin (it only "works" from tools that don't enforce CORS, like curl
-    // or Node). Route it through the same proxy fallback used elsewhere.
-    const pnlResponse = await withCorsProxy(
-      `${FLUID_BORROWING_URL}/vaults/${position.vaultId}/nfts/${position.id}/pnl`
-    );
-    const pnl = pnlResponse.data;
-    if (pnl) {
-      ({ pnlUsd, pnlPercentage } = parseFluidPnl(pnl, borrowToken));
+    const pnlUrl =
+      `${FLUID_BORROWING_URL}/vaults/${position.vaultId}/nfts/${position.id}/pnl`;
+
+    const pnlResponse = await withCorsProxy(pnlUrl);
+    const rawPnl = pnlResponse?.data ?? pnlResponse ?? null;
+
+    const pnl =
+      rawPnl?.data ??
+      rawPnl?.result ??
+      rawPnl?.pnl ??
+      rawPnl;
+
+    if (pnl && typeof pnl === "object") {
+      const parsed = parseFluidPnl(pnl, borrowToken);
+
+      if (Number.isFinite(parsed.pnlUsd)) {
+        pnlUsd = parsed.pnlUsd;
+      }
+
+      if (Number.isFinite(parsed.pnlPercentage)) {
+        pnlPercentage = parsed.pnlPercentage;
+      }
     }
-  } catch {
-    // Keep current position data when the optional P&L endpoint is unavailable.
+
+    console.info("[Jupiter INF Loop] Fluid P&L sync", {
+      url: pnlUrl,
+      raw: rawPnl,
+      parsedPnlUsd: pnlUsd,
+      parsedPnlPercentage: pnlPercentage,
+    });
+  } catch (error) {
+    console.warn("[Jupiter INF Loop] Fluid P&L fetch failed:", error);
+  }
+
+  if (!Number.isFinite(pnlUsd)) {
+    const directUsdCandidates = [
+      position?.pnlUsd,
+      position?.pnl_usd,
+      position?.positionPnlUsd,
+      position?.position_pnl_usd,
+      position?.stats?.pnlUsd,
+      position?.stats?.pnl_usd,
+      position?.pnl?.usd,
+      position?.pnl?.valueUsd,
+    ];
+
+    const directUsd = directUsdCandidates
+      .map(Number)
+      .find(Number.isFinite);
+
+    if (Number.isFinite(directUsd)) {
+      pnlUsd = directUsd;
+      console.info("[Jupiter INF Loop] Using Jupiter position P&L fallback:", pnlUsd);
+    }
+  }
+
+  if (!Number.isFinite(pnlPercentage)) {
+    const directPctCandidates = [
+      position?.pnlPercentage,
+      position?.pnl_percentage,
+      position?.positionPnlPercentage,
+      position?.position_pnl_percentage,
+      position?.stats?.pnlPercentage,
+      position?.stats?.pnl_percentage,
+      position?.pnl?.percentage,
+    ];
+
+    const directPct = directPctCandidates
+      .map(Number)
+      .find(Number.isFinite);
+
+    if (Number.isFinite(directPct)) {
+      pnlPercentage = Math.abs(directPct) > 10 ? directPct / 100 : directPct;
+    }
   }
 
   return {
@@ -85,6 +146,7 @@ export async function getJupiterInfLoopSnapshot(walletAddress, positionId) {
     netApy: netEquityUsd > 0 ? (annualNetUsd / netEquityUsd) * 100 : 0,
     pnlUsd: Number.isFinite(pnlUsd) ? pnlUsd : null,
     pnlPercentage: Number.isFinite(pnlPercentage) ? pnlPercentage : null,
+    pnlAvailable: Number.isFinite(pnlUsd),
     source: "jupiter_lend",
   };
 }
