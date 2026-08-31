@@ -228,6 +228,23 @@ function getDisplayCategoryLabel(project) {
   return CATEGORY_CONFIGS[getProjectCategory(project)]?.label || CATEGORY_CONFIGS.other.label;
 }
 
+function getProjectFilterKey(project) {
+  const customLabel = String(
+    project?.custom_tag ||
+    project?.tag_label ||
+    project?.category_label ||
+    ""
+  ).trim();
+
+  // Custom tags get their own exact filter.
+  if (customLabel) {
+    return `tag:${customLabel.toLowerCase()}`;
+  }
+
+  // Projects without a custom tag still use the normal broad categories.
+  return getProjectCategory(project);
+}
+
 const CATEGORY_CONFIGS = {
   crypto: {
     label: "Crypto Staking",
@@ -612,42 +629,56 @@ const events = [
   };
   const inactiveProjects = projects.filter((p) => isInactiveProject(p));
 
-  const categoryCounts = useMemo(() => {
-    const counts = { all: activeProjects.length };
-    activeProjects.forEach((p) => {
-      const cat = getProjectCategory(p);
-      counts[cat] = (counts[cat] || 0) + 1;
-    });
-    return counts;
-  }, [activeProjects]);
+const categoryCounts = useMemo(() => {
+  const counts = { all: activeProjects.length };
 
-  const filteredProjects = useMemo(() => {
-    if (categoryFilter === "all") return activeProjects;
-    return activeProjects.filter((p) => getProjectCategory(p) === categoryFilter);
-  }, [activeProjects, categoryFilter]);
+  activeProjects.forEach((project) => {
+    const key = getProjectFilterKey(project);
+    counts[key] = (counts[key] || 0) + 1;
+  });
 
-  const getDailyAmount = useCallback((project) => {
-    if (isInactiveProject(project)) return 0;
-    if (project?.yield_tracking === "lulo_lending") {
-      const balance = Number(project.lulo_total_balance_usd) || 0;
-      const apy = Number(project.lulo_weighted_apy) || 0;
-      return (balance * (apy / 100)) / 365;
+  return counts;
+}, [activeProjects]);
+
+const customTagTabs = useMemo(() => {
+  const tags = new Map();
+
+  activeProjects.forEach((project) => {
+    const label = String(
+      project?.custom_tag ||
+      project?.tag_label ||
+      project?.category_label ||
+      ""
+    ).trim();
+
+    if (!label) return;
+
+    const id = `tag:${label.toLowerCase()}`;
+
+    if (!tags.has(id)) {
+      tags.set(id, {
+        id,
+        label,
+        count: 0,
+      });
     }
-    if (project?.yield_tracking === "jupiter_inf_loop") {
-      const collateralUsd = (Number(project.jupiter_collateral_inf) || 0) * (Number(project.jupiter_inf_usd) || 0);
-      const debtUsd = (Number(project.jupiter_borrowed_sol) || 0) * (Number(project.jupiter_sol_usd) || 0);
-      const annualSupplyYield = collateralUsd * ((Number(project.jupiter_supply_apy) || 0) / 100);
-      const annualBorrowCost = debtUsd * ((Number(project.jupiter_borrow_apy) || 0) / 100);
-      return (annualSupplyYield - annualBorrowCost) / 365;
-    }
-    if (project?.yield_tracking === "sanctum_inf") {
-      return getLatestTrackedYieldAmount(project);
-    }
-    if (project?.yield_tracking === "kryptex") {
-      return Number(project.kryptex_profitability_usd_day) || 0;
-    }
-    return getDailyReturnValue(project, dailyReturns, trxPrice);
-  }, [dailyReturns, trxPrice]);
+
+    tags.get(id).count += 1;
+  });
+
+  return Array.from(tags.values());
+}, [activeProjects]);
+
+const filteredProjects = useMemo(() => {
+  if (categoryFilter === "all") {
+    return activeProjects;
+  }
+
+  return activeProjects.filter(
+    (project) =>
+      getProjectFilterKey(project) === categoryFilter
+  );
+}, [activeProjects, categoryFilter]);
 
   const getProjectEarningsTotal = (project) => {
     const txns = Array.isArray(project?.transactions) ? project.transactions : [];
@@ -946,7 +977,7 @@ const events = [
     const jupiterNetEquityUsd = Number(project.jupiter_net_equity_usd) || 0;
 
     const pnl = isJupiterLoop
-      ? Number(project.jupiter_position_pnl_usd) || 0
+      ? Number(project.getDisplayCategoryLabel) || 0
       : earned - invested;
 
     const displayedPnl = pnl;
@@ -1669,15 +1700,44 @@ const events = [
         <div className="space-y-4">
           <div className="flex items-center justify-between flex-wrap gap-2 pt-2">
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-              {[
-                { id: "all", label: "All Earner Types", count: categoryCounts.all || 0 },
-                { id: "crypto", label: "Crypto Staking", count: categoryCounts.crypto || 0 },
-                { id: "stocks", label: "Stocks & Index", count: categoryCounts.stocks || 0 },
-                { id: "real_estate", label: "Real Estate", count: categoryCounts.real_estate || 0 },
-                { id: "lending", label: "DeFi Lending", count: categoryCounts.lending || 0 },
-                { id: "mining", label: "Hardware / Mining", count: categoryCounts.mining || 0 },
-                { id: "monthly_rate", label: "Monthly", count: null },
-              ]
+{[
+  {
+    id: "all",
+    label: "All Earner Types",
+    count: categoryCounts.all || 0,
+  },
+
+  // Exact custom tags
+  ...customTagTabs,
+
+  // Built-in categories are still available for projects
+  // that don't have a custom tag.
+  {
+    id: "crypto",
+    label: "Crypto Staking",
+    count: categoryCounts.crypto || 0,
+  },
+  {
+    id: "stocks",
+    label: "Stocks & Index",
+    count: categoryCounts.stocks || 0,
+  },
+  {
+    id: "lending",
+    label: "DeFi Lending",
+    count: categoryCounts.lending || 0,
+  },
+  {
+    id: "mining",
+    label: "Hardware / Mining",
+    count: categoryCounts.mining || 0,
+  },
+  {
+    id: "monthly_rate",
+    label: "Monthly",
+    count: null,
+  },
+]}
                 .filter((item) => item.id === "all" || item.id === "monthly_rate" || item.count > 0)
                 .map((tab) => {
                   if (tab.id === "monthly_rate") {
