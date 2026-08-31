@@ -194,14 +194,8 @@ const positionPnlPercentage = startingEquityUsd > 0
     // Prefer Fluid's authoritative live position P&L whenever the endpoint
     // returns it. The old code always saved netEquity - startingEquity here,
     // which is why the dashboard could show +$29 while Jupiter showed +$1.xx.
-    jupiter_position_pnl_usd: hasAuthoritativePnl
-      ? authoritativePnl
-      : positionPnlUsd,
-    jupiter_position_pnl_percentage: hasAuthoritativePnl
-      ? (Number.isFinite(Number(snapshot.pnlPercentage))
-          ? Number(snapshot.pnlPercentage)
-          : 0)
-      : positionPnlPercentage,
+jupiter_position_pnl_usd: positionPnlUsd,
+jupiter_position_pnl_percentage: positionPnlPercentage,
 
     jupiter_apy_earned_usd: hasAuthoritativePnl ? authoritativePnl : null,
     jupiter_apy_earned_percentage: hasAuthoritativePnl
