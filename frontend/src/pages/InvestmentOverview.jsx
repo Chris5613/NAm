@@ -1723,6 +1723,11 @@ const filteredProjects = useMemo(() => {
     count: categoryCounts.stocks || 0,
   },
   {
+    id: "real_estate",
+    label: "Real Estate",
+    count: categoryCounts.real_estate || 0,
+  },
+  {
     id: "lending",
     label: "DeFi Lending",
     count: categoryCounts.lending || 0,
@@ -1737,7 +1742,7 @@ const filteredProjects = useMemo(() => {
     label: "Monthly",
     count: null,
   },
-]}
+]
                 .filter((item) => item.id === "all" || item.id === "monthly_rate" || item.count > 0)
                 .map((tab) => {
                   if (tab.id === "monthly_rate") {
