@@ -158,13 +158,28 @@ export function applyJupiterInfLoopSnapshot(project, snapshot, now = new Date())
   const startingEquityUsd = Number(project.invested) || 0;
   const authoritativePnl = Number(snapshot?.pnlUsd);
   const hasAuthoritativePnl = snapshot?.pnlUsd != null && Number.isFinite(authoritativePnl);
-  const positionPnlUsd = startingEquityUsd > 0
-    ? Number(((Number(snapshot.netEquityUsd) || 0) - startingEquityUsd).toFixed(6))
-    : 0;
-  const positionPnlPercentage = startingEquityUsd > 0
-    ? Number(((positionPnlUsd / startingEquityUsd) * 100).toFixed(6))
-    : 0;
+// P&L caused by the value of the position changing from coin price movement
+const pricePnlUsd = startingEquityUsd > 0
+  ? Number(
+      ((Number(snapshot.netEquityUsd) || 0) - startingEquityUsd).toFixed(6)
+    )
+  : 0;
 
+// APY/yield earned from Jupiter/Fluid
+const apyEarnedUsd = hasAuthoritativePnl
+  ? authoritativePnl
+  : 0;
+
+// Position P&L = price movement + APY earned
+const positionPnlUsd = Number(
+  (pricePnlUsd + apyEarnedUsd).toFixed(6)
+);
+
+const positionPnlPercentage = startingEquityUsd > 0
+  ? Number(
+      ((positionPnlUsd / startingEquityUsd) * 100).toFixed(6)
+    )
+  : 0;
   const positionState = {
     jupiter_collateral_inf: Number(snapshot.collateralInf) || 0,
     jupiter_borrowed_sol: Number(snapshot.borrowedSol) || 0,
