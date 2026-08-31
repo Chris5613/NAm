@@ -228,26 +228,9 @@ function getDisplayCategoryLabel(project) {
   return CATEGORY_CONFIGS[getProjectCategory(project)]?.label || CATEGORY_CONFIGS.other.label;
 }
 
-function getProjectFilterKey(project) {
-  const customLabel = String(
-    project?.custom_tag ||
-    project?.tag_label ||
-    project?.category_label ||
-    ""
-  ).trim();
-
-  // Custom tags get their own exact filter.
-  if (customLabel) {
-    return `tag:${customLabel.toLowerCase()}`;
-  }
-
-  // Projects without a custom tag still use the normal broad categories.
-  return getProjectCategory(project);
-}
-
 const CATEGORY_CONFIGS = {
   crypto: {
-    label: "Crypto Staking",
+    label: "Crypto",
     icon: Coins,
     badgeBg: "bg-purple-500/10 text-purple-400 border-purple-500/30",
     cardBg: "bg-gradient-to-b from-purple-950/20 via-card/90 to-card border-purple-500/30 hover:border-purple-500/60 shadow-lg shadow-purple-950/20",
@@ -629,40 +612,11 @@ const categoryCounts = useMemo(() => {
   const counts = { all: activeProjects.length };
 
   activeProjects.forEach((project) => {
-    const key = getProjectFilterKey(project);
-    counts[key] = (counts[key] || 0) + 1;
+    const category = getProjectCategory(project);
+    counts[category] = (counts[category] || 0) + 1;
   });
 
   return counts;
-}, [activeProjects]);
-
-const customTagTabs = useMemo(() => {
-  const tags = new Map();
-
-  activeProjects.forEach((project) => {
-    const label = String(
-      project?.custom_tag ||
-      project?.tag_label ||
-      project?.category_label ||
-      ""
-    ).trim();
-
-    if (!label) return;
-
-    const id = `tag:${label.toLowerCase()}`;
-
-    if (!tags.has(id)) {
-      tags.set(id, {
-        id,
-        label,
-        count: 0,
-      });
-    }
-
-    tags.get(id).count += 1;
-  });
-
-  return Array.from(tags.values());
 }, [activeProjects]);
 
 const filteredProjects = useMemo(() => {
@@ -671,8 +625,7 @@ const filteredProjects = useMemo(() => {
   }
 
   return activeProjects.filter(
-    (project) =>
-      getProjectFilterKey(project) === categoryFilter
+    (project) => getProjectCategory(project) === categoryFilter
   );
 }, [activeProjects, categoryFilter]);
 
@@ -1080,7 +1033,7 @@ const pnl = isJupiterLoop
                 </h3>
 
                 <div className="flex items-center gap-1.5 mt-1 flex-nowrap overflow-x-auto scrollbar-none max-w-full pb-0.5">
-                  <span className={`inline-flex items-center gap-1 text-[10px] font-medium uppercase px-2 py-0.5 rounded-full border ${config.badgeBg}`}>
+                  <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${config.badgeBg}`}>
                     <CategoryIcon className="w-3 h-3" strokeWidth={2} />
                     {getDisplayCategoryLabel(project)}
                     {(project.custom_tag || project.tag_label || project.category_label) && (
@@ -1748,14 +1701,11 @@ const pnl = isJupiterLoop
     count: categoryCounts.all || 0,
   },
 
-  // Exact custom tags
-  ...customTagTabs,
-
   // Built-in categories are still available for projects
   // that don't have a custom tag.
   {
     id: "crypto",
-    label: "Crypto Staking",
+    label: "Crypto",
     count: categoryCounts.crypto || 0,
   },
   {
