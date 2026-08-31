@@ -50,3 +50,27 @@ async def kryptex_status() -> dict:
         "devices": read_kryptex("devices"),
         "currency_rates": read_kryptex("currency-rates"),
     }
+
+
+@app.get("/api/jupiter/fluid-pnl")
+async def jupiter_fluid_pnl(vault_id: int, position_id: int) -> dict:
+    url = (
+        f"https://api.solana.fluid.io/v2/main/borrowing/"
+        f"vaults/{vault_id}/nfts/{position_id}/pnl"
+    )
+
+    try:
+        with urlopen(url, timeout=10) as response:
+            return json.load(response)
+
+    except HTTPError as error:
+        raise HTTPException(
+            status_code=error.code,
+            detail=f"Fluid API returned HTTP {error.code}",
+        ) from error
+
+    except (URLError, TimeoutError, json.JSONDecodeError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Fluid P&L service is unavailable.",
+        ) from error

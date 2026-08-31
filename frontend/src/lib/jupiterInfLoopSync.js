@@ -1,8 +1,6 @@
 import { INF_MINT, SOL_MINT } from "./infYieldSync";
-import { withCorsProxy } from "./cors-proxy";
 
 const JUPITER_LEND_POSITIONS_URL = "https://lite-api.jup.ag/lend/v1/borrow/positions";
-const FLUID_BORROWING_URL = "https://api.solana.fluid.io/v2/main/borrowing";
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
 function tokenAmount(rawAmount, decimals) {
@@ -55,34 +53,30 @@ export async function getJupiterInfLoopSnapshot(walletAddress, positionId) {
   let pnlUsd = null;
   let pnlPercentage = null;
 
+  const BACKEND_URL = "https://nam1-dmte.onrender.com";
+
   try {
     const pnlUrl =
-      `${FLUID_BORROWING_URL}/vaults/${position.vaultId}/nfts/${position.id}/pnl`;
+      `${BACKEND_URL}/api/jupiter/fluid-pnl` +
+      `?vault_id=${encodeURIComponent(position.vaultId)}` +
+      `&position_id=${encodeURIComponent(position.id)}`;
 
-    const pnlResponse = await withCorsProxy(pnlUrl);
-    const rawPnl = pnlResponse?.data ?? pnlResponse ?? null;
+    const pnlResponse = await fetch(pnlUrl);
 
-    const pnl =
-      rawPnl?.data ??
-      rawPnl?.result ??
-      rawPnl?.pnl ??
-      rawPnl;
-
-    if (pnl && typeof pnl === "object") {
-      const parsed = parseFluidPnl(pnl, borrowToken);
-
-      if (Number.isFinite(parsed.pnlUsd)) {
-        pnlUsd = parsed.pnlUsd;
-      }
-
-      if (Number.isFinite(parsed.pnlPercentage)) {
-        pnlPercentage = parsed.pnlPercentage;
-      }
+    if (!pnlResponse.ok) {
+      const errorText = await pnlResponse.text().catch(() => "");
+      throw new Error(
+        `Fluid P&L proxy returned HTTP ${pnlResponse.status}${errorText ? `: ${errorText}` : ""}`
+      );
     }
+
+    const pnl = await pnlResponse.json();
+
+    ({ pnlUsd, pnlPercentage } = parseFluidPnl(pnl, borrowToken));
 
     console.info("[Jupiter INF Loop] Fluid P&L sync", {
       url: pnlUrl,
-      raw: rawPnl,
+      raw: pnl,
       parsedPnlUsd: pnlUsd,
       parsedPnlPercentage: pnlPercentage,
     });
