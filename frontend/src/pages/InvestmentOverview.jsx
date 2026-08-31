@@ -504,10 +504,6 @@ const events = [
     }
   };
 
-  const toggleExpand = (id) => {
-    setExpandedId(expandedId === id ? null : id);
-  };
-
   const activeProjects = useMemo(
     () => projects.filter((p) => !isInactiveProject(p)),
     [projects]
@@ -679,6 +675,51 @@ const filteredProjects = useMemo(() => {
       getProjectFilterKey(project) === categoryFilter
   );
 }, [activeProjects, categoryFilter]);
+
+const getDailyAmount = useCallback((project) => {
+  if (isInactiveProject(project)) return 0;
+
+  if (project?.yield_tracking === "lulo_lending") {
+    const balance = Number(project.lulo_total_balance_usd) || 0;
+    const apy = Number(project.lulo_weighted_apy) || 0;
+
+    return (balance * (apy / 100)) / 365;
+  }
+
+  if (project?.yield_tracking === "jupiter_inf_loop") {
+    const collateralUsd =
+      (Number(project.jupiter_collateral_inf) || 0) *
+      (Number(project.jupiter_inf_usd) || 0);
+
+    const debtUsd =
+      (Number(project.jupiter_borrowed_sol) || 0) *
+      (Number(project.jupiter_sol_usd) || 0);
+
+    const annualSupplyYield =
+      collateralUsd *
+      ((Number(project.jupiter_supply_apy) || 0) / 100);
+
+    const annualBorrowCost =
+      debtUsd *
+      ((Number(project.jupiter_borrow_apy) || 0) / 100);
+
+    return (annualSupplyYield - annualBorrowCost) / 365;
+  }
+
+  if (project?.yield_tracking === "sanctum_inf") {
+    return getLatestTrackedYieldAmount(project);
+  }
+
+  if (project?.yield_tracking === "kryptex") {
+    return Number(project.kryptex_profitability_usd_day) || 0;
+  }
+
+  return getDailyReturnValue(
+    project,
+    dailyReturns,
+    trxPrice
+  );
+}, [dailyReturns, trxPrice]);
 
   const getProjectEarningsTotal = (project) => {
     const txns = Array.isArray(project?.transactions) ? project.transactions : [];
@@ -976,9 +1017,9 @@ const filteredProjects = useMemo(() => {
     const jupiterDebtUsd = (Number(project.jupiter_borrowed_sol) || 0) * (Number(project.jupiter_sol_usd) || 0);
     const jupiterNetEquityUsd = Number(project.jupiter_net_equity_usd) || 0;
 
-    const pnl = isJupiterLoop
-      ? Number(project.getDisplayCategoryLabel) || 0
-      : earned - invested;
+const pnl = isJupiterLoop
+  ? Number(project.jupiter_position_pnl_usd) || 0
+  : earned - invested;
 
     const displayedPnl = pnl;
 
