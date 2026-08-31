@@ -6,7 +6,7 @@ const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 function tokenAmount(rawAmount, decimals) {
   return Number(rawAmount || 0) / (10 ** Number(decimals || 0));
 }
-
+// hi
 export function parseFluidPnl(pnl, borrowToken) {
   const tokenPnl = tokenAmount(pnl?.amount, borrowToken?.decimals);
   const tokenPrice = Number(borrowToken?.price) || 0;
