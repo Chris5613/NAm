@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { walletsApi, tokenPrefsApi, customTokensApi, cryptoCacheApi } from "@/lib/api";
+import { walletsApi, tokenPrefsApi, customTokensApi, cryptoCacheApi, projectsApi } from "@/lib/api";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -294,6 +294,7 @@ export default function CryptoPage() {
   const [manualDefiPositions, setManualDefiPositions] = useState(() =>
     getSavedManualDefiPositions()
   );
+  const [luloProject, setLuloProject] = useState(null);
   const [defiLoading] = useState(false);
   const [tokenPrefs, setTokenPrefs] = useState({});
   const [customTokens, setCustomTokens] = useState([]);
@@ -316,17 +317,54 @@ export default function CryptoPage() {
 
 
   const lastSyncedRef = useRef(null);
-  const allDefiPositions = useMemo(
-    () => [...defiPositions, ...manualDefiPositions],
-    [defiPositions, manualDefiPositions]
-  );
+  const liveLuloPosition = useMemo(() => {
+    if (!luloProject || !(Number(luloProject.lulo_total_balance_usd) > 0)) return null;
+
+    return {
+      platform_id: "lulo-live",
+      platform: "Lulo",
+      label: "Lending",
+      type: "Lending",
+      logo: "https://raw.githubusercontent.com/jup-ag/platform-list/main/img/flexlend.webp",
+      url: "https://lulo.fi",
+      total_value: Number(luloProject.lulo_total_balance_usd) || 0,
+      tokens: [
+        {
+          symbol: "USDC",
+          name: "USDC",
+          amount: Number(luloProject.lulo_usdc_balance_usd) || 0,
+          price: 1,
+          value: Number(luloProject.lulo_usdc_balance_usd) || 0,
+          kind: "supplied",
+        },
+        {
+          symbol: "USDS",
+          name: "USDS",
+          amount: Number(luloProject.lulo_usds_balance_usd) || 0,
+          price: 1,
+          value: Number(luloProject.lulo_usds_balance_usd) || 0,
+          kind: "supplied",
+        },
+      ].filter((token) => token.amount > 0),
+      live: true,
+      synced_at: luloProject.lulo_last_synced_at || null,
+    };
+  }, [luloProject]);
+
+  const allDefiPositions = useMemo(() => {
+    const manualPositions = liveLuloPosition
+      ? manualDefiPositions.filter((position) => position.platform?.trim().toLowerCase() !== "lulo")
+      : manualDefiPositions;
+    return [...defiPositions, ...manualPositions, ...(liveLuloPosition ? [liveLuloPosition] : [])];
+  }, [defiPositions, manualDefiPositions, liveLuloPosition]);
 
   const fetchWallets = useCallback(async () => {
     try {
-      const [walletsRes, prefsRes, customRes] = await Promise.all([
+      const [walletsRes, prefsRes, customRes, projectsRes] = await Promise.all([
         walletsApi.getAll(),
         tokenPrefsApi.getAll(),
         customTokensApi.getAll(),
+        projectsApi.getAll(),
       ]);
 
       setWallets(walletsRes.data || []);
@@ -338,6 +376,9 @@ export default function CryptoPage() {
 
       setTokenPrefs(prefsMap);
       setCustomTokens(customRes.data || []);
+      setLuloProject((projectsRes.data || []).find(
+        (project) => project.yield_tracking === "lulo_lending",
+      ) || null);
     } catch {
       toast.error("Failed to load wallets");
     } finally {

@@ -364,7 +364,7 @@ function gameToSingle(game, title = "NRFI") {
 
   return {
     ...gameToLeg(game, title),
-    amount: "",
+    amount: "25",
     odds: "",
     matchup: `${awayTeam} @ ${homeTeam} · ${awayPitcher} vs ${homePitcher} · ${formatFirstPitch(game?.gameDate)}`,
     date: getPacificDateKey(game?.gameDate) || getPstDateString(),
@@ -400,7 +400,7 @@ function emptyForm() {
     title: "NRFI",
     matchup: "",
     gamePk: "",
-    amount: "",
+    amount: "25",
     odds: "",
     result: "pending",
     date: getPstDateString(),
