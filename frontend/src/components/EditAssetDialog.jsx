@@ -24,6 +24,7 @@ const CATEGORIES = [
   { value: "crypto", label: "Crypto" },
   { value: "cash", label: "Cash / Bank" },
   { value: "debts", label: "Debts / Liabilities" },
+  { value: "other", label: "Other Assets" },
 ];
 
 export default function EditAssetDialog({ asset, open, onOpenChange, onUpdated }) {
@@ -64,7 +65,7 @@ export default function EditAssetDialog({ asset, open, onOpenChange, onUpdated }
   };
 
   const showQuantityFields = ["stocks", "crypto"].includes(form.category);
-  const showManualValue = ["cash", "crypto_projects", "debts"].includes(form.category);
+  const showManualValue = ["cash", "crypto_projects", "debts", "other"].includes(form.category);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
