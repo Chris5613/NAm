@@ -31,31 +31,6 @@ export const withCorsProxy = async (url, config = {}) => {
 };
 
 /**
- * POST request through CORS proxy (for JSON-RPC and POST APIs)
- */
-export const withCorsProxyPost = async (url, data, config = {}) => {
-  // For POST requests, direct call first
-  try {
-    const response = await axios.post(url, data, { ...config, timeout: 10000 });
-    return response;
-  } catch (error) {
-    // If CORS error, we need to send POST through proxy differently
-    if (error.response?.status === 0 || error.message?.includes("CORS") || error.message?.includes("Network")) {
-      try {
-        // Some CORS proxies support POST by encoding in URL as base64
-        const proxyUrl = `${CORS_PROXY_URL}/?url=${encodeURIComponent(url)}`;
-        const response = await axios.post(proxyUrl, data, { ...config, timeout: 10000 });
-        return response;
-      } catch (proxyError) {
-        console.warn(`CORS proxy failed for POST ${url}:`, proxyError);
-        throw error;
-      }
-    }
-    throw error;
-  }
-};
-
-/**
  * Alternative: use fetch API for CORS requests (no credentials mode)
  */
 export const fetchWithCors = async (url, options = {}) => {

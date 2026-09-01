@@ -145,7 +145,7 @@ export default function AddProjectDialog({ open, onOpenChange, onCreated }) {
             <div className="flex-1 space-y-2">
               <Label>Project Name</Label>
               <Input
-                placeholder="e.g. ETH Staking, S&P 500, GoMining"
+                placeholder="e.g. ETH Staking, S&P 500, Kryptex"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 data-testid="project-input-name"

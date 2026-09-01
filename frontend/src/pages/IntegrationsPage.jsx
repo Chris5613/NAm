@@ -6,10 +6,6 @@
 
 import { useState, useCallback } from "react";
 import NosanaEarningsCard from "@/components/NosanaEarningsCard";
-import RollerCoinEarningsCard from "@/components/RollerCoinEarningsCard";
-import AcurastEarningsCard from "@/components/AcurastEarningsCard";
-import UnityNetworkEarningsCard from "@/components/UnityNetworkEarningsCard";
-import GoMiningEarningsCard from "@/components/GoMiningEarningsCard";
 import KryptexEarningsCard from "@/components/KryptexEarningsCard";
 import {
   AddIntegrationDialog,
@@ -60,10 +56,6 @@ export default function IntegrationsPage() {
       <div className="space-y-4">
         <NosanaEarningsCard />
         <KryptexEarningsCard />
-         {/*<UnityNetworkEarningsCard />*/}
-        <RollerCoinEarningsCard />
-        {/* <AcurastEarningsCard /> */}
-        {/* <GoMiningEarningsCard /> */}
 
         {/* Custom integrations */}
         {customIntegrations.length > 0 && (

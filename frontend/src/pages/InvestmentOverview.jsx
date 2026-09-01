@@ -181,7 +181,7 @@ function normalizeProjectCategoryKey(rawValue = "") {
   ];
   const realEstateKeys = ["real estate", "reit", "property", "rental"];
   const lendingKeys = ["lending", "defi lending", "aave", "yield", "compound", "savings", "bank"];
-  const miningKeys = ["mining", "hardware / mining", "hardware", "device", "acurast", "nosana", "roller", "unity", "phone farm"];
+  const miningKeys = ["mining", "hardware / mining", "hardware", "device", "nosana", "roller"];
   const otherKeys = ["alternative yield", "other"];
 
   if (cryptoKeys.some((key) => value.includes(key))) return "crypto";
@@ -212,7 +212,7 @@ function getProjectCategory(project) {
   if (name.includes("lending") || name.includes("aave") || name.includes("yield") || name.includes("defi") || name.includes("compound")) {
     return "lending";
   }
-  if (name.includes("mining") || name.includes("acurast") || name.includes("nosana") || name.includes("roller") || name.includes("unity") || name.includes("device") || name.includes("hardware")) {
+  if (name.includes("mining") || name.includes("nosana") || name.includes("roller") || name.includes("device") || name.includes("hardware")) {
     return "mining";
   }
   if (cat === "stocks" || name.includes("stock") || name.includes("index") || name.includes("s&p") || name.includes("dividend") || name.includes("equity") || name.includes("etf")) {
@@ -420,12 +420,8 @@ export default function InvestmentOverview() {
 const events = [
   "focus",
   "storage",
-  "acurast-sync-complete",
-  "unity-network-sync-complete",
   "rollercoin-sync-complete",
   "nosana-sync-complete",
-  "gomining-sync-complete",
-  "gomining-token-sync-complete",
 ];
     events.forEach((e) => window.addEventListener(e, refresh));
 
@@ -896,76 +892,6 @@ const getDailyAmount = useCallback((project) => {
     const rollerCoinAverageTrx =
       rollerCoinActiveDays > 0 ? rollerCoinMonthTrx / rollerCoinActiveDays : 0;
 
-    const unityProjectName = String(project.name || "")
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "");
-
-    const unityYieldTracking = String(project.yield_tracking || "")
-      .trim()
-      .toLowerCase();
-
-    const unityCategoryText = Array.isArray(project.categories)
-      ? project.categories
-          .map((category) => String(category?.name || "").toLowerCase())
-          .join(" ")
-      : "";
-
-    const isUnityNetwork =
-      unityProjectName === "unitynetwork" ||
-      unityProjectName === "phonefarm" ||
-      unityYieldTracking.includes("unity") ||
-      unityCategoryText.includes("phone rental") ||
-      unityCategoryText.includes("unity");
-
-    const unityTransactions =
-      isUnityNetwork && Array.isArray(project.transactions)
-        ? project.transactions.filter((txn) => {
-            const type = String(txn?.type || "").toLowerCase();
-            return !type || type === "earning" || type === "earned";
-          })
-        : [];
-
-    const unityTodayKey = new Date().toLocaleDateString("en-CA");
-    const unityMonthKey = unityTodayKey.slice(0, 7);
-
-    const unityMonthTransactions = unityTransactions.filter((txn) => {
-      const date = String(
-        txn?.date || txn?.source_date || txn?.created_at || ""
-      ).slice(0, 10);
-      return date.startsWith(unityMonthKey);
-    });
-
-    const unityMonthEarned = unityMonthTransactions.reduce(
-      (sum, txn) => sum + (Number(txn?.amount) || 0),
-      0
-    );
-
-    const unityActiveDays = new Set(
-      unityMonthTransactions
-        .filter((txn) => (Number(txn?.amount) || 0) > 0)
-        .map((txn) =>
-          String(
-            txn?.date || txn?.source_date || txn?.created_at || ""
-          ).slice(0, 10)
-        )
-    ).size;
-
-    const unityAverageActiveDay =
-      unityActiveDays > 0 ? unityMonthEarned / unityActiveDays : 0;
-
-    const unityLatestSync =
-      unityTransactions
-        .map((txn) => txn?.updated_at || txn?.created_at || null)
-        .filter(Boolean)
-        .sort()
-        .pop() || null;
-
-    const unityRentalStatus =
-      Number(project.per_day || 0) > 0 || unityMonthEarned > 0
-        ? "Active"
-        : "Idle";
-
     const jupiterCollateralUsd = (Number(project.jupiter_collateral_inf) || 0) * (Number(project.jupiter_inf_usd) || 0);
     const jupiterDebtUsd = (Number(project.jupiter_borrowed_sol) || 0) * (Number(project.jupiter_sol_usd) || 0);
     const jupiterNetEquityUsd = Number(project.jupiter_net_equity_usd) || 0;
@@ -1289,46 +1215,6 @@ const pnl = isJupiterLoop
                 </span>
                 <span className="font-mono text-foreground">
                   {trxPrice > 0 ? formatCurrency(trxPrice) : "—"}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {isUnityNetwork && (
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
-                  This Month
-                </span>
-                <span className="font-mono text-emerald-400">
-                  {formatCurrency(unityMonthEarned)}
-                </span>
-              </div>
-
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
-                  Active Days
-                </span>
-                <span className="font-mono text-foreground">
-                  {unityActiveDays}
-                </span>
-              </div>
-
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
-                  Avg / Active Day
-                </span>
-                <span className="font-mono text-foreground">
-                  {formatCurrency(unityAverageActiveDay)}
-                </span>
-              </div>
-
-              <div className="rounded-md bg-secondary/20 border border-border/20 p-2 text-right">
-                <span className="block text-[9px] uppercase font-semibold text-muted-foreground">
-                  Last Sync
-                </span>
-                <span className="font-mono text-muted-foreground">
-                  {unityLatestSync ? formatSyncTime(unityLatestSync) : "—"}
                 </span>
               </div>
             </div>

@@ -5,7 +5,6 @@ import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/pages/Dashboard";
 import InvestmentOverview from "@/pages/InvestmentOverview";
 import CryptoPage from "@/pages/CryptoPage";
-import GoMiningPage from "@/pages/GoMiningPage";
 import IntegrationsPage from "@/pages/IntegrationsPage";
 import CloudPage from "@/pages/CloudPage";
 import { Toaster } from "@/components/ui/sonner";
@@ -17,12 +16,9 @@ import {
   shouldRunCatchupNow,
   runTodayOnlyMigrationIfNeeded,
 } from "@/lib/nosanaSync";
-import { runAcurastUsdToAcuMigrationIfNeeded } from "@/lib/acurastSync";
 import { syncKryptex } from "@/lib/kryptexSync";
 import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
-import { installExtensionListener } from "@/lib/unityNetworkExtensionSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
-import RollercoinCalculator from "./pages/RollercoinCalculator";
 
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
@@ -30,7 +26,6 @@ import RollercoinCalculator from "./pages/RollercoinCalculator";
 let dailySnapshotAttempted = false;
 let nosanaSchedulerStarted = false;
 let demoBootstrapAttempted = false;
-let unityExtensionListenerStarted = false;
 let kryptexSchedulerStarted = false;
 let kryptexExtensionListenerStarted = false;
 
@@ -58,19 +53,12 @@ function App() {
   // One-time demo bootstrap — pre-seeds the Nosana config + first sync so
   // the user can play with the app immediately. No-op if the user already
   // has Nosana configured or if we've seeded before.
-  //
-  // We chain the today-only migration *after* bootstrap so demo users who
-  // were seeded with the legacy 35-day backfill get auto-collapsed to a
-  // "today only" view (matches the latest product spec) on next app load.
   useEffect(() => {
     if (demoBootstrapAttempted) return;
     demoBootstrapAttempted = true;
     (async () => {
       await bootstrapDemoData();
       await runTodayOnlyMigrationIfNeeded();
-      // Acurast switched data models (USD → ACU tokens). Wipes any earlier
-      // USD-based config + its synced txns so the user starts clean.
-      await runAcurastUsdToAcuMigrationIfNeeded();
     })();
   }, []);
 
@@ -133,17 +121,6 @@ function App() {
     };
   }, []);
 
-  // Unity Nodes Chrome-extension listener — registers a window.postMessage
-  // handler so the extension's content script can push earnings to us in
-  // real time. Pure client-side: no polling, no backend hop. The extension
-  // runs its own schedule (default 7:30 PM PST) and posts whenever it has
-  // fresh data. Idempotent on payload.synced_at.
-  useEffect(() => {
-    if (unityExtensionListenerStarted) return;
-    unityExtensionListenerStarted = true;
-    installExtensionListener();
-  }, []);
-
   // Kryptex browser-extension bridge — works on the deployed site with no
   // backend, since the extension itself reaches 127.0.0.1:8107 locally.
   useEffect(() => {
@@ -162,9 +139,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/investments" element={<InvestmentOverview />} />
               <Route path="/crypto" element={<CryptoPage />} />
-              <Route path="/gomining" element={<GoMiningPage />} />
               <Route path="/integrations" element={<IntegrationsPage />} />
-              <Route path="/rollercoin-calculator" element={<RollercoinCalculator />} />
               <Route path="/cloud" element={<CloudPage />} />
             </Routes>
           </div>

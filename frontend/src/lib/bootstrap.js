@@ -4,7 +4,7 @@
 //
 // Removal: the user can clear `networth_demo_seeded` from localStorage to
 // re-seed, or clear all storage to reset to a blank app.
-import { localStorage as storage, STORAGE_KEYS } from "./localStorage";
+import { localStorage as storage } from "./localStorage";
 import { syncNosanaEarnings } from "./nosanaSync";
 
 const DEMO_FLAG_KEY = "networth_demo_seeded";
@@ -63,18 +63,5 @@ export async function bootstrapDemoData() {
   } catch (err) {
     console.warn("Demo bootstrap failed:", err);
     return { seeded: false, reason: "error", error: String(err) };
-  }
-}
-
-// Helper exposed for debugging — clear the seed flag + Nosana state if
-// you want to start over from a blank slate.
-export function clearDemoData() {
-  try {
-    window.localStorage.removeItem(DEMO_FLAG_KEY);
-    window.localStorage.removeItem(STORAGE_KEYS.NOSANA_CONFIG);
-    window.localStorage.removeItem(STORAGE_KEYS.NOSANA_SYNCED_DATES);
-    window.localStorage.removeItem(STORAGE_KEYS.ROLLERCOIN_CONFIG);
-  } catch (err) {
-    console.warn("clearDemoData failed:", err);
   }
 }

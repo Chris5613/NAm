@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Trash2, Pencil, Check, X, Pickaxe, Cpu, Gamepad2 } from "lucide-react";
+import { Trash2, Pencil, Check, X, Cpu, Gamepad2 } from "lucide-react";
 
 function formatCurrency(value) {
   if (!value && value !== 0) return "$0.00";
@@ -271,7 +271,6 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
             <div className="space-y-1 max-h-[250px] overflow-y-auto">
               {transactions.map((txn) => {
                 const isEditing = editingId === txn.id;
-                const isAutoSync = txn.source === "gomining";
                 const isNosanaSync = txn.source === "nosana";
                 const isRollerCoinSync = txn.source === "rollercoin";
                 if (isEditing) {
@@ -350,16 +349,6 @@ export default function TransactionsDialog({ project, open, onOpenChange, onUpda
                         <span className="font-mono text-sm text-foreground">{formatCurrency(txn.amount)}</span>
                         {txn.category && (
                           <span className="text-xs text-muted-foreground">{txn.category}</span>
-                        )}
-                        {isAutoSync && (
-                          <span
-                            className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-400 font-mono"
-                            title="Auto-synced from GoMining"
-                            data-testid={`auto-sync-badge-${txn.id}`}
-                          >
-                            <Pickaxe className="w-2.5 h-2.5" strokeWidth={2} />
-                            auto
-                          </span>
                         )}
                         {isNosanaSync && (
                           <span

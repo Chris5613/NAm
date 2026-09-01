@@ -411,14 +411,6 @@ export const projectsApi = {
 
     storage.setProjects(next);
 
-    if (prev?.source === "gomining" && prev?.source_row_id) {
-      const snap = storage.getGoMiningSynced();
-      const cur = Number(snap[prev.source_row_id]) || 0;
-      const diff = (Number(updated.amount) || 0) - (Number(prev.amount) || 0);
-      snap[prev.source_row_id] = Math.max(0, cur + diff);
-      storage.setGoMiningSynced(snap);
-    }
-
     if (prev?.source === "nosana" && prev?.source_date) {
       const snap = storage.getNosanaSyncedDates();
       const cur = snap[prev.source_date] || {};
@@ -435,13 +427,8 @@ export const projectsApi = {
     if (
       (
         prev?.source === "clore" ||
-        prev?.source === "gomining" ||
         prev?.source === "nosana" ||
-        prev?.source === "rollercoin" ||
-        prev?.source === "acurast" ||
-        prev?.source === "unity_network" ||
-        prev?.source === "gomining_gmt" ||
-        prev?.source === "gomining_btc"
+        prev?.source === "rollercoin"
       ) &&
       parentId
     ) {
@@ -491,13 +478,6 @@ export const projectsApi = {
 
     storage.setProjects(next);
 
-    if (removed?.source === "gomining" && removed?.source_row_id) {
-      const snap = storage.getGoMiningSynced();
-      const cur = Number(snap[removed.source_row_id]) || 0;
-      snap[removed.source_row_id] = Math.max(0, cur - (Number(removed.amount) || 0));
-      storage.setGoMiningSynced(snap);
-    }
-
     if (removed?.source === "nosana" && removed?.source_date) {
       const snap = storage.getNosanaSyncedDates();
 
@@ -525,57 +505,12 @@ export const projectsApi = {
       }
     }
 
-    if (removed?.source === "acurast") {
-      const ac = storage.getAcurastConfig();
-
-      if (ac?.baseline_acu != null) {
-        const dec = Number(removed.source_acu_delta) || 0;
-        const nextBaseline = Math.max(0, (Number(ac.baseline_acu) || 0) - dec);
-        storage.setAcurastConfig({ ...ac, baseline_acu: nextBaseline });
-      }
-    }
-
-    if (removed?.source === "unity_network") {
-      const un = storage.getUnityNetworkConfig();
-
-      if (un?.baseline_usd != null) {
-        const dec = Number(removed.source_usd_delta) || 0;
-        const nextBaseline = Math.max(0, (Number(un.baseline_usd) || 0) - dec);
-        storage.setUnityNetworkConfig({ ...un, baseline_usd: nextBaseline });
-      }
-    }
-
-    if (removed?.source === "gomining_gmt") {
-      const gm = storage.getGoMiningTokenConfig();
-
-      if (gm?.baseline_gmt != null) {
-        const dec = Number(removed.source_gmt_delta) || 0;
-        const nextBaseline = Math.max(0, (Number(gm.baseline_gmt) || 0) - dec);
-        storage.setGoMiningTokenConfig({ ...gm, baseline_gmt: nextBaseline });
-      }
-    }
-
-    if (removed?.source === "gomining_btc") {
-      const gm = storage.getGoMiningTokenConfig();
-
-      if (gm?.baseline_btc != null) {
-        const dec = Number(removed.source_btc_delta) || 0;
-        const nextBaseline = Math.max(0, (Number(gm.baseline_btc) || 0) - dec);
-        storage.setGoMiningTokenConfig({ ...gm, baseline_btc: nextBaseline });
-      }
-    }
-
     if (
       (
         removed?.source === "clore" ||
-        removed?.source === "gomining" ||
         removed?.source === "nosana" ||
         removed?.source === "kryptex" ||
-        removed?.source === "rollercoin" ||
-        removed?.source === "acurast" ||
-        removed?.source === "unity_network" ||
-        removed?.source === "gomining_gmt" ||
-        removed?.source === "gomining_btc"
+        removed?.source === "rollercoin"
       ) &&
       removed?.type === "earning" &&
       parentId
@@ -588,25 +523,6 @@ export const projectsApi = {
         return {
           ...p,
           earned: Math.max(0, (Number(p.earned) || 0) - (Number(removed.amount) || 0)),
-        };
-      });
-
-      storage.setProjects(adjusted);
-    }
-
-    if (
-      (removed?.source === "gomining_gmt" || removed?.source === "gomining_btc") &&
-      removed?.type === "investment" &&
-      parentId
-    ) {
-      const projects = storage.getProjects();
-
-      const adjusted = projects.map((p) => {
-        if (p.id !== parentId) return p;
-
-        return {
-          ...p,
-          invested: Math.max(0, (Number(p.invested) || 0) - (Number(removed.amount) || 0)),
         };
       });
 
@@ -900,108 +816,6 @@ export const netWorthApi = {
     storage.setHistory(nextHistory);
 
     return toResponse(snapshot);
-  },
-};
-
-export const walletSyncApi = {
-  refreshAll: async () => {
-    const wallets = normalizeItems(storage.getWallets());
-
-    if (wallets.length === 0) {
-      return toResponse({ total: 0, chains: [], tokens: [] });
-    }
-
-    const customTokens = normalizeItems(storage.getTokens());
-    const tokenPrefs = storage.getPrefs();
-
-    const hidden = new Set(
-      Object.entries(tokenPrefs)
-        .filter(([, p]) => p?.hidden)
-        .map(([s]) => s)
-    );
-
-    // Sequential to keep us under API rate limits.
-    const balances = {};
-
-for (const w of wallets) {
-  try {
-    const res = await walletsApi.getBalances(w.id);
-    balances[w.id] = res.data;
-
-    // CoinStats rate limit protection
-    await sleep(2000);
-  } catch {
-    // silent
-  }
-}
-
-    const chainBreakdown = {};
-    const tokensByChain = {};
-
-    wallets.forEach((w) => {
-      (balances[w.id]?.tokens || []).forEach((t) => {
-        if (hidden.has(t.symbol)) return;
-        if ((t.usd_value || 0) < 0.01) return;
-
-        chainBreakdown[w.chain] = (chainBreakdown[w.chain] || 0) + t.usd_value;
-
-        if (!tokensByChain[w.chain]) {
-          tokensByChain[w.chain] = [];
-        }
-
-        tokensByChain[w.chain].push({
-          symbol: t.symbol,
-          name: t.name,
-          icon_url: tokenPrefs[t.symbol]?.custom_icon_url || t.icon_url || "",
-          amount: t.amount,
-          price: t.price,
-          usd_value: t.usd_value,
-        });
-      });
-    });
-
-    customTokens.forEach((ct) => {
-      if (hidden.has(ct.symbol)) return;
-
-      const v = (ct.amount || 0) * (ct.price || 0);
-      if (v < 0.01) return;
-
-      const c = ct.chain || "custom";
-      chainBreakdown[c] = (chainBreakdown[c] || 0) + v;
-
-      if (!tokensByChain[c]) {
-        tokensByChain[c] = [];
-      }
-
-      tokensByChain[c].push({
-        symbol: ct.symbol,
-        name: ct.name,
-        icon_url: ct.icon_url || "",
-        amount: ct.amount,
-        price: ct.price,
-        usd_value: v,
-      });
-    });
-
-    const total = Object.values(chainBreakdown).reduce((s, v) => s + v, 0);
-
-    const chains = Object.entries(chainBreakdown)
-      .sort((a, b) => b[1] - a[1])
-      .map(([chain, value]) => ({
-        chain,
-        value,
-        tokens: (tokensByChain[chain] || []).sort((a, b) => b.usd_value - a.usd_value),
-      }));
-
-    const cache = {
-      total,
-      chains,
-      tokens: chains.flatMap((c) => c.tokens),
-      updated_at: new Date().toISOString(),
-    };
-
-    storage.setCryptoCache(cache);
-    return toResponse(cache);
   },
 };
 
