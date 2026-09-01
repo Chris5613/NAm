@@ -327,10 +327,23 @@ function getMinimumBoardSlotCount(projectCount) {
 function getMonthKeyFromDate(dateStr) {
   if (!dateStr) return "";
   const str = String(dateStr);
-  if (str.length >= 7 && str.includes("-")) {
+
+  // Plain "YYYY-MM-DD" is already a calendar date with no time component —
+  // slicing it directly avoids any timezone conversion.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
     return str.slice(0, 7);
   }
-  return "";
+
+  // Full timestamps (e.g. `created_at`) are UTC instants. Slicing those
+  // directly can bucket a PST evening transaction into next month, since
+  // UTC is already several hours into the next day. Convert to PST first.
+  const parsed = new Date(str);
+  if (Number.isNaN(parsed.getTime())) return "";
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+  }).format(parsed);
 }
 
 export default function InvestmentOverview() {
