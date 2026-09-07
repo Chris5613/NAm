@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bitcoin,
   Volleyball,
+  ReceiptText,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
   { path: "/investments", label: "Monthly Earners", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
+  { path: "/spending", label: "Spending", icon: ReceiptText },
   { path: "/cloud", label: "Gamble", icon: Volleyball },
 ];
 

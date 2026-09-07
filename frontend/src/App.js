@@ -19,6 +19,7 @@ import {
 import { syncKryptex } from "@/lib/kryptexSync";
 import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
 import { bootstrapDemoData } from "@/lib/bootstrap";
+import SpendingPage from "./pages/SpendingPage";
 
 
 // Module-level flag prevents React.StrictMode from double-firing the daily
@@ -139,6 +140,7 @@ function App() {
               <Route path="/" element={<Dashboard />} />
               <Route path="/investments" element={<InvestmentOverview />} />
               <Route path="/crypto" element={<CryptoPage />} />
+              <Route path="/spending" element={<SpendingPage />} />
               <Route path="/integrations" element={<IntegrationsPage />} />
               <Route path="/cloud" element={<CloudPage />} />
             </Routes>

@@ -16,6 +16,9 @@ export const STORAGE_KEYS = {
   ROLLERCOIN_CONFIG: 'networth_rollercoin_config',
   TRX_PRICE_CACHE: 'networth_trx_price_cache',
   CUSTOM_INTEGRATIONS: 'networth_custom_integrations',
+  SPENDING_ACCOUNTS: 'networth_spending_accounts',
+  SPENDING_TRANSACTIONS: 'networth_spending_transactions',
+  SPENDING_BUDGET: 'networth_spending_budget',
 };
 
 export const localStorage = {
@@ -119,5 +122,14 @@ export const localStorage = {
   // Custom integrations list
   getCustomIntegrations: () => localStorage.get(STORAGE_KEYS.CUSTOM_INTEGRATIONS) || [],
   setCustomIntegrations: (list) => localStorage.set(STORAGE_KEYS.CUSTOM_INTEGRATIONS, list),
+
+  getSpendingAccounts: () => localStorage.get(STORAGE_KEYS.SPENDING_ACCOUNTS) || [],
+  setSpendingAccounts: (accounts) => localStorage.set(STORAGE_KEYS.SPENDING_ACCOUNTS, accounts),
+
+  getSpendingTransactions: () => localStorage.get(STORAGE_KEYS.SPENDING_TRANSACTIONS) || [],
+  setSpendingTransactions: (transactions) => localStorage.set(STORAGE_KEYS.SPENDING_TRANSACTIONS, transactions),
+
+  getSpendingBudget: () => localStorage.get(STORAGE_KEYS.SPENDING_BUDGET) || 0,
+  setSpendingBudget: (budget) => localStorage.set(STORAGE_KEYS.SPENDING_BUDGET, budget),
 
 };

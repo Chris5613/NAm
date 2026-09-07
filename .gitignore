@@ -380,3 +380,7 @@ credentials.json
 *.pem
 *.key
 .credentials
+
+# Plaid local secrets
+backend/.plaid_key
+backend/.plaid_items.json
