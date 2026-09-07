@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { localStorage as storage } from "@/lib/localStorage";
 import { plaidApi } from "@/lib/plaid";
-import { createSampleSpendingData } from "@/lib/spendingSampleData";
 import {
   ArrowDownRight,
   Building2,
@@ -239,19 +238,16 @@ export default function SpendingPage() {
     storage.setSpendingTransactions(value);
   };
 
-  // One-time sample load so the charts and lists are explorable before linking a bank.
+  // Clears rows left behind by the removed sample-data seeder; runs at most once.
   useEffect(() => {
-    if (window.localStorage.getItem(SAMPLE_FLAG)) return;
-    window.localStorage.setItem(SAMPLE_FLAG, "true");
-    if (storage.getSpendingAccounts().length || storage.getSpendingTransactions().length) return;
-    const sample = createSampleSpendingData();
-    setAccounts(sample.accounts);
-    storage.setSpendingAccounts(sample.accounts);
-    setTransactions(sample.transactions);
-    storage.setSpendingTransactions(sample.transactions);
-    setBudget(sample.budget);
-    setBudgetInput(String(sample.budget));
-    storage.setSpendingBudget(sample.budget);
+    if (!window.localStorage.getItem(SAMPLE_FLAG)) return;
+    window.localStorage.removeItem(SAMPLE_FLAG);
+    const realAccounts = storage.getSpendingAccounts().filter((item) => !item.sample);
+    const realTransactions = storage.getSpendingTransactions().filter((item) => !item.sample);
+    setAccounts(realAccounts);
+    storage.setSpendingAccounts(realAccounts);
+    setTransactions(realTransactions);
+    storage.setSpendingTransactions(realTransactions);
   }, []);
 
   const clientUserId = () => {
