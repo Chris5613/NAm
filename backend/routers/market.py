@@ -73,6 +73,26 @@ def _fetch(url: str, headers: dict[str, str], body: bytes | None = None) -> Any:
         raise HTTPException(status_code=502, detail="Upstream returned a non-JSON response.") from error
 
 
+@router.api_route("/mlb/{path:path}", methods=["GET", "POST"])
+async def public_mlb_proxy(path: str, request: Request) -> Any:
+    """MLB schedule and game data are public and do not need account auth."""
+    if ".." in path:
+        raise HTTPException(status_code=400, detail="Invalid path.")
+
+    config = _provider_config()["mlb"]
+    params = urllib.parse.urlencode(dict(request.query_params))
+    url = f'{config["base"]}/{path.lstrip("/")}' + (f"?{params}" if params else "")
+    cache_key = f"mlb:{url}"
+    cached = _cache.get(cache_key)
+    if cached and time.time() - cached[0] < CACHE_TTL_SECONDS:
+        return cached[1]
+
+    body = await request.body() if request.method == "POST" else None
+    data = _fetch(url, config.get("headers", {}), body)
+    _cache[cache_key] = (time.time(), data)
+    return data
+
+
 @router.api_route("/{provider}/{path:path}", methods=["GET", "POST"])
 async def proxy(provider: str, path: str, request: Request, user: User = Depends(current_user)) -> Any:
     providers = _provider_config()
