@@ -187,6 +187,8 @@ export default function SpendingPage() {
   const [simplefinDialogOpen, setSimplefinDialogOpen] = useState(false);
   const [simplefinUrl, setSimplefinUrl] = useState("");
   const [allTransactionsOpen, setAllTransactionsOpen] = useState(false);
+  const [categoryTransactionsOpen, setCategoryTransactionsOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState("");
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isLinking, setIsLinking] = useState(false);
@@ -213,6 +215,10 @@ export default function SpendingPage() {
     [selectedYear, today, transactions]
   );
   const rangeTransactions = range === "ytd" ? yearTransactions : monthTransactions;
+  const categoryTransactions = useMemo(
+    () => rangeTransactions.filter((item) => item.category === selectedCategory),
+    [rangeTransactions, selectedCategory]
+  );
 
   const totalSpent = useMemo(() => rangeTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0), [rangeTransactions]);
   const yearTotal = useMemo(() => yearTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0), [yearTransactions]);
@@ -332,6 +338,11 @@ export default function SpendingPage() {
     setCustomCategories(next);
     settingsApi.set("spending_custom_categories", next).catch(() => toast.error("Could not save the category."));
     return category;
+  };
+
+  const openCategoryTransactions = (category) => {
+    setSelectedCategory(category);
+    setCategoryTransactionsOpen(true);
   };
 
   const sync = async (itemId) => {
@@ -730,12 +741,18 @@ export default function SpendingPage() {
                 </div>
                 <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
                   {categoryBreakdown.map((entry, index) => (
-                    <div className="flex items-center gap-2" key={entry.category}>
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 rounded-md text-left hover:bg-secondary/60"
+                      key={entry.category}
+                      onClick={() => openCategoryTransactions(entry.category)}
+                      title={`View ${entry.category} transactions`}
+                    >
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }} />
                       <span className="min-w-0 flex-1 truncate text-sm">{entry.category}</span>
                       <span className="text-sm font-semibold tabular-nums">{money(entry.amount)}</span>
                       <span className="w-9 text-right text-xs text-muted-foreground">{Math.round(entry.share)}%</span>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </>
@@ -923,6 +940,41 @@ export default function SpendingPage() {
             <div className="flex w-full items-center justify-between text-sm">
               <span className="text-muted-foreground">Total</span>
               <span className="font-semibold tabular-nums">{money(filteredTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0))}</span>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={categoryTransactionsOpen} onOpenChange={setCategoryTransactionsOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{selectedCategory} transactions</DialogTitle>
+            <DialogDescription>
+              {range === "ytd" ? selectedYear : monthLabel(selectedMonth)} · {categoryTransactions.length} shown
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] divide-y divide-border/40 overflow-y-auto border-y border-border/60">
+            {categoryTransactions.length ? (
+              categoryTransactions.map((item) => (
+                <TransactionRow
+                  key={item.id}
+                  item={item}
+                  color={categoryColorMap[item.category] || CATEGORY_COLORS[CATEGORY_COLORS.length - 1]}
+                  categories={categories}
+                  showDate
+                  onRecategorize={recategorize}
+                  onHide={hideTransaction}
+                  onAddCategory={addCategory}
+                />
+              ))
+            ) : (
+              <p className="px-5 py-12 text-center text-sm text-muted-foreground">No transactions in this category.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <div className="flex w-full items-center justify-between text-sm">
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-semibold tabular-nums">{money(categoryTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0))}</span>
             </div>
           </DialogFooter>
         </DialogContent>
