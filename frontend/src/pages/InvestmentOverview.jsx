@@ -807,8 +807,12 @@ const getDailyAmount = useCallback((project) => {
 
     const monthTotal = Object.values(monthEarnedByProject).reduce((sum, val) => sum + val, 0);
 
-    if (monthTotal !== 0) {
-      return monthProjects
+    if (monthTotal === 0) {
+      return { rows: [] };
+    }
+
+    return {
+      rows: monthProjects
         .map((project) => {
           const monthly = monthEarnedByProject[project.id] || 0;
           return {
@@ -819,27 +823,13 @@ const getDailyAmount = useCallback((project) => {
           };
         })
         .filter((row) => row.monthly !== 0)
-        .sort((a, b) => b.monthly - a.monthly);
-    }
+        .sort((a, b) => b.monthly - a.monthly),
+    };
+  }, [activeProjects, inactiveProjects, selectedMonthKey]);
 
-    const projectedTotal = totals.per_month;
-    return activeProjects
-      .map((project) => {
-        const daily = getDailyAmount(project);
-        const monthly = daily * 30;
+  const breakdownRows = monthlyBreakdown.rows;
 
-        return {
-          project,
-          daily,
-          monthly,
-          share: projectedTotal > 0 ? (monthly / projectedTotal) * 100 : 0,
-        };
-      })
-      .filter((row) => row.monthly > 0)
-      .sort((a, b) => b.monthly - a.monthly);
-  }, [activeProjects, inactiveProjects, selectedMonthKey, totals.per_month, getDailyAmount]);
-
-  const topEarner = monthlyBreakdown[0] || null;
+  const topEarner = breakdownRows[0] || null;
 
   function getRoiDays(project) {
     if (isInactiveProject(project)) return null;
@@ -1255,7 +1245,7 @@ const pnl = isJupiterLoop
         </Button>
       </div>
 
-      {monthlyBreakdown.length > 0 && (
+      {breakdownRows.length > 0 && (
         <Card className="border-border/40 bg-card" data-testid="monthly-breakdown-card">
           <CardContent className="p-5 space-y-5">
             <div className="flex items-center justify-between gap-3">
@@ -1315,7 +1305,7 @@ const pnl = isJupiterLoop
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={monthlyBreakdown.map((row) => ({
+                      data={breakdownRows.map((row) => ({
                         name: row.project.name,
                         value: Number(row.monthly.toFixed(2)),
                       }))}
@@ -1328,7 +1318,7 @@ const pnl = isJupiterLoop
                       strokeWidth={1}
                       stroke="#09090B"
                     >
-                      {monthlyBreakdown.map((row, index) => (
+                      {breakdownRows.map((row, index) => (
                         <Cell
                           key={row.project.id}
                           fill={CHART_COLORS[index % CHART_COLORS.length]}
@@ -1344,7 +1334,7 @@ const pnl = isJupiterLoop
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 flex-1 w-full">
-                {monthlyBreakdown.map((row, index) => (
+                {breakdownRows.map((row, index) => (
                   <div
                     key={row.project.id}
                     className="flex items-center justify-between p-2.5 rounded-lg bg-secondary/30 border border-border/20"

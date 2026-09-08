@@ -325,7 +325,18 @@ export default function SpendingPage() {
   }, []);
 
   useEffect(() => {
-    loadAll();
+    const initializePage = async () => {
+      await loadAll();
+      try {
+        const connections = await api.get("/api/simplefin/connections");
+        if (!Array.isArray(connections) || connections.length === 0) return;
+        await sync();
+      } catch {
+        // No SimpleFIN connection configured; skip the background sync.
+      }
+    };
+
+    initializePage();
     settingsApi.get("spending_custom_categories").then((saved) => {
       if (Array.isArray(saved)) setCustomCategories(saved.filter((category) => typeof category === "string" && category.trim()));
     }).catch(() => {});
@@ -801,102 +812,12 @@ export default function SpendingPage() {
       </section>
 
       <section className="mt-10 border-t border-border/60 pt-8">
-        <h2 className="mb-4 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Accounts &amp; upcoming</h2>
-        <div className="grid gap-5 lg:grid-cols-2">
-          <Card className="rounded-lg border-border/70 bg-card shadow-none">
-            <CardContent className="p-0">
-              <div className="flex items-center justify-between px-5 py-4">
-                <h2 className="font-semibold">Accounts</h2>
-                <button className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground" onClick={() => sync()} disabled={isSyncing}>
-                  <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? "animate-spin" : ""}`} /> Sync now
-                </button>
-              </div>
-              {accounts.length ? (
-                accounts.map((account) => {
-                  const Icon = getAccountIcon(account);
-                  return (
-                    <div className="flex items-center gap-3 border-t border-border/60 px-5 py-4" key={account.id}>
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <div className="min-w-0 flex-1">
-                        <span className="block truncate text-sm font-medium">{account.name}</span>
-                        {account.classification?.matchedName ? (
-                          <span className="mt-0.5 block text-xs text-rose-300">
-                            Matched: {account.classification.matchedName}
-                          </span>
-                        ) : account.classification?.confidence === "possible" ? (
-                          <span className="mt-0.5 block text-xs text-amber-300">Possible credit card</span>
-                        ) : null}
-                      </div>
-                      <span className="text-sm font-semibold tabular-nums">{money(account.currentBalance, "Linked")}</span>
-                      <button title="Remove account" onClick={() => removeAccount(account.id)}>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground hover:text-rose-400" />
-                      </button>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="border-t border-border/60 px-5 py-12 text-center">
-                  <WalletCards className="mx-auto h-6 w-6 text-muted-foreground" />
-                  <p className="mt-3 text-sm text-muted-foreground">Link an account to see balances and activity.</p>
-                </div>
-              )}
-              <button className="flex w-full items-center gap-2 border-t border-border/60 px-5 py-3 text-sm text-emerald-400 hover:bg-emerald-400/5" onClick={linkAccount}>
-                <Plus className="h-4 w-4" /> Link bank account
-              </button>
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-lg border-border/70 bg-card shadow-none">
-            <CardContent className="p-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="font-semibold">Upcoming</h2>
-                  <p className="mt-1 text-xs text-muted-foreground">Scheduled expenses in the next seven days.</p>
-                </div>
-                {budget > 0 && <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-xs text-emerald-400">Budget set</span>}
-              </div>
-              <div className="mt-6 grid grid-cols-7 divide-x divide-border/60">
-                {upcomingDays.map((day) => {
-                  const items = upcoming.filter((item) => item.date === day.key);
-                  return (
-                    <div className="min-w-0 px-1 text-center" key={day.key}>
-                      <p className="text-[10px] uppercase text-muted-foreground">{day.weekday}</p>
-                      <p className={`mt-1 text-sm font-semibold ${day.key === today ? "text-emerald-400" : ""}`}>{day.number}</p>
-                      <div className="mt-3 min-h-12 space-y-1">
-                        {items.map((item) => (
-                          <div
-                            key={item.id}
-                            title={`${item.merchant}: ${money(item.amount)}`}
-                            className="mx-auto flex h-5 w-5 items-center justify-center rounded-full bg-blue-400/15 text-blue-300"
-                          >
-                            <CircleDollarSign className="h-3 w-3" />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              {upcoming.length ? (
-                <div className="mt-5 space-y-2 border-t border-border/60 pt-4">
-                  {upcoming.slice(0, 3).map((item) => (
-                    <div className="flex justify-between text-sm" key={item.id}>
-                      <span>{item.merchant}</span>
-                      <span className="font-medium">{money(item.amount)}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-5 border-t border-border/60 pt-4 text-sm text-muted-foreground">No upcoming expenses have been added.</p>
-              )}
-              <div className="mt-5 flex gap-2">
-                <Input aria-label="Monthly budget" type="number" min="0" placeholder="Monthly budget" value={budgetInput} onChange={(event) => setBudgetInput(event.target.value)} />
-                <Button size="sm" variant="outline" onClick={saveBudget}>
-                  Save
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex-1" />
+          <div className="flex items-center gap-2">
+            <Input aria-label="Monthly budget" type="number" min="0" placeholder="Monthly budget" value={budgetInput} onChange={(event) => setBudgetInput(event.target.value)} />
+            <Button size="sm" variant="outline" onClick={saveBudget}>Save</Button>
+          </div>
         </div>
       </section>
 
