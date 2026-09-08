@@ -11,15 +11,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TrendingUp, Landmark, CreditCard, Coins, RefreshCw, Loader2, Boxes } from "lucide-react";
+import { TrendingUp, CreditCard, RefreshCw, Loader2, Boxes } from "lucide-react";
 import SnaptradeCard from "@/components/SnaptradeCard";
 
 const CATEGORIES = [
   { value: "stocks", label: "Stocks", icon: TrendingUp, hint: "Stock holdings with real-time prices" },
-  { value: "cash", label: "Cash / Bank", icon: Landmark, hint: "Savings, checking, emergency funds" },
   { value: "debts", label: "Debts / Liabilities", icon: CreditCard, hint: "Loans, credit cards, mortgages" },
   { value: "other", label: "Other Assets", icon: Boxes, hint: "Real estate, vehicles, gold, watches, collectibles, anything manual" },
-  { value: "crypto", label: "Crypto (manual)", icon: Coins, hint: "Use the Crypto tab for wallets. Use this only for manual crypto entries." },
 ];
 
 export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultCategory = "stocks", allowStocks = true }) {

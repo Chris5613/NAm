@@ -25,6 +25,7 @@ def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     with engine.begin() as connection:
         connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS security_answer_hash TEXT"))
+        connection.execute(text("ALTER TABLE spending_transactions ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE"))
 
 
 def get_db() -> Iterator[Session]:

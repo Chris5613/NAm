@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { spendingApi } from "@/lib/apiClient";
+import { settingsApi, spendingApi } from "@/lib/apiClient";
 import { api } from "@/lib/apiClient";
 import { assetsApi } from "@/lib/api";
 import {
@@ -25,9 +25,14 @@ import {
   Trash2,
   Utensils,
   WalletCards,
+  EyeOff,
 } from "lucide-react";
 
-const CATEGORIES = ["Home", "Food & drink", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Other"];
+const CATEGORIES = [
+  "Housing", "Utilities", "Groceries", "Dining", "Gas & Fuel", "Transportation", "Travel",
+  "Shopping", "Subscriptions", "Entertainment", "Health", "Personal Care", "Pets", "Education",
+  "Insurance", "Taxes", "Fees", "Income", "Transfers", "Payments", "Other",
+];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const CATEGORY_COLORS = ["#60a5fa", "#34d399", "#a78bfa", "#f472b6", "#22d3ee", "#818cf8", "#2dd4bf", "#94a3b8"];
 
@@ -38,7 +43,7 @@ const money = (amount, fallback = "$0") =>
     ? fallback
     : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amount);
 const humanDate = (date) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${date}T12:00:00`));
-const emptyTransaction = () => ({ merchant: "", amount: "", category: "Food & drink", date: dayKey(new Date()), accountId: "" });
+const emptyTransaction = () => ({ merchant: "", amount: "", category: "Dining", date: dayKey(new Date()), accountId: "" });
 
 function shiftMonth(key, amount) {
   const [year, month] = key.split("-").map(Number);
@@ -81,9 +86,11 @@ function cumulativeByDay(items, key, length) {
   });
 }
 
-function TransactionRow({ item, showDate, onRecategorize, onDelete }) {
+function TransactionRow({ item, categories, showDate, onRecategorize, onHide, onAddCategory }) {
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [newCategory, setNewCategory] = useState("");
   const Icon = getTransactionIcon(item.category);
-  const options = CATEGORIES.includes(item.category) ? CATEGORIES : [item.category, ...CATEGORIES];
+  const options = categories.includes(item.category) ? categories : [item.category, ...categories];
 
   return (
     <div className="flex items-center gap-3 px-5 py-3">
@@ -96,25 +103,76 @@ function TransactionRow({ item, showDate, onRecategorize, onDelete }) {
           {item.pending && <span className="ml-1 text-muted-foreground">| Pending</span>}
         </p>
         <div className="mt-0.5 flex items-center gap-2">
-          <select
-            aria-label={`Category for ${item.merchant}`}
-            className="-ml-1 cursor-pointer rounded border border-transparent bg-transparent px-1 py-0 text-xs text-muted-foreground hover:border-border/70 hover:text-foreground focus:border-border/70 focus:outline-none"
-            value={item.category}
-            onChange={(event) => onRecategorize(item.id, event.target.value)}
+          <button
+            type="button"
+            className="-ml-1 rounded border border-transparent px-1 py-0 text-xs text-muted-foreground hover:border-border/70 hover:text-foreground"
+            onClick={() => setCategoryOpen(true)}
+            aria-label={`Change category for ${item.merchant}`}
           >
-            {options.map((category) => (
-              <option className="bg-zinc-950 text-foreground" key={category} value={category}>
-                {category}
-              </option>
-            ))}
-          </select>
+            {item.category}
+          </button>
           {showDate && <span className="text-xs text-muted-foreground">{humanDate(item.date)}</span>}
         </div>
       </div>
       <span className="shrink-0 text-sm font-semibold tabular-nums">{money(item.amount)}</span>
-      <button title="Remove expense" className="shrink-0 text-muted-foreground hover:text-rose-400" onClick={() => onDelete(item.id)}>
-        <Trash2 className="h-3.5 w-3.5" />
+      <button title="Hide transaction" className="shrink-0 text-muted-foreground hover:text-amber-400" onClick={() => onHide(item.id)}>
+        <EyeOff className="h-3.5 w-3.5" />
       </button>
+      <Dialog open={categoryOpen} onOpenChange={setCategoryOpen}>
+        <DialogContent className="w-[min(92vw,42rem)] max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Choose category</DialogTitle>
+            <DialogDescription>{item.merchant}</DialogDescription>
+          </DialogHeader>
+          <div className="grid max-h-[55vh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
+            {options.map((category) => (
+              <Button
+                key={category}
+                type="button"
+                variant={category === item.category ? "default" : "outline"}
+                className="justify-start"
+                onClick={() => {
+                  onRecategorize(item.id, category);
+                  setCategoryOpen(false);
+                }}
+              >
+                {category}
+              </Button>
+            ))}
+          </div>
+          <div className="flex gap-2 border-t border-border/60 pt-4">
+            <Input
+              value={newCategory}
+              onChange={(event) => setNewCategory(event.target.value)}
+              placeholder="New category"
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  const added = onAddCategory(newCategory);
+                  if (added) {
+                    onRecategorize(item.id, added);
+                    setNewCategory("");
+                    setCategoryOpen(false);
+                  }
+                }
+              }}
+            />
+            <Button
+              type="button"
+              onClick={() => {
+                const added = onAddCategory(newCategory);
+                if (added) {
+                  onRecategorize(item.id, added);
+                  setNewCategory("");
+                  setCategoryOpen(false);
+                }
+              }}
+            >
+              Add
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -136,6 +194,8 @@ export default function SpendingPage() {
   const [range, setRange] = useState("month");
   const [selectedMonth, setSelectedMonth] = useState(() => monthKeyOf());
   const [transaction, setTransaction] = useState(emptyTransaction);
+  const [customCategories, setCustomCategories] = useState([]);
+  const categories = useMemo(() => [...CATEGORIES, ...customCategories], [customCategories]);
 
   const today = dayKey(new Date());
   const currentMonth = monthKeyOf();
@@ -255,7 +315,19 @@ export default function SpendingPage() {
 
   useEffect(() => {
     loadAll();
+    settingsApi.get("spending_custom_categories").then((saved) => {
+      if (Array.isArray(saved)) setCustomCategories(saved.filter((category) => typeof category === "string" && category.trim()));
+    }).catch(() => {});
   }, [loadAll]);
+
+  const addCategory = (value) => {
+    const category = value.trim().replace(/\s+/g, " ");
+    if (!category || categories.some((item) => item.toLowerCase() === category.toLowerCase())) return "";
+    const next = [...customCategories, category];
+    setCustomCategories(next);
+    settingsApi.set("spending_custom_categories", next).catch(() => toast.error("Could not save the category."));
+    return category;
+  };
 
   const sync = async (itemId) => {
     setIsSyncing(true);
@@ -341,16 +413,41 @@ export default function SpendingPage() {
     parsed.password = "";
     const path = parsed.pathname.replace(/\/$/, "");
     parsed.pathname = path.endsWith("/accounts") ? path : `${path}/accounts`;
-    parsed.search = "?version=2";
-    const response = await fetch(parsed.toString(), {
-      headers: { Accept: "application/json", Authorization: `Basic ${window.btoa(`${username}:${password}`)}` },
-    });
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      const detail = data?.errlist?.map((item) => item.description || item.code).join(", ") || `SimpleFIN returned HTTP ${response.status}`;
-      throw new Error(detail);
+    const startDate = Math.floor((Date.now() - 90 * 86400000) / 1000);
+    const queryVariants = [
+      `start-date=${startDate}&version=2`,
+      `start-date=${startDate}`,
+      "version=2",
+    ];
+    let bestPayload = null;
+    let lastError = null;
+
+    for (const query of queryVariants) {
+      parsed.search = query ? `?${query}` : "";
+      const response = await fetch(parsed.toString(), {
+        headers: { Accept: "application/json", Authorization: `Basic ${window.btoa(`${username}:${password}`)}` },
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const detail = data?.errlist?.map((item) => item.description || item.code).join(", ") || `SimpleFIN returned HTTP ${response.status}`;
+        lastError = new Error(detail);
+        continue;
+      }
+
+      const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
+      const transactionCount = accounts.reduce(
+        (total, account) => total + (Array.isArray(account?.transactions) ? account.transactions.length : 0),
+        Array.isArray(data?.transactions) ? data.transactions.length : 0
+      );
+      const bestCount = bestPayload?.transactionCount ?? -1;
+      if (!bestPayload || transactionCount > bestCount) {
+        bestPayload = { data, transactionCount };
+      }
+      if (transactionCount > 0) break;
     }
-    return data;
+
+    if (!bestPayload) throw lastError || new Error("SimpleFIN returned no account data.");
+    return bestPayload.data;
   };
 
   const connectSimplefin = async () => {
@@ -395,6 +492,17 @@ export default function SpendingPage() {
     } catch (error) {
       setTransactions(previous);
       toast.error(error.message || "Could not delete the expense.");
+    }
+  };
+
+  const hideTransaction = async (id) => {
+    const previous = transactions;
+    setTransactions((current) => current.filter((item) => item.id !== id));
+    try {
+      await spendingApi.hideTransaction(id);
+    } catch (error) {
+      setTransactions(previous);
+      toast.error(error.message || "Could not hide the transaction.");
     }
   };
 
@@ -648,7 +756,7 @@ export default function SpendingPage() {
                     <span>{money(items.reduce((sum, item) => sum + Number(item.amount || 0), 0))}</span>
                   </div>
                   {items.map((item) => (
-                    <TransactionRow key={item.id} item={item} onRecategorize={recategorize} onDelete={deleteTransaction} />
+                    <TransactionRow key={item.id} item={item} categories={categories} onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />
                   ))}
                 </div>
               ))
@@ -801,7 +909,7 @@ export default function SpendingPage() {
           </div>
           <div className="-mx-6 max-h-[55vh] divide-y divide-border/40 overflow-y-auto border-y border-border/60">
             {filteredTransactions.length ? (
-              filteredTransactions.map((item) => <TransactionRow key={item.id} item={item} showDate onRecategorize={recategorize} onDelete={deleteTransaction} />)
+              filteredTransactions.map((item) => <TransactionRow key={item.id} item={item} categories={categories} showDate onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />)
             ) : (
               <p className="px-5 py-12 text-center text-sm text-muted-foreground">No transactions match this search.</p>
             )}
@@ -879,7 +987,7 @@ export default function SpendingPage() {
                 value={transaction.category}
                 onChange={(event) => setTransaction({ ...transaction, category: event.target.value })}
               >
-                {CATEGORIES.map((category) => (
+                {categories.map((category) => (
                   <option className="bg-zinc-950" key={category}>
                     {category}
                   </option>

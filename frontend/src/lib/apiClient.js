@@ -88,6 +88,7 @@ export const spendingApi = {
   transactions: () => api.get("/api/spending/transactions"),
   saveTransaction: (transaction) => api.post("/api/spending/transactions", transaction),
   patchTransaction: (id, changes) => api.patch(`/api/spending/transactions/${id}`, changes),
+  hideTransaction: (id) => api.patch(`/api/spending/transactions/${id}`, { hidden: true }),
   deleteTransaction: (id) => api.delete(`/api/spending/transactions/${id}`),
   getBudget: () => api.get("/api/spending/budget").then((row) => row?.budget ?? 0),
   setBudget: (budget) => api.put("/api/spending/budget", { budget }),

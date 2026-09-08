@@ -6,6 +6,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from urllib.parse import unquote, urlencode, urlsplit, urlunsplit
 from typing import Any
 from uuid import uuid4
@@ -93,6 +94,46 @@ def looks_like_credit_card(account_type: Any, account_name: Any) -> bool:
     return classify_account(account_type, account_name)["category"] == "debts"
 
 
+def normalize_transaction_date(value: Any) -> str | None:
+    if value is None or value == "":
+        return None
+    if isinstance(value, (int, float)) or str(value).isdigit():
+        return datetime.fromtimestamp(float(value), tz=timezone.utc).date().isoformat()
+    return str(value)[:10]
+
+
+TRANSACTION_CATEGORY_RULES = (
+    ("Income", ("payroll", "paycheck", "salary", "direct deposit", "deposit", "adp ", "gusto")),
+    ("Transfers", ("transfer", " zelle", "venmo", "cash app", "ach ")),
+    ("Payments", ("payment", "autopay", "pay bill", "credit card payment")),
+    ("Fees", ("fee", "service charge", "overdraft", "atm fee")),
+    ("Taxes", ("irs", "tax", "dmv", "property tax")),
+    ("Insurance", ("insurance", "geico", "state farm", "progressive", "allstate")),
+    ("Housing", ("rent", "mortgage", "property management", "hoa", "airbnb")),
+    ("Utilities", ("electric", "utility", "water bill", "sewer", "gas bill", "internet", "comcast", "verizon", "at&t")),
+    ("Groceries", ("grocery", "groceries", "safeway", "kroger", "whole foods", "trader joe", "costco", "walmart", "target")),
+    ("Dining", ("restaurant", "doordash", "grubhub", "ubereats", "mcdonald", "subway", "starbucks", "taco", "pizza")),
+    ("Gas & Fuel", ("shell", "chevron", "exxon", "mobil", "fuel", "gas station", "76 ")),
+    ("Transportation", ("uber", "lyft", "parking", "transit", "metro", "train", "toll", "airline")),
+    ("Travel", ("hotel", "resort", "flight", "southwest", "delta", "united airlines", "american airlines", "car rental")),
+    ("Subscriptions", ("subscription", "netflix", "spotify", "hulu", "disney", "youtube premium", "apple.com/bill")),
+    ("Entertainment", ("cinema", "movie", "theater", "concert", "steam", "playstation", "xbox", "ticketmaster")),
+    ("Health", ("pharmacy", "cvs", "walgreens", "doctor", "hospital", "medical", "dental", "vision")),
+    ("Personal Care", ("salon", "barber", "spa", "haircut")),
+    ("Pets", ("pet", "veterinary", "vetco", "chewy")),
+    ("Education", ("school", "tuition", "university", "college", "course", "udemy")),
+    ("Shopping", ("amazon", "ebay", "etsy", "shop", "store", "clothing", "best buy", "home depot", "lowe")),
+)
+
+
+def classify_transaction(transaction: dict[str, Any]) -> str:
+    text = " ".join(str(transaction.get(key) or "") for key in ("payee", "description", "memo", "name")).lower()
+    for category, keywords in TRANSACTION_CATEGORY_RULES:
+        if any(keyword in text for keyword in keywords):
+            return category
+    return "Other"
+
+
 def fetch_simplefin(access_url: str) -> dict[str, Any]:
     if not access_url.startswith("https://"):
         raise HTTPException(status_code=400, detail="SimpleFIN access URL must use HTTPS.")
@@ -158,6 +199,9 @@ def save_simplefin_payload(payload: dict[str, Any], connection: SimplefinConnect
     accounts = payload.get("accounts") or payload.get("account") or []
     if isinstance(accounts, dict):
         accounts = [accounts]
+    top_level_transactions = payload.get("transactions") or payload.get("transaction") or []
+    if isinstance(top_level_transactions, dict):
+        top_level_transactions = [top_level_transactions]
     for account in accounts:
         account_count += 1
         account_id = str(account.get("id") or uuid4())
@@ -192,26 +236,40 @@ def save_simplefin_payload(payload: dict[str, Any], connection: SimplefinConnect
         }
         db.merge(asset)
         transactions = account.get("transactions") or account.get("transaction") or []
+        if isinstance(transactions, dict):
+            transactions = [transactions]
+        if not transactions:
+            account_keys = {str(value) for value in (
+                account.get("id"), account.get("account-id"), account.get("account_id")
+            ) if value is not None}
+            transactions = [transaction for transaction in top_level_transactions if not account_keys or str(
+                transaction.get("account-id") or transaction.get("account_id") or transaction.get("accountId") or ""
+            ) in account_keys]
         if not transactions and len(accounts) == 1:
-            transactions = payload.get("transactions") or []
+            transactions = top_level_transactions
         received_transaction_count += len(transactions)
         for transaction in transactions:
             transaction_id = transaction.get("id") or transaction.get("id_string") or str(uuid4())
-            posted = transaction.get("posted") or transaction.get("date") or transaction.get("transacted")
+            posted = normalize_transaction_date(
+                transaction.get("posted") or transaction.get("date") or transaction.get("transacted")
+            )
             if not posted:
                 continue
             amount = abs(float(transaction.get("amount") or 0))
             if amount <= 0:
                 continue
+            transaction_row_id = f"simplefin-{transaction_id}"
+            existing_transaction = db.get(SpendingTransaction, transaction_row_id)
             row = SpendingTransaction(
-                id=f"simplefin-{transaction_id}",
+                id=transaction_row_id,
                 user_id=user.id,
                 merchant=transaction.get("payee") or transaction.get("description") or transaction.get("memo") or "SimpleFIN transaction",
                 amount=amount,
                 date=str(posted)[:10],
-                category="Other",
+                category=classify_transaction(transaction),
                 account_id=f"simplefin-{account_id}",
                 pending=False,
+                hidden=existing_transaction.hidden if existing_transaction else False,
                 source="simplefin",
             )
             db.merge(row)

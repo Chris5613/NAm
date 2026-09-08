@@ -139,6 +139,7 @@ class SpendingTransaction(Base, TimestampMixin):
     category: Mapped[str] = mapped_column(String(64), default="Other")
     account_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     pending: Mapped[bool] = mapped_column(Boolean, default=False)
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     source: Mapped[str] = mapped_column(String(32), default="manual")
 
 

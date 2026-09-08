@@ -61,7 +61,7 @@ async def delete_account(account_id: str, user: User = Depends(current_user), db
 async def list_transactions(user: User = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:
     rows = db.scalars(
         select(SpendingTransaction)
-        .where(SpendingTransaction.user_id == user.id)
+        .where(SpendingTransaction.user_id == user.id, SpendingTransaction.hidden.is_(False))
         .order_by(SpendingTransaction.date.desc())
     ).all()
     return [spending_transaction_to_dict(row) for row in rows]
@@ -115,6 +115,8 @@ async def patch_transaction(
         row.date = str(payload["date"])[:10]
     if "accountId" in payload:
         row.account_id = payload["accountId"]
+    if "hidden" in payload:
+        row.hidden = bool(payload["hidden"])
     db.commit()
     return spending_transaction_to_dict(row)
 

@@ -113,6 +113,7 @@ def spending_transaction_to_dict(row: Any) -> dict[str, Any]:
         "category": row.category,
         "accountId": row.account_id,
         "pending": row.pending,
+        "hidden": row.hidden,
         "source": row.source,
     }
 

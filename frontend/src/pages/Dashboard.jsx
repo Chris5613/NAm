@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { netWorthApi, pricesApi } from "@/lib/api";
+import { netWorthApi } from "@/lib/api";
+import { snaptradeApi } from "@/lib/apiClient";
 import { remoteStorage as localStorage } from "@/lib/serverStore";
 import { refreshCollection } from "@/lib/serverStore";
 import { localStorage as storage } from "@/lib/localStorage";
@@ -13,7 +14,7 @@ import SnaptradeCard from "@/components/SnaptradeCard";
 import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Plus, Camera } from "lucide-react";
+import { Plus, Camera } from "lucide-react";
 
 const DAILY_BASELINE_KEY = "daily_net_worth_baseline_pst";
 const DAILY_CATEGORY_BASELINE_KEY = "daily_category_baseline_pst";
@@ -286,12 +287,12 @@ export default function Dashboard() {
     return Array.isArray(persisted) ? persisted : [];
   });
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [lastUpdated, setLastUpdated] = useState(null);
   const [dailyNetWorthChange, setDailyNetWorthChange] = useState(null);
   const [dailyCategoryChanges, setDailyCategoryChanges] = useState(null);
+  const snaptradeSyncStarted = useRef(false);
 
   useEffect(() => {
     if (!Array.isArray(liveHistory)) return;
@@ -348,7 +349,20 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    fetchData();
+    if (snaptradeSyncStarted.current) return;
+    snaptradeSyncStarted.current = true;
+
+    const syncSnaptrade = async () => {
+      try {
+        await snaptradeApi.sync();
+        await refreshCollection("networth_assets");
+      } catch {
+        // A disconnected SnapTrade account should not block the Net Worth page.
+      }
+      fetchData();
+    };
+
+    syncSnaptrade();
 
     const interval = setInterval(() => {
       fetchData();
@@ -408,64 +422,6 @@ export default function Dashboard() {
       { kind: "debts", total: debtsTotal },
     ].sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
   }, [assets, netWorth]);
-
-const handleRefreshPrices = async () => {
-  setRefreshing(true);
-
-  try {
-    const currentAssets = storage.getAssets?.() || [];
-    let updatedCount = 0;
-
-    const nextAssets = await Promise.all(
-      currentAssets.map(async (asset) => {
-        if (asset.category !== "stocks" || !asset.symbol) {
-          return asset;
-        }
-
-        try {
-          const quote = await pricesApi.getStock(asset.symbol);
-          const price = Number(quote?.c || quote?.price || quote?.current_price || 0);
-
-          if (price > 0) {
-            updatedCount += 1;
-
-            return {
-              ...asset,
-              current_price: price,
-              manual_value: null,
-              updated_at: new Date().toISOString(),
-            };
-          }
-
-          return asset;
-        } catch (error) {
-          console.warn(`Failed to refresh ${asset.symbol}:`, error);
-          return asset;
-        }
-      })
-    );
-
-    storage.setAssets?.(nextAssets);
-
-    const cryptoCache = storage.getCryptoCache?.() || {};
-    const cryptoTotal = Number(cryptoCache.total) || 0;
-    const calculatedNetWorth = calculateNetWorth(nextAssets, cryptoTotal);
-
-    setAssets(nextAssets);
-    setNetWorth(calculatedNetWorth);
-    setDailyNetWorthChange(getDailyNetWorthChange(calculatedNetWorth.total_net_worth));
-    setDailyCategoryChanges(getCategoryDailyChanges(calculatedNetWorth.breakdown));
-    setHistory(getMonthlyNetWorthHistory(calculatedNetWorth.total_net_worth));
-    setLastUpdated(new Date());
-
-    toast.success(`Refreshed ${updatedCount} stock price${updatedCount === 1 ? "" : "s"}`);
-  } catch (error) {
-    console.error("Failed to refresh stock prices:", error);
-    toast.error("Failed to refresh stock prices");
-  } finally {
-    setRefreshing(false);
-  }
-};
 
   if (loading) {
     return (
@@ -534,22 +490,7 @@ const handleRefreshPrices = async () => {
             Snapshot
           </Button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefreshPrices}
-            disabled={refreshing}
-            data-testid="refresh-prices-btn"
-            className="border-border/40 hover:bg-secondary"
-          >
-            <RefreshCw
-              className={`w-4 h-4 mr-2 ${refreshing ? "animate-spin" : ""}`}
-              strokeWidth={1.5}
-            />
-            Refresh Prices
-          </Button>
-
-          {activeTab !== "stocks" && (
+          {(activeTab === "all" || activeTab === "other" || activeTab === "debts") && (
             <Button
               size="sm"
               onClick={() => setAddDialogOpen(true)}
@@ -679,7 +620,7 @@ const handleRefreshPrices = async () => {
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         onCreated={handleAssetCreated}
-        defaultCategory={activeTab !== "all" ? activeTab : "cash"}
+        defaultCategory={activeTab === "other" || activeTab === "debts" ? activeTab : "other"}
         allowStocks
       />
 
