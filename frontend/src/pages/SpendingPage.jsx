@@ -86,7 +86,7 @@ function cumulativeByDay(items, key, length) {
   });
 }
 
-function TransactionRow({ item, categories, showDate, onRecategorize, onHide, onAddCategory }) {
+function TransactionRow({ item, color, categories, showDate, onRecategorize, onHide, onAddCategory }) {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [newCategory, setNewCategory] = useState("");
   const Icon = getTransactionIcon(item.category);
@@ -94,7 +94,7 @@ function TransactionRow({ item, categories, showDate, onRecategorize, onHide, on
 
   return (
     <div className="flex items-center gap-3 px-5 py-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-400/10 text-blue-300">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: `${color}22`, color }}>
         <Icon className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
@@ -268,6 +268,11 @@ export default function SpendingPage() {
       .map(([category, amount]) => ({ category, amount, share: totalSpent ? (amount / totalSpent) * 100 : 0 }))
       .sort((first, second) => second.amount - first.amount);
   }, [rangeTransactions, totalSpent]);
+
+  const categoryColorMap = useMemo(
+    () => Object.fromEntries(categoryBreakdown.map((entry, index) => [entry.category, CATEGORY_COLORS[index % CATEGORY_COLORS.length]])),
+    [categoryBreakdown]
+  );
 
   const groups = useMemo(() => {
     const grouped = new Map();
@@ -756,7 +761,7 @@ export default function SpendingPage() {
                     <span>{money(items.reduce((sum, item) => sum + Number(item.amount || 0), 0))}</span>
                   </div>
                   {items.map((item) => (
-                    <TransactionRow key={item.id} item={item} categories={categories} onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />
+                    <TransactionRow key={item.id} item={item} color={categoryColorMap[item.category] || CATEGORY_COLORS[CATEGORY_COLORS.length - 1]} categories={categories} onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />
                   ))}
                 </div>
               ))
@@ -909,7 +914,7 @@ export default function SpendingPage() {
           </div>
           <div className="-mx-6 max-h-[55vh] divide-y divide-border/40 overflow-y-auto border-y border-border/60">
             {filteredTransactions.length ? (
-              filteredTransactions.map((item) => <TransactionRow key={item.id} item={item} categories={categories} showDate onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />)
+              filteredTransactions.map((item) => <TransactionRow key={item.id} item={item} color={categoryColorMap[item.category] || CATEGORY_COLORS[CATEGORY_COLORS.length - 1]} categories={categories} showDate onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />)
             ) : (
               <p className="px-5 py-12 text-center text-sm text-muted-foreground">No transactions match this search.</p>
             )}
