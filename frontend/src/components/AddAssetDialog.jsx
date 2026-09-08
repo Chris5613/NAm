@@ -21,7 +21,7 @@ const CATEGORIES = [
   { value: "crypto", label: "Crypto (manual)", icon: Coins, hint: "Use the Crypto tab for wallets. Use this only for manual crypto entries." },
 ];
 
-export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultCategory = "stocks" }) {
+export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultCategory = "stocks", allowStocks = true }) {
   const [category, setCategory] = useState(defaultCategory);
   const [submitting, setSubmitting] = useState(false);
 
@@ -186,7 +186,7 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
 
         {/* Category picker as visual cards */}
         <div className="grid grid-cols-2 gap-2">
-          {CATEGORIES.map((cat) => {
+          {CATEGORIES.filter((cat) => allowStocks || cat.value !== "stocks").map((cat) => {
             const Icon = cat.icon;
             const active = category === cat.value;
             return (
