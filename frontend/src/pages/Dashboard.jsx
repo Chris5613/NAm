@@ -9,16 +9,14 @@ import NetWorthHistory from "@/components/NetWorthHistory";
 import CryptoBreakdown from "@/components/CryptoBreakdown";
 import AssetBreakdown from "@/components/AssetBreakdown";
 import SnaptradeCard from "@/components/SnaptradeCard";
-import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { RefreshCw, Plus, Camera } from "lucide-react";
+import { RefreshCw, Camera } from "lucide-react";
 
 const DAILY_BASELINE_KEY = "daily_net_worth_baseline_pst";
 const DAILY_CATEGORY_BASELINE_KEY = "daily_category_baseline_pst";
 const MONTHLY_NET_WORTH_HISTORY_KEY = "monthly_net_worth_history_v1";
 const LIVE_HISTORY_MAX_POINTS = 200;
-const SUPPORTED_TABS = new Set(["all", "stocks", "crypto", "cash", "debts", "other"]);
 
 
   const exportAllLocalStorage = () => {
@@ -287,7 +285,6 @@ export default function Dashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
   const [lastUpdated, setLastUpdated] = useState(null);
   const [dailyNetWorthChange, setDailyNetWorthChange] = useState(null);
@@ -366,11 +363,6 @@ export default function Dashboard() {
     } catch (err) {
       toast.error("Failed to save snapshot");
     }
-  };
-
-  const handleAssetCreated = () => {
-    setAddDialogOpen(false);
-    fetchData();
   };
 
   const handleAssetUpdated = () => fetchData();
@@ -543,15 +535,6 @@ const handleRefreshPrices = async () => {
             Refresh Prices
           </Button>
 
-          <Button
-            size="sm"
-            onClick={() => setAddDialogOpen(true)}
-            data-testid="add-asset-btn"
-            className="bg-white text-black hover:bg-neutral-200"
-          >
-            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
-            Add Asset
-          </Button>
         </div>
       </div>
 
@@ -666,16 +649,6 @@ const handleRefreshPrices = async () => {
         </Tabs>
       </div>
 
-      <AddAssetDialog
-        open={addDialogOpen}
-        onOpenChange={setAddDialogOpen}
-        onCreated={handleAssetCreated}
-        defaultCategory={
-          SUPPORTED_TABS.has(activeTab) && activeTab !== "all"
-            ? activeTab
-            : "stocks"
-        }
-      />
     </div>
   );
 }
