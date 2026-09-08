@@ -48,13 +48,16 @@ def is_secure_cookie() -> bool:
 
 
 def set_session_cookie(response: Response, user_id: int) -> None:
+    same_site = os.getenv("COOKIE_SAMESITE", "none").lower()
+    if same_site not in {"lax", "strict", "none"}:
+        same_site = "none"
     response.set_cookie(
         key=SESSION_COOKIE,
         value=_serializer().dumps({"uid": user_id, "csrf": secrets.token_urlsafe(16)}),
         max_age=SESSION_MAX_AGE,
         httponly=True,
         secure=is_secure_cookie(),
-        samesite=os.getenv("COOKIE_SAMESITE", "lax"),
+        samesite=same_site,
         path="/",
     )
 
