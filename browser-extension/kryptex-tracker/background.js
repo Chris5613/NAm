@@ -5,7 +5,7 @@
 const KRYPTEX_BASE = "http://127.0.0.1:8107";
 const STORAGE_KEY = "kryptex_latest";
 const POLL_ALARM = "kryptex-poll";
-
+// hi
 function summarize(balance, devices) {
   const miners = [];
   for (const entry of devices || []) {
