@@ -1,4 +1,7 @@
-// Local storage utilities for caching data client-side
+// Server-backed store. The name and API are unchanged so existing call sites keep
+// working, but values now persist in Postgres and sync across devices.
+import { remoteStorage } from "./serverStore";
+
 export const STORAGE_KEYS = {
   ASSETS: 'networth_assets',
   PHONES: 'networth_phones',
@@ -25,30 +28,30 @@ export const localStorage = {
   // Generic storage methods
   get: (key) => {
     try {
-      const item = window.localStorage.getItem(key);
+      const item = remoteStorage.getItem(key);
       return item ? JSON.parse(item) : null;
     } catch (error) {
-      console.warn(`Error reading from localStorage:`, error);
+      console.warn(`Error reading from store:`, error);
       return null;
     }
   },
 
   set: (key, value) => {
     try {
-      window.localStorage.setItem(key, JSON.stringify(value));
+      remoteStorage.setItem(key, JSON.stringify(value));
       return true;
     } catch (error) {
-      console.warn(`Error writing to localStorage:`, error);
+      console.warn(`Error writing to store:`, error);
       return false;
     }
   },
 
   remove: (key) => {
     try {
-      window.localStorage.removeItem(key);
+      remoteStorage.removeItem(key);
       return true;
     } catch (error) {
-      console.warn(`Error removing from localStorage:`, error);
+      console.warn(`Error removing from store:`, error);
       return false;
     }
   },

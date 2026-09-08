@@ -1,57 +1,41 @@
-// CORS proxy utility for handling CORS-blocked API requests
-import axios from "axios";
+// All third-party market data now goes through the backend proxy, which holds the
+// API keys and applies short-lived caching. Nothing here contacts a vendor directly.
 
-// Use a public CORS proxy for development
-// For production, you should set up your own backend proxy endpoint
-const CORS_PROXY_URL = process.env.REACT_APP_CORS_PROXY || "https://cors.istrav.dev";
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "";
 
-/**
- * Makes a request through a CORS proxy when the direct request would be blocked
- * Falls back to direct request if proxy fails
- */
-export const withCorsProxy = async (url, config = {}) => {
-  // First, try direct request
-  try {
-    const response = await axios(url, { ...config, timeout: 10000 });
-    return response;
-  } catch (error) {
-    // If CORS error, try proxy
-    if (error.response?.status === 0 || error.message?.includes("CORS") || error.message?.includes("Network")) {
-      try {
-        const proxyUrl = `${CORS_PROXY_URL}/?url=${encodeURIComponent(url)}`;
-        const response = await axios(proxyUrl, { ...config, timeout: 10000 });
-        return response;
-      } catch (proxyError) {
-        console.warn(`CORS proxy failed for ${url}:`, proxyError);
-        throw error; // Re-throw original error
-      }
+async function proxyRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE_URL}/api/market${path}`, {
+    credentials: "include",
+    ...options,
+    headers: options.body ? { "Content-Type": "application/json", ...options.headers } : options.headers,
+  });
+
+  const raw = await response.text();
+  let data = null;
+  if (raw) {
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      data = null;
     }
-    throw error;
   }
+  if (!response.ok) {
+    throw new Error(data?.detail || `Market request failed (HTTP ${response.status}).`);
+  }
+  return data;
+}
+
+/** Raw Response for call sites that inspect status/ok themselves. */
+export const proxyFetch = (path, options = {}) =>
+  fetch(`${API_BASE_URL}/api/market${path}`, { credentials: "include", ...options });
+
+/** Mirrors the old axios response shape so call sites can keep reading `.data`. */
+export const withCorsProxy = async (path, config = {}) => {
+  if (config.method === "POST" || config.data) {
+    const data = await proxyRequest(path, { method: "POST", body: JSON.stringify(config.data ?? {}) });
+    return { data };
+  }
+  return { data: await proxyRequest(path) };
 };
 
-/**
- * Alternative: use fetch API for CORS requests (no credentials mode)
- */
-export const fetchWithCors = async (url, options = {}) => {
-  try {
-    const response = await fetch(url, {
-      mode: "cors",
-      credentials: "omit",
-      ...options,
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-    }
-
-    const contentType = response.headers.get("content-type");
-    if (contentType?.includes("application/json")) {
-      return await response.json();
-    }
-    return await response.text();
-  } catch (error) {
-    console.error(`Fetch failed for ${url}:`, error);
-    throw error;
-  }
-};
+export const fetchWithCors = async (path, options = {}) => proxyRequest(path, options);

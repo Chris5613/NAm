@@ -1,4 +1,4 @@
-const LULO_API_BASE = "https://api.lulo.fi";
+const LULO_API_BASE = "/api/market/lulo";
 const USDS_MINT = "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA";
 
 function toDayKey(date) {
@@ -11,7 +11,7 @@ function toDayKey(date) {
 
 async function getJson(path, walletAddress) {
   const url = `${LULO_API_BASE}/${path}?owner=${encodeURIComponent(walletAddress)}`;
-  const response = await fetch(url);
+  const response = await fetch(url, { credentials: "include" });
   if (!response.ok) throw new Error(`Lulo returned HTTP ${response.status}`);
   return response.json();
 }

@@ -1,7 +1,7 @@
-import { withCorsProxy, fetchWithCors } from "./cors-proxy";
+import { withCorsProxy, fetchWithCors, proxyFetch } from "./cors-proxy";
 
-// CoinGecko API
-const COINGECKO_BASE = "https://api.coingecko.com/api/v3";
+// Paths below are backend proxy routes, not vendor URLs. Keys live on the server.
+const COINGECKO_BASE = "/coingecko";
 
 export const coinGeckoApi = {
   getPrice: async (coinId, vsCurrency = "usd") => {
@@ -65,14 +65,12 @@ export const coinGeckoApi = {
 };
 
 // Finnhub API
-const FINNHUB_BASE = "https://finnhub.io/api/v1";
-const FINNHUB_KEY = process.env.REACT_APP_FINNHUB_API_KEY;
+const FINNHUB_BASE = "/finnhub";
 
 export const finnhubApi = {
   getQuote: async (symbol) => {
     try {
-      const url = `${FINNHUB_BASE}/quote?symbol=${symbol}&token=${FINNHUB_KEY}`;
-      const response = await withCorsProxy(url);
+      const response = await withCorsProxy(`${FINNHUB_BASE}/quote?symbol=${symbol}`);
       return response.data || {};
     } catch (error) {
       console.warn(`Finnhub quote fetch failed for ${symbol}:`, error);
@@ -82,8 +80,7 @@ export const finnhubApi = {
 
   search: async (query) => {
     try {
-      const url = `${FINNHUB_BASE}/search?q=${query}&token=${FINNHUB_KEY}`;
-      const response = await withCorsProxy(url);
+      const response = await withCorsProxy(`${FINNHUB_BASE}/search?q=${query}`);
       return response.data.result || [];
     } catch (error) {
       console.warn(`Finnhub search failed for ${query}:`, error);
@@ -93,10 +90,7 @@ export const finnhubApi = {
 };
 
 // CoinStats API
-const COINSTATS_BASE = "https://openapiv1.coinstats.app";
-const COINSTATS_API_KEY = process.env.REACT_APP_COINSTATS_KEY?.trim();
-const COINSTATS_PORTFOLIO_ID =
-  process.env.REACT_APP_COINSTATS_PORTFOLIO_ID?.trim();
+const COINSTATS_BASE = "/coinstats";
 
 const COINSTATS_CHAIN_MAP = {
   solana: "solana",
@@ -117,11 +111,6 @@ export const coinStatsApi = {
   getWalletBalance: async (address, chain = "solana") => {
     if (!address) return [];
 
-    if (!COINSTATS_API_KEY) {
-      console.warn("CoinStats: REACT_APP_COINSTATS_KEY is not set.");
-      return [];
-    }
-
     try {
       const connectionId = COINSTATS_CHAIN_MAP[chain] || chain;
 
@@ -130,12 +119,7 @@ export const coinStatsApi = {
         `?address=${encodeURIComponent(address)}` +
         `&connectionId=${encodeURIComponent(connectionId)}`;
 
-      const response = await fetch(url, {
-        headers: {
-          "X-API-KEY": COINSTATS_API_KEY,
-          accept: "application/json",
-        },
-      });
+      const response = await proxyFetch(url);
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
@@ -344,14 +328,9 @@ function extractDefiTokens(protocol) {
 }
 
 export const coinStatsPortfolioApi = {
-  getDefiPortfolio: async (portfolioId = COINSTATS_PORTFOLIO_ID) => {
-    if (!COINSTATS_API_KEY) {
-      console.warn("CoinStats: REACT_APP_COINSTATS_KEY is not set.");
-      return { positions: [], totalAssets: {} };
-    }
-
+  getDefiPortfolio: async (portfolioId = "") => {
     if (!portfolioId) {
-      console.warn("CoinStats: REACT_APP_COINSTATS_PORTFOLIO_ID is not set.");
+      console.warn("CoinStats: portfolio id is not configured.");
       return { positions: [], totalAssets: {} };
     }
 
@@ -360,12 +339,7 @@ export const coinStatsPortfolioApi = {
         `${COINSTATS_BASE}/portfolio/defi` +
         `?portfolioId=${encodeURIComponent(portfolioId)}`;
 
-      const response = await fetch(url, {
-        headers: {
-          "X-API-KEY": COINSTATS_API_KEY,
-          accept: "application/json",
-        },
-      });
+      const response = await proxyFetch(url);
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
@@ -416,10 +390,7 @@ return {
 };
 
 // Jupiter Price API
-const JUPITER_API_KEY = process.env.REACT_APP_JUPITER_API_KEY?.trim();
-const JUPITER_PRICE_BASE = JUPITER_API_KEY
-  ? "https://api.jup.ag/price/v3"
-  : "https://lite-api.jup.ag/price/v3";
+const JUPITER_PRICE_BASE = "/jupiter/price/v3";
 
 export const jupiterPriceApi = {
   getPrices: async (mints = []) => {
@@ -439,9 +410,7 @@ export const jupiterPriceApi = {
       for (const chunk of chunks) {
         const url = `${JUPITER_PRICE_BASE}?ids=${encodeURIComponent(chunk.join(","))}`;
 
-        const response = await fetch(url, {
-          headers: JUPITER_API_KEY ? { "x-api-key": JUPITER_API_KEY } : {},
-        });
+        const response = await proxyFetch(url);
 
         if (!response.ok) {
           const text = await response.text();
@@ -463,7 +432,7 @@ export const jupiterPriceApi = {
 
 // Solana RPC fallback/helper
 const SOL_MINT = "So11111111111111111111111111111111111111112";
-const SOLANA_RPC = "https://api.mainnet-beta.solana.com";
+const SOLANA_RPC = "/solana/rpc";
 const SPL_TOKEN_PROGRAM = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 const TOKEN_2022_PROGRAM = "TokenzQdBNbLqP5VEHdkAS6EP8CCpM4TbP9pXdJq4iR";
 
@@ -563,7 +532,7 @@ export const solanaApi = {
 };
 
 // Bitcoin Blockchain.info
-const BITCOIN_API = "https://blockchain.info";
+const BITCOIN_API = "/bitcoin";
 
 export const bitcoinApi = {
   getBalance: async (address) => {
@@ -579,10 +548,7 @@ export const bitcoinApi = {
 };
 
 // RapidAPI eBay average selling price
-const RAPIDAPI_KEY = process.env.REACT_APP_RAPIDAPI_KEY;
-const RAPIDAPI_EBAY_HOST =
-  process.env.REACT_APP_RAPIDAPI_EBAY_HOST ||
-  "ebay-average-selling-price.p.rapidapi.com";
+const EBAY_ENDPOINT = "/ebay/findCompletedItems";
 
 const EBAY_CATEGORY_CELL_PHONES = "9355";
 const EBAY_CACHE_TTL_MS = 60 * 60 * 1000;
@@ -618,23 +584,14 @@ export const ebayApi = {
   getMarketData: async (model) => {
     if (!model) return null;
 
-    if (!RAPIDAPI_KEY) {
-      console.warn("eBay: REACT_APP_RAPIDAPI_KEY is not set.");
-      return null;
-    }
-
     const key = model.trim().toLowerCase();
     const cached = readEbayCache(key);
     if (cached) return cached;
 
     try {
-      const response = await fetch(`https://${RAPIDAPI_EBAY_HOST}/findCompletedItems`, {
+      const response = await proxyFetch(EBAY_ENDPOINT, {
         method: "POST",
-        headers: {
-          "X-RapidAPI-Key": RAPIDAPI_KEY,
-          "X-RapidAPI-Host": RAPIDAPI_EBAY_HOST,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           keywords: model,
           max_search_results: "240",
@@ -675,7 +632,7 @@ export const ebayApi = {
 };
 
 // Nosana dashboard API
-const NOSANA_API_BASE = "https://dashboard.k8s.prd.nos.ci/api/stats/earning-history";
+const NOSANA_API_BASE = "/nosana/stats/earning-history";
 
 export const nosanaApi = {
   getEarningHistory: async (address, startDate, endDate, groupBy = "month") => {

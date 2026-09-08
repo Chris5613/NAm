@@ -15,6 +15,7 @@
 //   Manually editing/deleting a synced txn in the InvestmentOverview is also
 //   handled in `api.js` — it removes the date from the synced map so the next
 //   auto-sync re-applies it (or leaves it, depending on user intent).
+import { remoteStorage } from "./serverStore";
 import { nosanaApi } from "./external-apis";
 import { projectsApi } from "./api";
 import { localStorage as storage } from "./localStorage";
@@ -292,18 +293,18 @@ export async function resetNosanaSyncHistory(opts = {}) {
 const MIGRATION_FLAG = "networth_nosana_today_only_migration_v1";
 export async function runTodayOnlyMigrationIfNeeded() {
   try {
-    if (window.localStorage.getItem(MIGRATION_FLAG) === "true") return { migrated: false, reason: "already-run" };
+    if (remoteStorage.getItem(MIGRATION_FLAG) === "true") return { migrated: false, reason: "already-run" };
     const config = storage.getNosanaConfig();
     const synced = storage.getNosanaSyncedDates() || {};
     // Only migrate the demo-seeded state — don't touch users who opted in
     // themselves and intentionally synced historical data.
-    const demoSeeded = window.localStorage.getItem("networth_demo_seeded") === "true";
+    const demoSeeded = remoteStorage.getItem("networth_demo_seeded") === "true";
     if (!demoSeeded || !config || Object.keys(synced).length === 0) {
-      window.localStorage.setItem(MIGRATION_FLAG, "true");
+      remoteStorage.setItem(MIGRATION_FLAG, "true");
       return { migrated: false, reason: "no-op" };
     }
     const result = await resetNosanaSyncHistory();
-    window.localStorage.setItem(MIGRATION_FLAG, "true");
+    remoteStorage.setItem(MIGRATION_FLAG, "true");
     // Kick a fresh sync so today's data appears right after migration.
     try { await syncNosanaEarnings({ silent: true }); } catch { /* ignore */ }
     return { migrated: true, ...result };

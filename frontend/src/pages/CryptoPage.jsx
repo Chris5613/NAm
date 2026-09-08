@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { remoteStorage as localStorage } from "@/lib/serverStore";
 import { walletsApi, tokenPrefsApi, customTokensApi, cryptoCacheApi, projectsApi } from "@/lib/api";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { toast } from "sonner";

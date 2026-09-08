@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
+import ImportDataDialog from "@/components/ImportDataDialog";
+import { useAuth } from "@/lib/AuthContext";
 import {
   DollarSign,
   BarChart3,
@@ -8,6 +10,8 @@ import {
   ReceiptText,
   ChevronLeft,
   ChevronRight,
+  DatabaseBackup,
+  LogOut,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -22,6 +26,8 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <aside
@@ -77,6 +83,36 @@ export default function Sidebar() {
           </NavLink>
         ))}
       </nav>
+
+      <div className="space-y-1 border-t border-border/40 px-3 py-3">
+        {!collapsed && user && (
+          <p className="px-3 pb-1 text-xs text-muted-foreground">
+            Signed in as <span className="text-foreground">{user.username}</span>
+          </p>
+        )}
+        <button
+          onClick={() => setImportOpen(true)}
+          title={collapsed ? "Import data" : undefined}
+          className={`flex w-full items-center rounded-md py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground ${
+            collapsed ? "justify-center px-2" : "gap-3 px-3"
+          }`}
+        >
+          <DatabaseBackup className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
+          {!collapsed && <span>Import data</span>}
+        </button>
+        <button
+          onClick={logout}
+          title={collapsed ? "Sign out" : undefined}
+          className={`flex w-full items-center rounded-md py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground ${
+            collapsed ? "justify-center px-2" : "gap-3 px-3"
+          }`}
+        >
+          <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
+          {!collapsed && <span>Sign out</span>}
+        </button>
+      </div>
+
+      <ImportDataDialog open={importOpen} onOpenChange={setImportOpen} />
     </aside>
   );
 }

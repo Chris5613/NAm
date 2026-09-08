@@ -1,5 +1,5 @@
-// MLB StatsAPI client — public, no key required, sends CORS headers.
-const STATS_API = "https://statsapi.mlb.com/api/v1";
+// MLB requests go through the authenticated backend market proxy.
+const STATS_API = "/api/market/mlb";
 
 export function getPacificDateKey(value = new Date()) {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -219,8 +219,8 @@ export async function fetchGameFeed(gamePk) {
   if (!gamePk) return null;
 
   const urls = [
-    `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`,
-    `https://statsapi.mlb.com/api/v1/game/${gamePk}/feed/live`,
+    `${STATS_API}/game/${gamePk}/feed/live`,
+    `${STATS_API}/game/${gamePk}/feed/live`,
   ];
 
   let lastError;

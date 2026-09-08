@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { remoteStorage as localStorage } from "@/lib/serverStore";
 import { projectsApi } from "@/lib/api";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -407,10 +408,10 @@ export default function InvestmentOverview() {
   // empty on first load. No-op once seeded or if the user already has data.
   useEffect(() => {
     const seedMockEarners = async () => {
-      const flagged = window.localStorage.getItem(MONTHLY_EARNERS_SEED_FLAG) === "true";
+      const flagged = localStorage.getItem(MONTHLY_EARNERS_SEED_FLAG) === "true";
       if (flagged) return;
 
-      window.localStorage.setItem(MONTHLY_EARNERS_SEED_FLAG, "true");
+      localStorage.setItem(MONTHLY_EARNERS_SEED_FLAG, "true");
 
       const res = await projectsApi.getAll();
       if ((res.data || []).length > 0) return;

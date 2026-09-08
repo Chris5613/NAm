@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { localStorage as storage } from "@/lib/localStorage";
-import { plaidApi } from "@/lib/plaid";
+import { spendingApi } from "@/lib/apiClient";
+import { api } from "@/lib/apiClient";
+import { assetsApi } from "@/lib/api";
 import {
   ArrowDownRight,
   Building2,
@@ -15,6 +16,7 @@ import {
   CircleDollarSign,
   CreditCard,
   Link2,
+  Loader2,
   Plus,
   ReceiptText,
   RefreshCw,
@@ -28,7 +30,6 @@ import {
 const CATEGORIES = ["Home", "Food & drink", "Transport", "Shopping", "Bills", "Health", "Entertainment", "Other"];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const CATEGORY_COLORS = ["#60a5fa", "#34d399", "#a78bfa", "#f472b6", "#22d3ee", "#818cf8", "#2dd4bf", "#94a3b8"];
-const SAMPLE_FLAG = "networth_spending_sample_loaded";
 
 const dayKey = (date) => date.toISOString().slice(0, 10);
 const monthKeyOf = (date = new Date()) => date.toISOString().slice(0, 7);
@@ -119,11 +120,14 @@ function TransactionRow({ item, showDate, onRecategorize, onDelete }) {
 }
 
 export default function SpendingPage() {
-  const [accounts, setAccounts] = useState(() => storage.getSpendingAccounts());
-  const [transactions, setTransactions] = useState(() => storage.getSpendingTransactions());
-  const [budget, setBudget] = useState(() => storage.getSpendingBudget());
-  const [budgetInput, setBudgetInput] = useState(() => String(storage.getSpendingBudget() || ""));
+  const [accounts, setAccounts] = useState([]);
+  const [transactions, setTransactions] = useState([]);
+  const [budget, setBudget] = useState(0);
+  const [budgetInput, setBudgetInput] = useState("");
+  const [isLoading, setIsLoading] = useState(true);
   const [transactionDialogOpen, setTransactionDialogOpen] = useState(false);
+  const [simplefinDialogOpen, setSimplefinDialogOpen] = useState(false);
+  const [simplefinUrl, setSimplefinUrl] = useState("");
   const [allTransactionsOpen, setAllTransactionsOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
@@ -229,94 +233,203 @@ export default function SpendingPage() {
   );
   const upcoming = useMemo(() => transactions.filter((item) => item.date >= today && item.date <= upcomingDays[6].key), [today, upcomingDays, transactions]);
 
-  const saveAccounts = (value) => {
-    setAccounts(value);
-    storage.setSpendingAccounts(value);
-  };
-  const saveTransactions = (value) => {
-    setTransactions(value);
-    storage.setSpendingTransactions(value);
-  };
-
-  // Clears rows left behind by the removed sample-data seeder; runs at most once.
-  useEffect(() => {
-    if (!window.localStorage.getItem(SAMPLE_FLAG)) return;
-    window.localStorage.removeItem(SAMPLE_FLAG);
-    const realAccounts = storage.getSpendingAccounts().filter((item) => !item.sample);
-    const realTransactions = storage.getSpendingTransactions().filter((item) => !item.sample);
-    setAccounts(realAccounts);
-    storage.setSpendingAccounts(realAccounts);
-    setTransactions(realTransactions);
-    storage.setSpendingTransactions(realTransactions);
+  const loadAll = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const [serverAccounts, serverTransactions, serverBudget] = await Promise.all([
+        spendingApi.accounts(),
+        spendingApi.transactions(),
+        spendingApi.getBudget(),
+      ]);
+      setAccounts(serverAccounts || []);
+      setTransactions(serverTransactions || []);
+      setBudget(serverBudget || 0);
+      setBudgetInput(serverBudget ? String(serverBudget) : "");
+      return serverAccounts || [];
+    } catch (error) {
+      toast.error(error.message || "Could not load spending data.");
+    } finally {
+      setIsLoading(false);
+    }
   }, []);
 
-  const clientUserId = () => {
-    const key = "networth_plaid_client_user_id";
-    const stored = window.localStorage.getItem(key);
-    if (stored) return stored;
-    const value = crypto.randomUUID();
-    window.localStorage.setItem(key, value);
-    return value;
-  };
+  useEffect(() => {
+    loadAll();
+  }, [loadAll]);
 
-  const sync = async (itemIds) => {
-    const ids = itemIds || [...new Set(accounts.map((account) => account.plaidItemId).filter(Boolean))];
-    if (!ids.length) return toast.info("Link a bank or card with Plaid first.");
+  const sync = async (itemId) => {
     setIsSyncing(true);
     try {
-      const results = await Promise.all(ids.map((id) => plaidApi.syncTransactions(id)));
-      const incoming = results.flatMap((result) => result.transactions);
-      const idsToReplace = new Set(incoming.map((item) => item.id));
-      saveTransactions([...incoming, ...transactions.filter((item) => !idsToReplace.has(item.id))]);
-      toast.success(incoming.length ? `${incoming.length} expenses synced` : "Accounts are up to date");
+      const connections = await api.get("/api/simplefin/connections");
+      const selected = itemId ? connections.filter((connection) => connection.id === itemId) : connections;
+      if (!selected.length) throw new Error("No SimpleFIN connections found.");
+      let accountCount = 0;
+      let receivedCount = 0;
+      let incoming = [];
+      for (const connection of selected) {
+        const payload = await fetchSimplefinInBrowser(connection.access_url);
+        const result = await api.post("/api/simplefin/browser-sync", {
+          connection_id: connection.id,
+          payload,
+        });
+        accountCount += result?.accounts || 0;
+        receivedCount += result?.received_transactions || 0;
+        incoming = [...incoming, ...(result?.transactions || [])];
+      }
+      const refreshedAccounts = await loadAll();
+      await syncNetWorthBalances(refreshedAccounts);
+      toast.success(incoming.length ? `${incoming.length} expenses synced` : `${accountCount} accounts checked; ${receivedCount} transactions received`);
     } catch (error) {
-      toast.error(error.message || "Could not sync Plaid transactions.");
+      toast.error(error.message || "Could not sync SimpleFIN transactions.");
     } finally {
       setIsSyncing(false);
     }
   };
 
-  const linkAccount = async () => {
-    setIsLinking(true);
-    try {
-      await plaidApi.openLink(clientUserId(), async (publicToken) => {
-        try {
-          const result = await plaidApi.exchangePublicToken(publicToken);
-          const existing = new Set(accounts.map((account) => account.id));
-          const added = result.accounts.filter((account) => !existing.has(account.id));
-          saveAccounts([...accounts, ...added]);
-          toast.success(`${added.length || "Your"} account${added.length === 1 ? "" : "s"} linked`);
-          await sync([result.item_id]);
-        } catch (error) {
-          toast.error(error.message || "Could not finish linking the account.");
-        } finally {
-          setIsLinking(false);
-        }
-      });
-    } catch (error) {
-      setIsLinking(false);
-      toast.error(error.message || "Could not open Plaid Link.");
+  const syncNetWorthBalances = async (serverAccounts = accounts) => {
+    const existing = (await assetsApi.getAll()).data || [];
+    const existingByProviderId = new Map(existing.map((asset) => [asset.provider_account_id || asset.providerAccountId, asset]));
+    for (const account of serverAccounts) {
+      if (!account.providerAccountId || account.currentBalance === null || account.currentBalance === undefined) continue;
+      const type = String(account.type || "").toLowerCase();
+      const isDebt = type.includes("credit") || type.includes("card");
+      const payload = {
+        id: `simplefin-asset-${account.providerAccountId}`,
+        name: account.name,
+        category: isDebt ? "debts" : "cash",
+        symbol: null,
+        quantity: 1,
+        current_price: 0,
+        manual_value: Math.abs(Number(account.currentBalance) || 0),
+        provider_account_id: account.providerAccountId,
+        provider: "simplefin",
+        synced_at: new Date().toISOString(),
+      };
+      const current = existingByProviderId.get(account.providerAccountId);
+      const nameMatch = existing.find(
+        (asset) =>
+          !asset.provider_account_id &&
+          String(asset.name || "").trim().toLowerCase() === String(account.name || "").trim().toLowerCase() &&
+          asset.category === payload.category
+      );
+      if (current || nameMatch) await assetsApi.update((current || nameMatch).id, payload);
+      else await assetsApi.create(payload);
     }
   };
 
-  const recategorize = (id, category) => saveTransactions(transactions.map((item) => (item.id === id ? { ...item, category } : item)));
-  const deleteTransaction = (id) => saveTransactions(transactions.filter((item) => item.id !== id));
+  const linkAccount = async () => {
+    setSimplefinDialogOpen(true);
+  };
 
-  const addTransaction = () => {
+  const fetchSimplefinInBrowser = async (accessUrl) => {
+    const parsed = new URL(accessUrl);
+    const username = decodeURIComponent(parsed.username);
+    const password = decodeURIComponent(parsed.password);
+    parsed.username = "";
+    parsed.password = "";
+    const path = parsed.pathname.replace(/\/$/, "");
+    parsed.pathname = path.endsWith("/accounts") ? path : `${path}/accounts`;
+    parsed.search = "?version=2";
+    const response = await fetch(parsed.toString(), {
+      headers: { Accept: "application/json", Authorization: `Basic ${window.btoa(`${username}:${password}`)}` },
+    });
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const detail = data?.errlist?.map((item) => item.description || item.code).join(", ") || `SimpleFIN returned HTTP ${response.status}`;
+      throw new Error(detail);
+    }
+    return data;
+  };
+
+  const connectSimplefin = async () => {
+    setIsLinking(true);
+    try {
+      let accessUrl = simplefinUrl.trim();
+      if (!accessUrl.startsWith("https://")) {
+        const claimed = await api.post("/api/simplefin/claim", { setup_token: accessUrl });
+        accessUrl = claimed.access_url;
+      }
+      const result = await api.post("/api/simplefin/connections", { access_url: accessUrl });
+      const payload = await fetchSimplefinInBrowser(accessUrl);
+      await api.post("/api/simplefin/browser-sync", { connection_id: result.id, payload });
+      setSimplefinUrl("");
+      setSimplefinDialogOpen(false);
+      toast.success(`${payload.accounts?.length || "Your"} account${payload.accounts?.length === 1 ? "" : "s"} connected`);
+      const refreshedAccounts = await loadAll();
+      await syncNetWorthBalances(refreshedAccounts);
+    } catch (error) {
+      toast.error(error.message || "Could not connect SimpleFIN.");
+    } finally {
+      setIsLinking(false);
+    }
+  };
+
+  const recategorize = async (id, category) => {
+    const previous = transactions;
+    setTransactions((current) => current.map((item) => (item.id === id ? { ...item, category } : item)));
+    try {
+      await spendingApi.patchTransaction(id, { category });
+    } catch (error) {
+      setTransactions(previous);
+      toast.error(error.message || "Could not update the category.");
+    }
+  };
+
+  const deleteTransaction = async (id) => {
+    const previous = transactions;
+    setTransactions((current) => current.filter((item) => item.id !== id));
+    try {
+      await spendingApi.deleteTransaction(id);
+    } catch (error) {
+      setTransactions(previous);
+      toast.error(error.message || "Could not delete the expense.");
+    }
+  };
+
+  const removeAccount = async (id) => {
+    const previous = accounts;
+    setAccounts((current) => current.filter((item) => item.id !== id));
+    try {
+      await spendingApi.deleteAccount(id);
+    } catch (error) {
+      setAccounts(previous);
+      toast.error(error.message || "Could not remove the account.");
+    }
+  };
+
+  const addTransaction = async () => {
     const amount = Number(transaction.amount);
     if (!transaction.merchant.trim() || !Number.isFinite(amount) || amount <= 0) return;
-    saveTransactions([{ ...transaction, id: crypto.randomUUID(), merchant: transaction.merchant.trim(), amount }, ...transactions]);
-    setTransaction(emptyTransaction());
-    setTransactionDialogOpen(false);
-    toast.success("Expense added");
+    try {
+      const saved = await spendingApi.saveTransaction({ ...transaction, merchant: transaction.merchant.trim(), amount });
+      setTransactions((current) => [saved, ...current]);
+      setTransaction(emptyTransaction());
+      setTransactionDialogOpen(false);
+      toast.success("Expense added");
+    } catch (error) {
+      toast.error(error.message || "Could not add the expense.");
+    }
   };
 
-  const saveBudget = () => {
+  const saveBudget = async () => {
     const value = Math.max(Number(budgetInput) || 0, 0);
-    setBudget(value);
-    setBudgetInput(value ? String(value) : "");
-    storage.setSpendingBudget(value);
+    try {
+      await spendingApi.setBudget(value);
+      setBudget(value);
+      setBudgetInput(value ? String(value) : "");
+      toast.success("Budget saved");
+    } catch (error) {
+      toast.error(error.message || "Could not save the budget.");
+    }
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-7xl">
@@ -330,7 +443,7 @@ export default function SpendingPage() {
             <RefreshCw className={isSyncing ? "animate-spin" : ""} /> {isSyncing ? "Syncing" : "Sync"}
           </Button>
           <Button size="sm" variant="outline" disabled={isLinking} onClick={linkAccount}>
-            <Link2 /> {isLinking ? "Opening Plaid" : "Link account"}
+            <Link2 /> {isLinking ? "Connecting" : "Connect SimpleFIN"}
           </Button>
           <Button size="sm" onClick={() => setTransactionDialogOpen(true)}>
             <Plus /> Add expense
@@ -562,9 +675,18 @@ export default function SpendingPage() {
                   return (
                     <div className="flex items-center gap-3 border-t border-border/60 px-5 py-4" key={account.id}>
                       <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium">{account.name}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium">{account.name}</span>
+                        {account.classification?.matchedName ? (
+                          <span className="mt-0.5 block text-xs text-rose-300">
+                            Matched: {account.classification.matchedName}
+                          </span>
+                        ) : account.classification?.confidence === "possible" ? (
+                          <span className="mt-0.5 block text-xs text-amber-300">Possible credit card</span>
+                        ) : null}
+                      </div>
                       <span className="text-sm font-semibold tabular-nums">{money(account.currentBalance, "Linked")}</span>
-                      <button title="Remove account" onClick={() => saveAccounts(accounts.filter((item) => item.id !== account.id))}>
+                      <button title="Remove account" onClick={() => removeAccount(account.id)}>
                         <ChevronRight className="h-4 w-4 text-muted-foreground hover:text-rose-400" />
                       </button>
                     </div>
@@ -577,7 +699,7 @@ export default function SpendingPage() {
                 </div>
               )}
               <button className="flex w-full items-center gap-2 border-t border-border/60 px-5 py-3 text-sm text-emerald-400 hover:bg-emerald-400/5" onClick={linkAccount}>
-                <Plus className="h-4 w-4" /> Link account
+                <Plus className="h-4 w-4" /> Link bank account
               </button>
             </CardContent>
           </Card>
@@ -677,6 +799,35 @@ export default function SpendingPage() {
               <span className="text-muted-foreground">Total</span>
               <span className="font-semibold tabular-nums">{money(filteredTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0))}</span>
             </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={simplefinDialogOpen} onOpenChange={setSimplefinDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect SimpleFIN</DialogTitle>
+            <DialogDescription>
+              Paste the SimpleFIN setup token you received, or an HTTPS access URL if you already claimed it. The setup token is exchanged securely by the backend.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <label className="text-sm font-medium" htmlFor="simplefin-access-url">SimpleFIN access URL</label>
+            <Input
+              className="mt-2"
+              id="simplefin-access-url"
+              type="url"
+              placeholder="Setup token or https://..."
+              value={simplefinUrl}
+              onChange={(event) => setSimplefinUrl(event.target.value)}
+            />
+            <p className="mt-2 text-xs text-muted-foreground">Create this URL in SimpleFIN Bridge after linking your institutions.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSimplefinDialogOpen(false)}>Cancel</Button>
+            <Button disabled={isLinking || !simplefinUrl.trim()} onClick={connectSimplefin}>
+              {isLinking ? "Connecting" : "Connect"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { netWorthApi, pricesApi } from "@/lib/api";
+import { remoteStorage as localStorage } from "@/lib/serverStore";
 import { localStorage as storage } from "@/lib/localStorage";
 import { toast } from "sonner";
 import NetWorthHero from "@/components/NetWorthHero";

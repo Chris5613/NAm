@@ -1,7 +1,7 @@
 import { INF_MINT, SOL_MINT } from "./infYieldSync";
 
 const JUPITER_LEND_POSITIONS_URL =
-  "https://lite-api.jup.ag/lend/v1/borrow/positions";
+  "/api/market/jupiter/lend/v1/borrow/positions";
 
 const YEAR_MS = 365 * 24 * 60 * 60 * 1000;
 
@@ -48,7 +48,7 @@ export async function getJupiterInfLoopSnapshot(
     `${JUPITER_LEND_POSITIONS_URL}` +
     `?users=${encodeURIComponent(walletAddress)}`;
 
-  const response = await fetch(url);
+  const response = await fetch(url, { credentials: "include" });
 
   if (!response.ok) {
     throw new Error(
