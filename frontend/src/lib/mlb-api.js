@@ -29,7 +29,10 @@ export function getTodayDateKey() {
 }
 
 async function getJson(url) {
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+  const res = await fetch(url, {
+    credentials: "include",
+    headers: { Accept: "application/json" },
+  });
   if (!res.ok) throw new Error(`MLB API ${res.status}`);
   return res.json();
 }
