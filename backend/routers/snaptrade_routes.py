@@ -2,6 +2,7 @@
 
 import os
 from uuid import uuid4
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -28,8 +29,29 @@ def get_client():
         raise HTTPException(status_code=503, detail="SnapTrade SDK is not installed on the backend.") from error
 
 
-def body(response):
-    return getattr(response, "body", response)
+def body(response: Any) -> Any:
+    value = getattr(response, "body", response)
+    if isinstance(value, (dict, list)):
+        return value
+    for method_name in ("to_dict", "model_dump"):
+        method = getattr(value, method_name, None)
+        if callable(method):
+            return method()
+    return value
+
+
+def response_list(value: Any, *keys: str) -> list[dict[str, Any]]:
+    value = body(value)
+    if isinstance(value, list):
+        return value
+    if isinstance(value, dict):
+        for key in keys:
+            candidate = value.get(key)
+            if isinstance(candidate, list):
+                return candidate
+        data = value.get("data")
+        return data if isinstance(data, list) else []
+    return []
 
 
 def require_connection(user: User, db: Session) -> SnaptradeConnection:
@@ -58,33 +80,39 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
 
 @router.post("/connect")
 async def connect(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    client = get_client()
-    connection = db.scalar(select(SnaptradeConnection).where(SnaptradeConnection.user_id == user.id))
-    if not connection:
-        response = body(client.authentication.register_snap_trade_user(user_id=str(user.id)))
-        snaptrade_user_id = response.get("userId") or response.get("user_id")
-        user_secret = response.get("userSecret") or response.get("user_secret")
-        if not snaptrade_user_id or not user_secret:
-            raise HTTPException(status_code=502, detail="SnapTrade did not return user credentials.")
-        connection = SnaptradeConnection(
-            id=str(uuid4()),
-            user_id=user.id,
-            snaptrade_user_id=str(snaptrade_user_id),
-            user_secret=get_cipher().encrypt(str(user_secret).encode()).decode(),
-            brokerage="Fidelity",
-        )
-        db.add(connection)
-        db.commit()
+    try:
+        client = get_client()
+        connection = db.scalar(select(SnaptradeConnection).where(SnaptradeConnection.user_id == user.id))
+        if not connection:
+            response = body(client.authentication.register_snap_trade_user(user_id=str(user.id)))
+            snaptrade_user_id = response.get("userId") or response.get("user_id")
+            user_secret = response.get("userSecret") or response.get("user_secret")
+            if not snaptrade_user_id or not user_secret:
+                raise HTTPException(status_code=502, detail="SnapTrade did not return user credentials.")
+            connection = SnaptradeConnection(
+                id=str(uuid4()),
+                user_id=user.id,
+                snaptrade_user_id=str(snaptrade_user_id),
+                user_secret=get_cipher().encrypt(str(user_secret).encode()).decode(),
+                brokerage="Fidelity",
+            )
+            db.add(connection)
+            db.commit()
 
-    response = body(client.authentication.login_snap_trade_user(
-        user_id=connection.snaptrade_user_id,
-        user_secret=decrypt_user_secret(connection),
-        custom_redirect=os.getenv("SNAPTRADE_REDIRECT_URI") or None,
-    ))
-    redirect_uri = response.get("redirectURI") or response.get("redirect_uri") or response.get("redirectUrl")
-    if not redirect_uri:
-        raise HTTPException(status_code=502, detail="SnapTrade did not return an authorization URL.")
-    return {"redirect_uri": redirect_uri}
+        response = body(client.authentication.login_snap_trade_user(
+            user_id=connection.snaptrade_user_id,
+            user_secret=decrypt_user_secret(connection),
+            custom_redirect=os.getenv("SNAPTRADE_REDIRECT_URI") or None,
+        ))
+        redirect_uri = response.get("redirectURI") or response.get("redirect_uri") or response.get("redirectUrl")
+        if not redirect_uri:
+            raise HTTPException(status_code=502, detail="SnapTrade did not return an authorization URL.")
+        return {"redirect_uri": redirect_uri}
+    except HTTPException:
+        raise
+    except Exception as error:
+        db.rollback()
+        raise HTTPException(status_code=502, detail=f"SnapTrade connection failed: {str(error)[:240]}") from error
 
 
 @router.post("/sync")
@@ -95,7 +123,7 @@ async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)
         user_id=connection.snaptrade_user_id,
         user_secret=decrypt_user_secret(connection),
     ))
-    accounts = accounts_response if isinstance(accounts_response, list) else accounts_response.get("accounts", accounts_response.get("data", []))
+    accounts = response_list(accounts_response, "accounts")
     synced = 0
     for account in accounts or []:
         account_id = str(account.get("id") or account.get("accountId") or "")
@@ -106,7 +134,7 @@ async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)
             user_secret=decrypt_user_secret(connection),
             account_id=account_id,
         ))
-        holdings = holdings_response if isinstance(holdings_response, list) else holdings_response.get("holdings", holdings_response.get("data", []))
+        holdings = response_list(holdings_response, "holdings")
         for holding in holdings or []:
             symbol = holding.get("symbol", {}) if isinstance(holding.get("symbol"), dict) else {}
             ticker = str(holding.get("ticker") or symbol.get("symbol") or symbol.get("ticker") or "").upper()
