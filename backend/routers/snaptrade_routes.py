@@ -21,8 +21,9 @@ def get_client():
     if not client_id or not consumer_key:
         raise HTTPException(status_code=503, detail="SNAPTRADE_CLIENT_ID and SNAPTRADE_CONSUMER_KEY must be set on the backend.")
     try:
-        from snaptrade_client import SnapTrade
-        return SnapTrade(consumer_key=consumer_key, client_id=client_id)
+        from snaptrade_client import SnapTrade, SnapTradeAuth
+        auth = SnapTradeAuth.commercial_api_key(consumer_key=consumer_key, client_id=client_id)
+        return SnapTrade(auth=auth)
     except ImportError as error:
         raise HTTPException(status_code=503, detail="SnapTrade SDK is not installed on the backend.") from error
 
@@ -78,6 +79,7 @@ async def connect(user: User = Depends(current_user), db: Session = Depends(get_
     response = body(client.authentication.login_snap_trade_user(
         user_id=connection.snaptrade_user_id,
         user_secret=decrypt_user_secret(connection),
+        custom_redirect=os.getenv("SNAPTRADE_REDIRECT_URI") or None,
     ))
     redirect_uri = response.get("redirectURI") or response.get("redirect_uri") or response.get("redirectUrl")
     if not redirect_uri:
@@ -91,7 +93,7 @@ async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)
     connection = require_connection(user, db)
     accounts_response = body(client.account_information.list_user_accounts(
         user_id=connection.snaptrade_user_id,
-        user_secret=connection.user_secret,
+        user_secret=decrypt_user_secret(connection),
     ))
     accounts = accounts_response if isinstance(accounts_response, list) else accounts_response.get("accounts", accounts_response.get("data", []))
     synced = 0
