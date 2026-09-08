@@ -120,35 +120,33 @@ async def connect(user: User = Depends(current_user), db: Session = Depends(get_
 async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     client = get_client()
     connection = require_connection(user, db)
-    accounts_response = body(client.account_information.list_user_accounts())
+    try:
+        accounts_response = body(client.account_information.list_user_accounts())
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f"SnapTrade sync failed: {api_error_detail(error)}") from error
     accounts = response_list(accounts_response, "accounts")
     synced = 0
     for account in accounts or []:
         account_id = str(account.get("id") or account.get("accountId") or "")
         if not account_id:
             continue
-        holdings_response = body(client.account_information.get_user_holdings(
-            account_id=account_id,
-        ))
-        holdings = response_list(holdings_response, "holdings")
-        for holding in holdings or []:
-            symbol = holding.get("symbol", {}) if isinstance(holding.get("symbol"), dict) else {}
-            ticker = str(holding.get("ticker") or symbol.get("symbol") or symbol.get("ticker") or "").upper()
-            quantity = float(holding.get("units") or holding.get("quantity") or holding.get("unitsOwned") or 0)
-            price = float(holding.get("price") or holding.get("lastPrice") or holding.get("currentPrice") or 0)
-            if not ticker or quantity == 0:
-                continue
-            asset_id = f"snaptrade-asset-{account_id}-{ticker}"
-            asset = db.get(Asset, asset_id) or Asset(id=asset_id, user_id=user.id, data={})
-            asset.name = symbol.get("description") or symbol.get("name") or ticker
-            asset.category = "stocks"
-            asset.symbol = ticker
-            asset.quantity = quantity
-            asset.current_price = price
-            asset.manual_value = None
-            asset.data = {**(asset.data or {}), "provider": "snaptrade", "provider_account_id": account_id, "synced_at": utcnow().isoformat()}
-            db.merge(asset)
-            synced += 1
+        balance = account.get("balance") or {}
+        total = balance.get("total") or {}
+        amount = total.get("amount")
+        if amount is None:
+            continue
+        name = account.get("name") or account.get("institution_name") or "SnapTrade account"
+        asset_id = f"snaptrade-asset-{account_id}"
+        asset = db.get(Asset, asset_id) or Asset(id=asset_id, user_id=user.id, data={})
+        asset.name = f"{account.get('institution_name') or 'SnapTrade'} - {name}"
+        asset.category = "stocks"
+        asset.symbol = None
+        asset.quantity = 1
+        asset.current_price = float(amount)
+        asset.manual_value = None
+        asset.data = {**(asset.data or {}), "provider": "snaptrade", "provider_account_id": account_id, "synced_at": utcnow().isoformat()}
+        db.merge(asset)
+        synced += 1
     connection.last_synced_at = utcnow()
     db.commit()
     return {"synced": synced, "last_synced_at": connection.last_synced_at.isoformat()}
