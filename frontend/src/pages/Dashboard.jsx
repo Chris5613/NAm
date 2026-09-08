@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { netWorthApi, pricesApi } from "@/lib/api";
 import { remoteStorage as localStorage } from "@/lib/serverStore";
+import { refreshCollection } from "@/lib/serverStore";
 import { localStorage as storage } from "@/lib/localStorage";
 import { toast } from "sonner";
 import NetWorthHero from "@/components/NetWorthHero";
@@ -375,6 +376,11 @@ export default function Dashboard() {
   const handleAssetUpdated = () => fetchData();
   const handleAssetDeleted = () => fetchData();
 
+  const handleSnaptradeSynced = async () => {
+    await refreshCollection("networth_assets");
+    fetchData();
+  };
+
   const sortedAllSections = useMemo(() => {
     const stocksTotal = (assets || [])
       .filter((a) => a.category === "stocks")
@@ -595,7 +601,7 @@ const handleRefreshPrices = async () => {
 
             {activeTab === "stocks" && (
               <div className="space-y-4">
-                <SnaptradeCard />
+                <SnaptradeCard onSynced={handleSnaptradeSynced} />
                 <AssetBreakdown
                   category="stocks"
                   assets={assets}

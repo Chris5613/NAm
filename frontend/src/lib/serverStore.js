@@ -99,6 +99,15 @@ export function resetStore() {
   hydrated = false;
 }
 
+/** Re-fetches one collection (e.g. "networth_assets") from the server, bypassing the in-memory cache. */
+export async function refreshCollection(key) {
+  const resource = COLLECTION_RESOURCES[key];
+  if (!resource) return;
+  const records = await resourceApi.list(resource);
+  cache.set(key, records || []);
+  notify(key);
+}
+
 /** Mirrors the Web Storage API so existing call sites work unchanged. */
 export const remoteStorage = {
   get length() {
