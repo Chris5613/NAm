@@ -21,8 +21,8 @@ def get_client():
     if not client_id or not consumer_key:
         raise HTTPException(status_code=503, detail="SNAPTRADE_CLIENT_ID and SNAPTRADE_CONSUMER_KEY must be set on the backend.")
     try:
-        from snaptrade_client import Snaptrade
-        return Snaptrade(consumer_key=consumer_key, client_id=client_id)
+        from snaptrade_client import SnapTrade
+        return SnapTrade(consumer_key=consumer_key, client_id=client_id)
     except ImportError as error:
         raise HTTPException(status_code=503, detail="SnapTrade SDK is not installed on the backend.") from error
 
