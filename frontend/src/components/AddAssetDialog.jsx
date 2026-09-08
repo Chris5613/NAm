@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TrendingUp, Landmark, CreditCard, Coins, RefreshCw, Loader2, Boxes } from "lucide-react";
+import SnaptradeCard from "@/components/SnaptradeCard";
 
 const CATEGORIES = [
   { value: "stocks", label: "Stocks", icon: TrendingUp, hint: "Stock holdings with real-time prices" },
@@ -212,6 +213,9 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* ===== STOCKS ===== */}
           {category === "stocks" && (
+            <SnaptradeCard onSynced={onCreated} />
+          )}
+          {false && category === "stocks" && (
             <>
               <div className="space-y-2 relative">
                 <Label htmlFor="ticker">Ticker Symbol</Label>
@@ -397,14 +401,16 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
           )}
 
           {/* Notes - shared */}
-          <div className="space-y-2">
+          {category !== "stocks" && <div className="space-y-2">
             <Label htmlFor="notes">Notes (optional)</Label>
             <Input id="notes" placeholder="Optional notes" value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="input-notes" className="bg-background border-border" />
-          </div>
+          </div>}
 
-          <Button type="submit" disabled={submitting} className="w-full bg-white text-black hover:bg-neutral-200" data-testid="submit-add-asset">
-            {submitting ? "Adding..." : "Add Asset"}
-          </Button>
+          {category !== "stocks" && (
+            <Button type="submit" disabled={submitting} className="w-full bg-white text-black hover:bg-neutral-200" data-testid="submit-add-asset">
+              {submitting ? "Adding..." : "Add Asset"}
+            </Button>
+          )}
         </form>
       </DialogContent>
     </Dialog>

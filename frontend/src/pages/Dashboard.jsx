@@ -674,7 +674,7 @@ const handleRefreshPrices = async () => {
         onOpenChange={setAddDialogOpen}
         onCreated={handleAssetCreated}
         defaultCategory={activeTab !== "all" ? activeTab : "cash"}
-        allowStocks={false}
+        allowStocks
       />
 
     </div>

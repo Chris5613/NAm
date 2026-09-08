@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { snaptradeApi } from "@/lib/apiClient";
 
-export default function SnaptradeCard() {
+export default function SnaptradeCard({ onSynced }) {
   const [status, setStatus] = useState(null);
   const [busy, setBusy] = useState(false);
 
@@ -40,6 +40,7 @@ export default function SnaptradeCard() {
     try {
       const result = await snaptradeApi.sync();
       toast.success(`${result.synced || 0} stock holdings synced.`);
+      onSynced?.();
       await loadStatus();
     } catch (error) {
       toast.error(error.message || "Could not sync SnapTrade holdings.");
