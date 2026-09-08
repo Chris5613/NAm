@@ -292,7 +292,19 @@ export default function SpendingPage() {
     for (const account of serverAccounts) {
       if (!account.providerAccountId || account.currentBalance === null || account.currentBalance === undefined) continue;
       const type = String(account.type || "").toLowerCase();
-      const isDebt = type.includes("credit") || type.includes("card");
+      const name = String(account.name || "").toLowerCase();
+      const classifiedCategory = account.classification?.category;
+      const isDebt = classifiedCategory === "debts" || (
+        !classifiedCategory && (
+          type.includes("credit") ||
+          type.includes("card") ||
+          name.includes("sapphire") ||
+          name.includes("freedom") ||
+          name.includes("slate") ||
+          name.includes("credit") ||
+          name.includes("card")
+        )
+      );
       const payload = {
         id: `simplefin-asset-${account.providerAccountId}`,
         name: account.name,
