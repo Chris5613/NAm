@@ -8,6 +8,7 @@ import PortfolioChart from "@/components/PortfolioChart";
 import NetWorthHistory from "@/components/NetWorthHistory";
 import CryptoBreakdown from "@/components/CryptoBreakdown";
 import AssetBreakdown from "@/components/AssetBreakdown";
+import SnaptradeCard from "@/components/SnaptradeCard";
 import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -590,13 +591,16 @@ const handleRefreshPrices = async () => {
             )}
 
             {activeTab === "stocks" && (
-              <AssetBreakdown
-                category="stocks"
-                assets={assets}
-                onUpdate={handleAssetUpdated}
-                onDelete={handleAssetDeleted}
-                defaultOpen={true}
-              />
+              <div className="space-y-4">
+                <SnaptradeCard />
+                <AssetBreakdown
+                  category="stocks"
+                  assets={assets}
+                  onUpdate={handleAssetUpdated}
+                  onDelete={handleAssetDeleted}
+                  defaultOpen={true}
+                />
+              </div>
             )}
 
             {activeTab === "cash" && (

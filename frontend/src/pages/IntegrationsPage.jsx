@@ -7,7 +7,6 @@
 import { useState, useCallback } from "react";
 import NosanaEarningsCard from "@/components/NosanaEarningsCard";
 import KryptexEarningsCard from "@/components/KryptexEarningsCard";
-import SnaptradeCard from "@/components/SnaptradeCard";
 import {
   AddIntegrationDialog,
   CustomIntegrationCard,
@@ -57,7 +56,6 @@ export default function IntegrationsPage() {
       <div className="space-y-4">
         <NosanaEarningsCard />
         <KryptexEarningsCard />
-        <SnaptradeCard />
 
         {/* Custom integrations */}
         {customIntegrations.length > 0 && (
