@@ -99,7 +99,7 @@ export default function LoginScreen() {
           </p>
 
           <form className="mt-6 space-y-4" onSubmit={forgotPassword ? resetPassword : submit}>
-            {!forgotPassword && <div>
+            <div>
               <label className="text-sm font-medium" htmlFor="username">
                 Username
               </label>
@@ -112,7 +112,6 @@ export default function LoginScreen() {
                 onChange={(event) => setUsername(event.target.value)}
               />
             </div>
-            }
             <div>
               <label className="text-sm font-medium" htmlFor="password">
                 Password
@@ -155,7 +154,7 @@ export default function LoginScreen() {
 
             {error && <p className="text-sm text-rose-400">{error}</p>}
 
-            <Button className="w-full" disabled={busy || !username || !password || (forgotPassword && !securityAnswer)} type="submit">
+            <Button className="w-full" disabled={busy || (!forgotPassword && !username) || !password || (forgotPassword && !securityAnswer)} type="submit">
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               {forgotPassword ? "Reset password" : needsSetup ? "Create account" : "Sign in"}
             </Button>
