@@ -11,7 +11,6 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..db import get_db
 from ..models import Asset, SnaptradeConnection, User, utcnow
-from .simplefin_routes import get_cipher
 
 router = APIRouter(prefix="/api/snaptrade", tags=["snaptrade"])
 
@@ -23,7 +22,8 @@ def get_client():
         raise HTTPException(status_code=503, detail="SNAPTRADE_CLIENT_ID and SNAPTRADE_CONSUMER_KEY must be set on the backend.")
     try:
         from snaptrade_client import SnapTrade, SnapTradeAuth
-        auth = SnapTradeAuth.commercial_api_key(consumer_key=consumer_key, client_id=client_id)
+        # Personal keys auto-provision their single user at signup; no registerUser/user_id/user_secret needed.
+        auth = SnapTradeAuth.personal_api_key(consumer_key=consumer_key, client_id=client_id)
         return SnapTrade(auth=auth)
     except ImportError as error:
         raise HTTPException(status_code=503, detail="SnapTrade SDK is not installed on the backend.") from error
@@ -54,18 +54,26 @@ def response_list(value: Any, *keys: str) -> list[dict[str, Any]]:
     return []
 
 
+def api_error_detail(error: Exception) -> str:
+    """Extract the JSON error body from a SnapTrade ApiException (str(error) buries it after huge headers)."""
+    raw_body = getattr(error, "body", None)
+    if raw_body:
+        try:
+            parsed = raw_body if isinstance(raw_body, dict) else __import__("json").loads(raw_body)
+            message = parsed.get("detail") or parsed.get("message") or parsed.get("error")
+            if message:
+                return str(message)[:240]
+        except Exception:
+            pass
+        return str(raw_body)[:240]
+    return str(error)[:240]
+
+
 def require_connection(user: User, db: Session) -> SnaptradeConnection:
     connection = db.scalar(select(SnaptradeConnection).where(SnaptradeConnection.user_id == user.id))
     if not connection:
         raise HTTPException(status_code=404, detail="Connect SnapTrade before syncing.")
     return connection
-
-
-def decrypt_user_secret(connection: SnaptradeConnection) -> str:
-    try:
-        return get_cipher().decrypt(connection.user_secret.encode()).decode()
-    except Exception as error:
-        raise HTTPException(status_code=409, detail="Stored SnapTrade credentials could not be read. Reconnect Fidelity.") from error
 
 
 @router.get("/status")
@@ -84,24 +92,17 @@ async def connect(user: User = Depends(current_user), db: Session = Depends(get_
         client = get_client()
         connection = db.scalar(select(SnaptradeConnection).where(SnaptradeConnection.user_id == user.id))
         if not connection:
-            response = body(client.authentication.register_snap_trade_user(user_id=str(user.id)))
-            snaptrade_user_id = response.get("userId") or response.get("user_id")
-            user_secret = response.get("userSecret") or response.get("user_secret")
-            if not snaptrade_user_id or not user_secret:
-                raise HTTPException(status_code=502, detail="SnapTrade did not return user credentials.")
             connection = SnaptradeConnection(
                 id=str(uuid4()),
                 user_id=user.id,
-                snaptrade_user_id=str(snaptrade_user_id),
-                user_secret=get_cipher().encrypt(str(user_secret).encode()).decode(),
+                snaptrade_user_id="",
+                user_secret="",
                 brokerage="Fidelity",
             )
             db.add(connection)
             db.commit()
 
         response = body(client.authentication.login_snap_trade_user(
-            user_id=connection.snaptrade_user_id,
-            user_secret=decrypt_user_secret(connection),
             custom_redirect=os.getenv("SNAPTRADE_REDIRECT_URI") or None,
         ))
         redirect_uri = response.get("redirectURI") or response.get("redirect_uri") or response.get("redirectUrl")
@@ -112,17 +113,14 @@ async def connect(user: User = Depends(current_user), db: Session = Depends(get_
         raise
     except Exception as error:
         db.rollback()
-        raise HTTPException(status_code=502, detail=f"SnapTrade connection failed: {str(error)[:240]}") from error
+        raise HTTPException(status_code=502, detail=f"SnapTrade connection failed: {api_error_detail(error)}") from error
 
 
 @router.post("/sync")
 async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     client = get_client()
     connection = require_connection(user, db)
-    accounts_response = body(client.account_information.list_user_accounts(
-        user_id=connection.snaptrade_user_id,
-        user_secret=decrypt_user_secret(connection),
-    ))
+    accounts_response = body(client.account_information.list_user_accounts())
     accounts = response_list(accounts_response, "accounts")
     synced = 0
     for account in accounts or []:
@@ -130,8 +128,6 @@ async def sync(user: User = Depends(current_user), db: Session = Depends(get_db)
         if not account_id:
             continue
         holdings_response = body(client.account_information.get_user_holdings(
-            user_id=connection.snaptrade_user_id,
-            user_secret=decrypt_user_secret(connection),
             account_id=account_id,
         ))
         holdings = response_list(holdings_response, "holdings")
