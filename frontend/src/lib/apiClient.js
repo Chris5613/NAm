@@ -53,6 +53,11 @@ export const authApi = {
   me: () => api.get("/api/auth/me"),
   login: (username, password) => api.post("/api/auth/login", { username, password }),
   setup: (username, password) => api.post("/api/auth/setup", { username, password }),
+  resetPassword: (username, securityAnswer, newPassword) => api.post("/api/auth/reset-password", {
+    username,
+    security_answer: securityAnswer,
+    new_password: newPassword,
+  }),
   logout: () => api.post("/api/auth/logout"),
 };
 
