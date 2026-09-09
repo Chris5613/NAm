@@ -400,11 +400,9 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
             <Input id="notes" placeholder="Optional notes" value={notes} onChange={(e) => setNotes(e.target.value)} data-testid="input-notes" className="bg-background border-border" />
           </div>}
 
-          {category !== "stocks" && (
-            <Button type="submit" disabled={submitting} className="w-full bg-white text-black hover:bg-neutral-200" data-testid="submit-add-asset">
-              {submitting ? "Adding..." : "Add Asset"}
-            </Button>
-          )}
+          <Button type="submit" disabled={submitting} className="w-full bg-white text-black hover:bg-neutral-200" data-testid="submit-add-asset">
+            {submitting ? "Adding..." : "Add Asset"}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
