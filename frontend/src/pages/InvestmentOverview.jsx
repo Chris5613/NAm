@@ -807,24 +807,19 @@ const getDailyAmount = useCallback((project) => {
 
     const monthTotal = Object.values(monthEarnedByProject).reduce((sum, val) => sum + val, 0);
 
-    if (monthTotal === 0) {
-      return { rows: [] };
-    }
+    const rows = monthProjects
+      .map((project) => {
+        const monthly = monthEarnedByProject[project.id] || 0;
+        return {
+          project,
+          daily: monthly / 30,
+          monthly,
+          share: monthTotal > 0 ? (monthly / monthTotal) * 100 : 0,
+        };
+      })
+      .sort((a, b) => b.monthly - a.monthly);
 
-    return {
-      rows: monthProjects
-        .map((project) => {
-          const monthly = monthEarnedByProject[project.id] || 0;
-          return {
-            project,
-            daily: monthly / 30,
-            monthly,
-            share: (monthly / monthTotal) * 100,
-          };
-        })
-        .filter((row) => row.monthly !== 0)
-        .sort((a, b) => b.monthly - a.monthly),
-    };
+    return { rows };
   }, [activeProjects, inactiveProjects, selectedMonthKey]);
 
   const breakdownRows = monthlyBreakdown.rows;

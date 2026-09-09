@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { netWorthApi } from "@/lib/api";
+import { netWorthApi, pricesApi } from "@/lib/api";
 import { remoteStorage as localStorage } from "@/lib/serverStore";
 import { localStorage as storage } from "@/lib/localStorage";
 import { toast } from "sonner";
@@ -11,7 +11,7 @@ import AssetBreakdown from "@/components/AssetBreakdown";
 import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Camera } from "lucide-react";
+import { Plus, Camera, RefreshCw } from "lucide-react";
 
 const DAILY_BASELINE_KEY = "daily_net_worth_baseline_pst";
 const DAILY_CATEGORY_BASELINE_KEY = "daily_category_baseline_pst";
@@ -289,6 +289,7 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [dailyNetWorthChange, setDailyNetWorthChange] = useState(null);
   const [dailyCategoryChanges, setDailyCategoryChanges] = useState(null);
+  const [refreshingPrices, setRefreshingPrices] = useState(false);
 
   useEffect(() => {
     if (!Array.isArray(liveHistory)) return;
@@ -369,6 +370,24 @@ export default function Dashboard() {
     setAddDialogOpen(false);
     fetchData();
   };
+
+  const handleRefreshPrices = useCallback(async () => {
+    setRefreshingPrices(true);
+    try {
+      const result = await pricesApi.refreshAll();
+      await fetchData();
+      toast.success(
+        result?.updatedCount > 0
+          ? `Updated ${result.updatedCount} asset prices`
+          : "Prices are already up to date"
+      );
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to refresh prices");
+    } finally {
+      setRefreshingPrices(false);
+    }
+  }, [fetchData]);
 
   const handleAssetUpdated = () => fetchData();
   const handleAssetDeleted = () => fetchData();
@@ -466,6 +485,18 @@ export default function Dashboard() {
           >
             <Camera className="w-4 h-4 mr-2" strokeWidth={1.5} />
             Snapshot
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefreshPrices}
+            disabled={refreshingPrices}
+            data-testid="refresh-prices-btn"
+            className="border-border/40 hover:bg-secondary"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${refreshingPrices ? "animate-spin" : ""}`} strokeWidth={1.5} />
+            {refreshingPrices ? "Refreshing..." : "Refresh Prices"}
           </Button>
 
           {(activeTab === "all" || activeTab === "other" || activeTab === "debts") && (

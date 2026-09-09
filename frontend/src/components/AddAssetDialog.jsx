@@ -15,6 +15,7 @@ import { TrendingUp, CreditCard, RefreshCw, Loader2, Boxes } from "lucide-react"
 
 const CATEGORIES = [
   { value: "stocks", label: "Stocks", icon: TrendingUp, hint: "Stock holdings with real-time prices" },
+  { value: "cash", label: "Cash / Bank", icon: CreditCard, hint: "Checking, savings, and cash balances" },
   { value: "debts", label: "Debts / Liabilities", icon: CreditCard, hint: "Loans, credit cards, mortgages" },
   { value: "other", label: "Other Assets", icon: Boxes, hint: "Real estate, vehicles, gold, watches, collectibles, anything manual" },
 ];
