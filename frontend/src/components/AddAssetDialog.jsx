@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { TrendingUp, CreditCard, RefreshCw, Loader2, Boxes } from "lucide-react";
-import SnaptradeCard from "@/components/SnaptradeCard";
 
 const CATEGORIES = [
   { value: "stocks", label: "Stocks", icon: TrendingUp, hint: "Stock holdings with real-time prices" },
@@ -211,9 +210,6 @@ export default function AddAssetDialog({ open, onOpenChange, onCreated, defaultC
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* ===== STOCKS ===== */}
           {category === "stocks" && (
-            <SnaptradeCard onSynced={onCreated} />
-          )}
-          {false && category === "stocks" && (
             <>
               <div className="space-y-2 relative">
                 <Label htmlFor="ticker">Ticker Symbol</Label>

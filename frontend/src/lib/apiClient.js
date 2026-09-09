@@ -61,12 +61,6 @@ export const authApi = {
   logout: () => api.post("/api/auth/logout"),
 };
 
-export const snaptradeApi = {
-  status: () => api.get("/api/snaptrade/status"),
-  connect: () => api.post("/api/snaptrade/connect"),
-  sync: () => api.post("/api/snaptrade/sync"),
-};
-
 export const resourceApi = {
   list: (name) => api.get(`/api/resources/${name}`),
   create: (name, record) => api.post(`/api/resources/${name}`, record),

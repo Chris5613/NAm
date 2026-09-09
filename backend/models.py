@@ -174,14 +174,3 @@ class SimplefinConnection(Base, TimestampMixin):
     access_url: Mapped[str] = mapped_column(Text)
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-
-
-class SnaptradeConnection(Base, TimestampMixin):
-    __tablename__ = "snaptrade_connections"
-
-    id: Mapped[str] = mapped_column(String(64), primary_key=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
-    snaptrade_user_id: Mapped[str] = mapped_column(String(255))
-    user_secret: Mapped[str] = mapped_column(Text)
-    brokerage: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

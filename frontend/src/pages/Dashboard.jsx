@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { netWorthApi } from "@/lib/api";
-import { snaptradeApi } from "@/lib/apiClient";
 import { remoteStorage as localStorage } from "@/lib/serverStore";
-import { refreshCollection } from "@/lib/serverStore";
 import { localStorage as storage } from "@/lib/localStorage";
 import { toast } from "sonner";
 import NetWorthHero from "@/components/NetWorthHero";
@@ -10,7 +8,6 @@ import PortfolioChart from "@/components/PortfolioChart";
 import NetWorthHistory from "@/components/NetWorthHistory";
 import CryptoBreakdown from "@/components/CryptoBreakdown";
 import AssetBreakdown from "@/components/AssetBreakdown";
-import SnaptradeCard from "@/components/SnaptradeCard";
 import AddAssetDialog from "@/components/AddAssetDialog";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -292,7 +289,6 @@ export default function Dashboard() {
   const [lastUpdated, setLastUpdated] = useState(null);
   const [dailyNetWorthChange, setDailyNetWorthChange] = useState(null);
   const [dailyCategoryChanges, setDailyCategoryChanges] = useState(null);
-  const snaptradeSyncStarted = useRef(false);
 
   useEffect(() => {
     if (!Array.isArray(liveHistory)) return;
@@ -349,20 +345,7 @@ export default function Dashboard() {
   }, []);
 
   useEffect(() => {
-    if (snaptradeSyncStarted.current) return;
-    snaptradeSyncStarted.current = true;
-
-    const syncSnaptrade = async () => {
-      try {
-        await snaptradeApi.sync();
-        await refreshCollection("networth_assets");
-      } catch {
-        // A disconnected SnapTrade account should not block the Net Worth page.
-      }
-      fetchData();
-    };
-
-    syncSnaptrade();
+    fetchData();
 
     const interval = setInterval(() => {
       fetchData();
@@ -389,11 +372,6 @@ export default function Dashboard() {
 
   const handleAssetUpdated = () => fetchData();
   const handleAssetDeleted = () => fetchData();
-
-  const handleSnaptradeSynced = async () => {
-    await refreshCollection("networth_assets");
-    fetchData();
-  };
 
   const sortedAllSections = useMemo(() => {
     const stocksTotal = (assets || [])
@@ -542,7 +520,6 @@ export default function Dashboard() {
 
             {activeTab === "stocks" && (
               <div className="space-y-4">
-                <SnaptradeCard onSynced={handleSnaptradeSynced} />
                 <AssetBreakdown
                   category="stocks"
                   assets={assets}
