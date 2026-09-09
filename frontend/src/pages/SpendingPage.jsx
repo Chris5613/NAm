@@ -368,13 +368,6 @@ export default function SpendingPage() {
   }, []);
 
   const sync = useCallback(async (itemId) => {
-    const rateLimitedUntil = Number(sessionStorage.getItem("simplefin_rate_limited_until") || "0");
-    if (rateLimitedUntil > Date.now()) {
-      const remainingSeconds = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
-      toast.error(`SimpleFIN is rate-limiting requests. Try again in ${remainingSeconds} seconds.`);
-      return;
-    }
-
     setIsSyncing(true);
     try {
       const connections = await api.get("/api/simplefin/connections");
@@ -410,6 +403,7 @@ export default function SpendingPage() {
 
   useEffect(() => {
     let mounted = true;
+    let syncTimer;
 
     const initializePage = async () => {
       await loadAll();
@@ -417,12 +411,16 @@ export default function SpendingPage() {
         const connections = await api.get("/api/simplefin/connections");
         if (!mounted || !Array.isArray(connections) || connections.length === 0) return;
 
-        const now = Date.now();
-        const lastAutoSync = Number(sessionStorage.getItem("simplefin_auto_sync_last") || "0");
-        if (lastAutoSync && now - lastAutoSync < 10 * 60 * 1000) return;
-        sessionStorage.setItem("simplefin_auto_sync_last", String(now));
-
-        await sync();
+        const now = new Date();
+        if (now.getMinutes() === 0 && now.getSeconds() === 0) {
+          await sync();
+          return;
+        }
+        const nextHour = new Date(now);
+        nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+        syncTimer = window.setTimeout(() => {
+          if (mounted) sync();
+        }, nextHour.getTime() - now.getTime());
       } catch {
         // No SimpleFIN connection configured; skip the background sync.
       }
@@ -436,6 +434,7 @@ export default function SpendingPage() {
 
     return () => {
       mounted = false;
+      window.clearTimeout(syncTimer);
     };
   }, [loadAll, sync]);
 
@@ -458,6 +457,21 @@ export default function SpendingPage() {
   };
 
   const fetchSimplefinInBrowser = async (accessUrl) => {
+    const now = new Date();
+    const currentHour = now.toISOString().slice(0, 13);
+    const nextHour = new Date(now);
+    nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+    const nextHourLabel = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(nextHour);
+
+    if (now.getMinutes() !== 0 || now.getSeconds() !== 0) {
+      throw new Error(`SimpleFIN sync runs at the top of each hour. Your next sync is at ${nextHourLabel}.`);
+    }
+    if (sessionStorage.getItem("simplefin_request_hour") === currentHour) {
+      throw new Error(`SimpleFIN was already requested this hour. Your next sync is at ${nextHourLabel}.`);
+    }
+    // Save before sending because even a failed provider request counts against the hourly allowance.
+    sessionStorage.setItem("simplefin_request_hour", currentHour);
+
     const parsed = new URL(accessUrl);
     const username = decodeURIComponent(parsed.username);
     const password = decodeURIComponent(parsed.password);
