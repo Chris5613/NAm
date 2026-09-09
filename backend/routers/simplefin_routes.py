@@ -102,6 +102,15 @@ def normalize_transaction_date(value: Any) -> str | None:
     return str(value)[:10]
 
 
+def simplefin_transaction_key(account_id: str, merchant: str, date_value: str, amount: float) -> tuple[str, str, float, str]:
+    return (
+        str(account_id),
+        str(date_value),
+        round(float(amount or 0), 2),
+        str(merchant or "SimpleFIN transaction").strip().lower(),
+    )
+
+
 TRANSACTION_CATEGORY_RULES = (
     ("Income", ("payroll", "paycheck", "salary", "direct deposit", "deposit", "adp ", "gusto")),
     ("Transfers", ("transfer", " zelle", "venmo", "cash app", "ach ")),
@@ -247,6 +256,7 @@ def save_simplefin_payload(payload: dict[str, Any], connection: SimplefinConnect
             ) in account_keys]
         if not transactions and len(accounts) == 1:
             transactions = top_level_transactions
+        seen_txns = set()
         received_transaction_count += len(transactions)
         for transaction in transactions:
             transaction_id = transaction.get("id") or transaction.get("id_string") or str(uuid4())
@@ -258,18 +268,38 @@ def save_simplefin_payload(payload: dict[str, Any], connection: SimplefinConnect
             amount = abs(float(transaction.get("amount") or 0))
             if amount <= 0:
                 continue
-            transaction_row_id = f"simplefin-{transaction_id}"
-            existing_transaction = db.get(SpendingTransaction, transaction_row_id)
+            merchant = transaction.get("payee") or transaction.get("description") or transaction.get("memo") or "SimpleFIN transaction"
+            account_key = f"simplefin-{account_id}"
+            tx_key = simplefin_transaction_key(account_key, merchant, str(posted)[:10], amount)
+            if tx_key in seen_txns:
+                continue
+            seen_txns.add(tx_key)
+
+            existing_transaction = db.get(SpendingTransaction, f"simplefin-{transaction_id}")
+            if existing_transaction is None:
+                existing_transaction = db.scalar(
+                    select(SpendingTransaction).where(
+                        SpendingTransaction.user_id == user.id,
+                        SpendingTransaction.account_id == account_key,
+                        SpendingTransaction.source == "simplefin",
+                        SpendingTransaction.merchant == merchant,
+                        SpendingTransaction.date == str(posted)[:10],
+                        SpendingTransaction.amount == amount,
+                    )
+                )
+            if existing_transaction is not None:
+                continue
+
             row = SpendingTransaction(
-                id=transaction_row_id,
+                id=f"simplefin-{transaction_id}",
                 user_id=user.id,
-                merchant=transaction.get("payee") or transaction.get("description") or transaction.get("memo") or "SimpleFIN transaction",
+                merchant=merchant,
                 amount=amount,
                 date=str(posted)[:10],
                 category=classify_transaction(transaction),
-                account_id=f"simplefin-{account_id}",
+                account_id=account_key,
                 pending=False,
-                hidden=existing_transaction.hidden if existing_transaction else False,
+                hidden=False,
                 source="simplefin",
             )
             db.merge(row)
@@ -372,6 +402,7 @@ async def sync_simplefin(
                 linked_at=connection.created_at,
             )
             db.merge(account_row)
+            seen_txns = set()
             for transaction in account.get("transactions", []):
                 transaction_id = transaction.get("id")
                 posted = transaction.get("posted")
@@ -380,13 +411,29 @@ async def sync_simplefin(
                 amount = abs(float(transaction.get("amount") or 0))
                 if amount <= 0:
                     continue
+                merchant = transaction.get("payee") or transaction.get("description") or transaction.get("memo") or "SimpleFIN transaction"
+                tx_key = simplefin_transaction_key(f"simplefin-{account_id}", merchant, str(posted)[:10], amount)
+                if tx_key in seen_txns:
+                    continue
+                seen_txns.add(tx_key)
+                if db.scalar(
+                    select(SpendingTransaction).where(
+                        SpendingTransaction.user_id == user.id,
+                        SpendingTransaction.account_id == f"simplefin-{account_id}",
+                        SpendingTransaction.source == "simplefin",
+                        SpendingTransaction.merchant == merchant,
+                        SpendingTransaction.date == str(posted)[:10],
+                        SpendingTransaction.amount == amount,
+                    )
+                ) is not None:
+                    continue
                 row = SpendingTransaction(
                     id=f"simplefin-{transaction_id}",
                     user_id=user.id,
-                    merchant=transaction.get("payee") or transaction.get("description") or transaction.get("memo") or "SimpleFIN transaction",
+                    merchant=merchant,
                     amount=amount,
                     date=str(posted)[:10],
-                    category="Other",
+                    category=classify_transaction(transaction),
                     account_id=f"simplefin-{account_id}",
                     pending=False,
                     source="simplefin",
