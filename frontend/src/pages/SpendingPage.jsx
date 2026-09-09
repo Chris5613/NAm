@@ -35,9 +35,38 @@ const CATEGORIES = [
 ];
 const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const CATEGORY_COLORS = ["#60a5fa", "#34d399", "#a78bfa", "#f472b6", "#22d3ee", "#818cf8", "#2dd4bf", "#94a3b8"];
+const SIMPLEFIN_REQUEST_HOUR_KEY = "simplefin_request_hour";
 
 const dayKey = (date) => date.toISOString().slice(0, 10);
 const monthKeyOf = (date = new Date()) => date.toISOString().slice(0, 7);
+const hourKeyOf = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  const hour = String(date.getHours()).padStart(2, "0");
+  return `${year}-${month}-${day}T${hour}`;
+};
+const nextHourOf = (date = new Date()) => {
+  const nextHour = new Date(date);
+  nextHour.setHours(date.getHours() + 1, 0, 0, 0);
+  return nextHour;
+};
+const timeLabel = (date) => new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
+const simplefinHourLock = (date = new Date()) => {
+  const nextHour = nextHourOf(date);
+  return {
+    isLocked: localStorage.getItem(SIMPLEFIN_REQUEST_HOUR_KEY) === hourKeyOf(date),
+    currentHour: hourKeyOf(date),
+    nextHourLabel: timeLabel(nextHour),
+  };
+};
+const reserveSimplefinHour = () => {
+  const lock = simplefinHourLock();
+  if (lock.isLocked) {
+    throw new Error(`SimpleFIN was already requested this hour. Your next sync is at ${lock.nextHourLabel}.`);
+  }
+  localStorage.setItem(SIMPLEFIN_REQUEST_HOUR_KEY, lock.currentHour);
+};
 const money = (amount, fallback = "$0") =>
   amount === null || amount === undefined || Number.isNaN(Number(amount))
     ? fallback
@@ -197,7 +226,9 @@ export default function SpendingPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => monthKeyOf());
   const [transaction, setTransaction] = useState(emptyTransaction);
   const [customCategories, setCustomCategories] = useState([]);
+  const [, setSyncClockTick] = useState(0);
   const categories = useMemo(() => [...CATEGORIES, ...customCategories], [customCategories]);
+  const syncLock = simplefinHourLock();
 
   const today = dayKey(new Date());
   const currentMonth = monthKeyOf();
@@ -368,6 +399,12 @@ export default function SpendingPage() {
   }, []);
 
   const sync = useCallback(async (itemId) => {
+    const lock = simplefinHourLock();
+    if (lock.isLocked) {
+      toast.error(`SimpleFIN was already requested this hour. Your next sync is at ${lock.nextHourLabel}.`);
+      return;
+    }
+
     setIsSyncing(true);
     try {
       const connections = await api.get("/api/simplefin/connections");
@@ -404,6 +441,7 @@ export default function SpendingPage() {
   useEffect(() => {
     let mounted = true;
     let syncTimer;
+    let lockTimer;
 
     const initializePage = async () => {
       await loadAll();
@@ -418,6 +456,9 @@ export default function SpendingPage() {
         }
         const nextHour = new Date(now);
         nextHour.setHours(now.getHours() + 1, 0, 0, 0);
+        lockTimer = window.setTimeout(() => {
+          if (mounted) setSyncClockTick((tick) => tick + 1);
+        }, nextHour.getTime() - now.getTime());
         syncTimer = window.setTimeout(() => {
           if (mounted) sync();
         }, nextHour.getTime() - now.getTime());
@@ -435,6 +476,7 @@ export default function SpendingPage() {
     return () => {
       mounted = false;
       window.clearTimeout(syncTimer);
+      window.clearTimeout(lockTimer);
     };
   }, [loadAll, sync]);
 
@@ -457,20 +499,8 @@ export default function SpendingPage() {
   };
 
   const fetchSimplefinInBrowser = async (accessUrl) => {
-    const now = new Date();
-    const currentHour = now.toISOString().slice(0, 13);
-    const nextHour = new Date(now);
-    nextHour.setHours(now.getHours() + 1, 0, 0, 0);
-    const nextHourLabel = new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(nextHour);
-
-    if (now.getMinutes() !== 0 || now.getSeconds() !== 0) {
-      throw new Error(`SimpleFIN sync runs at the top of each hour. Your next sync is at ${nextHourLabel}.`);
-    }
-    if (sessionStorage.getItem("simplefin_request_hour") === currentHour) {
-      throw new Error(`SimpleFIN was already requested this hour. Your next sync is at ${nextHourLabel}.`);
-    }
+    reserveSimplefinHour();
     // Save before sending because even a failed provider request counts against the hourly allowance.
-    sessionStorage.setItem("simplefin_request_hour", currentHour);
 
     const parsed = new URL(accessUrl);
     const username = decodeURIComponent(parsed.username);
@@ -612,8 +642,8 @@ export default function SpendingPage() {
           <h1 className="mt-1 text-3xl font-semibold">Spending</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={isSyncing} onClick={() => sync()}>
-            <RefreshCw className={isSyncing ? "animate-spin" : ""} /> {isSyncing ? "Syncing" : "Sync"}
+          <Button size="sm" variant="outline" disabled={isSyncing || syncLock.isLocked} onClick={() => sync()}>
+            <RefreshCw className={isSyncing ? "animate-spin" : ""} /> {isSyncing ? "Syncing" : syncLock.isLocked ? `Sync at ${syncLock.nextHourLabel}` : "Sync"}
           </Button>
           <Button size="sm" variant="outline" disabled={isLinking} onClick={linkAccount}>
             <Link2 /> {isLinking ? "Connecting" : "Connect SimpleFIN"}
