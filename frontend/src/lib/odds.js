@@ -2,26 +2,14 @@ export function normalizeOddsToDecimal(odds) {
   if (odds === null || odds === undefined || odds === "") return null;
 
   const raw = String(odds).trim();
-  if (!raw) return null;
+  if (!raw || !/^\d+(?:\.\d+)?$/.test(raw)) return null;
 
-  const cleaned = raw.replace(/[^\d.+\-]/g, "");
-  const numeric = Number(cleaned);
+  const numeric = Number(raw);
+  if (!Number.isFinite(numeric) || numeric <= 1) return null;
 
-  if (!Number.isFinite(numeric) || numeric === 0) return null;
+  if (Number.isInteger(numeric) && numeric >= 10) return null;
 
-  if (raw.includes(".") || (numeric > 1 && numeric < 10)) {
-    return numeric;
-  }
-
-  if (numeric > 0) {
-    return numeric / 100 + 1;
-  }
-
-  if (numeric < 0) {
-    return 100 / Math.abs(numeric) + 1;
-  }
-
-  return null;
+  return numeric;
 }
 
 export function calculateProfit(stake, odds) {

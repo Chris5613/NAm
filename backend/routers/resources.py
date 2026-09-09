@@ -21,6 +21,31 @@ def _resource(name: str):
     return RESOURCES[name]
 
 
+def _exact_identity(name: str, item: dict[str, Any]) -> str:
+    if name == "assets":
+        return f"{str(item.get('category') or '').strip()}::{str(item.get('name') or '').strip()}::{str(item.get('symbol') or '').strip()}"
+    if name == "wallets":
+        return f"{str(item.get('chain') or '').strip()}::{str(item.get('address') or item.get('label') or '').strip()}"
+    if name == "projects":
+        return f"{str(item.get('category') or '').strip()}::{str(item.get('name') or '').strip()}"
+    if name == "phones":
+        return str(item.get("model") or "").strip()
+    if name == "bets":
+        return "::".join(
+            [
+                str(item.get("date") or "").strip(),
+                str(item.get("title") or "").strip(),
+                str(item.get("matchup") or "").strip(),
+                str(item.get("awayTeam") or "").strip(),
+                str(item.get("homeTeam") or "").strip(),
+                str(item.get("gamePk") or "").strip(),
+                str(item.get("odds") or "").strip(),
+                str(item.get("stake") or item.get("amount") or "").strip(),
+            ]
+        )
+    return str(item.get("id") or "").strip()
+
+
 @router.get("/resources/{name}")
 async def list_records(name: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:
     model, fields = _resource(name)
@@ -32,6 +57,13 @@ async def list_records(name: str, user: User = Depends(current_user), db: Sessio
 async def create_record(name: str, payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     model, fields = _resource(name)
     columns, extra = dict_to_columns(payload, fields)
+
+    identity = _exact_identity(name, payload)
+    if identity:
+        existing = db.scalars(select(model).where(model.user_id == user.id)).all()
+        if any(_exact_identity(name, row_to_dict(row, fields)) == identity for row in existing):
+            return row_to_dict(next(row for row in existing if _exact_identity(name, row_to_dict(row, fields)) == identity), fields)
+
     row = model(id=str(payload.get("id") or uuid4()), user_id=user.id, data=extra, **columns)
     db.merge(row)
     db.commit()
@@ -75,7 +107,14 @@ async def replace_collection(
     model, fields = _resource(name)
     db.execute(delete(model).where(model.user_id == user.id))
     rows = []
+    seen = set()
     for item in payload:
+        if not isinstance(item, dict):
+            continue
+        identity = _exact_identity(name, item)
+        if identity and identity in seen:
+            continue
+        seen.add(identity)
         columns, extra = dict_to_columns(item, fields)
         row = model(id=str(item.get("id") or uuid4()), user_id=user.id, data=extra, **columns)
         db.add(row)

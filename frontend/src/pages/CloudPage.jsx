@@ -1353,12 +1353,26 @@ const chartSegments = useMemo(() => {
   const handleSaveBet = () => {
     const savedDate = form.date || getPstDateString();
 
+    const validateDecimalOdds = (value) => {
+      const numeric = Number(String(value ?? "").trim());
+      if (!Number.isFinite(numeric) || numeric <= 1) {
+        toast.error("Use decimal odds greater than 1.00, for example 1.83");
+        return null;
+      }
+      return numeric;
+    };
+
     if (form.betMode === "parlay") {
       const amountRaw = Number(form.amount);
       const normalizedOdds = String(form.odds || "").trim();
+      const normalizedOddsValue = validateDecimalOdds(normalizedOdds);
 
       if (!Number.isFinite(amountRaw) || amountRaw <= 0) {
         toast.error("Enter a valid amount");
+        return;
+      }
+
+      if (normalizedOddsValue === null) {
         return;
       }
 
@@ -1424,7 +1438,7 @@ const chartSegments = useMemo(() => {
         matchup,
         amount: 0,
         stake: Math.abs(amountRaw),
-        odds: normalizedOdds,
+        odds: String(normalizedOddsValue),
         result: "pending",
         date: savedDate,
         category: "Parlay",
@@ -1453,9 +1467,14 @@ const chartSegments = useMemo(() => {
     const finalAmount = 0;
     const activeSingle = singleSelections[0] || {};
     const singleAmountRaw = Number(activeSingle.amount ?? form.amount);
-    const singleOdds = String(activeSingle.odds ?? form.odds ?? "").trim();
+    const singleOddsRaw = String(activeSingle.odds ?? form.odds ?? "").trim();
+    const singleOddsValue = validateDecimalOdds(singleOddsRaw);
     const gamePk = String(activeSingle.gamePk || form.gamePk || "");
     const inferredMatchup = String(activeSingle.matchup || form.matchup || "").trim();
+
+    if (singleOddsValue === null) {
+      return;
+    }
 
     const invalidSingle = singleSelections.find((single) => {
       const amount = Number(single.amount ?? form.amount);
@@ -1483,7 +1502,7 @@ const chartSegments = useMemo(() => {
               doubleHeader: Boolean(form.doubleHeader),
               amount: finalAmount,
               stake: Math.abs(singleAmountRaw),
-              odds: singleOdds,
+              odds: String(singleOddsValue),
               mlbGamePk: gamePk,
               result: "pending",
               date: savedDate,
@@ -1520,7 +1539,7 @@ const chartSegments = useMemo(() => {
       doubleHeader: Boolean(single.doubleHeader),
       amount: finalAmount,
       stake: Math.abs(Number(single.amount) || 0),
-      odds: String(single.odds || "").trim(),
+      odds: String(validateDecimalOdds(single.odds ?? form.odds ?? "") ?? "1.01"),
       mlbGamePk: String(single.gamePk || ""),
       gamePk: String(single.gamePk || ""),
       result: "pending",
@@ -2085,13 +2104,14 @@ const chartSegments = useMemo(() => {
 
               <div className="space-y-2">
                 <Label className="text-xs font-bold uppercase text-muted-foreground">
-                  {form.betMode === "parlay" ? "Combined Odds" : "Odds"}
+                  {form.betMode === "parlay" ? "Combined Decimal Odds" : "Decimal Odds"}
                 </Label>
 
                 <Input
                   type="number"
                   step="0.01"
                   min="1.01"
+                  inputMode="decimal"
                   value={form.odds}
                   onChange={(e) =>
                     setForm((prev) => ({
@@ -2099,7 +2119,7 @@ const chartSegments = useMemo(() => {
                       odds: e.target.value,
                     }))
                   }
-                  placeholder="1.91"
+                  placeholder="1.83"
                   className="border-border bg-background font-mono text-foreground"
                 />
               </div>
