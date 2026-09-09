@@ -404,6 +404,12 @@ export default function SpendingPage() {
       try {
         const connections = await api.get("/api/simplefin/connections");
         if (!mounted || !Array.isArray(connections) || connections.length === 0) return;
+
+        const now = Date.now();
+        const lastAutoSync = Number(sessionStorage.getItem("simplefin_auto_sync_last") || "0");
+        if (lastAutoSync && now - lastAutoSync < 10 * 60 * 1000) return;
+        sessionStorage.setItem("simplefin_auto_sync_last", String(now));
+
         await sync();
       } catch {
         // No SimpleFIN connection configured; skip the background sync.
@@ -456,28 +462,47 @@ export default function SpendingPage() {
     let bestPayload = null;
     let lastError = null;
 
-    for (const query of queryVariants) {
+    for (let attempt = 0; attempt < queryVariants.length; attempt += 1) {
+      const query = queryVariants[attempt];
       parsed.search = query ? `?${query}` : "";
-      const response = await fetch(parsed.toString(), {
-        headers: { Accept: "application/json", Authorization: `Basic ${window.btoa(`${username}:${password}`)}` },
-      });
-      const data = await response.json().catch(() => null);
-      if (!response.ok) {
-        const detail = data?.errlist?.map((item) => item.description || item.code).join(", ") || `SimpleFIN returned HTTP ${response.status}`;
-        lastError = new Error(detail);
-        continue;
-      }
 
-      const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
-      const transactionCount = accounts.reduce(
-        (total, account) => total + (Array.isArray(account?.transactions) ? account.transactions.length : 0),
-        Array.isArray(data?.transactions) ? data.transactions.length : 0
-      );
-      const bestCount = bestPayload?.transactionCount ?? -1;
-      if (!bestPayload || transactionCount > bestCount) {
-        bestPayload = { data, transactionCount };
+      try {
+        const response = await fetch(parsed.toString(), {
+          headers: { Accept: "application/json", Authorization: `Basic ${window.btoa(`${username}:${password}`)}` },
+        });
+        const data = await response.json().catch(() => null);
+
+        if (response.status === 429) {
+          const retryAfter = Number(response.headers.get("Retry-After") || "0");
+          const waitMs = Math.max(retryAfter * 1000, 2000 + attempt * 1000);
+          await new Promise((resolve) => setTimeout(resolve, waitMs));
+          if (attempt === queryVariants.length - 1) {
+            throw new Error("SimpleFIN is rate-limiting requests. Please wait a minute and try again.");
+          }
+          continue;
+        }
+
+        if (!response.ok) {
+          const detail = data?.errlist?.map((item) => item.description || item.code).join(", ") || `SimpleFIN returned HTTP ${response.status}`;
+          lastError = new Error(detail);
+          continue;
+        }
+
+        const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
+        const transactionCount = accounts.reduce(
+          (total, account) => total + (Array.isArray(account?.transactions) ? account.transactions.length : 0),
+          Array.isArray(data?.transactions) ? data.transactions.length : 0
+        );
+        const bestCount = bestPayload?.transactionCount ?? -1;
+        if (!bestPayload || transactionCount > bestCount) {
+          bestPayload = { data, transactionCount };
+        }
+        if (transactionCount > 0) break;
+      } catch (error) {
+        lastError = error;
+        if (attempt === queryVariants.length - 1) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
       }
-      if (transactionCount > 0) break;
     }
 
     if (!bestPayload) throw lastError || new Error("SimpleFIN returned no account data.");
