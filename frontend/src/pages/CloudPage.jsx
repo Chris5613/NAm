@@ -57,6 +57,7 @@ import {
   getPacificDateKey,
   gradeFirstInningBet,
 } from "@/lib/mlb-api";
+import { calculateProfit as calculateDecimalProfit, normalizeOddsToDecimal } from "@/lib/odds";
 
 const CLOUD_BETS_KEY = "cloud_manual_bets";
 const CLOUD_BANKROLL_KEY = "cloud_starting_bankroll";
@@ -204,9 +205,27 @@ function getSavedBets() {
   }
 }
 
+function betIdentityKey(bet = {}) {
+  return [
+    String(bet.date ?? "").trim(),
+    String(bet.title ?? "").trim(),
+    String(bet.matchup ?? "").trim(),
+    String(bet.awayTeam ?? "").trim(),
+    String(bet.homeTeam ?? "").trim(),
+    String(bet.gamePk ?? bet.mlbGamePk ?? bet.game_id ?? bet.gameId ?? "").trim(),
+    String(bet.odds ?? "").trim(),
+    String(bet.stake ?? bet.amount ?? "").trim(),
+  ].join("::");
+}
+
 function saveBets(bets) {
   try {
-    localStorage.setItem(CLOUD_BETS_KEY, JSON.stringify(bets || []));
+    const deduped = Array.isArray(bets) ? bets.filter((bet, index, list) => {
+      const key = betIdentityKey(bet);
+      if (!key) return true;
+      return list.findIndex((item) => betIdentityKey(item) === key) === index;
+    }) : [];
+    localStorage.setItem(CLOUD_BETS_KEY, JSON.stringify(deduped));
   } catch {
     // localStorage unavailable
   }
@@ -229,15 +248,7 @@ function formatPercent(value) {
 }
 
 function calculateProfit(stake, odds) {
-  const wager = Math.abs(Number(stake) || 0);
-  const normalizedOdds = String(odds || "").trim().replace(/^\+/, "");
-  const americanOdds = Number(normalizedOdds);
-
-  if (!wager || !Number.isFinite(americanOdds) || americanOdds === 0) return 0;
-
-  return americanOdds > 0
-    ? (wager * americanOdds) / 100
-    : (wager * 100) / Math.abs(americanOdds);
+  return calculateDecimalProfit(stake, odds);
 }
 
 function formatRecord(wins, losses) {
@@ -1800,9 +1811,12 @@ const chartSegments = useMemo(() => {
                               Odds
                             </Label>
                             <Input
+                              type="number"
+                              step="0.01"
+                              min="1.01"
                               value={single.odds || ""}
                               onChange={(e) => updateSingle(single.id, { odds: e.target.value })}
-                              placeholder="+120 or -110"
+                              placeholder="1.91"
                               className="h-9 border-border bg-background font-mono text-foreground"
                             />
                           </div>
@@ -2075,6 +2089,9 @@ const chartSegments = useMemo(() => {
                 </Label>
 
                 <Input
+                  type="number"
+                  step="0.01"
+                  min="1.01"
                   value={form.odds}
                   onChange={(e) =>
                     setForm((prev) => ({
@@ -2082,7 +2099,7 @@ const chartSegments = useMemo(() => {
                       odds: e.target.value,
                     }))
                   }
-                  placeholder="+120 or -110"
+                  placeholder="1.91"
                   className="border-border bg-background font-mono text-foreground"
                 />
               </div>

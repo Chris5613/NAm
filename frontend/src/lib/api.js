@@ -24,6 +24,38 @@ const normalizeId = (item) => {
   return { ...item, id, _id: id };
 };
 
+export const exactNameKey = (value) => String(value ?? "").trim();
+
+export const assetIdentityKey = (asset = {}) => {
+  const name = exactNameKey(asset.name);
+  const category = exactNameKey(asset.category);
+  const symbol = exactNameKey(asset.symbol);
+  return `${category}::${name}::${symbol}`;
+};
+
+export const projectIdentityKey = (project = {}) => {
+  const name = exactNameKey(project.name);
+  const category = exactNameKey(project.category);
+  return `${category}::${name}`;
+};
+
+export const phoneIdentityKey = (phone = {}) => exactNameKey(phone.model);
+
+export const customTokenIdentityKey = (token = {}) => {
+  const chain = exactNameKey(token.chain);
+  const symbol = exactNameKey(token.symbol);
+  const name = exactNameKey(token.name);
+  return `${chain}::${symbol}::${name}`;
+};
+
+export const walletIdentityKey = (wallet = {}) => {
+  const chain = exactNameKey(wallet.chain);
+  const address = exactNameKey(wallet.address);
+  const label = exactNameKey(wallet.label);
+  const identity = address || label || "";
+  return `${chain}::${identity}`;
+};
+
 const normalizeItems = (items = []) => items.map((item) => normalizeId(item));
 const toResponse = (data) => ({ data });
 
@@ -33,6 +65,11 @@ export const assetsApi = {
   create: async (data) => {
     const asset = normalizeId({ ...data });
     const all = normalizeItems(storage.getAssets());
+    const key = assetIdentityKey(asset);
+    const exists = all.some((item) => assetIdentityKey(item) === key);
+    if (exists) {
+      return toResponse(asset);
+    }
     storage.setAssets([...all, asset]);
     return toResponse(asset);
   },
@@ -78,6 +115,11 @@ export const phonesApi = {
   create: async (data) => {
     const phone = normalizeId({ ...data });
     const all = normalizeItems(storage.getPhones());
+    const key = phoneIdentityKey(phone);
+    const exists = all.some((item) => phoneIdentityKey(item) === key);
+    if (exists) {
+      return toResponse(phone);
+    }
     storage.setPhones([...all, phone]);
     return toResponse(phone);
   },
@@ -303,6 +345,11 @@ export const projectsApi = {
       last_accrued_at: data?.last_accrued_at || (data?.apy || data?.daily_trx ? new Date().toISOString() : null),
     });
     const all = normalizeItems(storage.getProjects());
+    const key = projectIdentityKey(project);
+    const exists = all.some((item) => projectIdentityKey(item) === key);
+    if (exists) {
+      return toResponse(project);
+    }
     storage.setProjects([...all, project]);
     return toResponse(project);
   },
@@ -539,13 +586,28 @@ export const walletsApi = {
   add: async (data) => {
     const wallet = normalizeId({ ...data });
     const all = normalizeItems(storage.getWallets());
+    const key = walletIdentityKey(wallet);
+    const exists = all.some((item) => walletIdentityKey(item) === key);
+    if (exists) {
+      return toResponse(wallet);
+    }
     storage.setWallets([...all, wallet]);
     return toResponse(wallet);
   },
 
   addBulk: async (items) => {
     const all = normalizeItems(storage.getWallets());
-    const created = items.map((data) => normalizeId({ ...data }));
+    const existingKeys = new Set(all.map((item) => walletIdentityKey(item)));
+    const created = [];
+
+    for (const data of items) {
+      const wallet = normalizeId({ ...data });
+      const key = walletIdentityKey(wallet);
+      if (existingKeys.has(key)) continue;
+      existingKeys.add(key);
+      created.push(wallet);
+    }
+
     storage.setWallets([...all, ...created]);
     return toResponse(created);
   },
@@ -660,6 +722,11 @@ export const customTokensApi = {
   create: async (data) => {
     const token = normalizeId({ ...data });
     const all = normalizeItems(storage.getTokens());
+    const key = customTokenIdentityKey(token);
+    const exists = all.some((item) => customTokenIdentityKey(item) === key);
+    if (exists) {
+      return toResponse(token);
+    }
     storage.setTokens([...all, token]);
     return toResponse(token);
   },

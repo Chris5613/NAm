@@ -47,6 +47,53 @@ def is_sample(record: Any) -> bool:
     return isinstance(record, dict) and record.get("sample") is True
 
 
+def exact_name_key(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def exact_name_candidates(record: dict[str, Any]) -> set[str]:
+    names = {
+        exact_name_key(record.get("name")),
+        exact_name_key(record.get("label")),
+        exact_name_key(record.get("model")),
+    }
+    return {value for value in names if value}
+
+
+def record_signature(resource: str, record: dict[str, Any]) -> tuple[Any, ...]:
+    if resource == "bets":
+        return (
+            str(record.get("date") or ""),
+            str(record.get("title") or ""),
+            str(record.get("matchup") or ""),
+            str(record.get("awayTeam") or ""),
+            str(record.get("homeTeam") or ""),
+            str(record.get("gamePk") or ""),
+            float(record.get("amount") or 0),
+            str(record.get("result") or ""),
+        )
+    if resource == "assets":
+        return (
+            str(record.get("name") or ""),
+            str(record.get("category") or ""),
+            str(record.get("symbol") or ""),
+            float(record.get("manual_value") or record.get("current_price") or 0),
+        )
+    if resource == "projects":
+        return (
+            str(record.get("name") or ""),
+            str(record.get("category") or ""),
+            float(record.get("invested") or 0),
+            float(record.get("earned") or 0),
+        )
+    return (
+        str(record.get("id") or ""),
+        str(record.get("name") or ""),
+        str(record.get("label") or ""),
+        str(record.get("model") or ""),
+    )
+
+
 @router.get("/status")
 async def status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     counts = {
@@ -73,14 +120,35 @@ async def import_dump(payload: dict[str, Any], user: User = Depends(current_user
             continue
         model, fields = RESOURCES[resource]
         count = 0
+        existing_ids = set()
+        existing_signatures = set()
+        existing_names = set()
+        for row in db.scalars(select(model).where(model.user_id == user.id)):
+            existing_ids.add(str(row.id))
+            existing_signatures.add(record_signature(resource, dict(row.data or {})))
+            row_data = dict(row.data or {})
+            row_names = exact_name_candidates({**row_data, "name": getattr(row, "name", None), "label": getattr(row, "label", None), "model": getattr(row, "model", None)})
+            existing_names.update(row_names)
         for record in records:
             if not isinstance(record, dict):
                 continue
             if is_sample(record):
                 skipped_samples += 1
                 continue
+            record_id = str(record.get("id") or "")
+            sig = record_signature(resource, record)
+            record_names = exact_name_candidates(record)
+            if record_id and record_id in existing_ids:
+                continue
+            if record_names and record_names & existing_names:
+                continue
+            if sig in existing_signatures:
+                continue
             columns, extra = dict_to_columns(record, fields)
             db.merge(model(id=str(record.get("id") or uuid4()), user_id=user.id, data=extra, **columns))
+            existing_ids.add(record_id) if record_id else None
+            existing_names.update(record_names)
+            existing_signatures.add(sig)
             count += 1
         imported[resource] = count
 

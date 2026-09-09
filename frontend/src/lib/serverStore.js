@@ -46,6 +46,60 @@ function notify(key) {
   });
 }
 
+function exactText(value) {
+  return String(value ?? "").trim();
+}
+
+function dedupeCollection(key, value) {
+  if (!Array.isArray(value)) return value;
+
+  const seen = new Set();
+  const deduped = [];
+
+  for (const item of value) {
+    if (!item || typeof item !== "object") {
+      deduped.push(item);
+      continue;
+    }
+
+    let recordKey = "";
+
+    if (key === "networth_assets") {
+      recordKey = `${exactText(item.category)}::${exactText(item.name)}::${exactText(item.symbol)}`;
+    } else if (key === "networth_wallets") {
+      recordKey = `${exactText(item.chain)}::${exactText(item.address) || exactText(item.label)}`;
+    } else if (key === "networth_projects") {
+      recordKey = `${exactText(item.category)}::${exactText(item.name)}`;
+    } else if (key === "networth_phones") {
+      recordKey = exactText(item.model);
+    } else if (key === "networth_tokens") {
+      recordKey = `${exactText(item.chain)}::${exactText(item.symbol)}::${exactText(item.name)}`;
+    } else if (key === "cloud_manual_bets") {
+      recordKey = [
+        exactText(item.date),
+        exactText(item.title),
+        exactText(item.matchup),
+        exactText(item.awayTeam),
+        exactText(item.homeTeam),
+        exactText(item.gamePk),
+        exactText(item.odds),
+        exactText(item.stake ?? item.amount),
+      ].join("::");
+    }
+
+    if (!recordKey) {
+      deduped.push(item);
+      continue;
+    }
+
+    if (seen.has(recordKey)) continue;
+    seen.add(recordKey);
+    deduped.push(item);
+  }
+
+  return deduped;
+}
+
 async function pushKey(key) {
   const value = cache.get(key);
   const resource = COLLECTION_RESOURCES[key];
@@ -130,6 +184,9 @@ export const remoteStorage = {
       } catch {
         parsed = value;
       }
+    }
+    if (Array.isArray(parsed)) {
+      parsed = dedupeCollection(key, parsed);
     }
     cache.set(key, parsed);
     scheduleWrite(key);

@@ -324,68 +324,7 @@ export default function SpendingPage() {
     }
   }, []);
 
-  useEffect(() => {
-    const initializePage = async () => {
-      await loadAll();
-      try {
-        const connections = await api.get("/api/simplefin/connections");
-        if (!Array.isArray(connections) || connections.length === 0) return;
-        await sync();
-      } catch {
-        // No SimpleFIN connection configured; skip the background sync.
-      }
-    };
-
-    initializePage();
-    settingsApi.get("spending_custom_categories").then((saved) => {
-      if (Array.isArray(saved)) setCustomCategories(saved.filter((category) => typeof category === "string" && category.trim()));
-    }).catch(() => {});
-  }, [loadAll]);
-
-  const addCategory = (value) => {
-    const category = value.trim().replace(/\s+/g, " ");
-    if (!category || categories.some((item) => item.toLowerCase() === category.toLowerCase())) return "";
-    const next = [...customCategories, category];
-    setCustomCategories(next);
-    settingsApi.set("spending_custom_categories", next).catch(() => toast.error("Could not save the category."));
-    return category;
-  };
-
-  const openCategoryTransactions = (category) => {
-    setSelectedCategory(category);
-    setCategoryTransactionsOpen(true);
-  };
-
-  const sync = async (itemId) => {
-    setIsSyncing(true);
-    try {
-      const connections = await api.get("/api/simplefin/connections");
-      const selected = itemId ? connections.filter((connection) => connection.id === itemId) : connections;
-      if (!selected.length) throw new Error("No SimpleFIN connections found.");
-      let accountCount = 0;
-      let receivedCount = 0;
-      let incoming = [];
-      for (const connection of selected) {
-        const payload = await fetchSimplefinInBrowser(connection.access_url);
-        const result = await api.post("/api/simplefin/browser-sync", {
-          connection_id: connection.id,
-          payload,
-        });
-        accountCount += result?.accounts || 0;
-        receivedCount += result?.received_transactions || 0;
-        incoming = [...incoming, ...(result?.transactions || [])];
-      }
-      const refreshedAccounts = await loadAll();
-      await syncNetWorthBalances(refreshedAccounts);
-      toast.success(incoming.length ? `${incoming.length} expenses synced` : `${accountCount} accounts checked; ${receivedCount} transactions received`);
-    } catch (error) {
-      toast.error(error.message || "Could not sync SimpleFIN transactions.");
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
-  const syncNetWorthBalances = async (serverAccounts = accounts) => {
+  const syncNetWorthBalances = useCallback(async (serverAccounts = accounts) => {
     const existing = (await assetsApi.getAll()).data || [];
     const existingByProviderId = new Map(existing.map((asset) => [asset.provider_account_id || asset.providerAccountId, asset]));
     for (const account of serverAccounts) {
@@ -426,6 +365,67 @@ export default function SpendingPage() {
       if (current || nameMatch) await assetsApi.update((current || nameMatch).id, payload);
       else await assetsApi.create(payload);
     }
+  }, [accounts]);
+
+  const sync = useCallback(async (itemId) => {
+    setIsSyncing(true);
+    try {
+      const connections = await api.get("/api/simplefin/connections");
+      const selected = itemId ? connections.filter((connection) => connection.id === itemId) : connections;
+      if (!selected.length) throw new Error("No SimpleFIN connections found.");
+      let accountCount = 0;
+      let receivedCount = 0;
+      let incoming = [];
+      for (const connection of selected) {
+        const payload = await fetchSimplefinInBrowser(connection.access_url);
+        const result = await api.post("/api/simplefin/browser-sync", {
+          connection_id: connection.id,
+          payload,
+        });
+        accountCount += result?.accounts || 0;
+        receivedCount += result?.received_transactions || 0;
+        incoming = [...incoming, ...(result?.transactions || [])];
+      }
+      const refreshedAccounts = await loadAll();
+      await syncNetWorthBalances(refreshedAccounts);
+      toast.success(incoming.length ? `${incoming.length} expenses synced` : `${accountCount} accounts checked; ${receivedCount} transactions received`);
+    } catch (error) {
+      toast.error(error.message || "Could not sync SimpleFIN transactions.");
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [loadAll, syncNetWorthBalances]);
+
+  useEffect(() => {
+    const initializePage = async () => {
+      await loadAll();
+      try {
+        const connections = await api.get("/api/simplefin/connections");
+        if (!Array.isArray(connections) || connections.length === 0) return;
+        await sync();
+      } catch {
+        // No SimpleFIN connection configured; skip the background sync.
+      }
+    };
+
+    initializePage();
+    settingsApi.get("spending_custom_categories").then((saved) => {
+      if (Array.isArray(saved)) setCustomCategories(saved.filter((category) => typeof category === "string" && category.trim()));
+    }).catch(() => {});
+  }, [loadAll, sync]);
+
+  const addCategory = (value) => {
+    const category = value.trim().replace(/\s+/g, " ");
+    if (!category || categories.some((item) => item.toLowerCase() === category.toLowerCase())) return "";
+    const next = [...customCategories, category];
+    setCustomCategories(next);
+    settingsApi.set("spending_custom_categories", next).catch(() => toast.error("Could not save the category."));
+    return category;
+  };
+
+  const openCategoryTransactions = (category) => {
+    setSelectedCategory(category);
+    setCategoryTransactionsOpen(true);
   };
 
   const linkAccount = async () => {
