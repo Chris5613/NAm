@@ -38,14 +38,26 @@ async function getJson(url, options = {}) {
   return res.json();
 }
 
+async function fetchMlbJsonWithFallback(urls) {
+  let lastError;
+
+  for (const url of urls) {
+    try {
+      return await getJson(url, {
+        credentials: url.startsWith("https://") ? "omit" : "include",
+      });
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("MLB fetch failed");
+}
+
 async function fetchScheduleWithFallback(dateKey, hydrate) {
   const backendUrl = `${STATS_API}/schedule?sportId=1&date=${dateKey}&hydrate=${encodeURIComponent(hydrate)}`;
-  try {
-    return await getJson(backendUrl);
-  } catch (backendError) {
-    const fallbackUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateKey}&hydrate=${encodeURIComponent(hydrate)}`;
-    return await getJson(fallbackUrl, { credentials: "omit" });
-  }
+  const fallbackUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateKey}&hydrate=${encodeURIComponent(hydrate)}`;
+  return fetchMlbJsonWithFallback([backendUrl, fallbackUrl]);
 }
 
 function pickPitchingStats(person) {
@@ -245,21 +257,13 @@ export async function fetchGameFeed(gamePk) {
 
   const urls = [
     `${STATS_API}/game/${gamePk}/feed/live`,
-    `${STATS_API}/game/${gamePk}/feed/live`,
+    `${STATS_API}/v1.1/game/${gamePk}/feed/live`,
+    `https://statsapi.mlb.com/api/v1.1/game/${gamePk}/feed/live`,
   ];
 
-  let lastError;
-
-  for (const url of urls) {
-    try {
-      const data = await getJson(url);
-      return data;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError || new Error("No MLB game feed found");
+  return fetchMlbJsonWithFallback(urls).catch((error) => {
+    throw error || new Error("No MLB game feed found");
+  });
 }
 
 function normalizeTeamName(name) {
@@ -312,8 +316,9 @@ export async function findGameForMatchup({
   const dateKey = getPacificDateKey(date);
   if (!dateKey || (!awayTeam && !homeTeam)) return null;
 
-  const url = `${STATS_API}/schedule?sportId=1&date=${dateKey}`;
-  const data = await getJson(url);
+  const backendUrl = `${STATS_API}/schedule?sportId=1&date=${dateKey}`;
+  const fallbackUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateKey}`;
+  const data = await fetchMlbJsonWithFallback([backendUrl, fallbackUrl]);
   const games = data?.dates?.[0]?.games || [];
   if (games.length === 0) return null;
 

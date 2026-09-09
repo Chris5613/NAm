@@ -1,4 +1,5 @@
 import {
+  fetchGameFeed,
   fetchTodaySlate,
   gradeFirstInningBet,
   getPacificDateKey,
@@ -90,6 +91,43 @@ describe("schedule fallback", () => {
       expect(calls.some((url) => url.includes("/api/market/mlb/schedule"))).toBe(true);
       expect(calls.some((url) => url.includes("https://statsapi.mlb.com/api/v1/schedule"))).toBe(true);
       expect(calls.some((url) => url.includes("https://statsapi.mlb.com/api/v1/people"))).toBe(true);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+});
+
+describe("live game feed fallback", () => {
+  it("falls back to the v1.1 MLB live feed path when v1 returns 404", async () => {
+    const originalFetch = global.fetch;
+    const calls = [];
+
+    global.fetch = jest.fn((url) => {
+      calls.push(String(url));
+      if (String(url).includes("/api/market/mlb/game/123/feed/live")) {
+        return Promise.resolve({ ok: false, status: 404 });
+      }
+
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({
+          gamePk: 123,
+          gameData: { status: { abstractGameState: "Final", detailedState: "Final" } },
+          liveData: {
+            linescore: {
+              innings: [{ away: { runs: 0 }, home: { runs: 0 } }],
+              currentInning: 1,
+            },
+          },
+        }),
+      });
+    });
+
+    try {
+      const feed = await fetchGameFeed(123);
+      expect(feed.gamePk).toBe(123);
+      expect(calls.some((url) => url.includes("/api/market/mlb/game/123/feed/live"))).toBe(true);
+      expect(calls.some((url) => url.includes("/api/market/mlb/v1.1/game/123/feed/live"))).toBe(true);
     } finally {
       global.fetch = originalFetch;
     }
