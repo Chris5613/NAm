@@ -324,7 +324,7 @@ export default function SpendingPage() {
     }
   }, []);
 
-  const syncNetWorthBalances = useCallback(async (serverAccounts = accounts) => {
+  const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
     const existing = (await assetsApi.getAll()).data || [];
     const existingByProviderId = new Map(existing.map((asset) => [asset.provider_account_id || asset.providerAccountId, asset]));
     for (const account of serverAccounts) {
@@ -365,7 +365,7 @@ export default function SpendingPage() {
       if (current || nameMatch) await assetsApi.update((current || nameMatch).id, payload);
       else await assetsApi.create(payload);
     }
-  }, [accounts]);
+  }, []);
 
   const sync = useCallback(async (itemId) => {
     setIsSyncing(true);
@@ -397,11 +397,13 @@ export default function SpendingPage() {
   }, [loadAll, syncNetWorthBalances]);
 
   useEffect(() => {
+    let mounted = true;
+
     const initializePage = async () => {
       await loadAll();
       try {
         const connections = await api.get("/api/simplefin/connections");
-        if (!Array.isArray(connections) || connections.length === 0) return;
+        if (!mounted || !Array.isArray(connections) || connections.length === 0) return;
         await sync();
       } catch {
         // No SimpleFIN connection configured; skip the background sync.
@@ -410,8 +412,13 @@ export default function SpendingPage() {
 
     initializePage();
     settingsApi.get("spending_custom_categories").then((saved) => {
+      if (!mounted) return;
       if (Array.isArray(saved)) setCustomCategories(saved.filter((category) => typeof category === "string" && category.trim()));
     }).catch(() => {});
+
+    return () => {
+      mounted = false;
+    };
   }, [loadAll, sync]);
 
   const addCategory = (value) => {
