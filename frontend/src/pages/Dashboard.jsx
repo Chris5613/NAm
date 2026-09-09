@@ -15,7 +15,7 @@ import { Plus, Camera, RefreshCw } from "lucide-react";
 
 const DAILY_BASELINE_KEY = "daily_net_worth_baseline_pst";
 const DAILY_CATEGORY_BASELINE_KEY = "daily_category_baseline_pst";
-const MONTHLY_NET_WORTH_HISTORY_KEY = "monthly_net_worth_history_v1";
+const MONTHLY_NET_WORTH_HISTORY_KEY = "monthly_net_worth_history_v2";
 const LIVE_HISTORY_MAX_POINTS = 200;
 
 
@@ -181,25 +181,6 @@ function getMonthlyNetWorthHistory(currentNetWorth) {
   const monthKey = getMonthKey();
   const monthLabel = getMonthLabel();
 
-  const fallback = [
-    { monthKey: "2025-01", month: "Jan 2025", value: 10800 },
-    { monthKey: "2025-02", month: "Feb 2025", value: 10700 },
-    { monthKey: "2025-03", month: "Mar 2025", value: 9900 },
-    { monthKey: "2025-04", month: "Apr 2025", value: 9200 },
-    { monthKey: "2025-05", month: "May 2025", value: 10900 },
-    { monthKey: "2025-06", month: "Jun 2025", value: 9500 },
-    { monthKey: "2025-07", month: "Jul 2025", value: 11600 },
-    { monthKey: "2025-08", month: "Aug 2025", value: 13100 },
-    { monthKey: "2025-09", month: "Sep 2025", value: 11300 },
-    { monthKey: "2025-10", month: "Oct 2025", value: 13700 },
-    { monthKey: "2025-11", month: "Nov 2025", value: 13400 },
-    { monthKey: "2025-12", month: "Dec 2025", value: 11300 },
-    { monthKey: "2026-01", month: "Jan 2026", value: 14200 },
-    { monthKey: "2026-02", month: "Feb 2026", value: 15300 },
-    { monthKey: "2026-03", month: "Mar 2026", value: 16400 },
-    { monthKey: "2026-04", month: "Apr 2026", value: 17244 },
-  ];
-
   let saved = null;
 
   try {
@@ -210,26 +191,37 @@ function getMonthlyNetWorthHistory(currentNetWorth) {
     saved = null;
   }
 
-  let history =
-    Array.isArray(saved) && saved.length > 0
-      ? saved
-      : fallback;
+  // Reset baseline so this month is always the first chart point.
+  let history = Array.isArray(saved)
+    ? saved
+        .filter((item) => item && typeof item.monthKey === "string" && item.monthKey >= monthKey)
+        .map((item) => ({
+          monthKey: item.monthKey,
+          month: item.month || item.label || item.time || monthLabel,
+          value: Number(item.value) || 0,
+          live: false,
+        }))
+    : [];
 
   const currentIndex = history.findIndex((m) => m.monthKey === monthKey);
 
   if (currentIndex >= 0) {
     history[currentIndex] = {
       ...history[currentIndex],
+      month: monthLabel,
       value,
       live: true,
     };
   } else {
-    history.push({
-      monthKey,
-      month: monthLabel,
-      value,
-      live: true,
-    });
+    history = [
+      {
+        monthKey,
+        month: monthLabel,
+        value,
+        live: true,
+      },
+      ...history,
+    ];
   }
 
   localStorage.setItem(

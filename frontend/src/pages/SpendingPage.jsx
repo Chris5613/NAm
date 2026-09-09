@@ -54,9 +54,10 @@ const nextHourOf = (date = new Date()) => {
 const timeLabel = (date) => new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
 const simplefinHourLock = (date = new Date()) => {
   const nextHour = nextHourOf(date);
+  const currentHour = hourKeyOf(date);
   return {
-    isLocked: localStorage.getItem(SIMPLEFIN_REQUEST_HOUR_KEY) === hourKeyOf(date),
-    currentHour: hourKeyOf(date),
+    isLocked: localStorage.getItem(SIMPLEFIN_REQUEST_HOUR_KEY) === currentHour,
+    currentHour,
     nextHourLabel: timeLabel(nextHour),
   };
 };
@@ -226,7 +227,6 @@ export default function SpendingPage() {
   const [selectedMonth, setSelectedMonth] = useState(() => monthKeyOf());
   const [transaction, setTransaction] = useState(emptyTransaction);
   const [customCategories, setCustomCategories] = useState([]);
-  const [, setSyncClockTick] = useState(0);
   const categories = useMemo(() => [...CATEGORIES, ...customCategories], [customCategories]);
   const syncLock = simplefinHourLock();
 
@@ -440,28 +440,12 @@ export default function SpendingPage() {
 
   useEffect(() => {
     let mounted = true;
-    let syncTimer;
-    let lockTimer;
 
     const initializePage = async () => {
       await loadAll();
       try {
         const connections = await api.get("/api/simplefin/connections");
         if (!mounted || !Array.isArray(connections) || connections.length === 0) return;
-
-        const now = new Date();
-        if (now.getMinutes() === 0 && now.getSeconds() === 0) {
-          await sync();
-          return;
-        }
-        const nextHour = new Date(now);
-        nextHour.setHours(now.getHours() + 1, 0, 0, 0);
-        lockTimer = window.setTimeout(() => {
-          if (mounted) setSyncClockTick((tick) => tick + 1);
-        }, nextHour.getTime() - now.getTime());
-        syncTimer = window.setTimeout(() => {
-          if (mounted) sync();
-        }, nextHour.getTime() - now.getTime());
       } catch {
         // No SimpleFIN connection configured; skip the background sync.
       }
@@ -475,10 +459,8 @@ export default function SpendingPage() {
 
     return () => {
       mounted = false;
-      window.clearTimeout(syncTimer);
-      window.clearTimeout(lockTimer);
     };
-  }, [loadAll, sync]);
+  }, [loadAll]);
 
   const addCategory = (value) => {
     const category = value.trim().replace(/\s+/g, " ");
