@@ -28,13 +28,24 @@ export function getTodayDateKey() {
   return getPacificDateKey();
 }
 
-async function getJson(url) {
+async function getJson(url, options = {}) {
   const res = await fetch(url, {
     credentials: "include",
     headers: { Accept: "application/json" },
+    ...options,
   });
   if (!res.ok) throw new Error(`MLB API ${res.status}`);
   return res.json();
+}
+
+async function fetchScheduleWithFallback(dateKey, hydrate) {
+  const backendUrl = `${STATS_API}/schedule?sportId=1&date=${dateKey}&hydrate=${encodeURIComponent(hydrate)}`;
+  try {
+    return await getJson(backendUrl);
+  } catch (backendError) {
+    const fallbackUrl = `https://statsapi.mlb.com/api/v1/schedule?sportId=1&date=${dateKey}&hydrate=${encodeURIComponent(hydrate)}`;
+    return await getJson(fallbackUrl, { credentials: "omit" });
+  }
 }
 
 function pickPitchingStats(person) {
@@ -49,12 +60,15 @@ async function fetchPitcherStats(pitcherIds, season) {
   if (ids.length === 0) return {};
 
   const hydrate = `stats(group=[pitching],type=[season],season=${season})`;
-  const url = `${STATS_API}/people?personIds=${ids.join(
+  const backendUrl = `${STATS_API}/people?personIds=${ids.join(
+    ","
+  )}&hydrate=${encodeURIComponent(hydrate)}`;
+  const fallbackUrl = `https://statsapi.mlb.com/api/v1/people?personIds=${ids.join(
     ","
   )}&hydrate=${encodeURIComponent(hydrate)}`;
 
   try {
-    const data = await getJson(url);
+    const data = await getJson(backendUrl);
     const byId = {};
     (data.people || []).forEach((person) => {
       byId[person.id] = {
@@ -64,7 +78,19 @@ async function fetchPitcherStats(pitcherIds, season) {
     });
     return byId;
   } catch {
-    return {};
+    try {
+      const data = await getJson(fallbackUrl, { credentials: "omit" });
+      const byId = {};
+      (data.people || []).forEach((person) => {
+        byId[person.id] = {
+          hand: person.pitchHand?.code || "",
+          stat: pickPitchingStats(person),
+        };
+      });
+      return byId;
+    } catch {
+      return {};
+    }
   }
 }
 
@@ -109,11 +135,7 @@ function mapTeam(side) {
  */
 export async function fetchTodaySlate(dateKey = getTodayDateKey()) {
   const hydrate = "team,probablePitcher";
-  const url = `${STATS_API}/schedule?sportId=1&date=${dateKey}&hydrate=${encodeURIComponent(
-    hydrate
-  )}`;
-
-  const data = await getJson(url);
+  const data = await fetchScheduleWithFallback(dateKey, hydrate);
   const games = data.dates?.[0]?.games || [];
   if (games.length === 0) return [];
 
