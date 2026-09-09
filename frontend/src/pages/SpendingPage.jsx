@@ -368,6 +368,13 @@ export default function SpendingPage() {
   }, []);
 
   const sync = useCallback(async (itemId) => {
+    const rateLimitedUntil = Number(sessionStorage.getItem("simplefin_rate_limited_until") || "0");
+    if (rateLimitedUntil > Date.now()) {
+      const remainingSeconds = Math.ceil((rateLimitedUntil - Date.now()) / 1000);
+      toast.error(`SimpleFIN is rate-limiting requests. Try again in ${remainingSeconds} seconds.`);
+      return;
+    }
+
     setIsSyncing(true);
     try {
       const connections = await api.get("/api/simplefin/connections");
@@ -390,6 +397,11 @@ export default function SpendingPage() {
       await syncNetWorthBalances(refreshedAccounts);
       toast.success(incoming.length ? `${incoming.length} expenses synced` : `${accountCount} accounts checked; ${receivedCount} transactions received`);
     } catch (error) {
+      if (Number.isFinite(error.retryAfter)) {
+        sessionStorage.setItem("simplefin_rate_limited_until", String(Date.now() + error.retryAfter * 1000));
+      } else if (error.message?.startsWith("SimpleFIN is rate-limiting")) {
+        sessionStorage.setItem("simplefin_rate_limited_until", String(Date.now() + 60 * 1000));
+      }
       toast.error(error.message || "Could not sync SimpleFIN transactions.");
     } finally {
       setIsSyncing(false);
@@ -454,59 +466,27 @@ export default function SpendingPage() {
     const path = parsed.pathname.replace(/\/$/, "");
     parsed.pathname = path.endsWith("/accounts") ? path : `${path}/accounts`;
     const startDate = Math.floor((Date.now() - 90 * 86400000) / 1000);
-    const queryVariants = [
-      `start-date=${startDate}&version=2`,
-      `start-date=${startDate}`,
-      "version=2",
-    ];
-    let bestPayload = null;
-    let lastError = null;
+    parsed.search = `?start-date=${startDate}&version=2`;
+    const response = await fetch(parsed.toString(), {
+      headers: { Accept: "application/json", Authorization: `Basic ${window.btoa(`${username}:${password}`)}` },
+    });
+    const data = await response.json().catch(() => null);
 
-    for (let attempt = 0; attempt < queryVariants.length; attempt += 1) {
-      const query = queryVariants[attempt];
-      parsed.search = query ? `?${query}` : "";
-
-      try {
-        const response = await fetch(parsed.toString(), {
-          headers: { Accept: "application/json", Authorization: `Basic ${window.btoa(`${username}:${password}`)}` },
-        });
-        const data = await response.json().catch(() => null);
-
-        if (response.status === 429) {
-          const retryAfter = Number(response.headers.get("Retry-After") || "0");
-          const waitMs = Math.max(retryAfter * 1000, 2000 + attempt * 1000);
-          await new Promise((resolve) => setTimeout(resolve, waitMs));
-          if (attempt === queryVariants.length - 1) {
-            throw new Error("SimpleFIN is rate-limiting requests. Please wait a minute and try again.");
-          }
-          continue;
-        }
-
-        if (!response.ok) {
-          const detail = data?.errlist?.map((item) => item.description || item.code).join(", ") || `SimpleFIN returned HTTP ${response.status}`;
-          lastError = new Error(detail);
-          continue;
-        }
-
-        const accounts = Array.isArray(data?.accounts) ? data.accounts : [];
-        const transactionCount = accounts.reduce(
-          (total, account) => total + (Array.isArray(account?.transactions) ? account.transactions.length : 0),
-          Array.isArray(data?.transactions) ? data.transactions.length : 0
-        );
-        const bestCount = bestPayload?.transactionCount ?? -1;
-        if (!bestPayload || transactionCount > bestCount) {
-          bestPayload = { data, transactionCount };
-        }
-        if (transactionCount > 0) break;
-      } catch (error) {
-        lastError = error;
-        if (attempt === queryVariants.length - 1) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 1000 * (attempt + 1)));
-      }
+    if (response.status === 429) {
+      const retryAfter = Number(response.headers.get("Retry-After") || "0");
+      const waitMessage = retryAfter ? ` Wait ${retryAfter} seconds before trying again.` : " Wait a minute before trying again.";
+      const error = new Error(`SimpleFIN is rate-limiting requests.${waitMessage}`);
+      error.retryAfter = retryAfter || 60;
+      throw error;
     }
-
-    if (!bestPayload) throw lastError || new Error("SimpleFIN returned no account data.");
-    return bestPayload.data;
+    if (!response.ok) {
+      const detail = data?.errlist?.map((item) => item.description || item.code).join(", ") || `SimpleFIN returned HTTP ${response.status}`;
+      throw new Error(detail);
+    }
+    if (!Array.isArray(data?.accounts) && !Array.isArray(data?.transactions)) {
+      throw new Error("SimpleFIN returned no account data.");
+    }
+    return data;
   };
 
   const connectSimplefin = async () => {
