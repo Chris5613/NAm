@@ -685,6 +685,11 @@ const getDailyAmount = useCallback((project) => {
 }, [dailyReturns, trxPrice]);
 
   const getProjectEarningsTotal = (project) => {
+    if (project?.yield_tracking === "lulo_lending") {
+      const lifetimeInterest = Number(project.lulo_lifetime_interest_usd);
+      if (Number.isFinite(lifetimeInterest) && lifetimeInterest >= 0) return lifetimeInterest;
+    }
+
     const txns = Array.isArray(project?.transactions) ? project.transactions : [];
     const earnings = txns.filter(isEarningTransaction);
 

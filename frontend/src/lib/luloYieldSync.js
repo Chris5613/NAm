@@ -39,7 +39,19 @@ export async function getLuloYieldSnapshot(walletAddress) {
       (customBalanceUsd * usdsApy)
     ) / totalBalanceUsd
     : 0;
-  const customInterestEarnedUsd = Number(customAccount.interestEarned) || 0;
+  const customInterestEarnedUsd = Number(
+    customAccount.interestEarned ??
+    customAccount.totalInterestEarned ??
+    customAccount.totalInterest ??
+    0
+  ) || 0;
+  const accountInterestEarnedUsd = Number(
+    account.totalInterestEarned ??
+    account.interestEarned ??
+    account.totalInterest ??
+    account.earnedInterest ??
+    0
+  ) || 0;
 
   return {
     walletAddress,
@@ -51,9 +63,9 @@ export async function getLuloYieldSnapshot(walletAddress) {
     usdsApy,
     customBalanceUsd,
     customInterestEarnedUsd,
-    totalInterestEarnedUsd: (Number(account.totalInterestEarned) || 0) + customInterestEarnedUsd,
-    regularInterestEarnedUsd: Number(account.regularInterestEarned) || 0,
-    protectedInterestEarnedUsd: Number(account.protectedInterestEarned) || 0,
+    totalInterestEarnedUsd: accountInterestEarnedUsd + customInterestEarnedUsd,
+    regularInterestEarnedUsd: Number(account.regularInterestEarned ?? account.regularInterest ?? 0) || 0,
+    protectedInterestEarnedUsd: Number(account.protectedInterestEarned ?? account.protectedInterest ?? 0) || 0,
     regularApy,
     protectedApy,
     weightedApy,
