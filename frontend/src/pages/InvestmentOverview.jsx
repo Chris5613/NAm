@@ -732,6 +732,7 @@ const getDailyAmount = useCallback((project) => {
 
   const actualEarningsByMonth = useMemo(() => {
     const map = {};
+    const currentMonthKey = getCurrentMonthKey();
 
     projects.forEach((p) => {
       const txns = Array.isArray(p.transactions) ? p.transactions : [];
@@ -748,10 +749,18 @@ const getDailyAmount = useCallback((project) => {
         const mKey = getMonthKeyFromDate(p.created_at || p.date || p.updated_at) || getCurrentMonthKey();
         map[mKey] = (map[mKey] || 0) + (Number(getProjectEarningsTotal(p)) || 0);
       }
+
+      if (
+        p.yield_tracking === "lulo_lending" &&
+        selectedMonthKey === currentMonthKey &&
+        !earningTxns.some((transaction) => getMonthKeyFromDate(transaction.date || transaction.created_at || transaction.source_date) === currentMonthKey)
+      ) {
+        map[currentMonthKey] = (map[currentMonthKey] || 0) + (getDailyAmount(p) * 30);
+      }
     });
 
     return map;
-  }, [projects]);
+  }, [projects, selectedMonthKey, getDailyAmount]);
 
   const selectedMonthSummary = useMemo(() => {
     const monthTotal = actualEarningsByMonth[selectedMonthKey] || totals.per_month;
@@ -785,6 +794,7 @@ const getDailyAmount = useCallback((project) => {
   const monthlyBreakdown = useMemo(() => {
     const monthEarnedByProject = {};
     const monthProjects = [...activeProjects, ...inactiveProjects];
+    const currentMonthKey = getCurrentMonthKey();
 
     monthProjects.forEach((p) => {
       const txns = Array.isArray(p.transactions) ? p.transactions : [];
@@ -803,6 +813,14 @@ const getDailyAmount = useCallback((project) => {
           monthEarnedByProject[p.id] = (monthEarnedByProject[p.id] || 0) + (Number(p.earned) || 0);
         }
       }
+
+      if (
+        p.yield_tracking === "lulo_lending" &&
+        selectedMonthKey === currentMonthKey &&
+        !earningTxns.some((transaction) => getMonthKeyFromDate(transaction.date || transaction.created_at || transaction.source_date) === currentMonthKey)
+      ) {
+        monthEarnedByProject[p.id] = getDailyAmount(p) * 30;
+      }
     });
 
     const monthTotal = Object.values(monthEarnedByProject).reduce((sum, val) => sum + val, 0);
@@ -820,7 +838,7 @@ const getDailyAmount = useCallback((project) => {
       .sort((a, b) => b.monthly - a.monthly);
 
     return { rows };
-  }, [activeProjects, inactiveProjects, selectedMonthKey]);
+  }, [activeProjects, inactiveProjects, selectedMonthKey, getDailyAmount]);
 
   const breakdownRows = monthlyBreakdown.rows;
 
