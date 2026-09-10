@@ -415,6 +415,67 @@ export const getCoinStatsWalletDefiPositions = async (address, chain) => {
     : [];
 };
 
+function getJupiterToken(asset, tokenInfo) {
+  const data = asset?.data || {};
+  const token = tokenInfo?.[data.address] || {};
+
+  return {
+    symbol: token.symbol || data.symbol || data.address?.slice(0, 6) || "Unknown",
+    name: token.name || data.name || data.address || "Unknown",
+    amount: Number(data.amount) || 0,
+    price: Number(data.price) || 0,
+    value: Number(asset?.value) || (Number(data.amount) || 0) * (Number(data.price) || 0),
+    image_uri: token.logoURI || data.logoURI || "",
+  };
+}
+
+function normalizeJupiterPosition(element, tokenInfo, address, index) {
+  const position = element?.data || {};
+  const assets = [
+    ...(position.suppliedAssets || []).map((asset) => ({ ...getJupiterToken(asset, tokenInfo), kind: "supplied" })),
+    ...(position.borrowedAssets || []).map((asset) => ({ ...getJupiterToken(asset, tokenInfo), kind: "borrowed" })),
+    ...(position.rewardAssets || []).map((asset) => ({ ...getJupiterToken(asset, tokenInfo), kind: "reward" })),
+  ];
+
+  return {
+    platform_id: `${element.platformId || "jupiter"}-${position.ref || index}`,
+    platform: element.platformId === "jupiter-exchange" ? "Jupiter" : element.platformId || "Jupiter",
+    label: element.label || "DeFi",
+    type: element.label || element.type || "DeFi",
+    logo: "https://station.jup.ag/img/jupiter-logo.png",
+    url: position.link || "https://jup.ag",
+    total_value: Number(element.value ?? position.value) || 0,
+    tokens: assets,
+    chain: "solana",
+    address,
+    source: "jupiter",
+  };
+}
+
+export const jupiterPortfolioApi = {
+  getPositions: async (address) => {
+    if (!address) return [];
+
+    const response = await proxyFetch(
+      `/jupiter-portfolio/portfolio/v1/positions/${encodeURIComponent(address)}`
+    );
+
+    if (!response.ok) {
+      const text = await response.text().catch(() => "");
+      throw new Error(`Jupiter Portfolio ${response.status}: ${text.slice(0, 300)}`);
+    }
+
+    const data = await response.json();
+    const tokenInfo = data?.tokenInfo?.solana || {};
+
+    return Array.isArray(data?.elements)
+      ? data.elements
+          .filter((element) => element?.networkId === "solana" && Number(element.value ?? element.data?.value) > 0)
+          .map((element, index) => normalizeJupiterPosition(element, tokenInfo, address, index))
+      : [];
+  },
+};
+
 // Jupiter Price API
 const JUPITER_PRICE_BASE = "/jupiter/price/v3";
 

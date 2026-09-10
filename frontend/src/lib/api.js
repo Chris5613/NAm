@@ -4,6 +4,7 @@ import {
   ebayApi,
   coinStatsApi,
   getCoinStatsWalletDefiPositions,
+  jupiterPortfolioApi,
   bitcoinApi,
 } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
@@ -694,18 +695,25 @@ export const walletsApi = {
       wallets
         .filter((wallet) => wallet.address && wallet.chain === "solana")
         .map(async (wallet) => {
-          try {
-            return { positions: await getCoinStatsWalletDefiPositions(wallet.address, wallet.chain) };
-          } catch (error) {
-            console.warn(`CoinStats DeFi fetch failed for ${wallet.address}:`, error);
-            return { positions: [], error: error.message || "CoinStats DeFi request failed" };
-          }
+          const [jupiterResult, coinStatsResult] = await Promise.allSettled([
+            jupiterPortfolioApi.getPositions(wallet.address),
+            getCoinStatsWalletDefiPositions(wallet.address, wallet.chain),
+          ]);
+          const jupiterPositions = jupiterResult.status === "fulfilled" ? jupiterResult.value : [];
+          const coinStatsPositions = coinStatsResult.status === "fulfilled"
+            ? coinStatsResult.value.filter((position) => !/jupiter/i.test(position.platform || ""))
+            : [];
+          const errors = [jupiterResult, coinStatsResult]
+            .filter((result) => result.status === "rejected")
+            .map((result) => result.reason?.message || "DeFi request failed");
+
+          return { positions: [...jupiterPositions, ...coinStatsPositions], errors };
         })
     );
 
     return toResponse({
       positions: results.flatMap((result) => result.positions),
-      errors: results.flatMap((result) => result.error ? [result.error] : []),
+      errors: results.flatMap((result) => result.errors),
     });
   },
 

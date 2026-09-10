@@ -435,7 +435,7 @@ await sleep(2000);
       setDefiPositions(freshDefiPositions);
       saveDefiPositions(freshDefiPositions);
       if (defiRes.data?.errors?.length) {
-        toast.error("DeFi sync failed: configure a valid CoinStats API key");
+        toast.error("Some DeFi sources failed to sync. Check API configuration.");
       }
     } catch {
       freshDefiPositions = [];

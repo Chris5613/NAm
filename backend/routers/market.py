@@ -39,6 +39,10 @@ def _provider_config() -> dict[str, dict[str, Any]]:
             "base": "https://lite-api.jup.ag",
             "headers": {"x-api-key": os.getenv("JUPITER_API_KEY", "")} if os.getenv("JUPITER_API_KEY") else {},
         },
+        "jupiter-portfolio": {
+            "base": "https://api.jup.ag",
+            "headers": {"x-api-key": os.getenv("JUPITER_API_KEY", "")} if os.getenv("JUPITER_API_KEY") else {},
+        },
         "bitcoin": {"base": "https://blockchain.info"},
         "nosana": {"base": "https://dashboard.k8s.prd.nos.ci/api"},
         "mlb": {"base": "https://statsapi.mlb.com/api/v1"},
