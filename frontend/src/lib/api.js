@@ -3,7 +3,7 @@ import {
   finnhubApi,
   ebayApi,
   coinStatsApi,
-  coinStatsPortfolioApi,
+  getCoinStatsWalletDefiPositions,
   bitcoinApi,
 } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
@@ -685,14 +685,22 @@ export const walletsApi = {
   },
 
   getDefiPositions: async () => {
-  try {
-    const data = await coinStatsPortfolioApi.getDefiPortfolio();
-    return toResponse(data);
-  } catch (error) {
-    console.warn("CoinStats DeFi fetch failed:", error);
-    return toResponse({ positions: [] });
-  }
-},
+    const wallets = normalizeItems(storage.getWallets());
+    const positions = await Promise.all(
+      wallets
+        .filter((wallet) => wallet.address && wallet.chain === "solana")
+        .map(async (wallet) => {
+          try {
+            return await getCoinStatsWalletDefiPositions(wallet.address, wallet.chain);
+          } catch (error) {
+            console.warn(`CoinStats DeFi fetch failed for ${wallet.address}:`, error);
+            return [];
+          }
+        })
+    );
+
+    return toResponse({ positions: positions.flat() });
+  },
 
   getCoinStatsBalance: async (address, chain = "solana") => {
     try {

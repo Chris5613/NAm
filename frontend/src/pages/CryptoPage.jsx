@@ -63,6 +63,23 @@ function saveDefiPositions(positions) {
   }
 }
 
+function getSavedManualDefiPositions() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(MANUAL_DEFI_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveManualDefiPositions(positions) {
+  try {
+    localStorage.setItem(MANUAL_DEFI_KEY, JSON.stringify(positions || []));
+  } catch {
+    // localStorage unavailable
+  }
+}
+
 
 function getSavedCryptoHistory() {
   try {
@@ -275,6 +292,7 @@ export default function CryptoPage() {
   const [wallets, setWallets] = useState([]);
   const [balances, setBalances] = useState({});
   const [defiPositions, setDefiPositions] = useState(() => getSavedDefiPositions());
+  const [manualDefiPositions, setManualDefiPositions] = useState(() => getSavedManualDefiPositions());
   const [luloProject, setLuloProject] = useState(null);
   const [defiLoading] = useState(false);
   const [tokenPrefs, setTokenPrefs] = useState({});
@@ -282,6 +300,7 @@ export default function CryptoPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [walletModalOpen, setWalletModalOpen] = useState(false);
+  const [manualDefiModalOpen, setManualDefiModalOpen] = useState(false);
   const [liveHistory, setLiveHistory] = useState(() => getSavedCryptoHistory());
   const [activeChain, setActiveChain] = useState(null);
   const [logoEditToken, setLogoEditToken] = useState(null);
@@ -323,8 +342,8 @@ export default function CryptoPage() {
   }, [luloProject]);
 
   const allDefiPositions = useMemo(
-    () => [...defiPositions, ...(liveLuloPosition ? [liveLuloPosition] : [])],
-    [defiPositions, liveLuloPosition],
+    () => [...defiPositions, ...manualDefiPositions, ...(liveLuloPosition ? [liveLuloPosition] : [])],
+    [defiPositions, manualDefiPositions, liveLuloPosition],
   );
 
   const fetchWallets = useCallback(async () => {
@@ -360,10 +379,6 @@ export default function CryptoPage() {
 useEffect(() => {
   fetchWallets();
 }, [fetchWallets]);
-
-  useEffect(() => {
-    localStorage.removeItem(MANUAL_DEFI_KEY);
-  }, []);
 
   useEffect(() => {
     const refresh = () => {
@@ -432,7 +447,11 @@ const defiTotal = freshDefiPositions.reduce(
   0
 );
 
-const total = walletTotal + defiTotal + (Number(liveLuloPosition?.total_value) || 0);
+const manualDefiTotal = manualDefiPositions.reduce(
+  (sum, position) => sum + (Number(position.total_value) || 0),
+  0
+);
+const total = walletTotal + defiTotal + manualDefiTotal + (Number(liveLuloPosition?.total_value) || 0);
 
 if (total > 0) {
   setLiveHistory((prev) => {
@@ -495,6 +514,23 @@ if (total > 0) {
     } catch {
       toast.error("Failed to update");
     }
+  };
+
+  const addManualDefiPosition = (position) => {
+    setManualDefiPositions((current) => {
+      const next = [...current, position];
+      saveManualDefiPositions(next);
+      return next;
+    });
+  };
+
+  const removeManualDefiPosition = (id) => {
+    setManualDefiPositions((current) => {
+      const next = current.filter((position) => position.id !== id);
+      saveManualDefiPositions(next);
+      return next;
+    });
+    toast.success("Manual DeFi position removed");
   };
 
   const allTokensRaw = [];
@@ -623,7 +659,7 @@ const defiTotalValue = allDefiPositions.reduce(
 const filteredDefi =
   !activeChain || activeChain === "solana"
     ? allDefiPositions
-        .filter((p) => (Number(p.total_value) || 0) > 0.01)
+        .filter((position) => (Number(position.total_value) || 0) > 0.01)
         .sort((a, b) => (Number(b.total_value) || 0) - (Number(a.total_value) || 0))
     : [];
 
@@ -712,13 +748,13 @@ useEffect(() => {
     });
 
     if (allDefiPositions.length > 0) {
-      if (!tokensByChain.solana) {
-        tokensByChain.solana = [];
-      }
-
       allDefiPositions.forEach((p) => {
         const value = Number(p.total_value) || 0;
         if (value < 0.01) return;
+
+        if (!tokensByChain.solana) {
+          tokensByChain.solana = [];
+        }
 
         tokensByChain.solana.push({
           symbol: p.platform || "DeFi",
@@ -816,6 +852,17 @@ useEffect(() => {
               Refresh
             </Button>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setManualDefiModalOpen(true)}
+            className="border-border/40 hover:bg-secondary"
+            data-testid="add-manual-defi-btn"
+          >
+            <Plus className="w-4 h-4 mr-2" strokeWidth={1.5} />
+            Add DeFi
+          </Button>
 
           <Button
             variant="outline"
@@ -1206,7 +1253,8 @@ useEffect(() => {
                           </div>
                         )}
 
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex items-center gap-1">
+                          <div className="min-w-0">
                           <p className="text-sm font-medium text-foreground truncate">
                             {pos.platform || "DeFi"}
                           </p>
@@ -1214,6 +1262,18 @@ useEffect(() => {
                             <p className="text-[10px] text-muted-foreground truncate">
                               {pos.url}
                             </p>
+                          )}
+                          </div>
+                          {pos.manual && (
+                            <button
+                              type="button"
+                              onClick={() => removeManualDefiPosition(pos.id)}
+                              className="p-1 text-muted-foreground hover:text-rose-400"
+                              title="Remove manual DeFi position"
+                              aria-label="Remove manual DeFi position"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" strokeWidth={1.5} />
+                            </button>
                           )}
                         </div>
                       </div>
@@ -1271,6 +1331,12 @@ useEffect(() => {
         onUpdate={fetchWallets}
       />
 
+      <ManualDefiDialog
+        open={manualDefiModalOpen}
+        onOpenChange={setManualDefiModalOpen}
+        onCreated={addManualDefiPosition}
+      />
+
       <LogoEditDialog
         symbol={logoEditToken}
         open={!!logoEditToken}
@@ -1278,6 +1344,97 @@ useEffect(() => {
         onSave={setTokenLogo}
       />
     </div>
+  );
+}
+
+function ManualDefiDialog({ open, onOpenChange, onCreated }) {
+  const [platform, setPlatform] = useState("");
+  const [type, setType] = useState("Lending");
+  const [value, setValue] = useState("");
+  const [tokenSymbol, setTokenSymbol] = useState("");
+  const [tokenAmount, setTokenAmount] = useState("");
+
+  const resetForm = () => {
+    setPlatform("");
+    setType("Lending");
+    setValue("");
+    setTokenSymbol("");
+    setTokenAmount("");
+  };
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    const totalValue = Number(value);
+
+    if (!platform.trim()) {
+      toast.error("Enter a protocol name");
+      return;
+    }
+    if (!(totalValue > 0)) {
+      toast.error("Enter a value greater than zero");
+      return;
+    }
+
+    const amount = Number(tokenAmount);
+    onCreated({
+      id: `manual-defi-${Date.now()}`,
+      platform_id: `manual-${platform.trim().toLowerCase()}-${Date.now()}`,
+      platform: platform.trim(),
+      label: "Manual",
+      type: type.trim() || "DeFi",
+      total_value: totalValue,
+      tokens: tokenSymbol.trim()
+        ? [{
+            symbol: tokenSymbol.trim().toUpperCase(),
+            name: tokenSymbol.trim().toUpperCase(),
+            amount: Number.isFinite(amount) ? amount : 0,
+            value: totalValue,
+            kind: "supplied",
+          }]
+        : [],
+      chain: "solana",
+      manual: true,
+    });
+    resetForm();
+    onOpenChange(false);
+    toast.success("Manual DeFi position added");
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="bg-card border-border sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add DeFi Position</DialogTitle>
+          <DialogDescription>Record a Solana position not returned by wallet sync.</DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="manual-defi-platform">Protocol</Label>
+            <Input id="manual-defi-platform" value={platform} onChange={(event) => setPlatform(event.target.value)} placeholder="e.g. Kamino" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="manual-defi-type">Position Type</Label>
+            <Input id="manual-defi-type" value={type} onChange={(event) => setType(event.target.value)} placeholder="e.g. Lending" />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="manual-defi-value">USD Value</Label>
+            <Input id="manual-defi-value" type="number" min="0" step="0.01" inputMode="decimal" value={value} onChange={(event) => setValue(event.target.value)} placeholder="0.00" />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label htmlFor="manual-defi-token">Asset</Label>
+              <Input id="manual-defi-token" value={tokenSymbol} onChange={(event) => setTokenSymbol(event.target.value)} placeholder="e.g. USDC" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="manual-defi-amount">Amount</Label>
+              <Input id="manual-defi-amount" type="number" min="0" step="any" inputMode="decimal" value={tokenAmount} onChange={(event) => setTokenAmount(event.target.value)} placeholder="Optional" />
+            </div>
+          </div>
+          <Button type="submit" className="w-full">Add Position</Button>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }
 

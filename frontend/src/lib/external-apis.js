@@ -108,7 +108,7 @@ const COINSTATS_CHAIN_MAP = {
 };
 
 export const coinStatsApi = {
-  getWalletBalance: async (address, chain = "solana") => {
+  getWalletPortfolio: async (address, chain = "solana") => {
     if (!address) return [];
 
     try {
@@ -131,13 +131,18 @@ export const coinStatsApi = {
 
       const data = await response.json();
 
-      return Array.isArray(data)
-        ? data
-        : data?.tokens || data?.coins || data?.balances || [];
+      return data;
     } catch (error) {
       console.warn(`CoinStats wallet balance fetch failed for ${address}:`, error);
       return [];
     }
+  },
+
+  getWalletBalance: async (address, chain = "solana") => {
+    const data = await coinStatsApi.getWalletPortfolio(address, chain);
+    return Array.isArray(data)
+      ? data
+      : data?.tokens || data?.coins || data?.balances || [];
   },
 };
 
@@ -327,6 +332,42 @@ function extractDefiTokens(protocol) {
   return Object.values(merged).sort((a, b) => (b.value || 0) - (a.value || 0));
 }
 
+function toUsdValue(value) {
+  if (typeof value === "string") {
+    return Number(value.replace(/[^0-9.-]/g, "")) || 0;
+  }
+
+  if (value && typeof value === "object") {
+    return Number(value.USD ?? value.usd ?? value.Usd ?? 0) || 0;
+  }
+
+  return Number(value) || 0;
+}
+
+function normalizeDefiPosition(protocol, chain, address) {
+  const totalValue = protocol?.totalValue ?? protocol?.total_value ?? protocol?.usd ?? protocol?.value;
+  const typeLabels = Array.isArray(protocol?.investments)
+    ? protocol.investments
+        .map((investment) => investment.type || investment.title || investment.name)
+        .filter(Boolean)
+        .filter((value, index, values) => values.indexOf(value) === index)
+    : [];
+
+  return {
+    platform_id: protocol?.id || protocol?.protocolId || protocol?.protocol_id || protocol?.protocol || protocol?.name || "unknown",
+    platform: protocol?.name || protocol?.protocolName || protocol?.protocol || protocol?.protocolId || "Unknown",
+    label: protocol?.label || "DeFi",
+    type: typeLabels.length > 0 ? typeLabels.join(" / ") : protocol?.type || "DeFi",
+    logo: protocol?.logo || protocol?.icon || "",
+    url: protocol?.url || protocol?.website || "",
+    total_value: toUsdValue(totalValue),
+    total_value_raw: totalValue,
+    tokens: extractDefiTokens(protocol),
+    chain,
+    address,
+  };
+}
+
 export const coinStatsPortfolioApi = {
   getDefiPortfolio: async (portfolioId = "") => {
     if (!portfolioId) {
@@ -351,32 +392,7 @@ export const coinStatsPortfolioApi = {
 
       console.log("RAW CoinStats DeFi Portfolio:", data);
 
-      const positions = (data?.protocols || []).map((p) => {
-        const totalValue = p?.totalValue || {};
-        const usdValue =
-          Number(totalValue.USD ?? totalValue.usd ?? totalValue.Usd ?? 0) || 0;
-
-        const tokens = extractDefiTokens(p);
-
-const typeLabels = Array.isArray(p.investments)
-  ? p.investments
-      .map((inv) => inv.type || inv.title || inv.name)
-      .filter(Boolean)
-      .filter((value, index, arr) => arr.indexOf(value) === index)
-  : [];
-
-return {
-  platform_id: p.id || p.protocolId || p.protocol_id || p.name || "unknown",
-  platform: p.name || p.protocolName || p.protocolId || "Unknown",
-  label: p.label || "DeFi",
-  type: typeLabels.length > 0 ? typeLabels.join(" / ") : p.type || "DeFi",
-  logo: p.logo || p.icon || "",
-  url: p.url || p.website || "",
-  total_value: usdValue,
-  total_value_raw: totalValue,
-  tokens,
-};
-      });
+      const positions = (data?.protocols || []).map((protocol) => normalizeDefiPosition(protocol));
 
       return {
         positions,
@@ -387,6 +403,17 @@ return {
       return { positions: [], totalAssets: {} };
     }
   },
+};
+
+export const getCoinStatsWalletDefiPositions = async (address, chain) => {
+  const data = await coinStatsApi.getWalletPortfolio(address, chain);
+  const protocols = Array.isArray(data)
+    ? []
+    : data?.defiPositions || data?.protocols || data?.defi?.positions || [];
+
+  return Array.isArray(protocols)
+    ? protocols.map((protocol) => normalizeDefiPosition(protocol, chain, address))
+    : [];
 };
 
 // Jupiter Price API
