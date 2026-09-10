@@ -408,11 +408,16 @@ useEffect(() => {
   const refreshAll = async () => {
     setRefreshing(true);
 
-    const newBalances = {};
+    const newBalances = { ...balances };
+    let walletRefreshFailed = false;
 
     for (const w of wallets) {
       try {
 const res = await walletsApi.getBalances(w.id);
+if (res.data?.unavailable) {
+  walletRefreshFailed = true;
+  continue;
+}
 newBalances[w.id] = res.data;
 setCachedWalletBalance(w.id, res.data);
 
@@ -429,6 +434,9 @@ await sleep(2000);
       freshDefiPositions = defiRes.data?.positions || [];
       setDefiPositions(freshDefiPositions);
       saveDefiPositions(freshDefiPositions);
+      if (defiRes.data?.errors?.length) {
+        toast.error("DeFi sync failed: configure a valid CoinStats API key");
+      }
     } catch {
       freshDefiPositions = [];
       setDefiPositions([]);
@@ -472,7 +480,11 @@ if (total > 0) {
 }
 
     setRefreshing(false);
-    toast.success("Refreshed");
+    if (walletRefreshFailed) {
+      toast.warning("Some wallet prices were unavailable; previous balances were kept");
+    } else {
+      toast.success("Refreshed");
+    }
   };
 
   const toggleHideToken = async (symbol) => {

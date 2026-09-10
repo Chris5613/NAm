@@ -123,10 +123,9 @@ export const coinStatsApi = {
 
       if (!response.ok) {
         const text = await response.text().catch(() => "");
-        console.warn(
+        throw new Error(
           `CoinStats ${response.status} for ${address} on ${chain}: ${text.slice(0, 300)}`
         );
-        return [];
       }
 
       const data = await response.json();
@@ -134,7 +133,7 @@ export const coinStatsApi = {
       return data;
     } catch (error) {
       console.warn(`CoinStats wallet balance fetch failed for ${address}:`, error);
-      return [];
+      throw error;
     }
   },
 

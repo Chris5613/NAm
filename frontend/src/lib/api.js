@@ -631,6 +631,10 @@ export const walletsApi = {
         const btcAmount = satoshis / 1e8;
         const btcPrice = await coinGeckoApi.getPrice("bitcoin");
 
+        if (!(btcPrice > 0)) {
+          throw new Error("Bitcoin price is unavailable");
+        }
+
         return toResponse({
           total_usd: btcAmount * btcPrice,
           tokens: [
@@ -680,26 +684,29 @@ export const walletsApi = {
       });
     } catch (error) {
       console.warn(`Balance fetch failed for ${wallet.address}:`, error);
-      return toResponse({ total_usd: 0, tokens: [] });
+      return toResponse({ total_usd: 0, tokens: [], unavailable: true });
     }
   },
 
   getDefiPositions: async () => {
     const wallets = normalizeItems(storage.getWallets());
-    const positions = await Promise.all(
+    const results = await Promise.all(
       wallets
         .filter((wallet) => wallet.address && wallet.chain === "solana")
         .map(async (wallet) => {
           try {
-            return await getCoinStatsWalletDefiPositions(wallet.address, wallet.chain);
+            return { positions: await getCoinStatsWalletDefiPositions(wallet.address, wallet.chain) };
           } catch (error) {
             console.warn(`CoinStats DeFi fetch failed for ${wallet.address}:`, error);
-            return [];
+            return { positions: [], error: error.message || "CoinStats DeFi request failed" };
           }
         })
     );
 
-    return toResponse({ positions: positions.flat() });
+    return toResponse({
+      positions: results.flatMap((result) => result.positions),
+      errors: results.flatMap((result) => result.error ? [result.error] : []),
+    });
   },
 
   getCoinStatsBalance: async (address, chain = "solana") => {
