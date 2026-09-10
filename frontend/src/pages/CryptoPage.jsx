@@ -294,7 +294,7 @@ export default function CryptoPage() {
   const [defiPositions, setDefiPositions] = useState(() => getSavedDefiPositions());
   const [manualDefiPositions, setManualDefiPositions] = useState(() => getSavedManualDefiPositions());
   const [luloProject, setLuloProject] = useState(null);
-  const [defiLoading] = useState(false);
+  const [defiLoading, setDefiLoading] = useState(false);
   const [tokenPrefs, setTokenPrefs] = useState({});
   const [customTokens, setCustomTokens] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -405,6 +405,29 @@ useEffect(() => {
   setBalances(cachedBalances);
 }, [wallets]);
 
+  const refreshDefiPositions = useCallback(async () => {
+    setDefiLoading(true);
+    try {
+      const defiRes = await walletsApi.getDefiPositions();
+      const positions = defiRes.data?.positions || [];
+      setDefiPositions(positions);
+      saveDefiPositions(positions);
+      if (defiRes.data?.errors?.length) {
+        toast.error("Some DeFi sources failed to sync. Check API configuration.");
+      }
+      return positions;
+    } catch {
+      return null;
+    } finally {
+      setDefiLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (loading || !wallets.some((wallet) => wallet.chain === "solana")) return;
+    refreshDefiPositions();
+  }, [loading, wallets, refreshDefiPositions]);
+
   const refreshAll = async () => {
     setRefreshing(true);
 
@@ -427,21 +450,8 @@ await sleep(2000);
       }
     }
 
-    let freshDefiPositions = [];
-
-    try {
-      const defiRes = await walletsApi.getDefiPositions();
-      freshDefiPositions = defiRes.data?.positions || [];
-      setDefiPositions(freshDefiPositions);
-      saveDefiPositions(freshDefiPositions);
-      if (defiRes.data?.errors?.length) {
-        toast.error("Some DeFi sources failed to sync. Check API configuration.");
-      }
-    } catch {
-      freshDefiPositions = [];
-      setDefiPositions([]);
-      saveDefiPositions([]);
-    }
+    const refreshedDefiPositions = await refreshDefiPositions();
+    const freshDefiPositions = refreshedDefiPositions ?? defiPositions;
 
     setBalances(newBalances);
 
@@ -1216,7 +1226,7 @@ useEffect(() => {
             </Card>
           )}
 
-          {(filteredDefi.length > 0 || defiLoading) && (
+          {(filteredDefi.length > 0 || defiLoading || wallets.some((wallet) => wallet.chain === "solana")) && (
             <Card className="border-border/40 bg-card" data-testid="defi-section">
               <CardHeader className="pb-0 pt-4 px-5">
                 <div className="flex items-center justify-between">
@@ -1329,6 +1339,12 @@ useEffect(() => {
                     </div>
                   );
                 })}
+
+                {!defiLoading && filteredDefi.length === 0 && (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+                    No DeFi positions found for your Solana wallets
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
