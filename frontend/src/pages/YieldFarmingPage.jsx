@@ -210,6 +210,85 @@ function saveRollerCoinTracker(value) {
   );
 }
 
+async function fetchLiveTrxPrice() {
+  try {
+    const price =
+      Number(
+        await coinGeckoApi.getPrice(
+          "tron"
+        )
+      ) || 0;
+
+    if (price > 0) {
+      return price;
+    }
+  } catch {
+    // Try the public fallbacks below.
+  }
+
+  try {
+    const response =
+      await fetch(
+        "https://api.coinbase.com/v2/prices/TRX-USD/spot",
+        {
+          credentials:
+            "omit",
+        }
+      );
+
+    if (response.ok) {
+      const data =
+        await response.json();
+
+      const price =
+        Number(
+          data?.data?.amount
+        ) || 0;
+
+      if (price > 0) {
+        return price;
+      }
+    }
+  } catch {
+    // Try Kraken next.
+  }
+
+  try {
+    const response =
+      await fetch(
+        "https://api.kraken.com/0/public/Ticker?pair=TRXUSD",
+        {
+          credentials:
+            "omit",
+        }
+      );
+
+    if (response.ok) {
+      const data =
+        await response.json();
+
+      const ticker =
+        Object.values(
+          data?.result ||
+            {}
+        )[0];
+
+      const price =
+        Number(
+          ticker?.c?.[0]
+        ) || 0;
+
+      if (price > 0) {
+        return price;
+      }
+    }
+  } catch {
+    // Fall through to zero.
+  }
+
+  return 0;
+}
+
 function getRollerCoinTrackerStats(
   tracker
 ) {
@@ -280,24 +359,43 @@ function getRollerCoinTrackerStats(
     }
   );
 
-  const trackedLifetimeTrx =
-    lifetimeTrx;
-
-  const trackedLifetimeUsd =
-    lifetimeUsd;
-
-  const referenceTrxPrice =
-    trackedLifetimeTrx > 0
-      ? trackedLifetimeUsd /
-        trackedLifetimeTrx
-      : 0;
+  const liveTrxPrice =
+    Number(
+      tracker?.lastTrxPrice
+    ) || 0;
 
   lifetimeTrx +=
     ROLLERCOIN_HISTORICAL_TRX;
 
-  lifetimeUsd +=
-    ROLLERCOIN_HISTORICAL_TRX *
-    referenceTrxPrice;
+  if (
+    liveTrxPrice > 0
+  ) {
+    todayUsd =
+      todayTrx *
+      liveTrxPrice;
+
+    monthUsd =
+      monthTrx *
+      liveTrxPrice;
+
+    lifetimeUsd =
+      lifetimeTrx *
+      liveTrxPrice;
+  } else {
+    const trackedLifetimeTrx =
+      lifetimeTrx -
+      ROLLERCOIN_HISTORICAL_TRX;
+
+    const referenceTrxPrice =
+      trackedLifetimeTrx > 0
+        ? lifetimeUsd /
+          trackedLifetimeTrx
+        : 0;
+
+    lifetimeUsd +=
+      ROLLERCOIN_HISTORICAL_TRX *
+      referenceTrxPrice;
+  }
 
   return {
     todayUsd,
@@ -2294,6 +2392,69 @@ export default function YieldFarmingPage() {
 
   useEffect(
     () => {
+      let cancelled =
+        false;
+
+      const refreshPrice =
+        async () => {
+          const price =
+            await fetchLiveTrxPrice();
+
+          if (
+            cancelled ||
+            !(price > 0)
+          ) {
+            return;
+          }
+
+          setRollerCoinTracker(
+            (current) => {
+              const previousPrice =
+                Number(
+                  current?.lastTrxPrice
+                ) || 0;
+
+              if (
+                Math.abs(
+                  previousPrice -
+                    price
+                ) <
+                1e-12
+              ) {
+                return current;
+              }
+
+              return {
+                ...current,
+                lastTrxPrice:
+                  price,
+              };
+            }
+          );
+        };
+
+      refreshPrice();
+
+      const timer =
+        window.setInterval(
+          refreshPrice,
+          300000
+        );
+
+      return () => {
+        cancelled =
+          true;
+
+        window.clearInterval(
+          timer
+        );
+      };
+    },
+    []
+  );
+
+  useEffect(
+    () => {
       saveMonthlySnapshots(
         monthlySnapshots
       );
@@ -2334,9 +2495,7 @@ export default function YieldFarmingPage() {
         try {
           trxPrice =
             Number(
-              await coinGeckoApi.getPrice(
-                "tron"
-              )
+              await fetchLiveTrxPrice()
             ) || 0;
         } catch (
           error
@@ -5196,7 +5355,7 @@ function Metric({
   return (
     <div>
       <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-        <span>
+        <span className="whitespace-nowrap">
           {label}
         </span>
 
