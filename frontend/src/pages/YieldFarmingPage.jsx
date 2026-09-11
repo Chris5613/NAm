@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
 import { projectsApi } from "@/lib/api";
 import { getRatexPtonycSnapshot } from "@/lib/ratexYieldSync";
+import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,40 +17,25 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Archive,
+  CheckCircle2,
+  Lock,
 } from "lucide-react";
 
 const STORAGE_KEY = "networth_yield_positions";
 const LOGO_STORAGE_KEY = "yield_project_logos_v1";
 const MONTHLY_BACKFILL_KEY = "yield_monthly_earnings_backfill_v1";
+const MONTHLY_SNAPSHOT_KEY = "yield_monthly_snapshots_v1";
+const RATEX_HISTORY_KEY = "yield_ratex_position_history_v1";
+const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
+const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
+
 const MONTHLY_TRACKING_START = "2026-09";
+const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
 
-function loadProjectLogos() {
+function readObject(key) {
   try {
-    const raw = remoteStorage.getItem(LOGO_STORAGE_KEY);
-    if (!raw) return {};
-
-    const parsed = JSON.parse(raw);
-
-    return parsed &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed)
-      ? parsed
-      : {};
-  } catch {
-    return {};
-  }
-}
-
-function saveProjectLogos(logos) {
-  remoteStorage.setItem(
-    LOGO_STORAGE_KEY,
-    JSON.stringify(logos)
-  );
-}
-
-function loadMonthlyBackfills() {
-  try {
-    const raw = remoteStorage.getItem(MONTHLY_BACKFILL_KEY);
+    const raw = remoteStorage.getItem(key);
 
     if (!raw) return {};
 
@@ -65,21 +51,284 @@ function loadMonthlyBackfills() {
   }
 }
 
-function saveMonthlyBackfills(value) {
+function saveObject(key, value) {
   remoteStorage.setItem(
-    MONTHLY_BACKFILL_KEY,
+    key,
     JSON.stringify(value)
   );
 }
 
+function loadProjectLogos() {
+  return readObject(LOGO_STORAGE_KEY);
+}
+
+function saveProjectLogos(logos) {
+  saveObject(
+    LOGO_STORAGE_KEY,
+    logos
+  );
+}
+
+function loadMonthlyBackfills() {
+  return readObject(
+    MONTHLY_BACKFILL_KEY
+  );
+}
+
+function saveMonthlyBackfills(value) {
+  saveObject(
+    MONTHLY_BACKFILL_KEY,
+    value
+  );
+}
+
+function loadMonthlySnapshots() {
+  return readObject(
+    MONTHLY_SNAPSHOT_KEY
+  );
+}
+
+function saveMonthlySnapshots(value) {
+  saveObject(
+    MONTHLY_SNAPSHOT_KEY,
+    value
+  );
+}
+
+function loadRatexHistory() {
+  const parsed =
+    readObject(
+      RATEX_HISTORY_KEY
+    );
+
+  return {
+    positions:
+      parsed.positions &&
+      typeof parsed.positions ===
+        "object"
+        ? parsed.positions
+        : {},
+  };
+}
+
+function saveRatexHistory(value) {
+  saveObject(
+    RATEX_HISTORY_KEY,
+    value
+  );
+}
+
+function loadSaladTracker() {
+  const parsed =
+    readObject(
+      SALAD_TRACKER_KEY
+    );
+
+  return {
+    initialized:
+      Boolean(
+        parsed.initialized
+      ),
+    startedMonth:
+      parsed.startedMonth ||
+      null,
+    currentBalance:
+      Number(
+        parsed.currentBalance
+      ) || 0,
+    lifetimeBalance:
+      Number(
+        parsed.lifetimeBalance
+      ) || 0,
+    lastBalance:
+      Number(
+        parsed.lastBalance
+      ) || 0,
+    lastLifetimeBalance:
+      Number(
+        parsed.lastLifetimeBalance
+      ) || 0,
+    lastSyncedAt:
+      parsed.lastSyncedAt ||
+      null,
+    lastWithdrawalAt:
+      parsed.lastWithdrawalAt ||
+      null,
+    withdrawals:
+      Number(
+        parsed.withdrawals
+      ) || 0,
+    monthlyEarnings:
+      parsed.monthlyEarnings &&
+      typeof parsed.monthlyEarnings ===
+        "object"
+        ? parsed.monthlyEarnings
+        : {},
+  };
+}
+
+function saveSaladTracker(value) {
+  saveObject(
+    SALAD_TRACKER_KEY,
+    value
+  );
+}
+
+function loadRollerCoinTracker() {
+  const parsed =
+    readObject(
+      ROLLERCOIN_TRACKER_KEY
+    );
+
+  return {
+    daily:
+      parsed.daily &&
+      typeof parsed.daily ===
+        "object"
+        ? parsed.daily
+        : {},
+    lastSyncedAt:
+      parsed.lastSyncedAt ||
+      null,
+    lastRange:
+      parsed.lastRange &&
+      typeof parsed.lastRange ===
+        "object"
+        ? parsed.lastRange
+        : null,
+    lastTrxPrice:
+      Number(
+        parsed.lastTrxPrice ?? parsed.lastSolPrice
+      ) || 0,
+  };
+}
+
+function saveRollerCoinTracker(value) {
+  saveObject(
+    ROLLERCOIN_TRACKER_KEY,
+    value
+  );
+}
+
+function getRollerCoinTrackerStats(
+  tracker
+) {
+  const rows =
+    Object.entries(
+      tracker?.daily ||
+        {}
+    );
+
+  const todayKey =
+    getTodayKey();
+
+  const currentMonth =
+    getCurrentMonthKey();
+
+  let todayUsd = 0;
+  let todayTrx = 0;
+  let monthUsd = 0;
+  let monthTrx = 0;
+  let lifetimeUsd = 0;
+  let lifetimeTrx = 0;
+
+  rows.forEach(
+    ([
+      date,
+      entry,
+    ]) => {
+      const usd =
+        Number(
+          entry?.usd
+        ) || 0;
+
+      const trx =
+        Number(
+          entry?.trx ?? entry?.sol
+        ) || 0;
+
+      lifetimeUsd +=
+        usd;
+
+      lifetimeTrx +=
+        trx;
+
+      if (
+        String(date).slice(
+          0,
+          7
+        ) ===
+        currentMonth
+      ) {
+        monthUsd +=
+          usd;
+
+        monthTrx +=
+          trx;
+      }
+
+      if (
+        date ===
+        todayKey
+      ) {
+        todayUsd +=
+          usd;
+
+        todayTrx +=
+          trx;
+      }
+    }
+  );
+
+  const trackedLifetimeTrx =
+    lifetimeTrx;
+
+  const trackedLifetimeUsd =
+    lifetimeUsd;
+
+  const referenceTrxPrice =
+    trackedLifetimeTrx > 0
+      ? trackedLifetimeUsd /
+        trackedLifetimeTrx
+      : 0;
+
+  lifetimeTrx +=
+    ROLLERCOIN_HISTORICAL_TRX;
+
+  lifetimeUsd +=
+    ROLLERCOIN_HISTORICAL_TRX *
+    referenceTrxPrice;
+
+  return {
+    todayUsd,
+    todayTrx,
+    monthUsd,
+    monthTrx,
+    lifetimeUsd,
+    lifetimeTrx,
+    lastSyncedAt:
+      tracker?.lastSyncedAt ||
+      null,
+    transactionCount:
+      rows.length,
+  };
+}
+
 function loadPositions() {
   try {
-    const raw = remoteStorage.getItem(STORAGE_KEY);
+    const raw =
+      remoteStorage.getItem(
+        STORAGE_KEY
+      );
+
     if (!raw) return [];
 
-    const parsed = JSON.parse(raw);
+    const parsed =
+      JSON.parse(raw);
 
-    return Array.isArray(parsed)
+    return Array.isArray(
+      parsed
+    )
       ? parsed
       : [];
   } catch {
@@ -90,48 +339,100 @@ function loadPositions() {
 function savePositions(positions) {
   remoteStorage.setItem(
     STORAGE_KEY,
-    JSON.stringify(positions)
+    JSON.stringify(
+      positions
+    )
   );
 }
 
 function formatCurrency(value) {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-  }).format(Number(value) || 0);
+  return new Intl.NumberFormat(
+    "en-US",
+    {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+    }
+  ).format(
+    Number(value) ||
+      0
+  );
 }
 
 function formatPercent(value) {
-  return `${(Number(value) || 0).toFixed(2)}%`;
+  return `${(
+    Number(value) ||
+    0
+  ).toFixed(2)}%`;
 }
 
 function formatSyncTime(value) {
-  if (!value) return "Not synced yet";
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
+  if (!value) {
     return "Not synced yet";
   }
 
-  return date.toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "Not synced yet";
+  }
+
+  return date.toLocaleString(
+    [],
+    {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    }
+  );
 }
 
-function getInitials(value = "") {
-  const parts = String(value)
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean);
+function formatDate(value) {
+  if (!value) return "—";
 
-  if (!parts.length) return "?";
+  const date =
+    new Date(value);
 
-  if (parts.length === 1) {
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return "—";
+  }
+
+  return date.toLocaleDateString(
+    [],
+    {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    }
+  );
+}
+
+function getInitials(
+  value = ""
+) {
+  const parts =
+    String(value)
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+
+  if (!parts.length) {
+    return "?";
+  }
+
+  if (
+    parts.length === 1
+  ) {
     return parts[0]
       .slice(0, 2)
       .toUpperCase();
@@ -143,54 +444,108 @@ function getInitials(value = "") {
 function getMonthKey(value) {
   if (!value) return "";
 
-  const text = String(value);
+  const text =
+    String(value);
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return text.slice(0, 7);
+  if (
+    /^\d{4}-\d{2}-\d{2}$/.test(
+      text
+    )
+  ) {
+    return text.slice(
+      0,
+      7
+    );
   }
 
-  const date = new Date(value);
+  const date =
+    new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
     return "";
   }
 
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-  }).format(date);
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone:
+        "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+    }
+  ).format(date);
 }
 
 function getCurrentMonthKey() {
-  return new Intl.DateTimeFormat("en-CA", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "2-digit",
-  }).format(new Date());
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone:
+        "America/Los_Angeles",
+      year: "numeric",
+      month: "2-digit",
+    }
+  ).format(
+    new Date()
+  );
 }
 
 function getCurrentYear() {
   return Number(
-    new Intl.DateTimeFormat("en-US", {
-      timeZone: "America/Los_Angeles",
+    new Intl.DateTimeFormat(
+      "en-US",
+      {
+        timeZone:
+          "America/Los_Angeles",
+        year: "numeric",
+      }
+    ).format(
+      new Date()
+    )
+  );
+}
+
+function getTodayKey() {
+  return new Intl.DateTimeFormat(
+    "en-CA",
+    {
+      timeZone:
+        "America/Los_Angeles",
       year: "numeric",
-    }).format(new Date())
+      month: "2-digit",
+      day: "2-digit",
+    }
+  ).format(
+    new Date()
   );
 }
 
-function formatMonthLabel(monthKey) {
+function formatMonthLabel(
+  monthKey
+) {
   if (!monthKey) return "";
 
-  const [year, month] = monthKey
-    .split("-")
-    .map(Number);
+  const [
+    year,
+    month,
+  ] =
+    monthKey
+      .split("-")
+      .map(Number);
 
-  return new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    month: "long",
-    year: "numeric",
-  }).format(
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      timeZone:
+        "America/Los_Angeles",
+      month: "long",
+      year: "numeric",
+    }
+  ).format(
     new Date(
       Date.UTC(
         year,
@@ -202,17 +557,27 @@ function formatMonthLabel(monthKey) {
   );
 }
 
-function formatShortMonth(monthKey) {
+function formatShortMonth(
+  monthKey
+) {
   if (!monthKey) return "";
 
-  const [year, month] = monthKey
-    .split("-")
-    .map(Number);
+  const [
+    year,
+    month,
+  ] =
+    monthKey
+      .split("-")
+      .map(Number);
 
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    timeZone: "America/Los_Angeles",
-  }).format(
+  return new Intl.DateTimeFormat(
+    "en-US",
+    {
+      month: "short",
+      timeZone:
+        "America/Los_Angeles",
+    }
+  ).format(
     new Date(
       Date.UTC(
         year,
@@ -224,7 +589,9 @@ function formatShortMonth(monthKey) {
   );
 }
 
-function getMonthStart(date = new Date()) {
+function getMonthStart(
+  date = new Date()
+) {
   return new Date(
     date.getFullYear(),
     date.getMonth(),
@@ -232,8 +599,12 @@ function getMonthStart(date = new Date()) {
   );
 }
 
-function getElapsedMonthDays(project, now = new Date()) {
-  const monthStart = getMonthStart(now);
+function getElapsedMonthDays(
+  project,
+  now = new Date()
+) {
+  const monthStart =
+    getMonthStart(now);
 
   const possibleStart =
     project?.start_date ||
@@ -242,17 +613,26 @@ function getElapsedMonthDays(project, now = new Date()) {
     project?.createdAt ||
     null;
 
-  let earningStart = monthStart;
+  let earningStart =
+    monthStart;
 
   if (possibleStart) {
-    const parsed = new Date(possibleStart);
+    const parsed =
+      new Date(
+        possibleStart
+      );
 
     if (
-      !Number.isNaN(parsed.getTime()) &&
-      parsed > monthStart &&
-      parsed < now
+      !Number.isNaN(
+        parsed.getTime()
+      ) &&
+      parsed >
+        monthStart &&
+      parsed <
+        now
     ) {
-      earningStart = parsed;
+      earningStart =
+        parsed;
     }
   }
 
@@ -262,7 +642,8 @@ function getElapsedMonthDays(project, now = new Date()) {
 
   return Math.max(
     0,
-    elapsedMs / 86400000
+    elapsedMs /
+      86400000
   );
 }
 
@@ -271,39 +652,59 @@ function getTrackedLuloMonthEarnings(
   monthKey
 ) {
   const transactions =
-    Array.isArray(project?.transactions)
+    Array.isArray(
+      project?.transactions
+    )
       ? project.transactions
       : [];
 
   return transactions
-    .filter((transaction) => {
-      if (
-        transaction?.source !==
-        "lulo_yield"
-      ) {
-        return false;
-      }
+    .filter(
+      (
+        transaction
+      ) => {
+        if (
+          transaction?.source !==
+          "lulo_yield"
+        ) {
+          return false;
+        }
 
-      const amount =
-        Number(transaction?.amount) || 0;
+        const amount =
+          Number(
+            transaction?.amount
+          ) || 0;
 
-      if (amount <= 0) {
-        return false;
-      }
+        if (
+          amount <= 0
+        ) {
+          return false;
+        }
 
-      const transactionMonth =
-        getMonthKey(
-          transaction.source_date ||
-            transaction.date ||
-            transaction.created_at
+        const transactionMonth =
+          getMonthKey(
+            transaction.source_date ||
+              transaction.date ||
+              transaction.created_at
+          );
+
+        return (
+          transactionMonth ===
+          monthKey
         );
-
-      return transactionMonth === monthKey;
-    })
+      }
+    )
     .reduce(
-      (total, transaction) =>
+      (
+        total,
+        transaction
+      ) =>
         total +
-        (Number(transaction.amount) || 0),
+        (
+          Number(
+            transaction.amount
+          ) || 0
+        ),
       0
     );
 }
@@ -338,11 +739,239 @@ function estimateLuloMonthToDate(
   return (
     balance *
     (apy / 100) *
-    (elapsedDays / 365)
+    (
+      elapsedDays /
+      365
+    )
   );
 }
 
-function createLuloProjectCard(project) {
+function isRollerCoinProject(
+  project
+) {
+  if (!project) {
+    return false;
+  }
+
+  if (
+    String(
+      project.name ||
+        ""
+    )
+      .trim()
+      .toLowerCase() ===
+    "rollercoin"
+  ) {
+    return true;
+  }
+
+  return (
+    Array.isArray(
+      project.transactions
+    ) &&
+    project.transactions.some(
+      (
+        transaction
+      ) =>
+        transaction?.source ===
+        "rollercoin"
+    )
+  );
+}
+
+function getRollerCoinTransactions(
+  projects
+) {
+  return (
+    projects ||
+    []
+  ).flatMap(
+    (project) => {
+      if (
+        !isRollerCoinProject(
+          project
+        )
+      ) {
+        return [];
+      }
+
+      return (
+        Array.isArray(
+          project.transactions
+        )
+          ? project.transactions
+          : []
+      ).filter(
+        (
+          transaction
+        ) => {
+          if (
+            transaction?.source !==
+            "rollercoin"
+          ) {
+            return false;
+          }
+
+          const type =
+            String(
+              transaction?.type ||
+                ""
+            ).toLowerCase();
+
+          const trxDelta =
+            Number(
+              transaction?.source_trx_delta
+            ) || 0;
+
+          const amount =
+            Number(
+              transaction?.amount
+            ) || 0;
+
+          return (
+            (
+              !type ||
+              type ===
+                "earning" ||
+              type ===
+                "earned"
+            ) &&
+            trxDelta >
+              0 &&
+            amount >
+              0
+          );
+        }
+      );
+    }
+  );
+}
+
+function getRollerCoinStats(
+  projects
+) {
+  const transactions =
+    getRollerCoinTransactions(
+      projects
+    );
+
+  const todayKey =
+    getTodayKey();
+
+  const currentMonth =
+    getCurrentMonthKey();
+
+  let todayUsd = 0;
+  let todayTrx = 0;
+  let monthUsd = 0;
+  let monthTrx = 0;
+  let lifetimeUsd = 0;
+  let lifetimeTrx = 0;
+  let lastSyncedAt =
+    null;
+
+  transactions.forEach(
+    (
+      transaction
+    ) => {
+      const amount =
+        Number(
+          transaction.amount
+        ) || 0;
+
+      const trx =
+        Number(
+          transaction.source_trx_delta
+        ) || 0;
+
+      const dateValue =
+        transaction.source_date ||
+        transaction.date ||
+        transaction.created_at ||
+        "";
+
+      const dateKey =
+        String(
+          dateValue
+        ).slice(
+          0,
+          10
+        );
+
+      const monthKey =
+        getMonthKey(
+          dateValue
+        );
+
+      lifetimeUsd +=
+        amount;
+
+      lifetimeTrx +=
+        trx;
+
+      if (
+        monthKey ===
+        currentMonth
+      ) {
+        monthUsd +=
+          amount;
+
+        monthTrx +=
+          trx;
+      }
+
+      if (
+        dateKey ===
+        todayKey
+      ) {
+        todayUsd +=
+          amount;
+
+        todayTrx +=
+          trx;
+      }
+
+      const syncValue =
+        transaction.sync_to ||
+        transaction.updated_at ||
+        transaction.created_at ||
+        transaction.date ||
+        null;
+
+      if (
+        syncValue &&
+        (
+          !lastSyncedAt ||
+          new Date(
+            syncValue
+          ).getTime() >
+            new Date(
+              lastSyncedAt
+            ).getTime()
+        )
+      ) {
+        lastSyncedAt =
+          syncValue;
+      }
+    }
+  );
+
+  return {
+    todayUsd,
+    todayTrx,
+    monthUsd,
+    monthTrx,
+    lifetimeUsd,
+    lifetimeTrx,
+    lastSyncedAt,
+    transactionCount:
+      transactions.length,
+  };
+}
+
+function createLuloProjectCard(
+  project
+) {
   const assets = [];
 
   const totalBalance =
@@ -365,25 +994,33 @@ function createLuloProjectCard(project) {
       project.lulo_usds_balance_usd
     ) || 0;
 
-  const derivedUsdsBalance = Math.max(
-    0,
-    totalBalance -
-      usdcBalance -
-      protectedBalance
-  );
+  const derivedUsdsBalance =
+    Math.max(
+      0,
+      totalBalance -
+        usdcBalance -
+        protectedBalance
+    );
 
   const usdsBalance =
-    savedUsdsBalance > 0
+    savedUsdsBalance >
+    0
       ? savedUsdsBalance
       : derivedUsdsBalance;
 
-  if (usdsBalance > 0) {
+  if (
+    usdsBalance >
+    0
+  ) {
     assets.push({
       id: `lulo-usds-${project.id}`,
       asset: "USDS",
-      strategy: "Lending",
-      balance: usdsBalance,
-      quantity: usdsBalance,
+      strategy:
+        "Lending",
+      balance:
+        usdsBalance,
+      quantity:
+        usdsBalance,
       price: 1,
       apy:
         Number(
@@ -393,65 +1030,88 @@ function createLuloProjectCard(project) {
           project.lulo_weighted_apy
         ) ||
         0,
-      sourceLabel: "Lulo",
+      sourceLabel:
+        "Lulo",
     });
   }
 
-  if (usdcBalance > 0) {
+  if (
+    usdcBalance >
+    0
+  ) {
     assets.push({
       id: `lulo-usdc-${project.id}`,
       asset: "USDC",
-      strategy: "Lending",
-      balance: usdcBalance,
-      quantity: usdcBalance,
+      strategy:
+        "Lending",
+      balance:
+        usdcBalance,
+      quantity:
+        usdcBalance,
       price: 1,
       apy:
         Number(
           project.lulo_regular_apy
         ) || 0,
-      sourceLabel: "Lulo",
+      sourceLabel:
+        "Lulo",
     });
   }
 
-  if (protectedBalance > 0) {
+  if (
+    protectedBalance >
+    0
+  ) {
     assets.push({
       id: `lulo-protected-${project.id}`,
-      asset: "Protected",
-      strategy: "Protected Lending",
-      balance: protectedBalance,
-      quantity: protectedBalance,
+      asset:
+        "Protected",
+      strategy:
+        "Protected Lending",
+      balance:
+        protectedBalance,
+      quantity:
+        protectedBalance,
       price: 1,
       apy:
         Number(
           project.lulo_protected_apy
         ) || 0,
-      sourceLabel: "Lulo",
+      sourceLabel:
+        "Lulo",
     });
   }
 
   if (
     !assets.length &&
-    totalBalance > 0
+    totalBalance >
+      0
   ) {
     assets.push({
       id: `lulo-total-${project.id}`,
-      asset: "Stablecoins",
-      strategy: "Lending",
-      balance: totalBalance,
+      asset:
+        "Stablecoins",
+      strategy:
+        "Lending",
+      balance:
+        totalBalance,
       quantity: null,
       price: null,
       apy:
         Number(
           project.lulo_weighted_apy
         ) || 0,
-      sourceLabel: "Lulo",
+      sourceLabel:
+        "Lulo",
     });
   }
 
   return {
     id: `lulo-project-${project.id}`,
-    platform: "Lulo",
-    autoSynced: true,
+    platform:
+      "Lulo",
+    autoSynced:
+      true,
     totalBalance,
     weightedApy:
       Number(
@@ -461,7 +1121,9 @@ function createLuloProjectCard(project) {
       Number(
         project.lulo_lifetime_interest_usd
       ) ||
-      Number(project.earned) ||
+      Number(
+        project.earned
+      ) ||
       0,
     lastSyncedAt:
       project.lulo_last_synced_at ||
@@ -470,18 +1132,72 @@ function createLuloProjectCard(project) {
   };
 }
 
-function createRatexProjectCard(snapshot) {
+function getRatexPositionKey(
+  snapshot
+) {
+  const mint =
+    String(
+      snapshot?.mint ||
+        "ratex"
+    );
+
+  const maturity =
+    String(
+      snapshot?.maturity ||
+        "unknown"
+    );
+
+  return `${mint}::${maturity}`;
+}
+
+function isRatexMatured(
+  value
+) {
+  if (!value) {
+    return false;
+  }
+
+  const maturity =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      maturity.getTime()
+    )
+  ) {
+    return false;
+  }
+
+  return (
+    new Date().getTime() >=
+    maturity.getTime()
+  );
+}
+
+function createRatexProjectCard(
+  snapshot
+) {
   if (
     !snapshot ||
-    !(Number(snapshot.quantity) > 0)
+    !(
+      Number(
+        snapshot.quantity
+      ) > 0
+    ) ||
+    isRatexMatured(
+      snapshot.maturity
+    )
   ) {
     return null;
   }
 
   const maturityDate =
-    new Date(snapshot.maturity);
+    new Date(
+      snapshot.maturity
+    );
 
-  const now = new Date();
+  const now =
+    new Date();
 
   const daysRemaining =
     Number.isNaN(
@@ -500,10 +1216,16 @@ function createRatexProjectCard(snapshot) {
         );
 
   const asset = {
-    id: "ratex-ptonyc-2609",
-    asset: "PTONyc",
-    allocationSymbol: "ONyc",
-    strategy: "Fixed Yield",
+    id:
+      getRatexPositionKey(
+        snapshot
+      ),
+    asset:
+      "PTONyc",
+    allocationSymbol:
+      "ONyc",
+    strategy:
+      "Fixed Yield",
     balance:
       Number(
         snapshot.currentValueUsd
@@ -535,13 +1257,18 @@ function createRatexProjectCard(snapshot) {
         snapshot.remainingYieldUsd
       ) || 0,
     daysRemaining,
-    sourceLabel: "RateX",
+    sourceLabel:
+      "RateX",
   };
 
   return {
-    id: "ratex-project-ptonyc-2609",
-    platform: "RateX",
-    autoSynced: true,
+    id: `ratex-project-${getRatexPositionKey(
+      snapshot
+    )}`,
+    platform:
+      "RateX",
+    autoSynced:
+      true,
     totalBalance:
       asset.balance,
     weightedApy:
@@ -553,12 +1280,17 @@ function createRatexProjectCard(snapshot) {
     lastSyncedAt:
       snapshot.syncedAt ||
       null,
-    assets: [asset],
+    assets: [
+      asset,
+    ],
   };
 }
 
-function groupManualPositions(positions) {
-  const grouped = new Map();
+function groupManualPositions(
+  positions
+) {
+  const grouped =
+    new Map();
 
   positions.forEach(
     (position) => {
@@ -572,103 +1304,375 @@ function groupManualPositions(positions) {
       const key =
         platform.toLowerCase();
 
-      if (!grouped.has(key)) {
-        grouped.set(key, {
-          id: `manual-project-${key}`,
-          platform,
-          autoSynced: false,
-          lastSyncedAt: null,
-          assets: [],
-        });
+      if (
+        !grouped.has(
+          key
+        )
+      ) {
+        grouped.set(
+          key,
+          {
+            id: `manual-project-${key}`,
+            platform,
+            autoSynced:
+              false,
+            lastSyncedAt:
+              null,
+            assets: [],
+          }
+        );
       }
 
-      grouped.get(key).assets.push({
-        id: position.id,
-        manualId:
-          position.id,
-        asset:
-          position.asset ||
-          "Position",
-        strategy:
-          position.strategy ||
-          "Yield",
-        balance:
-          Number(
-            position.balance
-          ) || 0,
-        quantity: null,
-        price: null,
-        apy:
-          Number(
-            position.apy
-          ) || 0,
-        earned:
-          Number(
-            position.earned
-          ) || 0,
-        startDate:
-          position.startDate ||
-          "",
-        sourceLabel:
-          platform,
-      });
+      grouped
+        .get(key)
+        .assets.push({
+          id:
+            position.id,
+          manualId:
+            position.id,
+          asset:
+            position.asset ||
+            "Position",
+          strategy:
+            position.strategy ||
+            "Yield",
+          balance:
+            Number(
+              position.balance
+            ) || 0,
+          quantity:
+            null,
+          price:
+            null,
+          apy:
+            Number(
+              position.apy
+            ) || 0,
+          earned:
+            Number(
+              position.earned
+            ) || 0,
+          startDate:
+            position.startDate ||
+            "",
+          sourceLabel:
+            platform,
+        });
     }
   );
 
   return Array.from(
     grouped.values()
-  ).map((project) => {
-    const totalBalance =
-      project.assets.reduce(
-        (sum, asset) =>
-          sum +
-          (Number(
-            asset.balance
-          ) || 0),
-        0
-      );
-
-    const earned =
-      project.assets.reduce(
-        (sum, asset) =>
-          sum +
-          (Number(
-            asset.earned
-          ) || 0),
-        0
-      );
-
-    const weightedApy =
-      totalBalance > 0
-        ? project.assets.reduce(
-            (sum, asset) =>
-              sum +
-              (Number(
+  ).map(
+    (project) => {
+      const totalBalance =
+        project.assets.reduce(
+          (
+            sum,
+            asset
+          ) =>
+            sum +
+            (
+              Number(
                 asset.balance
-              ) || 0) *
-                (Number(
-                  asset.apy
-                ) || 0),
-            0
-          ) /
-          totalBalance
-        : 0;
+              ) || 0
+            ),
+          0
+        );
 
-    return {
-      ...project,
-      totalBalance,
-      weightedApy,
-      earned,
-    };
-  });
+      const earned =
+        project.assets.reduce(
+          (
+            sum,
+            asset
+          ) =>
+            sum +
+            (
+              Number(
+                asset.earned
+              ) || 0
+            ),
+          0
+        );
+
+      const weightedApy =
+        totalBalance >
+        0
+          ? project.assets.reduce(
+              (
+                sum,
+                asset
+              ) =>
+                sum +
+                (
+                  Number(
+                    asset.balance
+                  ) || 0
+                ) *
+                  (
+                    Number(
+                      asset.apy
+                    ) || 0
+                  ),
+              0
+            ) /
+            totalBalance
+          : 0;
+
+      return {
+        ...project,
+        totalBalance,
+        weightedApy,
+        earned,
+      };
+    }
+  );
 }
 
-function buildMonthlyEarnings(
-  luloProjects,
-  ratexSnapshot,
-  monthlyBackfills
+function updateRatexHistoryFromSnapshot(
+  current,
+  snapshot
 ) {
-  const monthMap = new Map();
+  if (
+    !snapshot ||
+    !snapshot.mint ||
+    !snapshot.maturity
+  ) {
+    return current;
+  }
+
+  const next = {
+    positions: {
+      ...(
+        current?.positions ||
+        {}
+      ),
+    },
+  };
+
+  const key =
+    getRatexPositionKey(
+      snapshot
+    );
+
+  const now =
+    new Date();
+
+  const nowIso =
+    now.toISOString();
+
+  const monthKey =
+    getCurrentMonthKey();
+
+  const quantity =
+    Number(
+      snapshot.quantity
+    ) || 0;
+
+  const earnedUsd =
+    Number(
+      snapshot.earnedUsd
+    ) || 0;
+
+  const existing =
+    next.positions[
+      key
+    ];
+
+  if (
+    quantity > 0
+  ) {
+    const previous =
+      existing || {
+        key,
+        platform:
+          "RateX",
+        asset:
+          "PTONyc",
+        mint:
+          snapshot.mint,
+        maturity:
+          snapshot.maturity,
+        openedAt:
+          nowIso,
+        status:
+          "active",
+        monthlyBaselines:
+          {},
+        monthlyEarnings:
+          {},
+        lastMonthKey:
+          null,
+        lastEarnedUsd:
+          0,
+      };
+
+    const baselines = {
+      ...(
+        previous.monthlyBaselines ||
+        {}
+      ),
+    };
+
+    const monthlyEarnings = {
+      ...(
+        previous.monthlyEarnings ||
+        {}
+      ),
+    };
+
+    if (
+      baselines[
+        monthKey
+      ] ===
+      undefined
+    ) {
+      if (
+        previous.lastMonthKey &&
+        previous.lastMonthKey !==
+          monthKey
+      ) {
+        baselines[
+          monthKey
+        ] =
+          Number(
+            previous.lastEarnedUsd
+          ) || 0;
+      } else {
+        baselines[
+          monthKey
+        ] =
+          0;
+      }
+    }
+
+    const baseline =
+      Number(
+        baselines[
+          monthKey
+        ]
+      ) || 0;
+
+    monthlyEarnings[
+      monthKey
+    ] =
+      Number(
+        Math.max(
+          0,
+          earnedUsd -
+            baseline
+        ).toFixed(6)
+      );
+
+    const matured =
+      isRatexMatured(
+        snapshot.maturity
+      );
+
+    next.positions[
+      key
+    ] = {
+      ...previous,
+      key,
+      platform:
+        "RateX",
+      asset:
+        "PTONyc",
+      mint:
+        snapshot.mint,
+      maturity:
+        snapshot.maturity,
+      status:
+        matured
+          ? "matured"
+          : "active",
+      completedAt:
+        matured
+          ? (
+              previous.completedAt ||
+              nowIso
+            )
+          : null,
+      fixedApy:
+        Number(
+          snapshot.fixedApy
+        ) || 0,
+      costBasisUsd:
+        Number(
+          snapshot.costBasisUsd
+        ) ||
+        Number(
+          previous.costBasisUsd
+        ) ||
+        0,
+      quantity,
+      finalQuantity:
+        quantity,
+      lastValueUsd:
+        Number(
+          snapshot.currentValueUsd
+        ) || 0,
+      maturityValueUsd:
+        Number(
+          snapshot.maturityValueUsd
+        ) || 0,
+      lastEarnedUsd:
+        earnedUsd,
+      projectedProfitUsd:
+        Number(
+          snapshot.projectedProfitUsd
+        ) || 0,
+      monthlyBaselines:
+        baselines,
+      monthlyEarnings,
+      lastMonthKey:
+        monthKey,
+      lastSyncedAt:
+        snapshot.syncedAt ||
+        nowIso,
+    };
+
+    return next;
+  }
+
+  if (
+    existing &&
+    existing.status ===
+      "active"
+  ) {
+    const matured =
+      isRatexMatured(
+        existing.maturity
+      );
+
+    next.positions[
+      key
+    ] = {
+      ...existing,
+      status:
+        matured
+          ? "matured"
+          : "closed",
+      completedAt:
+        nowIso,
+      lastSyncedAt:
+        snapshot.syncedAt ||
+        nowIso,
+    };
+  }
+
+  return next;
+}
+
+function buildProjectIncome(
+  luloProjects,
+  ratexHistory,
+  saladTracker,
+  monthlyBackfills,
+  rollerCoinTracker
+) {
+  const monthMap =
+    new Map();
 
   function addEarning(
     monthKey,
@@ -676,28 +1680,42 @@ function buildMonthlyEarnings(
     amount
   ) {
     const numericAmount =
-      Number(amount) || 0;
+      Number(amount) ||
+      0;
 
     if (
       !monthKey ||
-      monthKey < MONTHLY_TRACKING_START ||
-      numericAmount <= 0
+      monthKey <
+        MONTHLY_TRACKING_START ||
+      numericAmount <=
+        0
     ) {
       return;
     }
 
-    if (!monthMap.has(monthKey)) {
-      monthMap.set(monthKey, {
+    if (
+      !monthMap.has(
+        monthKey
+      )
+    ) {
+      monthMap.set(
         monthKey,
-        total: 0,
-        platforms: new Map(),
-      });
+        {
+          monthKey,
+          total: 0,
+          platforms:
+            new Map(),
+        }
+      );
     }
 
     const month =
-      monthMap.get(monthKey);
+      monthMap.get(
+        monthKey
+      );
 
-    month.total += numericAmount;
+    month.total +=
+      numericAmount;
 
     month.platforms.set(
       platform,
@@ -710,7 +1728,10 @@ function buildMonthlyEarnings(
     );
   }
 
-  (luloProjects || []).forEach(
+  (
+    luloProjects ||
+    []
+  ).forEach(
     (project) => {
       const transactions =
         Array.isArray(
@@ -720,7 +1741,9 @@ function buildMonthlyEarnings(
           : [];
 
       transactions.forEach(
-        (transaction) => {
+        (
+          transaction
+        ) => {
           if (
             transaction?.source !==
             "lulo_yield"
@@ -733,7 +1756,9 @@ function buildMonthlyEarnings(
               transaction?.amount
             ) || 0;
 
-          if (amount <= 0) {
+          if (
+            amount <= 0
+          ) {
             return;
           }
 
@@ -754,7 +1779,9 @@ function buildMonthlyEarnings(
 
       const projectBackfills =
         monthlyBackfills?.[
-          String(project.id)
+          String(
+            project.id
+          )
         ] || {};
 
       Object.entries(
@@ -774,52 +1801,297 @@ function buildMonthlyEarnings(
     }
   );
 
-  const ratexEarned =
-    Number(
-      ratexSnapshot?.earnedUsd
-    ) || 0;
+  Object.values(
+    ratexHistory?.positions ||
+      {}
+  ).forEach(
+    (position) => {
+      Object.entries(
+        position.monthlyEarnings ||
+          {}
+      ).forEach(
+        ([
+          monthKey,
+          amount,
+        ]) => {
+          addEarning(
+            monthKey,
+            "RateX",
+            amount
+          );
+        }
+      );
+    }
+  );
 
-  if (ratexEarned > 0) {
-    addEarning(
-      getCurrentMonthKey(),
-      "RateX",
-      ratexEarned
-    );
-  }
+  Object.entries(
+    saladTracker?.monthlyEarnings ||
+      {}
+  ).forEach(
+    ([
+      monthKey,
+      amount,
+    ]) => {
+      addEarning(
+        monthKey,
+        "Salad",
+        amount
+      );
+    }
+  );
+
+  Object.entries(
+    rollerCoinTracker?.daily ||
+      {}
+  ).forEach(
+    ([
+      date,
+      entry,
+    ]) => {
+      addEarning(
+        getMonthKey(
+          date
+        ),
+        "RollerCoin",
+        Number(
+          entry?.usd
+        ) || 0
+      );
+    }
+  );
 
   return Array.from(
     monthMap.values()
   )
-    .map((month) => ({
-      monthKey:
-        month.monthKey,
-      total:
-        month.total,
-      platforms:
-        Array.from(
-          month.platforms.entries()
-        )
-          .map(
-            ([
-              platform,
-              amount,
-            ]) => ({
-              platform,
-              amount,
-            })
-          )
-          .sort(
-            (a, b) =>
-              b.amount -
-              a.amount
+    .map(
+      (month) => ({
+        monthKey:
+          month.monthKey,
+        total:
+          Number(
+            month.total.toFixed(
+              6
+            )
           ),
-    }))
+        platforms:
+          Array.from(
+            month.platforms.entries()
+          )
+            .map(
+              ([
+                platform,
+                amount,
+              ]) => ({
+                platform,
+                amount:
+                  Number(
+                    amount.toFixed(
+                      6
+                    )
+                  ),
+              })
+            )
+            .sort(
+              (
+                a,
+                b
+              ) =>
+                b.amount -
+                a.amount
+            ),
+      })
+    )
     .sort(
-      (a, b) =>
+      (
+        a,
+        b
+      ) =>
         a.monthKey.localeCompare(
           b.monthKey
         )
     );
+}
+
+function reconcileMonthlySnapshots(
+  currentSnapshots,
+  liveMonths
+) {
+  const currentMonthKey =
+    getCurrentMonthKey();
+
+  const next = {
+    ...(
+      currentSnapshots ||
+      {}
+    ),
+  };
+
+  Object.keys(
+    next
+  ).forEach(
+    (monthKey) => {
+      if (
+        monthKey <
+          currentMonthKey &&
+        !next[
+          monthKey
+        ]?.locked
+      ) {
+        next[
+          monthKey
+        ] = {
+          ...next[
+            monthKey
+          ],
+          locked:
+            true,
+          lockedAt:
+            new Date().toISOString(),
+        };
+      }
+    }
+  );
+
+  (
+    liveMonths ||
+    []
+  ).forEach(
+    (month) => {
+      if (
+        month.monthKey <
+        currentMonthKey
+      ) {
+        if (
+          !next[
+            month.monthKey
+          ]
+        ) {
+          next[
+            month.monthKey
+          ] = {
+            ...month,
+            locked:
+              true,
+            lockedAt:
+              new Date().toISOString(),
+            updatedAt:
+              new Date().toISOString(),
+          };
+        }
+
+        return;
+      }
+
+      if (
+        month.monthKey ===
+        currentMonthKey
+      ) {
+        next[
+          month.monthKey
+        ] = {
+          ...month,
+          locked:
+            false,
+          lockedAt:
+            null,
+          updatedAt:
+            new Date().toISOString(),
+        };
+      }
+    }
+  );
+
+  if (
+    !next[
+      currentMonthKey
+    ]
+  ) {
+    next[
+      currentMonthKey
+    ] = {
+      monthKey:
+        currentMonthKey,
+      total: 0,
+      platforms: [],
+      locked:
+        false,
+      lockedAt:
+        null,
+      updatedAt:
+        new Date().toISOString(),
+    };
+  }
+
+  return next;
+}
+
+function getEffectiveProjectIncome(
+  liveMonths,
+  snapshots
+) {
+  const currentMonthKey =
+    getCurrentMonthKey();
+
+  const result =
+    new Map();
+
+  Object.values(
+    snapshots ||
+      {}
+  ).forEach(
+    (snapshot) => {
+      if (
+        !snapshot?.monthKey
+      ) {
+        return;
+      }
+
+      result.set(
+        snapshot.monthKey,
+        snapshot
+      );
+    }
+  );
+
+  (
+    liveMonths ||
+    []
+  ).forEach(
+    (month) => {
+      const saved =
+        result.get(
+          month.monthKey
+        );
+
+      if (
+        month.monthKey ===
+          currentMonthKey ||
+        !saved ||
+        !saved.locked
+      ) {
+        result.set(
+          month.monthKey,
+          {
+            ...month,
+            locked:
+              false,
+          }
+        );
+      }
+    }
+  );
+
+  return Array.from(
+    result.values()
+  ).sort(
+    (
+      a,
+      b
+    ) =>
+      a.monthKey.localeCompare(
+        b.monthKey
+      )
+  );
 }
 
 export default function YieldFarmingPage() {
@@ -829,6 +2101,11 @@ export default function YieldFarmingPage() {
   ] = useState(
     loadPositions
   );
+
+  const [
+    allProjects,
+    setAllProjects,
+  ] = useState([]);
 
   const [
     luloProjects,
@@ -841,6 +2118,74 @@ export default function YieldFarmingPage() {
   ] = useState(null);
 
   const [
+    ratexHistory,
+    setRatexHistory,
+  ] = useState(
+    loadRatexHistory
+  );
+
+  const [
+    saladTracker,
+    setSaladTracker,
+  ] = useState(
+    loadSaladTracker
+  );
+
+  const [
+    rollerCoinTracker,
+    setRollerCoinTracker,
+  ] = useState(
+    loadRollerCoinTracker
+  );
+
+  const [
+    rollerCoinConnected,
+    setRollerCoinConnected,
+  ] = useState(false);
+
+  const [
+    rollerCoinAuthenticated,
+    setRollerCoinAuthenticated,
+  ] = useState(false);
+
+  const [
+    rollerCoinOpen,
+    setRollerCoinOpen,
+  ] = useState(false);
+
+  const [
+    rollerCoinSyncing,
+    setRollerCoinSyncing,
+  ] = useState(false);
+
+  const [
+    rollerCoinMessage,
+    setRollerCoinMessage,
+  ] = useState("");
+
+  const [
+    rollerCoinFrom,
+    setRollerCoinFrom,
+  ] = useState(
+    () =>
+      `${getCurrentMonthKey()}-01`
+  );
+
+  const [
+    rollerCoinTo,
+    setRollerCoinTo,
+  ] = useState(
+    getTodayKey
+  );
+
+  const [
+    monthlySnapshots,
+    setMonthlySnapshots,
+  ] = useState(
+    loadMonthlySnapshots
+  );
+
+  const [
     syncError,
     setSyncError,
   ] = useState("");
@@ -849,13 +2194,16 @@ export default function YieldFarmingPage() {
     expandedProjects,
     setExpandedProjects,
   ] = useState(
-    () => new Set()
+    () =>
+      new Set()
   );
 
   const [
     selectedMonthKey,
     setSelectedMonthKey,
-  ] = useState(null);
+  ] = useState(
+    null
+  );
 
   const [
     selectedYear,
@@ -878,169 +2226,840 @@ export default function YieldFarmingPage() {
     loadMonthlyBackfills
   );
 
-  useEffect(() => {
-    savePositions(
-      manualPositions
-    );
-  }, [manualPositions]);
+  useEffect(
+    () => {
+      savePositions(
+        manualPositions
+      );
+    },
+    [
+      manualPositions,
+    ]
+  );
 
-  useEffect(() => {
-    saveProjectLogos(
-      projectLogos
-    );
-  }, [projectLogos]);
+  useEffect(
+    () => {
+      saveProjectLogos(
+        projectLogos
+      );
+    },
+    [
+      projectLogos,
+    ]
+  );
 
-  useEffect(() => {
-    saveMonthlyBackfills(
-      monthlyBackfills
-    );
-  }, [monthlyBackfills]);
+  useEffect(
+    () => {
+      saveMonthlyBackfills(
+        monthlyBackfills
+      );
+    },
+    [
+      monthlyBackfills,
+    ]
+  );
 
-  useEffect(() => {
-    if (
-      !luloProjects.length
-    ) {
-      return;
-    }
+  useEffect(
+    () => {
+      saveRatexHistory(
+        ratexHistory
+      );
+    },
+    [
+      ratexHistory,
+    ]
+  );
 
-    const now = new Date();
-    const monthKey =
-      getCurrentMonthKey();
+  useEffect(
+    () => {
+      saveSaladTracker(
+        saladTracker
+      );
+    },
+    [
+      saladTracker,
+    ]
+  );
 
-    if (
-      monthKey <
-      MONTHLY_TRACKING_START
-    ) {
-      return;
-    }
+  useEffect(
+    () => {
+      saveRollerCoinTracker(
+        rollerCoinTracker
+      );
+    },
+    [
+      rollerCoinTracker,
+    ]
+  );
 
-    setMonthlyBackfills(
-      (current) => {
-        let changed = false;
+  useEffect(
+    () => {
+      saveMonthlySnapshots(
+        monthlySnapshots
+      );
+    },
+    [
+      monthlySnapshots,
+    ]
+  );
 
-        const next = {
-          ...current,
-        };
+  const importRollerCoinPayload =
+    useCallback(
+      async (
+        payload
+      ) => {
+        const rows =
+          Array.isArray(
+            payload?.rows
+          )
+            ? payload.rows
+            : [];
 
-        luloProjects.forEach(
-          (project) => {
-            if (!project?.id) {
-              return;
-            }
+        if (
+          !rows.length
+        ) {
+          setRollerCoinSyncing(
+            false
+          );
 
-            const projectKey =
-              String(project.id);
+          setRollerCoinMessage(
+            "RollerCoin returned no earnings for that date range."
+          );
 
-            const existing =
-              next[projectKey] ||
-              {};
+          return;
+        }
 
-            if (
-              Object.prototype.hasOwnProperty.call(
-                existing,
-                monthKey
+        let trxPrice = 0;
+
+        try {
+          trxPrice =
+            Number(
+              await coinGeckoApi.getPrice(
+                "tron"
               )
-            ) {
-              return;
-            }
+            ) || 0;
+        } catch (
+          error
+        ) {
+          console.error(
+            "Could not load TRX price for RollerCoin:",
+            error
+          );
+        }
 
-            const tracked =
-              getTrackedLuloMonthEarnings(
-                project,
-                monthKey
-              );
+        const affectedMonths =
+          new Set();
 
-            const estimate =
-              estimateLuloMonthToDate(
-                project,
-                now
-              );
-
-            const lifetimeInterest =
-              Number(
-                project.lulo_lifetime_interest_usd
-              ) || 0;
-
-            let targetMonthEarned =
-              estimate;
-
-            if (
-              lifetimeInterest > 0
-            ) {
-              targetMonthEarned =
-                Math.min(
-                  estimate,
-                  lifetimeInterest
-                );
-            }
-
-            targetMonthEarned =
-              Math.max(
-                tracked,
-                targetMonthEarned
-              );
-
-            const backfill =
-              Math.max(
-                0,
-                targetMonthEarned -
-                  tracked
-              );
-
-            next[projectKey] = {
-              ...existing,
-              [monthKey]:
-                Number(
-                  backfill.toFixed(
-                    6
-                  )
-                ),
+        setRollerCoinTracker(
+          (current) => {
+            const nextDaily = {
+              ...(
+                current?.daily ||
+                {}
+              ),
             };
 
-            changed = true;
+            const priceToUse =
+              trxPrice >
+              0
+                ? trxPrice
+                : (
+                    Number(
+                      current?.lastTrxPrice
+                    ) || 0
+                  );
+
+            rows.forEach(
+              (
+                row
+              ) => {
+                const date =
+                  String(
+                    row?.date ||
+                      ""
+                  ).slice(
+                    0,
+                    10
+                  );
+
+                const trx =
+                  Number(
+                    row?.trx ??
+                      row?.sol ??
+                      0
+                  ) || 0;
+
+                if (
+                  !/^\d{4}-\d{2}-\d{2}$/.test(
+                    date
+                  )
+                ) {
+                  return;
+                }
+
+                affectedMonths.add(
+                  date.slice(
+                    0,
+                    7
+                  )
+                );
+
+                const previous =
+                  nextDaily[
+                    date
+                  ];
+
+                const sameTrx =
+                  previous &&
+                  Math.abs(
+                    (
+                      Number(
+                        previous.trx ?? previous.sol
+                      ) || 0
+                    ) -
+                      trx
+                  ) <
+                    1e-12;
+
+                const rowPrice =
+                  sameTrx
+                    ? (
+                        Number(
+                          previous.trxPrice ?? previous.solPrice
+                        ) ||
+                        priceToUse
+                      )
+                    : priceToUse;
+
+                nextDaily[
+                  date
+                ] = {
+                  trx,
+                  usd:
+                    Number(
+                      (
+                        trx *
+                        rowPrice
+                      ).toFixed(
+                        8
+                      )
+                    ),
+                  trxPrice:
+                    rowPrice,
+                  syncedAt:
+                    payload?.synced_at ||
+                    payload?.syncedAt ||
+                    new Date().toISOString(),
+                };
+              }
+            );
+
+            return {
+              ...current,
+              daily:
+                nextDaily,
+              lastSyncedAt:
+                payload?.synced_at ||
+                payload?.syncedAt ||
+                new Date().toISOString(),
+              lastRange: {
+                from:
+                  payload?.from ||
+                  null,
+                to:
+                  payload?.to ||
+                  null,
+              },
+              lastTrxPrice:
+                priceToUse,
+            };
           }
         );
 
-        return changed
-          ? next
-          : current;
-      }
+        if (
+          affectedMonths.size
+        ) {
+          setMonthlySnapshots(
+            (current) => {
+              const next = {
+                ...current,
+              };
+
+              const currentMonth =
+                getCurrentMonthKey();
+
+              affectedMonths.forEach(
+                (
+                  monthKey
+                ) => {
+                  if (
+                    monthKey <
+                    currentMonth
+                  ) {
+                    delete next[
+                      monthKey
+                    ];
+                  }
+                }
+              );
+
+              return next;
+            }
+          );
+        }
+
+        setRollerCoinSyncing(
+          false
+        );
+
+        setRollerCoinMessage(
+          trxPrice >
+            0
+            ? `Imported ${rows.length} RollerCoin day${rows.length === 1 ? "" : "s"} into Project Income.`
+            : `Imported ${rows.length} RollerCoin day${rows.length === 1 ? "" : "s"}, but TRX price could not be loaded.`
+        );
+      },
+      []
     );
-  }, [luloProjects]);
+
+  const requestRollerCoinLatest =
+    useCallback(
+      () => {
+        window.postMessage(
+          {
+            source:
+              "rollercoin-app",
+            type:
+              "REQUEST_LATEST",
+          },
+          window.location.origin
+        );
+
+        window.postMessage(
+          {
+            source:
+              "rollercoin-app",
+            type:
+              "REQUEST_STATUS",
+          },
+          window.location.origin
+        );
+      },
+      []
+    );
+
+  const syncRollerCoinRange =
+    useCallback(
+      () => {
+        if (
+          !rollerCoinFrom ||
+          !rollerCoinTo
+        ) {
+          setRollerCoinMessage(
+            "Choose both dates first."
+          );
+
+          return;
+        }
+
+        if (
+          rollerCoinFrom >
+          rollerCoinTo
+        ) {
+          setRollerCoinMessage(
+            "From date must be before To date."
+          );
+
+          return;
+        }
+
+        if (
+          !rollerCoinConnected
+        ) {
+          setRollerCoinMessage(
+            "RollerCoin extension is not connected to this page."
+          );
+
+          requestRollerCoinLatest();
+
+          return;
+        }
+
+        setRollerCoinSyncing(
+          true
+        );
+
+        setRollerCoinMessage(
+          "Syncing RollerCoin earnings…"
+        );
+
+        window.postMessage(
+          {
+            source:
+              "rollercoin-app",
+            type:
+              "SYNC_RANGE",
+            from:
+              rollerCoinFrom,
+            to:
+              rollerCoinTo,
+          },
+          window.location.origin
+        );
+      },
+      [
+        rollerCoinConnected,
+        rollerCoinFrom,
+        rollerCoinTo,
+        requestRollerCoinLatest,
+      ]
+    );
+
+  useEffect(
+    () => {
+      const handleMessage =
+        (
+          event
+        ) => {
+          if (
+            event.origin !==
+              window.location.origin ||
+            event.source !==
+              window
+          ) {
+            return;
+          }
+
+          const data =
+            event.data;
+
+          if (
+            data?.source !==
+            "rollercoin-ext"
+          ) {
+            return;
+          }
+
+          if (
+            data.type ===
+            "READY"
+          ) {
+            setRollerCoinConnected(
+              true
+            );
+
+            requestRollerCoinLatest();
+
+            return;
+          }
+
+          if (
+            data.type ===
+            "ROLLERCOIN_STATUS"
+          ) {
+            setRollerCoinConnected(
+              true
+            );
+
+            setRollerCoinAuthenticated(
+              Boolean(
+                data.payload?.authenticated
+              )
+            );
+
+            setRollerCoinOpen(
+              Boolean(
+                data.payload?.rollercoinOpen
+              )
+            );
+
+            if (
+              data.payload?.lastPayload
+            ) {
+              importRollerCoinPayload(
+                data.payload.lastPayload
+              );
+            }
+
+            return;
+          }
+
+          if (
+            data.type ===
+              "ROLLERCOIN_PUSH" ||
+            data.type ===
+              "ROLLERCOIN_SYNC_RESULT"
+          ) {
+            setRollerCoinConnected(
+              true
+            );
+
+            if (
+              data.payload
+            ) {
+              importRollerCoinPayload(
+                data.payload
+              );
+            } else {
+              setRollerCoinSyncing(
+                false
+              );
+            }
+
+            return;
+          }
+
+          if (
+            data.type ===
+            "ROLLERCOIN_SYNC_ERROR" ||
+            data.type ===
+            "ROLLERCOIN_ERROR"
+          ) {
+            setRollerCoinConnected(
+              true
+            );
+
+            setRollerCoinSyncing(
+              false
+            );
+
+            setRollerCoinMessage(
+              data.error ||
+                "RollerCoin sync failed."
+            );
+          }
+        };
+
+      window.addEventListener(
+        "message",
+        handleMessage
+      );
+
+      const firstRequest =
+        window.setTimeout(
+          requestRollerCoinLatest,
+          400
+        );
+
+      const secondRequest =
+        window.setTimeout(
+          requestRollerCoinLatest,
+          1400
+        );
+
+      const handleFocus =
+        () =>
+          requestRollerCoinLatest();
+
+      window.addEventListener(
+        "focus",
+        handleFocus
+      );
+
+      return () => {
+        window.removeEventListener(
+          "message",
+          handleMessage
+        );
+
+        window.removeEventListener(
+          "focus",
+          handleFocus
+        );
+
+        window.clearTimeout(
+          firstRequest
+        );
+
+        window.clearTimeout(
+          secondRequest
+        );
+      };
+    },
+    [
+      importRollerCoinPayload,
+      requestRollerCoinLatest,
+    ]
+  );
+
+  const applyProjectData =
+    useCallback(
+      (projects) => {
+        const normalized =
+          Array.isArray(
+            projects
+          )
+            ? projects
+            : [];
+
+        setAllProjects(
+          normalized
+        );
+
+        setLuloProjects(
+          normalized.filter(
+            (project) =>
+              project?.yield_tracking ===
+              "lulo_lending"
+          )
+        );
+      },
+      []
+    );
+
+  const refreshProjectsOnly =
+    useCallback(
+      async () => {
+        try {
+          const response =
+            await projectsApi.getAll();
+
+          applyProjectData(
+            response?.data
+          );
+        } catch (
+          error
+        ) {
+          console.error(
+            "Project refresh failed:",
+            error
+          );
+        }
+      },
+      [
+        applyProjectData,
+      ]
+    );
+
+  useEffect(
+    () => {
+      const handleRollerCoinSync =
+        () => {
+          window.setTimeout(
+            refreshProjectsOnly,
+            150
+          );
+        };
+
+      window.addEventListener(
+        "rollercoin-sync-complete",
+        handleRollerCoinSync
+      );
+
+      window.addEventListener(
+        "focus",
+        handleRollerCoinSync
+      );
+
+      return () => {
+        window.removeEventListener(
+          "rollercoin-sync-complete",
+          handleRollerCoinSync
+        );
+
+        window.removeEventListener(
+          "focus",
+          handleRollerCoinSync
+        );
+      };
+    },
+    [
+      refreshProjectsOnly,
+    ]
+  );
+
+  useEffect(
+    () => {
+      if (
+        !luloProjects.length
+      ) {
+        return;
+      }
+
+      const now =
+        new Date();
+
+      const monthKey =
+        getCurrentMonthKey();
+
+      if (
+        monthKey <
+        MONTHLY_TRACKING_START
+      ) {
+        return;
+      }
+
+      setMonthlyBackfills(
+        (current) => {
+          let changed =
+            false;
+
+          const next = {
+            ...current,
+          };
+
+          luloProjects.forEach(
+            (project) => {
+              if (
+                !project?.id
+              ) {
+                return;
+              }
+
+              const projectKey =
+                String(
+                  project.id
+                );
+
+              const existing =
+                next[
+                  projectKey
+                ] || {};
+
+              if (
+                Object.prototype.hasOwnProperty.call(
+                  existing,
+                  monthKey
+                )
+              ) {
+                return;
+              }
+
+              const tracked =
+                getTrackedLuloMonthEarnings(
+                  project,
+                  monthKey
+                );
+
+              const estimate =
+                estimateLuloMonthToDate(
+                  project,
+                  now
+                );
+
+              const lifetimeInterest =
+                Number(
+                  project.lulo_lifetime_interest_usd
+                ) || 0;
+
+              let targetMonthEarned =
+                estimate;
+
+              if (
+                lifetimeInterest >
+                0
+              ) {
+                targetMonthEarned =
+                  Math.min(
+                    estimate,
+                    lifetimeInterest
+                  );
+              }
+
+              targetMonthEarned =
+                Math.max(
+                  tracked,
+                  targetMonthEarned
+                );
+
+              const backfill =
+                Math.max(
+                  0,
+                  targetMonthEarned -
+                    tracked
+                );
+
+              next[
+                projectKey
+              ] = {
+                ...existing,
+                [monthKey]:
+                  Number(
+                    backfill.toFixed(
+                      6
+                    )
+                  ),
+              };
+
+              changed =
+                true;
+            }
+          );
+
+          return changed
+            ? next
+            : current;
+        }
+      );
+    },
+    [
+      luloProjects,
+    ]
+  );
+
+  useEffect(
+    () => {
+      if (
+        !ratexSnapshot
+      ) {
+        return;
+      }
+
+      setRatexHistory(
+        (current) => {
+          const next =
+            updateRatexHistoryFromSnapshot(
+              current,
+              ratexSnapshot
+            );
+
+          if (
+            JSON.stringify(
+              next
+            ) ===
+            JSON.stringify(
+              current
+            )
+          ) {
+            return current;
+          }
+
+          return next;
+        }
+      );
+    },
+    [
+      ratexSnapshot,
+    ]
+  );
 
   const syncLivePositions =
     useCallback(
       async () => {
-        setSyncError("");
+        setSyncError(
+          ""
+        );
 
-        const errors = [];
+        const errors =
+          [];
 
         try {
           const response =
             await projectsApi.accrueApyTransactions();
 
-          const projects =
-            Array.isArray(
-              response?.data
-            )
-              ? response.data
-              : [];
-
-          setLuloProjects(
-            projects.filter(
-              (project) =>
-                project?.yield_tracking ===
-                "lulo_lending"
-            )
+          applyProjectData(
+            response?.data
           );
-        } catch (error) {
+        } catch (
+          error
+        ) {
           console.error(
-            "Yield page Lulo sync failed:",
+            "Yield page project sync failed:",
             error
           );
 
           errors.push(
-            `Lulo: ${
+            `Projects: ${
               error?.message ||
               "sync failed"
             }`
@@ -1050,22 +3069,13 @@ export default function YieldFarmingPage() {
             const response =
               await projectsApi.getAll();
 
-            const projects =
-              Array.isArray(
-                response?.data
-              )
-                ? response.data
-                : [];
-
-            setLuloProjects(
-              projects.filter(
-                (project) =>
-                  project?.yield_tracking ===
-                  "lulo_lending"
-              )
+            applyProjectData(
+              response?.data
             );
           } catch {
-            setLuloProjects([]);
+            setLuloProjects(
+              []
+            );
           }
         }
 
@@ -1076,7 +3086,9 @@ export default function YieldFarmingPage() {
           setRatexSnapshot(
             snapshot
           );
-        } catch (error) {
+        } catch (
+          error
+        ) {
           console.error(
             "Yield page RateX sync failed:",
             error
@@ -1088,65 +3100,126 @@ export default function YieldFarmingPage() {
               "sync failed"
             }`
           );
-
-          setRatexSnapshot(
-            null
-          );
         }
 
-        if (errors.length) {
+        if (
+          errors.length
+        ) {
           setSyncError(
-            errors.join(" · ")
+            errors.join(
+              " · "
+            )
           );
         }
       },
-      []
+      [
+        applyProjectData,
+      ]
     );
 
-  useEffect(() => {
-    syncLivePositions();
+  useEffect(
+    () => {
+      syncLivePositions();
 
-    const timer =
-      window.setInterval(
-        syncLivePositions,
-        60_000
-      );
+      const timer =
+        window.setInterval(
+          syncLivePositions,
+          60_000
+        );
 
-    return () =>
-      window.clearInterval(
-        timer
-      );
-  }, [syncLivePositions]);
+      return () =>
+        window.clearInterval(
+          timer
+        );
+    },
+    [
+      syncLivePositions,
+    ]
+  );
+
+  const rollerCoinStats =
+    useMemo(
+      () =>
+        getRollerCoinTrackerStats(
+          rollerCoinTracker
+        ),
+      [
+        rollerCoinTracker,
+      ]
+    );
 
   const projectCards =
-    useMemo(() => {
-      const autoProjects =
-        luloProjects.map(
-          createLuloProjectCard
-        );
+    useMemo(
+      () => {
+        const autoProjects =
+          luloProjects.map(
+            createLuloProjectCard
+          );
 
-      const ratexProject =
-        createRatexProjectCard(
-          ratexSnapshot
-        );
+        const ratexProject =
+          createRatexProjectCard(
+            ratexSnapshot
+          );
 
-      const manualProjects =
-        groupManualPositions(
-          manualPositions
-        );
+        const manualProjects =
+          groupManualPositions(
+            manualPositions
+          );
 
-      return [
-        ...autoProjects,
-        ...(ratexProject
-          ? [ratexProject]
-          : []),
-        ...manualProjects,
-      ];
-    }, [
-      luloProjects,
-      ratexSnapshot,
-      manualPositions,
-    ]);
+        return [
+          ...autoProjects,
+          ...(
+            ratexProject
+              ? [
+                  ratexProject,
+                ]
+              : []
+          ),
+          ...manualProjects,
+        ];
+      },
+      [
+        luloProjects,
+        ratexSnapshot,
+        manualPositions,
+      ]
+    );
+
+  const completedRatexPositions =
+    useMemo(
+      () =>
+        Object.values(
+          ratexHistory.positions ||
+            {}
+        )
+          .filter(
+            (position) =>
+              position.status ===
+                "matured" ||
+              position.status ===
+                "closed"
+          )
+          .sort(
+            (
+              a,
+              b
+            ) =>
+              String(
+                b.completedAt ||
+                  b.maturity ||
+                  ""
+              ).localeCompare(
+                String(
+                  a.completedAt ||
+                    a.maturity ||
+                    ""
+                )
+              )
+          ),
+      [
+        ratexHistory,
+      ]
+    );
 
   const allAssets =
     useMemo(
@@ -1156,92 +3229,178 @@ export default function YieldFarmingPage() {
             project.assets ||
             []
         ),
-      [projectCards]
+      [
+        projectCards,
+      ]
     );
 
-  const monthlyEarnings =
+  const liveProjectIncome =
     useMemo(
       () =>
-        buildMonthlyEarnings(
+        buildProjectIncome(
           luloProjects,
-          ratexSnapshot,
-          monthlyBackfills
+          ratexHistory,
+          saladTracker,
+          monthlyBackfills,
+          rollerCoinTracker
         ),
       [
         luloProjects,
-        ratexSnapshot,
+        ratexHistory,
+        saladTracker,
         monthlyBackfills,
+        rollerCoinTracker,
+      ]
+    );
+
+  useEffect(
+    () => {
+      setMonthlySnapshots(
+        (current) => {
+          const next =
+            reconcileMonthlySnapshots(
+              current,
+              liveProjectIncome
+            );
+
+          if (
+            JSON.stringify(
+              next
+            ) ===
+            JSON.stringify(
+              current
+            )
+          ) {
+            return current;
+          }
+
+          return next;
+        }
+      );
+    },
+    [
+      liveProjectIncome,
+    ]
+  );
+
+  const projectIncome =
+    useMemo(
+      () =>
+        getEffectiveProjectIncome(
+          liveProjectIncome,
+          monthlySnapshots
+        ),
+      [
+        liveProjectIncome,
+        monthlySnapshots,
       ]
     );
 
   const summary =
-    useMemo(() => {
-      const portfolioBalance =
-        allAssets.reduce(
-          (sum, asset) =>
-            sum +
-            (Number(
-              asset.balance
-            ) || 0),
-          0
-        );
-
-      const annualYield =
-        allAssets.reduce(
-          (sum, asset) =>
-            sum +
-            (Number(
-              asset.balance
-            ) || 0) *
+    useMemo(
+      () => {
+        const portfolioBalance =
+          allAssets.reduce(
+            (
+              sum,
+              asset
+            ) =>
+              sum +
               (
-                (Number(
-                  asset.apy
-                ) || 0) /
-                100
-              ),
-          0
-        );
-
-      const weightedApy =
-        portfolioBalance > 0
-          ? allAssets.reduce(
-              (sum, asset) =>
-                sum +
-                (Number(
+                Number(
                   asset.balance
-                ) || 0) *
-                  (Number(
-                    asset.apy
-                  ) || 0),
-              0
-            ) /
-            portfolioBalance
-          : 0;
+                ) || 0
+              ),
+            0
+          );
 
-      const totalEarned =
-        projectCards.reduce(
-          (sum, project) =>
-            sum +
-            (Number(
-              project.earned
-            ) || 0),
+        const annualYield =
+          allAssets.reduce(
+            (
+              sum,
+              asset
+            ) =>
+              sum +
+              (
+                Number(
+                  asset.balance
+                ) || 0
+              ) *
+                (
+                  (
+                    Number(
+                      asset.apy
+                    ) || 0
+                  ) /
+                  100
+                ),
+            0
+          ) +
+          365;
+
+        const weightedApy =
+          portfolioBalance >
           0
-        );
+            ? allAssets.reduce(
+                (
+                  sum,
+                  asset
+                ) =>
+                  sum +
+                  (
+                    Number(
+                      asset.balance
+                    ) || 0
+                  ) *
+                    (
+                      Number(
+                        asset.apy
+                      ) || 0
+                    ),
+                0
+              ) /
+              portfolioBalance
+            : 0;
 
-      return {
-        portfolioBalance,
-        weightedApy,
-        annualYield,
-        activePositions:
-          projectCards.length,
-        totalEarned,
-      };
-    }, [
-      allAssets,
-      projectCards,
-    ]);
+        const totalEarned =
+          projectCards.reduce(
+            (
+              sum,
+              project
+            ) =>
+              sum +
+              (
+                Number(
+                  project.earned
+                ) || 0
+              ),
+            0
+          ) +
+          (
+            Number(
+              rollerCoinStats?.lifetimeUsd
+            ) || 0
+          );
 
-  function deletePosition(id) {
+        return {
+          portfolioBalance,
+          weightedApy,
+          annualYield,
+          activePositions:
+            projectCards.length + 1,
+          totalEarned,
+        };
+      },
+      [
+        allAssets,
+        projectCards,
+        rollerCoinStats,
+      ]
+    );
+
+  function deletePosition(
+    id
+  ) {
     if (
       !window.confirm(
         "Delete this yield position?"
@@ -1260,14 +3419,20 @@ export default function YieldFarmingPage() {
     );
   }
 
-  function toggleProject(projectId) {
+  function toggleProject(
+    projectId
+  ) {
     setExpandedProjects(
       (current) => {
         const next =
-          new Set(current);
+          new Set(
+            current
+          );
 
         if (
-          next.has(projectId)
+          next.has(
+            projectId
+          )
         ) {
           next.delete(
             projectId
@@ -1302,7 +3467,7 @@ export default function YieldFarmingPage() {
       data-testid="yield-farming-page"
     >
       <section className="border-b border-border/50 pb-8">
-        <div className="grid gap-x-12 gap-y-8 md:grid-cols-2 xl:grid-cols-5">
+        <div className="grid gap-x-12 gap-y-8 md:grid-cols-2 xl:grid-cols-6">
           <Metric
             label="Portfolio Balance"
             value={formatCurrency(
@@ -1334,12 +3499,22 @@ export default function YieldFarmingPage() {
           />
 
           <Metric
-            label="Estimated Annual Yield"
+            label="Estimated Yearly Income"
             value={formatCurrency(
               summary.annualYield
             )}
             icon={
               TrendingUp
+            }
+          />
+
+          <Metric
+            label="Estimated Monthly Income"
+            value={formatCurrency(
+              summary.annualYield / 12
+            )}
+            icon={
+              CalendarDays
             }
           />
 
@@ -1366,7 +3541,7 @@ export default function YieldFarmingPage() {
 
       {syncError && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
-          One or more live positions could not refresh.
+          One or more live sources could not refresh.
           {syncError
             ? ` ${syncError}`
             : ""}
@@ -1381,7 +3556,7 @@ export default function YieldFarmingPage() {
               <CircleDollarSign className="mb-3 h-10 w-10 text-muted-foreground" />
 
               <p className="font-medium">
-                No yield projects yet
+                No active yield projects
               </p>
 
               <p className="mt-1 max-w-md text-sm text-muted-foreground">
@@ -1429,13 +3604,77 @@ export default function YieldFarmingPage() {
                 />
               )
             )}
+
+            <RollerCoinProjectCard
+              tracker={
+                rollerCoinTracker
+              }
+              stats={
+                rollerCoinStats
+              }
+              connected={
+                rollerCoinConnected
+              }
+              authenticated={
+                rollerCoinAuthenticated
+              }
+              rollerCoinOpen={
+                rollerCoinOpen
+              }
+              syncing={
+                rollerCoinSyncing
+              }
+              message={
+                rollerCoinMessage
+              }
+              from={
+                rollerCoinFrom
+              }
+              to={
+                rollerCoinTo
+              }
+              onFromChange={
+                setRollerCoinFrom
+              }
+              onToChange={
+                setRollerCoinTo
+              }
+              onSync={
+                syncRollerCoinRange
+              }
+              onRefresh={
+                requestRollerCoinLatest
+              }
+              logo={
+                projectLogos[
+                  "rollercoin-project"
+                ] || ""
+              }
+              onLogoChange={(
+                dataUrl
+              ) =>
+                setProjectLogo(
+                  "rollercoin-project",
+                  dataUrl
+                )
+              }
+            />
           </div>
         )}
       </section>
 
-      <MonthlyEarningsSection
+      {completedRatexPositions.length >
+        0 && (
+        <CompletedPositionsSection
+          positions={
+            completedRatexPositions
+          }
+        />
+      )}
+
+      <ProjectIncomeSection
         months={
-          monthlyEarnings
+          projectIncome
         }
         selectedMonthKey={
           selectedMonthKey
@@ -1448,6 +3687,9 @@ export default function YieldFarmingPage() {
         }
         onSelectYear={
           setSelectedYear
+        }
+        saladTracker={
+          saladTracker
         }
       />
     </div>
@@ -1513,17 +3755,10 @@ function ProjectCard({
         </div>
 
         <div className="text-right">
-          <div className="text-xl font-semibold tabular-nums">
+          <div className="text-2xl font-semibold tabular-nums">
             {formatCurrency(
               project.totalBalance
             )}
-          </div>
-
-          <div className="mt-0.5 text-xs text-emerald-400">
-            {formatPercent(
-              project.weightedApy
-            )}{" "}
-            weighted APY
           </div>
         </div>
       </button>
@@ -1537,6 +3772,189 @@ function ProjectCard({
             onDeletePosition
           }
         />
+      )}
+    </div>
+  );
+}
+
+function RollerCoinProjectCard({
+  tracker,
+  stats,
+  connected,
+  authenticated,
+  rollerCoinOpen,
+  syncing,
+  message,
+  from,
+  to,
+  onFromChange,
+  onToChange,
+  onSync,
+  onRefresh,
+  logo,
+  onLogoChange,
+}) {
+  const [
+    expanded,
+    setExpanded,
+  ] = useState(false);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
+      <button
+        type="button"
+        onClick={() =>
+          setExpanded(
+            (current) =>
+              !current
+          )
+        }
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <ProjectLogoButton
+            platform="RollerCoin"
+            logo={
+              logo
+            }
+            onLogoChange={
+              onLogoChange
+            }
+          />
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-lg font-semibold">
+                RollerCoin
+              </h3>
+
+              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                <Wifi className="h-3 w-3" />
+                LIVE
+              </span>
+            </div>
+
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              1 position
+              {tracker?.lastSyncedAt
+                ? ` · synced ${formatSyncTime(
+                    tracker.lastSyncedAt
+                  )}`
+                : ""}
+            </div>
+          </div>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <div className="text-2xl font-semibold tabular-nums">
+            {formatCurrency(
+              stats?.lifetimeUsd
+            )}
+          </div>
+
+          <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+            {(Number(
+              stats?.lifetimeTrx
+            ) || 0).toFixed(6)} TRX
+          </div>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border/40 px-5 pb-5 pt-4">
+          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
+            <label className="space-y-1.5">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                From
+              </span>
+
+              <input
+                type="date"
+                value={
+                  from
+                }
+                onChange={(event) =>
+                  onFromChange(
+                    event.target.value
+                  )
+                }
+                className="h-10 w-full rounded-lg border border-border/60 bg-background/50 px-3 text-sm outline-none transition focus:border-orange-400/60"
+              />
+            </label>
+
+            <label className="space-y-1.5">
+              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                To
+              </span>
+
+              <input
+                type="date"
+                value={
+                  to
+                }
+                max={
+                  getTodayKey()
+                }
+                onChange={(event) =>
+                  onToChange(
+                    event.target.value
+                  )
+                }
+                className="h-10 w-full rounded-lg border border-border/60 bg-background/50 px-3 text-sm outline-none transition focus:border-orange-400/60"
+              />
+            </label>
+
+            <div className="flex items-end">
+              <Button
+                type="button"
+                onClick={
+                  onSync
+                }
+                disabled={
+                  syncing
+                }
+                className="h-10 min-w-32"
+              >
+                {syncing
+                  ? "Syncing…"
+                  : "Sync earnings"}
+              </Button>
+            </div>
+
+            <div className="flex items-end">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={
+                  onRefresh
+                }
+                className="h-10"
+              >
+                Refresh
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span>
+              {message ||
+                (connected
+                  ? authenticated
+                    ? rollerCoinOpen
+                      ? "Ready to sync. Re-syncing the same dates replaces those dates instead of double-counting."
+                      : "Auth is saved. Open RollerCoin in a tab before starting a new date-range sync."
+                    : "Open RollerCoin once so the extension can capture your auth token."
+                  : "Reload the updated extension, then refresh this page.")}
+            </span>
+
+            {tracker?.lastRange?.from &&
+              tracker?.lastRange?.to && (
+                <span className="tabular-nums">
+                  Last range {tracker.lastRange.from} → {tracker.lastRange.to}
+                </span>
+              )}
+          </div>
+        </div>
       )}
     </div>
   );
@@ -1558,11 +3976,15 @@ function ProjectLogoButton({
         "-"
       )}`;
 
-  function handleFile(event) {
+  function handleFile(
+    event
+  ) {
     const file =
-      event.target.files?.[0];
+      event.target
+        .files?.[0];
 
-    event.target.value = "";
+    event.target.value =
+      "";
 
     if (!file) return;
 
@@ -1574,32 +3996,37 @@ function ProjectLogoButton({
       window.alert(
         "Please choose an image file."
       );
+
       return;
     }
 
     if (
       file.size >
-      1.5 * 1024 * 1024
+      1.5 *
+        1024 *
+        1024
     ) {
       window.alert(
         "Logo must be smaller than 1.5 MB."
       );
+
       return;
     }
 
     const reader =
       new FileReader();
 
-    reader.onload = () => {
-      if (
-        typeof reader.result ===
-        "string"
-      ) {
-        onLogoChange(
-          reader.result
-        );
-      }
-    };
+    reader.onload =
+      () => {
+        if (
+          typeof reader.result ===
+          "string"
+        ) {
+          onLogoChange(
+            reader.result
+          );
+        }
+      };
 
     reader.readAsDataURL(
       file
@@ -1609,15 +4036,21 @@ function ProjectLogoButton({
   return (
     <div
       className="shrink-0"
-      onClick={(event) =>
+      onClick={(
+        event
+      ) =>
         event.stopPropagation()
       }
-      onKeyDown={(event) =>
+      onKeyDown={(
+        event
+      ) =>
         event.stopPropagation()
       }
     >
       <input
-        id={inputId}
+        id={
+          inputId
+        }
         type="file"
         accept="image/*"
         className="sr-only"
@@ -1627,14 +4060,18 @@ function ProjectLogoButton({
       />
 
       <label
-        htmlFor={inputId}
+        htmlFor={
+          inputId
+        }
         title={`Change ${platform} logo`}
         aria-label={`Change ${platform} logo`}
         className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-white/[0.04] text-xs font-bold tracking-tight transition hover:border-border hover:bg-white/[0.08]"
       >
         {logo ? (
           <img
-            src={logo}
+            src={
+              logo
+            }
             alt={`${platform} logo`}
             className="h-full w-full object-cover"
           />
@@ -1684,21 +4121,27 @@ function PositionRow({
   onDeletePosition,
 }) {
   const yearly =
-    (Number(
-      asset.balance
-    ) || 0) *
     (
-      (Number(
-        asset.apy
-      ) || 0) /
+      Number(
+        asset.balance
+      ) || 0
+    ) *
+    (
+      (
+        Number(
+          asset.apy
+        ) || 0
+      ) /
       100
     );
 
   const monthly =
-    yearly / 12;
+    yearly /
+    12;
 
   const daily =
-    yearly / 365;
+    yearly /
+    365;
 
   return (
     <div className="grid grid-cols-[1.2fr_1.35fr_0.9fr] items-center gap-3 px-3 py-4 md:grid-cols-[1.2fr_1.25fr_1fr_1fr]">
@@ -1747,9 +4190,9 @@ function PositionRow({
 
       <div className="hidden md:block">
         {asset.price !==
-        null &&
+          null &&
         asset.price !==
-        undefined ? (
+          undefined ? (
           <div className="font-medium tabular-nums">
             {formatCurrency(
               asset.price
@@ -1774,15 +4217,8 @@ function PositionRow({
           {asset.maturity ? (
             <>
               matures{" "}
-              {new Date(
+              {formatDate(
                 asset.maturity
-              ).toLocaleDateString(
-                [],
-                {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                }
               )}
 
               {asset.daysRemaining !==
@@ -1819,15 +4255,184 @@ function PositionRow({
   );
 }
 
-function MonthlyEarningsSection({
+function CompletedPositionsSection({
+  positions,
+}) {
+  return (
+    <section className="space-y-4 border-t border-border/50 pt-8">
+      <div className="flex items-center gap-2">
+        <Archive className="h-4 w-4 text-muted-foreground" />
+
+        <div>
+          <h2 className="text-lg font-semibold">
+            Completed Positions
+          </h2>
+
+          <p className="mt-1 text-xs text-muted-foreground">
+            Matured and closed positions stay here for your records.
+          </p>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {positions.map(
+          (position) => {
+            const matured =
+              position.status ===
+              "matured";
+
+            const finalValue =
+              matured
+                ? (
+                    Number(
+                      position.maturityValueUsd
+                    ) ||
+                    Number(
+                      position.lastValueUsd
+                    ) ||
+                    0
+                  )
+                : (
+                    Number(
+                      position.lastValueUsd
+                    ) ||
+                    0
+                  );
+
+            const earned =
+              matured
+                ? (
+                    Number(
+                      position.projectedProfitUsd
+                    ) ||
+                    Number(
+                      position.lastEarnedUsd
+                    ) ||
+                    0
+                  )
+                : (
+                    Number(
+                      position.lastEarnedUsd
+                    ) ||
+                    0
+                  );
+
+            return (
+              <div
+                key={
+                  position.key
+                }
+                className="rounded-2xl border border-border/50 bg-card/30 px-5 py-4"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-white/[0.04] text-xs font-bold">
+                      RX
+                    </div>
+
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-semibold">
+                          RateX
+                        </span>
+
+                        <span className="text-sm text-muted-foreground">
+                          PTONyc
+                        </span>
+
+                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                          <CheckCircle2 className="h-3 w-3" />
+
+                          {matured
+                            ? "Matured"
+                            : "Closed"}
+                        </span>
+                      </div>
+
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {matured
+                          ? `Matured ${formatDate(
+                              position.maturity
+                            )}`
+                          : `Closed ${formatDate(
+                              position.completedAt
+                            )}`}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-right sm:grid-cols-4">
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Cost basis
+                      </div>
+
+                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                        {formatCurrency(
+                          position.costBasisUsd
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Final value
+                      </div>
+
+                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                        {formatCurrency(
+                          finalValue
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        Earned
+                      </div>
+
+                      <div className="mt-1 text-sm font-semibold tabular-nums text-emerald-400">
+                        {formatCurrency(
+                          earned
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                        APY
+                      </div>
+
+                      <div className="mt-1 text-sm font-semibold tabular-nums">
+                        {formatPercent(
+                          position.fixedApy
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ProjectIncomeSection({
   months,
   selectedMonthKey,
   onSelectMonth,
   selectedYear,
   onSelectYear,
+  saladTracker,
 }) {
   const currentYear =
     getCurrentYear();
+
+  const currentMonthKey =
+    getCurrentMonthKey();
 
   const firstTrackingYear =
     Number(
@@ -1836,18 +4441,6 @@ function MonthlyEarningsSection({
         4
       )
     );
-
-  const availableYears = [];
-
-  for (
-    let year = firstTrackingYear;
-    year <= currentYear;
-    year += 1
-  ) {
-    availableYears.push(
-      year
-    );
-  }
 
   const yearMonths =
     Array.from(
@@ -1879,7 +4472,7 @@ function MonthlyEarningsSection({
         ) {
           return (
             monthKey <=
-            getCurrentMonthKey()
+            currentMonthKey
           );
         }
 
@@ -1906,6 +4499,9 @@ function MonthlyEarningsSection({
           monthKey,
           total: 0,
           platforms: [],
+          locked:
+            monthKey <
+            currentMonthKey,
         }
     );
 
@@ -1931,11 +4527,16 @@ function MonthlyEarningsSection({
 
   const yearlyTotal =
     chartMonths.reduce(
-      (total, month) =>
+      (
+        total,
+        month
+      ) =>
         total +
-        (Number(
-          month.total
-        ) || 0),
+        (
+          Number(
+            month.total
+          ) || 0
+        ),
       0
     );
 
@@ -1972,17 +4573,39 @@ function MonthlyEarningsSection({
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
 
             <h2 className="text-lg font-semibold">
-              Monthly Earnings
+              Project Income
             </h2>
           </div>
 
           <p className="mt-1 text-xs text-muted-foreground">
-            Yield income tracked by calendar year.
+            Income earned across all tracked projects. Completed months are automatically locked.
           </p>
+
+          {saladTracker?.initialized && (
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+              <span>
+                Salad balance{" "}
+                <span className="font-medium text-foreground tabular-nums">
+                  {formatCurrency(
+                    saladTracker.currentBalance
+                  )}
+                </span>
+              </span>
+
+              <span>
+                Salad lifetime{" "}
+                <span className="font-medium text-foreground tabular-nums">
+                  {formatCurrency(
+                    saladTracker.lifetimeBalance
+                  )}
+                </span>
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="flex items-center gap-6">
-          <div className="flex items-center rounded-lg border border-border/50 bg-white/[0.02]">
+          <div className="flex h-10 items-center overflow-hidden rounded-lg border border-border/50 bg-white/[0.02]">
             <button
               type="button"
               onClick={() =>
@@ -1994,53 +4617,15 @@ function MonthlyEarningsSection({
                 selectedYear <=
                 firstTrackingYear
               }
-              className="flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
+              className="flex h-full w-10 items-center justify-center text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
               aria-label="Previous year"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
 
-            <select
-              value={
-                selectedYear
-              }
-              onChange={(
-                event
-              ) => {
-                onSelectMonth(
-                  null
-                );
-
-                onSelectYear(
-                  Number(
-                    event.target.value
-                  )
-                );
-              }}
-              className="h-9 border-x border-border/50 bg-transparent px-4 text-sm font-semibold outline-none"
-              aria-label="Select year"
-            >
-              {availableYears
-                .slice()
-                .reverse()
-                .map(
-                  (year) => (
-                    <option
-                      key={
-                        year
-                      }
-                      value={
-                        year
-                      }
-                      className="bg-card text-foreground"
-                    >
-                      {
-                        year
-                      }
-                    </option>
-                  )
-                )}
-            </select>
+            <div className="flex h-full min-w-[88px] items-center justify-center border-x border-border/50 px-5 text-sm font-semibold tabular-nums">
+              {selectedYear}
+            </div>
 
             <button
               type="button"
@@ -2053,7 +4638,7 @@ function MonthlyEarningsSection({
                 selectedYear >=
                 currentYear
               }
-              className="flex h-9 w-9 items-center justify-center rounded-r-lg text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
+              className="flex h-full w-10 items-center justify-center text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
               aria-label="Next year"
             >
               <ChevronRight className="h-4 w-4" />
@@ -2096,7 +4681,8 @@ function MonthlyEarningsSection({
                         (
                           amount /
                           maxAmount
-                        ) * 100
+                        ) *
+                          100
                       )
                     : 3;
 
@@ -2113,17 +4699,24 @@ function MonthlyEarningsSection({
                     }
                     className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                   >
-                    <div className="mb-2 min-h-6 whitespace-nowrap text-[11px] font-semibold tabular-nums text-foreground md:text-xs">
+                    <div className="mb-2 flex min-h-6 items-center gap-1 whitespace-nowrap text-[11px] font-semibold tabular-nums text-foreground md:text-xs">
                       {formatCurrency(
                         amount
+                      )}
+
+                      {month.locked && (
+                        <Lock className="h-2.5 w-2.5 text-muted-foreground" />
                       )}
                     </div>
 
                     <div className="flex h-36 w-full items-end justify-center">
                       <div
                         className={`w-full max-w-14 rounded-t-md transition-all duration-200 ${
-                          amount > 0
-                            ? "bg-emerald-400/75 group-hover:bg-emerald-400"
+                          amount >
+                          0
+                            ? month.locked
+                              ? "bg-emerald-400/45 group-hover:bg-emerald-400/65"
+                              : "bg-emerald-400/75 group-hover:bg-emerald-400"
                             : "bg-white/[0.06] group-hover:bg-white/[0.10]"
                         }`}
                         style={{
@@ -2147,7 +4740,7 @@ function MonthlyEarningsSection({
       </div>
 
       {selectedMonth && (
-        <MonthEarningsModal
+        <ProjectIncomeModal
           month={
             selectedMonth
           }
@@ -2162,7 +4755,7 @@ function MonthlyEarningsSection({
   );
 }
 
-function MonthEarningsModal({
+function ProjectIncomeModal({
   month,
   onClose,
 }) {
@@ -2171,29 +4764,34 @@ function MonthEarningsModal({
       month.total
     ) || 0;
 
-  useEffect(() => {
-    function handleKeyDown(
-      event
-    ) {
-      if (
-        event.key ===
-        "Escape"
+  useEffect(
+    () => {
+      function handleKeyDown(
+        event
       ) {
-        onClose();
+        if (
+          event.key ===
+          "Escape"
+        ) {
+          onClose();
+        }
       }
-    }
 
-    window.addEventListener(
-      "keydown",
-      handleKeyDown
-    );
-
-    return () =>
-      window.removeEventListener(
+      window.addEventListener(
         "keydown",
         handleKeyDown
       );
-  }, [onClose]);
+
+      return () =>
+        window.removeEventListener(
+          "keydown",
+          handleKeyDown
+        );
+    },
+    [
+      onClose,
+    ]
+  );
 
   return (
     <div
@@ -2216,9 +4814,18 @@ function MonthEarningsModal({
       >
         <div className="flex items-start justify-between gap-4 border-b border-border/50 px-5 py-5">
           <div>
-            <div className="text-lg font-semibold">
-              {formatMonthLabel(
-                month.monthKey
+            <div className="flex items-center gap-2">
+              <div className="text-lg font-semibold">
+                {formatMonthLabel(
+                  month.monthKey
+                )}
+              </div>
+
+              {month.locked && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-border/60 bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  <Lock className="h-3 w-3" />
+                  Final
+                </span>
               )}
             </div>
 
@@ -2235,7 +4842,7 @@ function MonthEarningsModal({
           <div className="flex items-start gap-4">
             <div className="text-right">
               <div className="text-xs text-muted-foreground">
-                Total earned
+                Project income
               </div>
 
               <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-400">
@@ -2262,18 +4869,22 @@ function MonthEarningsModal({
           {month.platforms.length ===
           0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
-              No earnings were recorded for this month.
+              No project income was recorded for this month.
             </div>
           ) : (
             <div className="space-y-2">
               {month.platforms.map(
-                (platform) => {
+                (
+                  platform
+                ) => {
                   const share =
-                    total > 0
+                    total >
+                    0
                       ? (
                           platform.amount /
                           total
-                        ) * 100
+                        ) *
+                        100
                       : 0;
 
                   return (
@@ -2324,7 +4935,7 @@ function MonthEarningsModal({
                         {share.toFixed(
                           1
                         )}
-                        % of monthly earnings
+                        % of project income
                       </div>
                     </div>
                   );
@@ -2345,7 +4956,10 @@ function PortfolioAllocationBar({
   const coinBalances =
     new Map();
 
-  (projects || []).forEach(
+  (
+    projects ||
+    []
+  ).forEach(
     (project) => {
       (
         project.assets ||
@@ -2398,7 +5012,10 @@ function PortfolioAllocationBar({
       })
     )
     .sort(
-      (a, b) =>
+      (
+        a,
+        b
+      ) =>
         b.balance -
         a.balance
     );
@@ -2474,7 +5091,8 @@ function PortfolioAllocationBar({
                 Number(
                   totalBalance
                 )
-              ) * 100;
+              ) *
+              100;
 
             return (
               <div
