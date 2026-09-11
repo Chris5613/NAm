@@ -1,19 +1,39 @@
 import { proxyFetch } from "./cors-proxy";
 import { jupiterPriceApi } from "./external-apis";
 
-export const RATEX_WALLET = "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM";
-export const RATEX_PTONYC_MINT = "7FbWfjanKYP9wQQjdDboLZFHiBQaCfhH8JBnazSx9bD5";
-export const RATEX_PTONYC_FIXED_APY = 13.207;
-export const RATEX_PTONYC_MATURITY = "2026-09-29T00:00:00-07:00";
-export const RATEX_PTONYC_COST_BASIS_USD = 600;
+export const RATEX_WALLET =
+  "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM";
+
+export const RATEX_PTONYC_MINT =
+  "7FbWfjanKYP9wQQjdDboLZFHiBQaCfhH8JBnazSx9bD5";
+
+export const RATEX_PTONYC_FIXED_APY =
+  13.207;
+
+export const RATEX_PTONYC_MATURITY =
+  "2026-09-29T00:00:00-07:00";
+
+export const RATEX_PTONYC_COST_BASIS_USD =
+  600;
 
 const TOKEN_PROGRAM_ID =
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
-const LAST_KNOWN_PTONYC_PRICE = 0.99285;
+const USDC_MINT =
+  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
+
+const USDC_DECIMALS = 6;
+
+// Only used if both live Jupiter price methods fail.
+const LAST_KNOWN_PTONYC_PRICE =
+  0.99229;
 
 function getUsdPrice(value) {
-  if (Number.isFinite(Number(value))) {
+  if (
+    Number.isFinite(
+      Number(value)
+    )
+  ) {
     return Number(value);
   }
 
@@ -25,39 +45,54 @@ function getUsdPrice(value) {
   );
 }
 
-async function getWalletTokenAccounts(walletAddress) {
-  const response = await proxyFetch("/solana/rpc", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "getTokenAccountsByOwner",
-      params: [
-        walletAddress,
-        {
-          programId: TOKEN_PROGRAM_ID,
+async function getWalletTokenAccounts(
+  walletAddress
+) {
+  const response =
+    await proxyFetch(
+      "/solana/rpc",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
         },
-        {
-          encoding: "jsonParsed",
-        },
-      ],
-    }),
-  });
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method:
+            "getTokenAccountsByOwner",
+          params: [
+            walletAddress,
+            {
+              programId:
+                TOKEN_PROGRAM_ID,
+            },
+            {
+              encoding:
+                "jsonParsed",
+            },
+          ],
+        }),
+      }
+    );
 
   if (!response.ok) {
-    const detail = await response
-      .text()
-      .catch(() => "");
+    const detail =
+      await response
+        .text()
+        .catch(() => "");
 
     throw new Error(
-      `Solana RPC returned ${response.status}: ${detail.slice(0, 160)}`
+      `Solana RPC returned ${response.status}: ${detail.slice(
+        0,
+        160
+      )}`
     );
   }
 
-  const payload = await response.json();
+  const payload =
+    await response.json();
 
   if (payload?.error) {
     throw new Error(
@@ -66,66 +101,163 @@ async function getWalletTokenAccounts(walletAddress) {
     );
   }
 
-  return Array.isArray(payload?.result?.value)
+  return Array.isArray(
+    payload?.result?.value
+  )
     ? payload.result.value
     : [];
 }
 
+async function getJupiterQuotePrice(
+  decimals = 6
+) {
+  const inputAmount =
+    BigInt(10) **
+    BigInt(
+      Math.max(
+        0,
+        Number(decimals) ||
+          0
+      )
+    );
+
+  const params =
+    new URLSearchParams({
+      inputMint:
+        RATEX_PTONYC_MINT,
+      outputMint:
+        USDC_MINT,
+      amount:
+        inputAmount.toString(),
+      slippageBps:
+        "50",
+      restrictIntermediateTokens:
+        "true",
+    });
+
+  const response =
+    await proxyFetch(
+      `/jupiter/swap/v1/quote?${params.toString()}`
+    );
+
+  if (!response.ok) {
+    const detail =
+      await response
+        .text()
+        .catch(() => "");
+
+    throw new Error(
+      `Jupiter quote returned ${response.status}: ${detail.slice(
+        0,
+        160
+      )}`
+    );
+  }
+
+  const quote =
+    await response.json();
+
+  const outAmount =
+    Number(
+      quote?.outAmount
+    ) || 0;
+
+  if (!(outAmount > 0)) {
+    return 0;
+  }
+
+  return (
+    outAmount /
+    10 ** USDC_DECIMALS
+  );
+}
+
 export async function getRatexPtonycSnapshot(
-  walletAddress = RATEX_WALLET
+  walletAddress =
+    RATEX_WALLET
 ) {
   const accounts =
-    await getWalletTokenAccounts(walletAddress);
+    await getWalletTokenAccounts(
+      walletAddress
+    );
 
-  const tokenAccount = accounts.find(
-    (entry) =>
-      entry?.account?.data?.parsed?.info?.mint ===
-      RATEX_PTONYC_MINT
-  );
+  const tokenAccount =
+    accounts.find(
+      (entry) =>
+        entry?.account?.data
+          ?.parsed?.info
+          ?.mint ===
+        RATEX_PTONYC_MINT
+    );
+
+  const tokenAmount =
+    tokenAccount?.account
+      ?.data?.parsed?.info
+      ?.tokenAmount;
 
   const quantity =
     Number(
-      tokenAccount?.account?.data?.parsed?.info
-        ?.tokenAmount?.uiAmountString ??
-        tokenAccount?.account?.data?.parsed?.info
-          ?.tokenAmount?.uiAmount ??
+      tokenAmount
+        ?.uiAmountString ??
+        tokenAmount
+          ?.uiAmount ??
         0
+    ) || 0;
+
+  const decimals =
+    Number(
+      tokenAmount
+        ?.decimals
     ) || 0;
 
   if (!(quantity > 0)) {
     return {
       walletAddress,
-      mint: RATEX_PTONYC_MINT,
+      mint:
+        RATEX_PTONYC_MINT,
 
       quantity: 0,
       priceUsd: 0,
       currentValueUsd: 0,
 
-      fixedApy: RATEX_PTONYC_FIXED_APY,
-      maturity: RATEX_PTONYC_MATURITY,
+      fixedApy:
+        RATEX_PTONYC_FIXED_APY,
+
+      maturity:
+        RATEX_PTONYC_MATURITY,
 
       maturityValueUsd: 0,
       earnedUsd: 0,
       projectedProfitUsd: 0,
       remainingYieldUsd: 0,
 
-      source: "solana_rpc",
-      syncedAt: new Date().toISOString(),
+      source:
+        "solana_rpc",
+
+      syncedAt:
+        new Date().toISOString(),
     };
   }
 
   let priceUsd = 0;
-  let priceSource = "jupiter";
+
+  let priceSource =
+    "jupiter_price";
 
   try {
     const prices =
-      await jupiterPriceApi.getPrices([
-        RATEX_PTONYC_MINT,
-      ]);
+      await jupiterPriceApi.getPrices(
+        [
+          RATEX_PTONYC_MINT,
+        ]
+      );
 
-    priceUsd = getUsdPrice(
-      prices?.[RATEX_PTONYC_MINT]
-    );
+    priceUsd =
+      getUsdPrice(
+        prices?.[
+          RATEX_PTONYC_MINT
+        ]
+      );
   } catch (error) {
     console.warn(
       "RateX PTONyc Jupiter price lookup failed:",
@@ -134,72 +266,79 @@ export async function getRatexPtonycSnapshot(
   }
 
   /*
-   * Jupiter may not index every RateX PT market.
-   *
-   * If a live price cannot be found, use the last
-   * observed RateX price temporarily.
-   *
-   * The actual PTONyc quantity is still being read
-   * live from the wallet through Solana RPC.
+   * Jupiter's normal price endpoint can miss RateX PT tokens.
+   * If that happens, ask Jupiter for a live swap quote for
+   * exactly 1 PTONyc -> USDC and use that as the current price.
    */
   if (!(priceUsd > 0)) {
-    priceUsd = LAST_KNOWN_PTONYC_PRICE;
-    priceSource = "ratex_last_known";
+    try {
+      priceUsd =
+        await getJupiterQuotePrice(
+          decimals
+        );
+
+      if (priceUsd > 0) {
+        priceSource =
+          "jupiter_quote";
+      }
+    } catch (error) {
+      console.warn(
+        "RateX PTONyc Jupiter quote lookup failed:",
+        error
+      );
+    }
+  }
+
+  /*
+   * Last resort only so the position still displays if
+   * Jupiter is temporarily unavailable.
+   */
+  if (!(priceUsd > 0)) {
+    priceUsd =
+      LAST_KNOWN_PTONYC_PRICE;
+
+    priceSource =
+      "ratex_last_known";
   }
 
   const currentValueUsd =
-    quantity * priceUsd;
+    quantity *
+    priceUsd;
 
-  /*
-   * At maturity, the PT position is expected to
-   * converge toward roughly $1-equivalent per PT.
-   *
-   * Example:
-   *
-   * 606.27 PTONyc
-   * ≈ $606.27 maturity value
-   */
-  const maturityValueUsd = quantity;
+  const maturityValueUsd =
+    quantity;
 
-  /*
-   * Your original RateX deposit / cost basis.
-   *
-   * Current earned:
-   * current market value - initial cost basis
-   */
-  const earnedUsd = Math.max(
-    0,
-    currentValueUsd -
-      RATEX_PTONYC_COST_BASIS_USD
-  );
+  const earnedUsd =
+    Math.max(
+      0,
+      currentValueUsd -
+        RATEX_PTONYC_COST_BASIS_USD
+    );
 
-  /*
-   * Total profit expected once the position reaches
-   * maturity.
-   */
-  const projectedProfitUsd = Math.max(
-    0,
-    maturityValueUsd -
-      RATEX_PTONYC_COST_BASIS_USD
-  );
+  const projectedProfitUsd =
+    Math.max(
+      0,
+      maturityValueUsd -
+        RATEX_PTONYC_COST_BASIS_USD
+    );
 
-  /*
-   * Amount of fixed yield still remaining between
-   * today's PT market value and maturity value.
-   */
-  const remainingYieldUsd = Math.max(
-    0,
-    maturityValueUsd -
-      currentValueUsd
-  );
+  const remainingYieldUsd =
+    Math.max(
+      0,
+      maturityValueUsd -
+        currentValueUsd
+    );
 
   return {
     walletAddress,
-    mint: RATEX_PTONYC_MINT,
+
+    mint:
+      RATEX_PTONYC_MINT,
 
     quantity,
 
     priceUsd,
+
     priceSource,
 
     currentValueUsd,
@@ -221,7 +360,8 @@ export async function getRatexPtonycSnapshot(
 
     remainingYieldUsd,
 
-    source: "solana_rpc",
+    source:
+      "solana_rpc",
 
     syncedAt:
       new Date().toISOString(),
