@@ -3860,7 +3860,7 @@ function RollerCoinProjectCard({
           <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
             {(Number(
               stats?.lifetimeTrx
-            ) || 0).toFixed(6)} TRX
+            ) || 0).toFixed(10)} TRX
           </div>
         </div>
       </button>
