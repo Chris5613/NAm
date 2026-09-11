@@ -14,6 +14,8 @@ import {
   Wifi,
   CalendarDays,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 
 const STORAGE_KEY = "networth_yield_positions";
@@ -168,6 +170,15 @@ function getCurrentMonthKey() {
   }).format(new Date());
 }
 
+function getCurrentYear() {
+  return Number(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      year: "numeric",
+    }).format(new Date())
+  );
+}
+
 function formatMonthLabel(monthKey) {
   if (!monthKey) return "";
 
@@ -211,42 +222,6 @@ function formatShortMonth(monthKey) {
       )
     )
   );
-}
-
-function getMonthRange(startMonthKey, endMonthKey) {
-  const [startYear, startMonth] = startMonthKey
-    .split("-")
-    .map(Number);
-
-  const [endYear, endMonth] = endMonthKey
-    .split("-")
-    .map(Number);
-
-  const months = [];
-
-  let year = startYear;
-  let month = startMonth;
-
-  while (
-    year < endYear ||
-    (
-      year === endYear &&
-      month <= endMonth
-    )
-  ) {
-    months.push(
-      `${year}-${String(month).padStart(2, "0")}`
-    );
-
-    month += 1;
-
-    if (month > 12) {
-      month = 1;
-      year += 1;
-    }
-  }
-
-  return months;
 }
 
 function getMonthStart(date = new Date()) {
@@ -883,6 +858,13 @@ export default function YieldFarmingPage() {
   ] = useState(null);
 
   const [
+    selectedYear,
+    setSelectedYear,
+  ] = useState(
+    getCurrentYear
+  );
+
+  const [
     projectLogos,
     setProjectLogos,
   ] = useState(
@@ -1461,6 +1443,12 @@ export default function YieldFarmingPage() {
         onSelectMonth={
           setSelectedMonthKey
         }
+        selectedYear={
+          selectedYear
+        }
+        onSelectYear={
+          setSelectedYear
+        }
       />
     </div>
   );
@@ -1835,14 +1823,68 @@ function MonthlyEarningsSection({
   months,
   selectedMonthKey,
   onSelectMonth,
+  selectedYear,
+  onSelectYear,
 }) {
-  const currentMonthKey =
-    getCurrentMonthKey();
+  const currentYear =
+    getCurrentYear();
 
-  const monthKeys =
-    getMonthRange(
-      MONTHLY_TRACKING_START,
-      currentMonthKey
+  const firstTrackingYear =
+    Number(
+      MONTHLY_TRACKING_START.slice(
+        0,
+        4
+      )
+    );
+
+  const availableYears = [];
+
+  for (
+    let year = firstTrackingYear;
+    year <= currentYear;
+    year += 1
+  ) {
+    availableYears.push(
+      year
+    );
+  }
+
+  const yearMonths =
+    Array.from(
+      {
+        length: 12,
+      },
+      (
+        _,
+        index
+      ) =>
+        `${selectedYear}-${String(
+          index + 1
+        ).padStart(
+          2,
+          "0"
+        )}`
+    ).filter(
+      (monthKey) => {
+        if (
+          monthKey <
+          MONTHLY_TRACKING_START
+        ) {
+          return false;
+        }
+
+        if (
+          selectedYear ===
+          currentYear
+        ) {
+          return (
+            monthKey <=
+            getCurrentMonthKey()
+          );
+        }
+
+        return true;
+      }
     );
 
   const monthMap =
@@ -1856,7 +1898,7 @@ function MonthlyEarningsSection({
     );
 
   const chartMonths =
-    monthKeys.map(
+    yearMonths.map(
       (monthKey) =>
         monthMap.get(
           monthKey
@@ -1887,7 +1929,7 @@ function MonthlyEarningsSection({
         )
       : null;
 
-  const trackingTotal =
+  const yearlyTotal =
     chartMonths.reduce(
       (total, month) =>
         total +
@@ -1896,6 +1938,31 @@ function MonthlyEarningsSection({
         ) || 0),
       0
     );
+
+  function moveYear(
+    direction
+  ) {
+    const targetYear =
+      selectedYear +
+      direction;
+
+    if (
+      targetYear <
+        firstTrackingYear ||
+      targetYear >
+        currentYear
+    ) {
+      return;
+    }
+
+    onSelectMonth(
+      null
+    );
+
+    onSelectYear(
+      targetYear
+    );
+  }
 
   return (
     <section className="space-y-4 border-t border-border/50 pt-8">
@@ -1910,94 +1977,173 @@ function MonthlyEarningsSection({
           </div>
 
           <p className="mt-1 text-xs text-muted-foreground">
-            Yield income tracked from September 2026 forward.
+            Yield income tracked by calendar year.
           </p>
         </div>
 
-        <div className="text-right">
-          <div className="text-xs text-muted-foreground">
-            Total tracked
+        <div className="flex items-center gap-6">
+          <div className="flex items-center rounded-lg border border-border/50 bg-white/[0.02]">
+            <button
+              type="button"
+              onClick={() =>
+                moveYear(
+                  -1
+                )
+              }
+              disabled={
+                selectedYear <=
+                firstTrackingYear
+              }
+              className="flex h-9 w-9 items-center justify-center rounded-l-lg text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
+              aria-label="Previous year"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+
+            <select
+              value={
+                selectedYear
+              }
+              onChange={(
+                event
+              ) => {
+                onSelectMonth(
+                  null
+                );
+
+                onSelectYear(
+                  Number(
+                    event.target.value
+                  )
+                );
+              }}
+              className="h-9 border-x border-border/50 bg-transparent px-4 text-sm font-semibold outline-none"
+              aria-label="Select year"
+            >
+              {availableYears
+                .slice()
+                .reverse()
+                .map(
+                  (year) => (
+                    <option
+                      key={
+                        year
+                      }
+                      value={
+                        year
+                      }
+                      className="bg-card text-foreground"
+                    >
+                      {
+                        year
+                      }
+                    </option>
+                  )
+                )}
+            </select>
+
+            <button
+              type="button"
+              onClick={() =>
+                moveYear(
+                  1
+                )
+              }
+              disabled={
+                selectedYear >=
+                currentYear
+              }
+              className="flex h-9 w-9 items-center justify-center rounded-r-lg text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
+              aria-label="Next year"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
 
-          <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
-            {formatCurrency(
-              trackingTotal
-            )}
+          <div className="text-right">
+            <div className="text-xs text-muted-foreground">
+              {selectedYear} total
+            </div>
+
+            <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
+              {formatCurrency(
+                yearlyTotal
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       <div className="rounded-2xl border border-border/60 bg-card/35 px-5 pb-5 pt-6">
-        <div className="flex h-56 items-end gap-3 md:gap-6">
-          {chartMonths.map(
-            (month) => {
-              const amount =
-                Number(
-                  month.total
-                ) || 0;
+        {chartMonths.length ===
+        0 ? (
+          <div className="flex h-56 items-center justify-center text-sm text-muted-foreground">
+            No tracked months for this year.
+          </div>
+        ) : (
+          <div className="flex h-56 items-end gap-2 md:gap-4">
+            {chartMonths.map(
+              (month) => {
+                const amount =
+                  Number(
+                    month.total
+                  ) || 0;
 
-              const height =
-                amount > 0
-                  ? Math.max(
-                      12,
-                      (
-                        amount /
-                        maxAmount
-                      ) * 100
-                    )
-                  : 3;
+                const height =
+                  amount > 0
+                    ? Math.max(
+                        12,
+                        (
+                          amount /
+                          maxAmount
+                        ) * 100
+                      )
+                    : 3;
 
-              const isCurrent =
-                month.monthKey ===
-                currentMonthKey;
-
-              return (
-                <button
-                  key={
-                    month.monthKey
-                  }
-                  type="button"
-                  onClick={() =>
-                    onSelectMonth(
+                return (
+                  <button
+                    key={
                       month.monthKey
-                    )
-                  }
-                  className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
-                >
-                  <div className="mb-2 min-h-6 whitespace-nowrap text-xs font-semibold tabular-nums text-foreground">
-                    {formatCurrency(
-                      amount
-                    )}
-                  </div>
+                    }
+                    type="button"
+                    onClick={() =>
+                      onSelectMonth(
+                        month.monthKey
+                      )
+                    }
+                    className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                  >
+                    <div className="mb-2 min-h-6 whitespace-nowrap text-[11px] font-semibold tabular-nums text-foreground md:text-xs">
+                      {formatCurrency(
+                        amount
+                      )}
+                    </div>
 
-                  <div className="flex h-36 w-full items-end justify-center">
-                    <div
-                      className={`w-full max-w-14 rounded-t-md transition-all duration-200 ${
-                        amount > 0
-                          ? "bg-emerald-400/75 group-hover:bg-emerald-400"
-                          : "bg-white/[0.06] group-hover:bg-white/[0.10]"
-                      }`}
-                      style={{
-                        height:
-                          `${height}%`,
-                      }}
-                    />
-                  </div>
+                    <div className="flex h-36 w-full items-end justify-center">
+                      <div
+                        className={`w-full max-w-14 rounded-t-md transition-all duration-200 ${
+                          amount > 0
+                            ? "bg-emerald-400/75 group-hover:bg-emerald-400"
+                            : "bg-white/[0.06] group-hover:bg-white/[0.10]"
+                        }`}
+                        style={{
+                          height:
+                            `${height}%`,
+                        }}
+                      />
+                    </div>
 
-                  <div className="mt-3 text-xs font-medium text-muted-foreground transition group-hover:text-foreground">
-                    {formatShortMonth(
-                      month.monthKey
-                    )}
-                  </div>
-
-                  {isCurrent && (
-                    <div className="mt-1 h-1 w-1 rounded-full bg-emerald-400" />
-                  )}
-                </button>
-              );
-            }
-          )}
-        </div>
+                    <div className="mt-3 text-[11px] font-medium text-muted-foreground transition group-hover:text-foreground md:text-xs">
+                      {formatShortMonth(
+                        month.monthKey
+                      )}
+                    </div>
+                  </button>
+                );
+              }
+            )}
+          </div>
+        )}
       </div>
 
       {selectedMonth && (
