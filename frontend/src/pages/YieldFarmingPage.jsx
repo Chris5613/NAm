@@ -164,6 +164,12 @@ function loadSaladTracker() {
         "object"
         ? parsed.monthlyEarnings
         : {},
+    daily:
+      parsed.daily &&
+      typeof parsed.daily ===
+        "object"
+        ? parsed.daily
+        : {},
   };
 }
 
@@ -172,6 +178,96 @@ function saveSaladTracker(value) {
     SALAD_TRACKER_KEY,
     value
   );
+}
+
+function getSaladTrackerStats(
+  tracker
+) {
+  const currentMonth =
+    getCurrentMonthKey();
+
+  const currentBalance =
+    Number(
+      tracker?.currentBalance
+    ) || 0;
+
+  const lifetimeUsd =
+    Number(
+      tracker?.lifetimeBalance
+    ) || 0;
+
+  const exactMonthUsd =
+    Object.entries(
+      tracker?.daily ||
+        {}
+    ).reduce(
+      (
+        sum,
+        [
+          date,
+          amount,
+        ]
+      ) =>
+        String(
+          date
+        ).slice(
+          0,
+          7
+        ) ===
+        currentMonth
+          ? sum +
+            (
+              Number(
+                amount
+              ) || 0
+            )
+          : sum,
+      0
+    );
+
+  const monthUsd =
+    exactMonthUsd > 0
+      ? exactMonthUsd
+      : Number(
+          tracker?.monthlyEarnings?.[
+            currentMonth
+          ]
+        ) || 0;
+
+  const currentDay =
+    Math.max(
+      1,
+      Number(
+        getTodayKey().slice(
+          8,
+          10
+        )
+      ) || 1
+    );
+
+  const estimatedDailyUsd =
+    monthUsd /
+    currentDay;
+
+  return {
+    currentBalance,
+    lifetimeUsd,
+    monthUsd,
+    withdrawals:
+      Number(
+        tracker?.withdrawals
+      ) || 0,
+    estimatedDailyUsd,
+    estimatedMonthlyUsd:
+      estimatedDailyUsd *
+      30.4375,
+    estimatedYearlyUsd:
+      estimatedDailyUsd *
+      365,
+    lastSyncedAt:
+      tracker?.lastSyncedAt ||
+      null,
+  };
 }
 
 function loadRollerCoinTracker() {
@@ -1922,21 +2018,48 @@ function buildProjectIncome(
     }
   );
 
-  Object.entries(
-    saladTracker?.monthlyEarnings ||
-      {}
-  ).forEach(
-    ([
-      monthKey,
-      amount,
-    ]) => {
-      addEarning(
+  const saladDaily =
+    Object.entries(
+      saladTracker?.daily ||
+        {}
+    );
+
+  if (
+    saladDaily.length
+  ) {
+    saladDaily.forEach(
+      ([
+        date,
+        amount,
+      ]) => {
+        addEarning(
+          getMonthKey(
+            date
+          ),
+          "Salad",
+          Number(
+            amount
+          ) || 0
+        );
+      }
+    );
+  } else {
+    Object.entries(
+      saladTracker?.monthlyEarnings ||
+        {}
+    ).forEach(
+      ([
         monthKey,
-        "Salad",
-        amount
-      );
-    }
-  );
+        amount,
+      ]) => {
+        addEarning(
+          monthKey,
+          "Salad",
+          amount
+        );
+      }
+    );
+  }
 
   Object.entries(
     rollerCoinTracker?.daily ||
@@ -2227,6 +2350,23 @@ export default function YieldFarmingPage() {
     setSaladTracker,
   ] = useState(
     loadSaladTracker
+  );
+
+  const [
+    saladConnected,
+    setSaladConnected,
+  ] = useState(false);
+
+  const [
+    saladSyncing,
+    setSaladSyncing,
+  ] = useState(false);
+
+  const [
+    saladMessage,
+    setSaladMessage,
+  ] = useState(
+    ""
   );
 
   const [
@@ -3192,6 +3332,467 @@ export default function YieldFarmingPage() {
     ]
   );
 
+  const importSaladPayload =
+    useCallback(
+      (payload) => {
+        const currentBalance =
+          Number(
+            payload?.currentBalance
+          );
+
+        const lifetimeBalance =
+          Number(
+            payload?.lifetimeBalance
+          );
+
+        if (
+          !Number.isFinite(
+            currentBalance
+          ) ||
+          !Number.isFinite(
+            lifetimeBalance
+          )
+        ) {
+          setSaladSyncing(
+            false
+          );
+
+          setSaladMessage(
+            "Salad returned an invalid balance payload."
+          );
+
+          return;
+        }
+
+        const syncedAt =
+          payload?.syncedAt ||
+          new Date().toISOString();
+
+        const incomingDaily =
+          payload?.daily &&
+          typeof payload.daily ===
+            "object"
+            ? payload.daily
+            : {};
+
+        setSaladTracker(
+          (current) => {
+            const daily = {
+              ...(
+                current?.daily ||
+                {}
+              ),
+            };
+
+            Object.entries(
+              incomingDaily
+            ).forEach(
+              ([
+                date,
+                amount,
+              ]) => {
+                const value =
+                  Number(
+                    amount
+                  ) || 0;
+
+                if (
+                  /^\d{4}-\d{2}-\d{2}$/.test(
+                    String(
+                      date
+                    )
+                  ) &&
+                  value >= 0
+                ) {
+                  daily[
+                    date
+                  ] = value;
+                }
+              }
+            );
+
+            const monthlyEarnings = {
+              ...(
+                current?.monthlyEarnings ||
+                {}
+              ),
+            };
+
+            const exactMonthly =
+              {};
+
+            Object.entries(
+              daily
+            ).forEach(
+              ([
+                date,
+                amount,
+              ]) => {
+                const monthKey =
+                  String(
+                    date
+                  ).slice(
+                    0,
+                    7
+                  );
+
+                exactMonthly[
+                  monthKey
+                ] =
+                  (
+                    Number(
+                      exactMonthly[
+                        monthKey
+                      ]
+                    ) || 0
+                  ) +
+                  (
+                    Number(
+                      amount
+                    ) || 0
+                  );
+              }
+            );
+
+            Object.entries(
+              exactMonthly
+            ).forEach(
+              ([
+                monthKey,
+                amount,
+              ]) => {
+                monthlyEarnings[
+                  monthKey
+                ] =
+                  Number(
+                    Number(
+                      amount
+                    ).toFixed(
+                      6
+                    )
+                  );
+              }
+            );
+
+            const monthKey =
+              getCurrentMonthKey();
+
+            const previousLifetime =
+              Number(
+                current?.lastLifetimeBalance
+              ) || 0;
+
+            const previousBalance =
+              Number(
+                current?.lastBalance
+              ) || 0;
+
+            const earnedDelta =
+              current?.initialized
+                ? Math.max(
+                    0,
+                    lifetimeBalance -
+                      previousLifetime
+                  )
+                : 0;
+
+            if (
+              !Object.keys(
+                incomingDaily
+              ).length
+            ) {
+              if (
+                !current?.initialized
+              ) {
+                monthlyEarnings[
+                  monthKey
+                ] =
+                  Number(
+                    Math.max(
+                      Number(
+                        monthlyEarnings[
+                          monthKey
+                        ]
+                      ) || 0,
+                      currentBalance
+                    ).toFixed(
+                      6
+                    )
+                  );
+              } else if (
+                earnedDelta > 0
+              ) {
+                monthlyEarnings[
+                  monthKey
+                ] =
+                  Number(
+                    (
+                      (
+                        Number(
+                          monthlyEarnings[
+                            monthKey
+                          ]
+                        ) || 0
+                      ) +
+                      earnedDelta
+                    ).toFixed(
+                      6
+                    )
+                  );
+              }
+            }
+
+            const expectedBalance =
+              previousBalance +
+              earnedDelta;
+
+            const withdrawalDelta =
+              current?.initialized
+                ? Math.max(
+                    0,
+                    expectedBalance -
+                      currentBalance
+                  )
+                : 0;
+
+            return {
+              ...current,
+              initialized:
+                true,
+              startedMonth:
+                current?.startedMonth ||
+                monthKey,
+              currentBalance,
+              lifetimeBalance,
+              lastBalance:
+                currentBalance,
+              lastLifetimeBalance:
+                lifetimeBalance,
+              lastSyncedAt:
+                syncedAt,
+              lastWithdrawalAt:
+                withdrawalDelta >
+                0.000001
+                  ? syncedAt
+                  : current?.lastWithdrawalAt ||
+                    null,
+              withdrawals:
+                Number(
+                  (
+                    (
+                      Number(
+                        current?.withdrawals
+                      ) || 0
+                    ) +
+                    withdrawalDelta
+                  ).toFixed(
+                    6
+                  )
+                ),
+              monthlyEarnings,
+              daily,
+            };
+          }
+        );
+
+        setSaladConnected(
+          true
+        );
+
+        setSaladSyncing(
+          false
+        );
+
+        const dayCount =
+          Object.keys(
+            incomingDaily
+          ).length;
+
+        setSaladMessage(
+          dayCount
+            ? `Salad synced ${dayCount} earning day${dayCount === 1 ? "" : "s"}.`
+            : "Salad balance synced."
+        );
+      },
+      []
+    );
+
+  const syncSaladBalance =
+    useCallback(
+      () => {
+        setSaladSyncing(
+          true
+        );
+
+        setSaladMessage(
+          "Syncing Salad earnings…"
+        );
+
+        window.postMessage(
+          {
+            source:
+              "salad-app",
+            type:
+              "SYNC_NOW",
+          },
+          window.location.origin
+        );
+      },
+      []
+    );
+
+  const requestSaladLatest =
+    useCallback(
+      () => {
+        window.postMessage(
+          {
+            source:
+              "salad-app",
+            type:
+              "REQUEST_LATEST",
+          },
+          window.location.origin
+        );
+      },
+      []
+    );
+
+  useEffect(
+    () => {
+      const handleMessage =
+        (
+          event
+        ) => {
+          if (
+            event.origin !==
+              window.location.origin ||
+            event.source !==
+              window
+          ) {
+            return;
+          }
+
+          const data =
+            event.data;
+
+          if (
+            data?.source !==
+            "salad-ext"
+          ) {
+            return;
+          }
+
+          if (
+            data.type ===
+            "READY"
+          ) {
+            setSaladConnected(
+              true
+            );
+
+            requestSaladLatest();
+
+            return;
+          }
+
+          if (
+            data.type ===
+              "SALAD_PUSH" ||
+            data.type ===
+              "SALAD_SYNC_RESULT"
+          ) {
+            setSaladConnected(
+              true
+            );
+
+            if (
+              data.payload
+            ) {
+              importSaladPayload(
+                data.payload
+              );
+            } else {
+              setSaladSyncing(
+                false
+              );
+            }
+
+            return;
+          }
+
+          if (
+            data.type ===
+              "SALAD_ERROR" ||
+            data.type ===
+              "SALAD_SYNC_ERROR"
+          ) {
+            setSaladConnected(
+              true
+            );
+
+            setSaladSyncing(
+              false
+            );
+
+            setSaladMessage(
+              data.error ||
+                "Salad sync failed. Open Salad and make sure you are signed in."
+            );
+          }
+        };
+
+      window.addEventListener(
+        "message",
+        handleMessage
+      );
+
+      const firstRequest =
+        window.setTimeout(
+          requestSaladLatest,
+          500
+        );
+
+      const secondRequest =
+        window.setTimeout(
+          requestSaladLatest,
+          1500
+        );
+
+      const handleFocus =
+        () =>
+          requestSaladLatest();
+
+      window.addEventListener(
+        "focus",
+        handleFocus
+      );
+
+      return () => {
+        window.removeEventListener(
+          "message",
+          handleMessage
+        );
+
+        window.removeEventListener(
+          "focus",
+          handleFocus
+        );
+
+        window.clearTimeout(
+          firstRequest
+        );
+
+        window.clearTimeout(
+          secondRequest
+        );
+      };
+    },
+    [
+      importSaladPayload,
+      requestSaladLatest,
+    ]
+  );
+
   const syncLivePositions =
     useCallback(
       async () => {
@@ -3261,6 +3862,8 @@ export default function YieldFarmingPage() {
           );
         }
 
+        requestSaladLatest();
+
         if (
           errors.length
         ) {
@@ -3273,6 +3876,7 @@ export default function YieldFarmingPage() {
       },
       [
         applyProjectData,
+        requestSaladLatest,
       ]
     );
 
@@ -3295,6 +3899,17 @@ export default function YieldFarmingPage() {
       syncLivePositions,
     ]
   );
+
+  const saladStats =
+    useMemo(
+      () =>
+        getSaladTrackerStats(
+          saladTracker
+        ),
+      [
+        saladTracker,
+      ]
+    );
 
   const rollerCoinStats =
     useMemo(
@@ -3495,7 +4110,12 @@ export default function YieldFarmingPage() {
                 ),
             0
           ) +
-          365;
+          365 +
+          (
+            Number(
+              saladStats?.estimatedYearlyUsd
+            ) || 0
+          );
 
         const weightedApy =
           portfolioBalance >
@@ -3539,6 +4159,11 @@ export default function YieldFarmingPage() {
             Number(
               rollerCoinStats?.lifetimeUsd
             ) || 0
+          ) +
+          (
+            Number(
+              saladStats?.lifetimeUsd
+            ) || 0
           );
 
         return {
@@ -3546,7 +4171,13 @@ export default function YieldFarmingPage() {
           weightedApy,
           annualYield,
           activePositions:
-            projectCards.length + 1,
+            projectCards.length +
+            1 +
+            (
+              saladTracker?.initialized
+                ? 1
+                : 0
+            ),
           totalEarned,
         };
       },
@@ -3554,6 +4185,8 @@ export default function YieldFarmingPage() {
         allAssets,
         projectCards,
         rollerCoinStats,
+        saladStats,
+        saladTracker,
       ]
     );
 
@@ -3823,6 +4456,40 @@ export default function YieldFarmingPage() {
                 )
               }
             />
+
+            <SaladProjectCard
+              tracker={
+                saladTracker
+              }
+              connected={
+                saladConnected
+              }
+              stats={
+                saladStats
+              }
+              syncing={
+                saladSyncing
+              }
+              message={
+                saladMessage
+              }
+              onRefresh={
+                syncSaladBalance
+              }
+              logo={
+                projectLogos[
+                  "salad-project"
+                ] || ""
+              }
+              onLogoChange={(
+                dataUrl
+              ) =>
+                setProjectLogo(
+                  "salad-project",
+                  dataUrl
+                )
+              }
+            />
           </div>
         )}
       </section>
@@ -3936,6 +4603,168 @@ function ProjectCard({
             onDeletePosition
           }
         />
+      )}
+    </div>
+  );
+}
+
+function SaladProjectCard({
+  tracker,
+  connected,
+  stats,
+  syncing,
+  message,
+  onRefresh,
+  logo,
+  onLogoChange,
+}) {
+  const [
+    expanded,
+    setExpanded,
+  ] = useState(false);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
+      <button
+        type="button"
+        onClick={() =>
+          setExpanded(
+            (value) =>
+              !value
+          )
+        }
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <ProjectLogoButton
+            platform="Salad"
+            logo={
+              logo
+            }
+            onLogoChange={
+              onLogoChange
+            }
+          />
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-lg font-semibold">
+                Salad
+              </h3>
+
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                  connected
+                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+                    : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                }`}
+              >
+                <Wifi className="h-3 w-3" />
+                {connected
+                  ? "LIVE"
+                  : "OFFLINE"}
+              </span>
+            </div>
+
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              1 position
+              {tracker?.lastSyncedAt
+                ? ` · synced ${formatSyncTime(
+                    tracker.lastSyncedAt
+                  )}`
+                : ""}
+            </div>
+          </div>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <div className="text-2xl font-semibold tabular-nums">
+            {formatCurrency(
+              stats?.lifetimeUsd
+            )}
+          </div>
+
+          <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+            {formatCurrency(
+              stats?.currentBalance
+            )}{" "}
+            available
+          </div>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border/40 px-5 pb-5 pt-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                This month
+              </div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.monthUsd
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Available
+              </div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.currentBalance
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Lifetime earned
+              </div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.lifetimeUsd
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Withdrawn
+              </div>
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.withdrawals
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {message ||
+                (connected
+                  ? "Salad extension connected. Earnings sync without storing your Salad login in NAm."
+                  : "Install the Salad Earnings Bridge, open Salad, and make sure you are signed in.")}
+            </p>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={
+                onRefresh
+              }
+              disabled={
+                syncing
+              }
+            >
+              {syncing
+                ? "Syncing..."
+                : "Refresh"}
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -4745,27 +5574,6 @@ function ProjectIncomeSection({
             Income earned across all tracked projects. Completed months are automatically locked.
           </p>
 
-          {saladTracker?.initialized && (
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
-              <span>
-                Salad balance{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatCurrency(
-                    saladTracker.currentBalance
-                  )}
-                </span>
-              </span>
-
-              <span>
-                Salad lifetime{" "}
-                <span className="font-medium text-foreground tabular-nums">
-                  {formatCurrency(
-                    saladTracker.lifetimeBalance
-                  )}
-                </span>
-              </span>
-            </div>
-          )}
         </div>
 
         <div className="flex items-center gap-6">
