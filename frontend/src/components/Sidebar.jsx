@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import ImportDataDialog from "@/components/ImportDataDialog";
@@ -6,6 +7,7 @@ import {
   DollarSign,
   BarChart3,
   Bitcoin,
+  CircleDollarSign,
   Volleyball,
   ReceiptText,
   ChevronLeft,
@@ -18,6 +20,7 @@ const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
   { path: "/investments", label: "Monthly Earners", icon: BarChart3 },
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
+  { path: "/yield-farming", label: "Yield Farming", icon: CircleDollarSign },
   { path: "/spending", label: "Spending", icon: ReceiptText },
   { path: "/cloud", label: "Gamble", icon: Volleyball },
 ];

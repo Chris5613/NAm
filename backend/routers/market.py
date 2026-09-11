@@ -98,35 +98,103 @@ async def public_mlb_proxy(path: str, request: Request) -> Any:
 
 
 @router.api_route("/{provider}/{path:path}", methods=["GET", "POST"])
-async def proxy(provider: str, path: str, request: Request, user: User = Depends(current_user)) -> Any:
+async def proxy(
+    provider: str,
+    path: str,
+    request: Request,
+    user: User = Depends(current_user),
+) -> Any:
     providers = _provider_config()
     config = providers.get(provider)
+
     if not config:
-        raise HTTPException(status_code=404, detail=f"Unknown provider '{provider}'.")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown provider '{provider}'."
+        )
+
     if ".." in path:
-        raise HTTPException(status_code=400, detail="Invalid path.")
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid path."
+        )
+
     if not config["base"] or config["base"].endswith("//"):
-        raise HTTPException(status_code=503, detail=f"{provider} is not configured on the backend.")
+        raise HTTPException(
+            status_code=503,
+            detail=f"{provider} is not configured on the backend."
+        )
 
     params = dict(request.query_params)
     params.update(config.get("query", {}))
-    # The portfolio id is server config, not something the browser should need to know.
-    if provider == "coinstats" and path.startswith("portfolio/defi") and not params.get("portfolioId"):
-        params["portfolioId"] = os.getenv("COINSTATS_PORTFOLIO_ID", "")
-    query = urllib.parse.urlencode({k: v for k, v in params.items() if v != ""})
-    upstream_path = "" if provider == "solana" and path == "rpc" else f"/{path.lstrip('/')}"
-    url = f"{config['base']}{upstream_path}" + (f"?{query}" if query else "")
+
+    if (
+        provider == "coinstats"
+        and path.startswith("portfolio/defi")
+        and not params.get("portfolioId")
+    ):
+        params["portfolioId"] = os.getenv(
+            "COINSTATS_PORTFOLIO_ID",
+            ""
+        )
+
+    query = urllib.parse.urlencode(
+        {
+            k: v
+            for k, v in params.items()
+            if v != ""
+        }
+    )
+
+    upstream_path = (
+        ""
+        if provider == "solana" and path == "rpc"
+        else f"/{path.lstrip('/')}"
+    )
+
+    url = (
+        f"{config['base']}{upstream_path}"
+        + (f"?{query}" if query else "")
+    )
 
     cache_key = f"{provider}:{url}"
     cached = _cache.get(cache_key)
-    if cached and time.time() - cached[0] < CACHE_TTL_SECONDS:
+
+    if (
+        cached
+        and time.time() - cached[0]
+        < CACHE_TTL_SECONDS
+    ):
         return cached[1]
 
-    body = await request.body() if request.method == "POST" else None
-    data = _fetch(url, config.get("headers", {}), body)
-    _cache[cache_key] = (time.time(), data)
-    return data
+    body = (
+        await request.body()
+        if request.method == "POST"
+        else None
+    )
 
+    headers = dict(
+        config.get("headers", {})
+    )
+
+    if (
+        provider == "solana"
+        and request.method == "POST"
+    ):
+        headers["Content-Type"] = "application/json"
+
+    data = _fetch(
+        url,
+        headers,
+        body
+    )
+
+    _cache[cache_key] = (
+        time.time(),
+        data
+    )
+
+    return data
 
 @router.post("/solana/rpc")
 async def solana_rpc(payload: dict[str, Any], user: User = Depends(current_user)) -> Any:

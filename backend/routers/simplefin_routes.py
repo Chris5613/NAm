@@ -7,7 +7,7 @@ import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
-from urllib.parse import unquote, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 from typing import Any
 from uuid import uuid4
 
@@ -39,13 +39,19 @@ def get_cipher() -> Fernet:
 def normalize_access_url(access_url: str) -> tuple[str, str | None]:
     """Remove credentials from the URL and return an explicit Basic Auth value."""
     parts = urlsplit(access_url.strip())
+
     if parts.scheme != "https" or not parts.hostname:
-        raise HTTPException(status_code=400, detail="SimpleFIN returned an invalid HTTPS access URL.")
+        raise HTTPException(
+            status_code=400,
+            detail="SimpleFIN returned an invalid HTTPS access URL.",
+        )
 
     credentials = None
+
     if "@" in parts.netloc:
         userinfo, host = parts.netloc.rsplit("@", 1)
         username, separator, password = userinfo.partition(":")
+
         if separator:
             credentials = base64.b64encode(
                 f"{unquote(username)}:{unquote(password)}".encode("utf-8")
@@ -54,27 +60,42 @@ def normalize_access_url(access_url: str) -> tuple[str, str | None]:
         host = parts.netloc
 
     path = parts.path.rstrip("/") or "/accounts"
-    query = parts.query or urlencode({"version": "2"})
-    return urlunsplit(("https", host, path, query, "")), credentials
 
+    query_params = dict(
+        parse_qsl(parts.query, keep_blank_values=True)
+    )
 
-KNOWN_CARDS = (
-    ("chase sapphire preferred", "Chase", "Sapphire Preferred"),
-    ("chase sapphire reserve", "Chase", "Sapphire Reserve"),
-    ("chase freedom unlimited", "Chase", "Freedom Unlimited"),
-    ("chase freedom flex", "Chase", "Freedom Flex"),
-    ("chase slate edge", "Chase", "Slate Edge"),
-    ("capital one venture", "Capital One", "Venture"),
-    ("capital one savor", "Capital One", "Savor"),
-    ("american express gold", "American Express", "Gold"),
-    ("amex gold", "American Express", "Gold"),
-    ("american express platinum", "American Express", "Platinum"),
-    ("amex platinum", "American Express", "Platinum"),
-    ("discover it", "Discover", "it"),
-    ("citi double cash", "Citi", "Double Cash"),
-    ("citi custom cash", "Citi", "Custom Cash"),
-)
+    query_params.setdefault("version", "2")
+    query_params["pending"] = "1"
 
+    query = urlencode(query_params)
+
+    return (
+        urlunsplit(
+            (
+                "https",
+                host,
+                path,
+                query,
+                "",
+            )
+        ),
+        credentials,
+    )
+
+def simplefin_transaction_is_pending(
+    transaction: dict[str, Any],
+) -> bool:
+    value = transaction.get("pending", False)
+
+    if isinstance(value, str):
+        return value.strip().lower() in {
+            "1",
+            "true",
+            "yes",
+        }
+
+    return bool(value)
 
 def classify_account(account_type: Any, account_name: Any) -> dict[str, Any]:
     text = f"{account_type or ''} {account_name or ''}".lower()
@@ -290,18 +311,20 @@ def save_simplefin_payload(payload: dict[str, Any], connection: SimplefinConnect
             if existing_transaction is not None:
                 continue
 
-            row = SpendingTransaction(
-                id=f"simplefin-{transaction_id}",
-                user_id=user.id,
-                merchant=merchant,
-                amount=amount,
-                date=str(posted)[:10],
-                category=classify_transaction(transaction),
-                account_id=account_key,
-                pending=False,
-                hidden=False,
-                source="simplefin",
-            )
+row = SpendingTransaction(
+    id=f"simplefin-{transaction_id}",
+    user_id=user.id,
+    merchant=merchant,
+    amount=amount,
+    date=str(posted)[:10],
+    category=classify_transaction(transaction),
+    account_id=account_key,
+    pending=simplefin_transaction_is_pending(
+        transaction
+    ),
+    hidden=False,
+    source="simplefin",
+)
             db.merge(row)
             saved.append(row)
     connection.last_synced_at = utcnow()
@@ -404,10 +427,16 @@ async def sync_simplefin(
             db.merge(account_row)
             seen_txns = set()
             for transaction in account.get("transactions", []):
-                transaction_id = transaction.get("id")
-                posted = transaction.get("posted")
-                if not transaction_id or not posted:
-                    continue
+transaction_id = transaction.get("id")
+
+posted = normalize_transaction_date(
+    transaction.get("posted")
+    or transaction.get("transacted")
+    or transaction.get("date")
+)
+
+if not transaction_id or not posted:
+    continue
                 amount = abs(float(transaction.get("amount") or 0))
                 if amount <= 0:
                     continue
@@ -427,17 +456,19 @@ async def sync_simplefin(
                     )
                 ) is not None:
                     continue
-                row = SpendingTransaction(
-                    id=f"simplefin-{transaction_id}",
-                    user_id=user.id,
-                    merchant=merchant,
-                    amount=amount,
-                    date=str(posted)[:10],
-                    category=classify_transaction(transaction),
-                    account_id=f"simplefin-{account_id}",
-                    pending=False,
-                    source="simplefin",
-                )
+row = SpendingTransaction(
+    id=f"simplefin-{transaction_id}",
+    user_id=user.id,
+    merchant=merchant,
+    amount=amount,
+    date=str(posted)[:10],
+    category=classify_transaction(transaction),
+    account_id=f"simplefin-{account_id}",
+    pending=simplefin_transaction_is_pending(
+        transaction
+    ),
+    source="simplefin",
+)
                 db.merge(row)
                 saved.append(row)
         connection.last_synced_at = utcnow()
