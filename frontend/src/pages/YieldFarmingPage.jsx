@@ -3536,6 +3536,11 @@ export default function YieldFarmingPage() {
           totalBalance={
             summary.portfolioBalance
           }
+          trxBalance={
+            Number(
+              rollerCoinStats?.lifetimeUsd
+            ) || 0
+          }
         />
       </section>
 
@@ -4952,6 +4957,7 @@ function ProjectIncomeModal({
 function PortfolioAllocationBar({
   projects,
   totalBalance,
+  trxBalance = 0,
 }) {
   const coinBalances =
     new Map();
@@ -4999,6 +5005,19 @@ function PortfolioAllocationBar({
     }
   );
 
+  if (
+    Number(
+      trxBalance
+    ) > 0
+  ) {
+    coinBalances.set(
+      "TRX",
+      Number(
+        trxBalance
+      )
+    );
+  }
+
   const coins = [
     ...coinBalances.entries(),
   ]
@@ -5020,12 +5039,25 @@ function PortfolioAllocationBar({
         a.balance
     );
 
+  const breakdownTotal =
+    coins.reduce(
+      (
+        sum,
+        coin
+      ) =>
+        sum +
+        (
+          Number(
+            coin.balance
+          ) || 0
+        ),
+      0
+    );
+
   if (
     !coins.length ||
     !(
-      Number(
-        totalBalance
-      ) > 0
+      breakdownTotal > 0
     )
   ) {
     return null;
@@ -5071,6 +5103,13 @@ function PortfolioAllocationBar({
         return "bg-yellow-400";
       }
 
+      if (
+        normalized ===
+        "TRX"
+      ) {
+        return "bg-red-500";
+      }
+
       return fallbackClasses[
         index %
           fallbackClasses.length
@@ -5088,9 +5127,7 @@ function PortfolioAllocationBar({
             const width =
               (
                 coin.balance /
-                Number(
-                  totalBalance
-                )
+                breakdownTotal
               ) *
               100;
 
