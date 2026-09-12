@@ -4680,15 +4680,15 @@ function SaladProjectCard({
         <div className="shrink-0 text-right">
           <div className="text-2xl font-semibold tabular-nums">
             {formatCurrency(
-              stats?.lifetimeUsd
+              stats?.currentBalance
             )}
           </div>
 
           <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
             {formatCurrency(
-              stats?.currentBalance
+              stats?.lifetimeUsd
             )}{" "}
-            available
+            lifetime earned
           </div>
         </div>
       </button>
