@@ -47,6 +47,7 @@ def _provider_config() -> dict[str, dict[str, Any]]:
         "nosana": {"base": "https://dashboard.k8s.prd.nos.ci/api"},
         "mlb": {"base": "https://statsapi.mlb.com/api/v1"},
         "lulo": {"base": "https://api.lulo.fi"},
+        "ratex": {"base": "https://api.rate-x.io"},
         "solana": {"base": os.getenv("SOLANA_RPC_URL", "https://api.mainnet-beta.solana.com")},
         "ebay": {
             "base": f"https://{os.getenv('RAPIDAPI_EBAY_HOST', '')}",
@@ -178,7 +179,7 @@ async def proxy(
     )
 
     if (
-        provider == "solana"
+        provider in {"solana", "ratex"}
         and request.method == "POST"
     ):
         headers["Content-Type"] = "application/json"
