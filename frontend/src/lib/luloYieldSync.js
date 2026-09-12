@@ -1,5 +1,6 @@
-const LULO_API_BASE =
-  "/api/market/lulo";
+import {
+  proxyFetch,
+} from "./cors-proxy";
 
 const USDS_MINT =
   "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA";
@@ -53,19 +54,22 @@ async function getJson(
   path,
   walletAddress
 ) {
-  const url =
-    `${LULO_API_BASE}/${path}` +
-    `?owner=${encodeURIComponent(
-      walletAddress
-    )}` +
-    `&_=${Date.now()}`;
+  const params =
+    new URLSearchParams({
+      owner:
+        walletAddress,
+      _:
+        String(
+          Date.now()
+        ),
+    });
 
   const response =
-    await fetch(
-      url,
+    await proxyFetch(
+      `/lulo/${path}?${params.toString()}`,
       {
-        credentials:
-          "include",
+        method:
+          "GET",
 
         cache:
           "no-store",
@@ -91,7 +95,7 @@ async function getJson(
     throw new Error(
       `Lulo ${path} returned HTTP ${response.status}: ${raw.slice(
         0,
-        200
+        220
       )}`
     );
   }
@@ -102,9 +106,9 @@ async function getJson(
     )
   ) {
     throw new Error(
-      `Lulo ${path} returned non-JSON content (${contentType || "unknown content type"}): ${raw.slice(
+      `Lulo ${path} returned non-JSON content (${contentType || "unknown"}): ${raw.slice(
         0,
-        200
+        220
       )}`
     );
   }
@@ -113,13 +117,11 @@ async function getJson(
     return JSON.parse(
       raw
     );
-  } catch (
-    error
-  ) {
+  } catch {
     throw new Error(
       `Lulo ${path} returned invalid JSON: ${raw.slice(
         0,
-        200
+        220
       )}`
     );
   }
@@ -187,36 +189,6 @@ export async function getLuloYieldSnapshot(
     );
 
   if (
-    !account &&
-    !customAccount
-  ) {
-    const errors = [
-      accountResult,
-      customAccountResult,
-    ]
-      .filter(
-        (result) =>
-          result.status ===
-          "rejected"
-      )
-      .map(
-        (result) =>
-          result.reason
-            ?.message
-      )
-      .filter(
-        Boolean
-      );
-
-    throw new Error(
-      errors.join(
-        " | "
-      ) ||
-        "Lulo account data is unavailable."
-    );
-  }
-
-  if (
     accountResult.status ===
     "rejected"
   ) {
@@ -243,6 +215,40 @@ export async function getLuloYieldSnapshot(
     console.warn(
       "Lulo v0 account request failed:",
       customAccountResult.reason
+    );
+  }
+
+  if (
+    !account &&
+    !customAccount
+  ) {
+    const errors = [
+      accountResult,
+      customAccountResult,
+    ]
+      .filter(
+        (
+          result
+        ) =>
+          result.status ===
+          "rejected"
+      )
+      .map(
+        (
+          result
+        ) =>
+          result.reason
+            ?.message
+      )
+      .filter(
+        Boolean
+      );
+
+    throw new Error(
+      errors.join(
+        " | "
+      ) ||
+        "Lulo account data is unavailable."
     );
   }
 
@@ -277,7 +283,9 @@ export async function getLuloYieldSnapshot(
 
   const usdsToken =
     tokenBalances.find(
-      (token) =>
+      (
+        token
+      ) =>
         token?.mint ===
         USDS_MINT
     );
@@ -341,6 +349,14 @@ export async function getLuloYieldSnapshot(
         0,
         customBalanceUsd
       );
+  }
+
+  if (
+    !(totalBalanceUsd > 0)
+  ) {
+    throw new Error(
+      "Lulo returned account data but no usable USD balance."
+    );
   }
 
   const regularApy =
@@ -422,14 +438,6 @@ export async function getLuloYieldSnapshot(
       account
         ?.protectedInterest
     );
-
-  if (
-    !(totalBalanceUsd > 0)
-  ) {
-    throw new Error(
-      "Lulo returned account data, but no usable USD balance was found."
-    );
-  }
 
   return {
     walletAddress,
@@ -685,33 +693,32 @@ export function applyLuloYieldSnapshot(
     }
   }
 
-  const getTrackedEarned =
-    (items) =>
-      initialEarned +
-      items
-        .filter(
+  const trackedEarned =
+    initialEarned +
+    transactions
+      .filter(
+        (
+          transaction
+        ) =>
+          transaction
+            .source ===
+            "lulo_yield"
+      )
+      .reduce(
+        (
+          total,
+          transaction
+        ) =>
+          total +
           (
-            transaction
-          ) =>
-            transaction
-              .source ===
-              "lulo_yield"
-        )
-        .reduce(
-          (
-            total,
-            transaction
-          ) =>
-            total +
-            (
-              Number(
-                transaction
-                  .amount
-              ) ||
-              0
-            ),
-          0
-        );
+            Number(
+              transaction
+                .amount
+            ) ||
+            0
+          ),
+        0
+      );
 
   const configuredInvested =
     Number(
@@ -754,9 +761,7 @@ export function applyLuloYieldSnapshot(
       initialEarned,
 
     earned:
-      getTrackedEarned(
-        transactions
-      ),
+      trackedEarned,
 
     lulo_total_balance_usd:
       totalBalanceUsd,
