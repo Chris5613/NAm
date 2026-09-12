@@ -6117,7 +6117,7 @@ function PortfolioAllocationBar({
         )}
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground">
+      <div className="mt-3 flex flex-wrap gap-x-7 gap-y-2.5 text-base font-medium text-muted-foreground">
         {coins.map(
           (
             coin,
@@ -6127,10 +6127,10 @@ function PortfolioAllocationBar({
               key={
                 coin.symbol
               }
-              className="flex items-center gap-1.5"
+              className="flex items-center gap-2"
             >
               <span
-                className={`h-2 w-2 rounded-full ${getCoinColor(
+                className={`h-3.5 w-3.5 rounded-full ${getCoinColor(
                   coin.symbol,
                   index
                 )}`}
@@ -6142,7 +6142,7 @@ function PortfolioAllocationBar({
                 }
               </span>
 
-              <span className="tabular-nums">
+              <span className="tabular-nums text-foreground/95">
                 {formatCurrency(
                   coin.balance
                 )}
