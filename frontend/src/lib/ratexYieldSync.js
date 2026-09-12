@@ -17,12 +17,27 @@ export const RATEX_PTONYC_COST_BASIS_USD = 600;
 const TOKEN_PROGRAM_ID =
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
-const USDC_MINT =
-  "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
-
-const USDC_DECIMALS = 6;
-
+// Only used if Jupiter Portfolio AND Jupiter Price V3 fail.
 const LAST_KNOWN_PTONYC_PRICE = 0.99229;
+
+function toNumber(value) {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(
+      value
+        .replace(/[$,%]/g, "")
+        .replace(/,/g, "")
+        .trim()
+    );
+
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
 
 function getUsdPrice(value) {
   if (Number.isFinite(Number(value))) {
@@ -37,259 +52,478 @@ function getUsdPrice(value) {
   );
 }
 
-function buildRatexCid() {
-  const hex =
-    "0123456789abcdef";
+function normalizePercent(value) {
+  if (value == null) {
+    return 0;
+  }
 
-  const part = () =>
-    Array.from(
-      { length: 4 },
-      () =>
-        hex[
-          Math.floor(
-            Math.random() *
-              hex.length
-          )
-        ]
-    ).join("");
+  const wasPercentString =
+    typeof value === "string" &&
+    value.includes("%");
 
-  return Array.from(
-    { length: 12 },
-    part
-  ).join("-");
+  const numeric = toNumber(value);
+
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0;
+  }
+
+  if (wasPercentString) {
+    return numeric;
+  }
+
+  // Some APIs return 0.1347 for 13.47%.
+  if (numeric > 0 && numeric <= 1) {
+    return numeric * 100;
+  }
+
+  return numeric;
 }
 
-async function ratexRpc(
-  serverName,
-  method,
-  content = {}
+function textIncludesRatex(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .includes("ratex");
+}
+
+function textIncludesPtonyc(value) {
+  const text = String(value ?? "")
+    .replace(/[^a-z0-9]/gi, "")
+    .toLowerCase();
+
+  return (
+    text.includes("ptonyc") ||
+    text.includes("onyc")
+  );
+}
+
+function walkObjects(value, callback, parent = null) {
+  if (!value || typeof value !== "object") {
+    return;
+  }
+
+  callback(value, parent);
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => {
+      walkObjects(item, callback, value);
+    });
+
+    return;
+  }
+
+  Object.values(value).forEach((child) => {
+    if (child && typeof child === "object") {
+      walkObjects(child, callback, value);
+    }
+  });
+}
+
+function getObjectAddress(object) {
+  return String(
+    object?.address ??
+      object?.mint ??
+      object?.mintAddress ??
+      object?.tokenAddress ??
+      object?.tokenMint ??
+      ""
+  );
+}
+
+function getObjectSymbol(object) {
+  return String(
+    object?.symbol ??
+      object?.ticker ??
+      object?.name ??
+      object?.tokenSymbol ??
+      object?.tokenName ??
+      ""
+  );
+}
+
+function findRatexTokenNode(ratexElements) {
+  const candidates = [];
+
+  ratexElements.forEach((element) => {
+    walkObjects(
+      element,
+      (object, parent) => {
+        let score = 0;
+
+        const address =
+          getObjectAddress(object);
+
+        const symbol =
+          getObjectSymbol(object);
+
+        if (
+          address ===
+          RATEX_PTONYC_MINT
+        ) {
+          score += 100;
+        }
+
+        if (
+          textIncludesPtonyc(
+            symbol
+          )
+        ) {
+          score += 30;
+        }
+
+        if (
+          toNumber(
+            object?.price
+          ) > 0
+        ) {
+          score += 10;
+        }
+
+        if (
+          toNumber(
+            object?.amount ??
+              object?.balance ??
+              object?.quantity
+          ) > 0
+        ) {
+          score += 5;
+        }
+
+        if (score > 0) {
+          candidates.push({
+            object,
+            parent,
+            element,
+            score,
+          });
+        }
+      }
+    );
+  });
+
+  candidates.sort(
+    (a, b) =>
+      b.score - a.score
+  );
+
+  return candidates[0] || null;
+}
+
+function extractPrice(candidate) {
+  if (!candidate) {
+    return 0;
+  }
+
+  const object =
+    candidate.object || {};
+
+  const parent =
+    candidate.parent || {};
+
+  const directPrice = toNumber(
+    object?.price ??
+      object?.priceUsd ??
+      object?.usdPrice ??
+      object?.currentPrice
+  );
+
+  if (directPrice > 0) {
+    return directPrice;
+  }
+
+  const parentPrice = toNumber(
+    parent?.price ??
+      parent?.priceUsd ??
+      parent?.usdPrice ??
+      parent?.currentPrice
+  );
+
+  if (parentPrice > 0) {
+    return parentPrice;
+  }
+
+  const amount = toNumber(
+    object?.amount ??
+      object?.balance ??
+      object?.quantity ??
+      parent?.amount ??
+      parent?.balance ??
+      parent?.quantity
+  );
+
+  const value = toNumber(
+    object?.value ??
+      object?.usdValue ??
+      object?.valueUsd ??
+      parent?.value ??
+      parent?.usdValue ??
+      parent?.valueUsd
+  );
+
+  if (
+    amount > 0 &&
+    value > 0
+  ) {
+    return value / amount;
+  }
+
+  return 0;
+}
+
+function extractQuantity(candidate) {
+  if (!candidate) {
+    return 0;
+  }
+
+  const object =
+    candidate.object || {};
+
+  const parent =
+    candidate.parent || {};
+
+  return toNumber(
+    object?.amount ??
+      object?.balance ??
+      object?.quantity ??
+      object?.tokenAmount ??
+      parent?.amount ??
+      parent?.balance ??
+      parent?.quantity ??
+      parent?.tokenAmount
+  );
+}
+
+function findYieldInObject(root) {
+  if (!root) {
+    return 0;
+  }
+
+  const yieldKeys = new Set([
+    "apy",
+    "apr",
+    "yield",
+    "yieldrate",
+    "yield_rate",
+    "fixedapy",
+    "fixed_apy",
+    "fixedyield",
+    "fixed_yield",
+    "annualyield",
+    "annual_yield",
+  ]);
+
+  let result = 0;
+
+  walkObjects(root, (object) => {
+    if (result > 0 || Array.isArray(object)) {
+      return;
+    }
+
+    Object.entries(object).some(
+      ([key, value]) => {
+        const normalizedKey =
+          key.toLowerCase();
+
+        if (
+          !yieldKeys.has(
+            normalizedKey
+          )
+        ) {
+          return false;
+        }
+
+        const percent =
+          normalizePercent(
+            value
+          );
+
+        if (
+          percent > 0 &&
+          percent < 1000
+        ) {
+          result = percent;
+          return true;
+        }
+
+        return false;
+      }
+    );
+  });
+
+  return result;
+}
+
+async function getJupiterPortfolioRatex(
+  walletAddress
 ) {
+  const params =
+    new URLSearchParams({
+      platforms: "ratex",
+
+      // Avoid getting a cached browser response.
+      _: String(
+        Date.now()
+      ),
+    });
+
   const response =
     await proxyFetch(
-      "/ratex/",
+      `/jupiter-portfolio/portfolio/v1/positions/${encodeURIComponent(
+        walletAddress
+      )}?${params.toString()}`,
       {
-        method: "POST",
-
+        method: "GET",
+        cache: "no-store",
         headers: {
-          "Content-Type":
-            "application/json",
-
           Accept:
             "application/json",
         },
-
-        body:
-          JSON.stringify({
-            serverName,
-
-            method,
-
-            content: {
-              cid:
-                buildRatexCid(),
-
-              ...content,
-            },
-          }),
       }
     );
 
   const raw =
     await response.text();
 
-  let payload = null;
+  if (!response.ok) {
+    throw new Error(
+      `Jupiter Portfolio returned ${response.status}: ${raw.slice(
+        0,
+        250
+      )}`
+    );
+  }
+
+  let payload;
 
   try {
     payload =
       raw
         ? JSON.parse(raw)
-        : null;
+        : {};
   } catch {
     throw new Error(
-      `RateX returned non-JSON content: ${raw.slice(
+      `Jupiter Portfolio returned invalid JSON: ${raw.slice(
         0,
-        180
+        250
       )}`
     );
   }
 
-  if (!response.ok) {
-    throw new Error(
-      payload?.detail ||
-        payload?.message ||
-        `RateX returned HTTP ${response.status}`
-    );
-  }
-
-  if (
-    payload &&
-    typeof payload ===
-      "object" &&
-    !Array.isArray(
-      payload
-    ) &&
-    payload.code != null &&
-    Number(
-      payload.code
-    ) !== 0
-  ) {
-    throw new Error(
-      payload.msg ||
-        payload.message ||
-        `RateX RPC ${method} failed with code ${payload.code}`
-    );
-  }
-
-  return (
-    payload?.data ??
-    payload
-  );
-}
-
-function normalizeText(
-  value
-) {
-  return String(
-    value ?? ""
-  )
-    .trim()
-    .toLowerCase();
-}
-
-function getSecurityId(
-  row
-) {
-  return String(
-    row?.symbol ??
-      row?.symbol_name ??
-      row?.SecurityID ??
-      ""
-  ).trim();
-}
-
-function getTargetRatexSuffix() {
-  const maturity =
-    new Date(
-      RATEX_PTONYC_MATURITY
-    );
-
-  return `${String(
-    maturity.getFullYear()
-  ).slice(-2)}${String(
-    maturity.getMonth() + 1
-  ).padStart(
-    2,
-    "0"
-  )}`;
-}
-
-async function getRatexLiveMarket() {
-  const snapshot =
-    await ratexRpc(
-      "MDSvr",
-      "queryTrade"
-    );
-
-  const trades =
+  const elements =
     Array.isArray(
-      snapshot
+      payload?.elements
     )
-      ? snapshot
+      ? payload.elements
       : [];
 
-  const targetSuffix =
-    getTargetRatexSuffix();
-
-  const trade =
-    trades.find(
-      (row) => {
-        const securityId =
-          getSecurityId(
-            row
-          );
-
-        return (
-          normalizeText(
-            securityId
-          ).includes(
-            "onyc"
-          ) &&
-          securityId.endsWith(
-            `-${targetSuffix}`
-          )
-        );
-      }
+  /*
+   * We requested platforms=ratex, but still explicitly
+   * filter in case the API returns additional elements.
+   */
+  let ratexElements =
+    elements.filter(
+      (element) =>
+        String(
+          element?.platformId ??
+            ""
+        ).toLowerCase() ===
+          "ratex" ||
+        textIncludesRatex(
+          element?.name
+        ) ||
+        textIncludesRatex(
+          element?.label
+        )
     );
-
-  if (!trade) {
-    throw new Error(
-      `Could not find the live RateX ONyc-${targetSuffix} market.`
-    );
-  }
-
-  const securityId =
-    getSecurityId(
-      trade
-    );
-
-  const ytPrice =
-    Number(
-      trade?.LastPrice
-    );
-
-  if (
-    !Number.isFinite(
-      ytPrice
-    ) ||
-    ytPrice < 0 ||
-    ytPrice > 1
-  ) {
-    throw new Error(
-      `RateX returned an invalid ONyc YT price for ${securityId}.`
-    );
-  }
 
   /*
-   * RateX reports the YT market price.
-   * PT price = 1 - YT price.
+   * If Jupiter already honored platforms=ratex but omitted
+   * platformId on the returned object, use those elements.
    */
-  const ptPrice =
-    1 - ytPrice;
+  if (
+    ratexElements.length ===
+      0 &&
+    elements.length > 0
+  ) {
+    ratexElements =
+      elements;
+  }
 
-  const rawYield =
-    Number(
-      trade?.Yield
+  if (
+    ratexElements.length ===
+    0
+  ) {
+    const fetcherStatus =
+      Array.isArray(
+        payload?.fetcherReports
+      )
+        ? payload.fetcherReports
+            .map(
+              (report) =>
+                `${report?.id ?? "unknown"}:${report?.status ?? "unknown"}`
+            )
+            .join(", ")
+        : "";
+
+    throw new Error(
+      `Jupiter Portfolio returned no RateX position${
+        fetcherStatus
+          ? ` (${fetcherStatus})`
+          : ""
+      }.`
+    );
+  }
+
+  const tokenCandidate =
+    findRatexTokenNode(
+      ratexElements
     );
 
-  const fixedApy =
-    Number.isFinite(
-      rawYield
-    )
-      ? rawYield <= 1
-        ? rawYield *
-          100
-        : rawYield
-      : 0;
+  if (!tokenCandidate) {
+    throw new Error(
+      "Jupiter Portfolio found RateX but could not locate the PTONyc position."
+    );
+  }
+
+  const priceUsd =
+    extractPrice(
+      tokenCandidate
+    );
+
+  const quantity =
+    extractQuantity(
+      tokenCandidate
+    );
+
+  /*
+   * Look closest to the PTONyc token first.
+   * If Jupiter stores the APY higher up on the
+   * RateX position, search the full element next.
+   */
+  let fixedApy =
+    findYieldInObject(
+      tokenCandidate.object
+    );
+
+  if (!(fixedApy > 0)) {
+    fixedApy =
+      findYieldInObject(
+        tokenCandidate.parent
+      );
+  }
+
+  if (!(fixedApy > 0)) {
+    fixedApy =
+      findYieldInObject(
+        tokenCandidate.element
+      );
+  }
 
   return {
-    securityId,
-
-    priceUsd:
-      ptPrice,
-
+    quantity,
+    priceUsd,
     fixedApy,
-
-    ytPrice,
-
-    indexPrice:
-      Number(
-        trade?.IndexPrice
-      ) || 0,
-
-    availableLiquidity:
-      Number(
-        trade?.AvaLiquidity
-      ) || 0,
+    element:
+      tokenCandidate.element,
   };
 }
 
@@ -334,20 +568,16 @@ async function getWalletTokenAccounts(
       }
     );
 
-  if (
-    !response.ok
-  ) {
+  if (!response.ok) {
     const detail =
       await response
         .text()
-        .catch(
-          () => ""
-        );
+        .catch(() => "");
 
     throw new Error(
       `Solana RPC returned ${response.status}: ${detail.slice(
         0,
-        160
+        200
       )}`
     );
   }
@@ -355,9 +585,7 @@ async function getWalletTokenAccounts(
   const payload =
     await response.json();
 
-  if (
-    payload?.error
-  ) {
+  if (payload?.error) {
     throw new Error(
       payload.error
         ?.message ||
@@ -374,91 +602,9 @@ async function getWalletTokenAccounts(
     : [];
 }
 
-async function getJupiterQuotePrice(
-  decimals = 6
+function getRpcPtonycPosition(
+  accounts
 ) {
-  const inputAmount =
-    BigInt(10) **
-    BigInt(
-      Math.max(
-        0,
-        Number(
-          decimals
-        ) || 0
-      )
-    );
-
-  const params =
-    new URLSearchParams({
-      inputMint:
-        RATEX_PTONYC_MINT,
-
-      outputMint:
-        USDC_MINT,
-
-      amount:
-        inputAmount.toString(),
-
-      slippageBps:
-        "50",
-
-      restrictIntermediateTokens:
-        "true",
-    });
-
-  const response =
-    await proxyFetch(
-      `/jupiter/swap/v1/quote?${params.toString()}`
-    );
-
-  if (
-    !response.ok
-  ) {
-    const detail =
-      await response
-        .text()
-        .catch(
-          () => ""
-        );
-
-    throw new Error(
-      `Jupiter quote returned ${response.status}: ${detail.slice(
-        0,
-        160
-      )}`
-    );
-  }
-
-  const quote =
-    await response.json();
-
-  const outAmount =
-    Number(
-      quote?.outAmount
-    ) || 0;
-
-  if (
-    !(outAmount > 0)
-  ) {
-    return 0;
-  }
-
-  return (
-    outAmount /
-    10 **
-      USDC_DECIMALS
-  );
-}
-
-export async function getRatexPtonycSnapshot(
-  walletAddress =
-    RATEX_WALLET
-) {
-  const accounts =
-    await getWalletTokenAccounts(
-      walletAddress
-    );
-
   const tokenAccount =
     accounts.find(
       (entry) =>
@@ -474,24 +620,96 @@ export async function getRatexPtonycSnapshot(
       ?.parsed?.info
       ?.tokenAmount;
 
-  const quantity =
-    Number(
-      tokenAmount
-        ?.uiAmountString ??
+  return {
+    quantity:
+      Number(
         tokenAmount
-          ?.uiAmount ??
-        0
-    ) || 0;
+          ?.uiAmountString ??
+          tokenAmount
+            ?.uiAmount ??
+          0
+      ) || 0,
 
-  const decimals =
-    Number(
-      tokenAmount
-        ?.decimals
-    ) || 0;
+    decimals:
+      Number(
+        tokenAmount
+          ?.decimals
+      ) || 0,
+  };
+}
+
+export async function getRatexPtonycSnapshot(
+  walletAddress =
+    RATEX_WALLET
+) {
+  /*
+   * Jupiter Portfolio and Solana RPC are independent.
+   * Run them together so a temporary failure in one
+   * doesn't kill the entire RateX position.
+   */
+  const [
+    portfolioResult,
+    accountsResult,
+  ] =
+    await Promise.allSettled([
+      getJupiterPortfolioRatex(
+        walletAddress
+      ),
+
+      getWalletTokenAccounts(
+        walletAddress
+      ),
+    ]);
+
+  let portfolio =
+    null;
 
   if (
-    !(quantity > 0)
+    portfolioResult.status ===
+    "fulfilled"
   ) {
+    portfolio =
+      portfolioResult.value;
+  } else {
+    console.warn(
+      "RateX Jupiter Portfolio lookup failed:",
+      portfolioResult.reason
+    );
+  }
+
+  let rpcPosition = {
+    quantity: 0,
+    decimals: 0,
+  };
+
+  if (
+    accountsResult.status ===
+    "fulfilled"
+  ) {
+    rpcPosition =
+      getRpcPtonycPosition(
+        accountsResult.value
+      );
+  } else {
+    console.warn(
+      "RateX Solana balance lookup failed:",
+      accountsResult.reason
+    );
+  }
+
+  /*
+   * Prefer the on-chain amount because that is the
+   * actual quantity in your wallet. Jupiter Portfolio
+   * is used as a fallback if RPC is unavailable.
+   */
+  const quantity =
+    rpcPosition.quantity > 0
+      ? rpcPosition.quantity
+      : Number(
+          portfolio?.quantity
+        ) || 0;
+
+  if (!(quantity > 0)) {
     return {
       walletAddress,
 
@@ -502,17 +720,26 @@ export async function getRatexPtonycSnapshot(
 
       priceUsd: 0,
 
+      priceSource:
+        "none",
+
       currentValueUsd:
         0,
 
       fixedApy:
         RATEX_PTONYC_FIXED_APY,
 
+      apySource:
+        "fallback",
+
       maturity:
         RATEX_PTONYC_MATURITY,
 
       maturityValueUsd:
         0,
+
+      costBasisUsd:
+        RATEX_PTONYC_COST_BASIS_USD,
 
       earnedUsd: 0,
 
@@ -525,9 +752,6 @@ export async function getRatexPtonycSnapshot(
       source:
         "solana_rpc",
 
-      priceSource:
-        "none",
-
       syncedAt:
         new Date()
           .toISOString(),
@@ -535,71 +759,25 @@ export async function getRatexPtonycSnapshot(
   }
 
   let priceUsd =
-    0;
-
-  let fixedApy =
-    RATEX_PTONYC_FIXED_APY;
+    Number(
+      portfolio?.priceUsd
+    ) || 0;
 
   let priceSource =
-    "none";
-
-  let ratexMarket =
-    null;
-
-  /*
-   * PRIMARY:
-   * RateX's own live
-   * market feed.
-   */
-  try {
-    ratexMarket =
-      await getRatexLiveMarket();
-
-    if (
-      ratexMarket
-        .priceUsd >
-      0
-    ) {
-      priceUsd =
-        ratexMarket
-          .priceUsd;
-
-      priceSource =
-        "ratex_live";
-    }
-
-    if (
-      ratexMarket
-        .fixedApy >
-      0
-    ) {
-      fixedApy =
-        ratexMarket
-          .fixedApy;
-    }
-  } catch (
-    error
-  ) {
-    console.warn(
-      "RateX live market lookup failed:",
-      error
-    );
-  }
+    priceUsd > 0
+      ? "jupiter_portfolio"
+      : "none";
 
   /*
-   * FALLBACK 1:
-   * Jupiter price API.
+   * Price V3 is now only a fallback.
+   * It is NOT the primary RateX valuation source.
    */
-  if (
-    !(priceUsd > 0)
-  ) {
+  if (!(priceUsd > 0)) {
     try {
       const prices =
-        await jupiterPriceApi.getPrices(
-          [
-            RATEX_PTONYC_MINT,
-          ]
-        );
+        await jupiterPriceApi.getPrices([
+          RATEX_PTONYC_MINT,
+        ]);
 
       priceUsd =
         getUsdPrice(
@@ -608,59 +786,22 @@ export async function getRatexPtonycSnapshot(
           ]
         );
 
-      if (
-        priceUsd >
-        0
-      ) {
+      if (priceUsd > 0) {
         priceSource =
-          "jupiter_price";
+          "jupiter_price_v3";
       }
-    } catch (
-      error
-    ) {
+    } catch (error) {
       console.warn(
-        "RateX PTONyc Jupiter price lookup failed:",
+        "RateX Jupiter Price V3 fallback failed:",
         error
       );
     }
   }
 
   /*
-   * FALLBACK 2:
-   * Jupiter swap quote.
+   * Final display fallback only.
    */
-  if (
-    !(priceUsd > 0)
-  ) {
-    try {
-      priceUsd =
-        await getJupiterQuotePrice(
-          decimals
-        );
-
-      if (
-        priceUsd >
-        0
-      ) {
-        priceSource =
-          "jupiter_quote";
-      }
-    } catch (
-      error
-    ) {
-      console.warn(
-        "RateX PTONyc Jupiter quote lookup failed:",
-        error
-      );
-    }
-  }
-
-  /*
-   * LAST RESORT.
-   */
-  if (
-    !(priceUsd > 0)
-  ) {
+  if (!(priceUsd > 0)) {
     priceUsd =
       LAST_KNOWN_PTONYC_PRICE;
 
@@ -668,10 +809,28 @@ export async function getRatexPtonycSnapshot(
       "ratex_last_known";
   }
 
+  const portfolioApy =
+    Number(
+      portfolio?.fixedApy
+    ) || 0;
+
+  const fixedApy =
+    portfolioApy > 0
+      ? portfolioApy
+      : RATEX_PTONYC_FIXED_APY;
+
+  const apySource =
+    portfolioApy > 0
+      ? "jupiter_portfolio"
+      : "fallback";
+
   const currentValueUsd =
     quantity *
     priceUsd;
 
+  /*
+   * PT tokens redeem 1:1 at maturity.
+   */
   const maturityValueUsd =
     quantity;
 
@@ -712,6 +871,8 @@ export async function getRatexPtonycSnapshot(
 
     fixedApy,
 
+    apySource,
+
     maturity:
       RATEX_PTONYC_MATURITY,
 
@@ -726,25 +887,10 @@ export async function getRatexPtonycSnapshot(
 
     remainingYieldUsd,
 
-    ratexSecurityId:
-      ratexMarket
-        ?.securityId ||
-      null,
-
-    ratexYtPrice:
-      ratexMarket
-        ?.ytPrice ??
-      null,
-
-    ratexIndexPrice:
-      ratexMarket
-        ?.indexPrice ??
-      null,
-
     source:
       priceSource ===
-      "ratex_live"
-        ? "solana_rpc+ratex_rpc"
+      "jupiter_portfolio"
+        ? "jupiter_portfolio+solana_rpc"
         : "solana_rpc",
 
     syncedAt:
