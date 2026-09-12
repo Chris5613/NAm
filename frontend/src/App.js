@@ -6,7 +6,6 @@ import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/pages/Dashboard";
 import InvestmentOverview from "@/pages/InvestmentOverview";
 import CryptoPage from "@/pages/CryptoPage";
-import IntegrationsPage from "@/pages/IntegrationsPage";
 import CloudPage from "@/pages/CloudPage";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import { Toaster } from "@/components/ui/sonner";
@@ -41,7 +40,6 @@ function App() {
               <Route path="/crypto" element={<CryptoPage />} />
               <Route path="/yield-farming" element={<YieldFarmingPage />} />
               <Route path="/spending" element={<SpendingPage />} />
-              <Route path="/integrations" element={<IntegrationsPage />} />
               <Route path="/cloud" element={<CloudPage />} />
             </Routes>
           </div>

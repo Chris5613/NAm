@@ -53,14 +53,9 @@ async function getJson(
   path,
   walletAddress
 ) {
-  const separator =
-    path.includes("?")
-      ? "&"
-      : "?";
-
   const url =
     `${LULO_API_BASE}/${path}` +
-    `${separator}owner=${encodeURIComponent(
+    `?owner=${encodeURIComponent(
       walletAddress
     )}` +
     `&_=${Date.now()}`;
@@ -82,29 +77,52 @@ async function getJson(
       }
     );
 
+  const contentType =
+    response.headers.get(
+      "content-type"
+    ) || "";
+
+  const raw =
+    await response.text();
+
   if (
     !response.ok
   ) {
-    const detail =
-      await response
-        .text()
-        .catch(
-          () => ""
-        );
-
     throw new Error(
-      `Lulo ${path} returned HTTP ${response.status}${
-        detail
-          ? `: ${detail.slice(
-              0,
-              160
-            )}`
-          : ""
-      }`
+      `Lulo ${path} returned HTTP ${response.status}: ${raw.slice(
+        0,
+        200
+      )}`
     );
   }
 
-  return response.json();
+  if (
+    !contentType.includes(
+      "application/json"
+    )
+  ) {
+    throw new Error(
+      `Lulo ${path} returned non-JSON content (${contentType || "unknown content type"}): ${raw.slice(
+        0,
+        200
+      )}`
+    );
+  }
+
+  try {
+    return JSON.parse(
+      raw
+    );
+  } catch (
+    error
+  ) {
+    throw new Error(
+      `Lulo ${path} returned invalid JSON: ${raw.slice(
+        0,
+        200
+      )}`
+    );
+  }
 }
 
 function fulfilledValue(
@@ -276,11 +294,6 @@ export async function getLuloYieldSnapshot(
         ?.balanceUsd
     );
 
-  /*
-   * Lulo's v0 response can expose the custom account total separately.
-   * Prefer that total when available because it may include accrued value
-   * that is not represented by just the token's displayed usdValue.
-   */
   const customBalanceUsd =
     firstFiniteNumber(
       customAccount
@@ -302,10 +315,6 @@ export async function getLuloYieldSnapshot(
         ?.usdValue
     );
 
-  /*
-   * v1 total is the regular/protected Lulo account.
-   * v0 total is the custom-token side, including USDS.
-   */
   let totalBalanceUsd =
     Math.max(
       0,
@@ -316,10 +325,6 @@ export async function getLuloYieldSnapshot(
       customBalanceUsd
     );
 
-  /*
-   * If the API doesn't provide a v1 total, reconstruct it from its
-   * component balances instead of leaving the whole project stale.
-   */
   if (
     !(v1TotalUsd > 0)
   ) {
@@ -502,10 +507,6 @@ export function applyLuloYieldSnapshot(
         ?.totalBalanceUsd
     );
 
-  /*
-   * Balance freshness should not depend on whether Lulo exposes an
-   * interest-total field. A valid live balance should always refresh.
-   */
   if (
     !Number.isFinite(
       totalBalanceUsd
@@ -550,7 +551,7 @@ export function applyLuloYieldSnapshot(
     previousInterest >=
       0;
 
-  let initialEarned =
+  const initialEarned =
     project
       .lulo_initial_earned !=
       null &&
