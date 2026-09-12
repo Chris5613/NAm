@@ -25,12 +25,14 @@ import {
 const STORAGE_KEY = "networth_yield_positions";
 const LOGO_STORAGE_KEY = "yield_project_logos_v1";
 const MONTHLY_BACKFILL_KEY = "yield_monthly_earnings_backfill_v1";
+const LULO_MONTHLY_BASELINE_KEY = "yield_lulo_monthly_baselines_v1";
 const MONTHLY_SNAPSHOT_KEY = "yield_monthly_snapshots_v1";
 const RATEX_HISTORY_KEY = "yield_ratex_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 
 const MONTHLY_TRACKING_START = "2026-09";
+const LULO_SEPTEMBER_2026_OPENING_EARNED = 6.9;
 const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
 
 function readObject(key) {
@@ -78,6 +80,19 @@ function loadMonthlyBackfills() {
 function saveMonthlyBackfills(value) {
   saveObject(
     MONTHLY_BACKFILL_KEY,
+    value
+  );
+}
+
+function loadLuloMonthlyBaselines() {
+  return readObject(
+    LULO_MONTHLY_BASELINE_KEY
+  );
+}
+
+function saveLuloMonthlyBaselines(value) {
+  saveObject(
+    LULO_MONTHLY_BASELINE_KEY,
     value
   );
 }
@@ -2464,6 +2479,13 @@ export default function YieldFarmingPage() {
     loadMonthlyBackfills
   );
 
+  const [
+    luloMonthlyBaselines,
+    setLuloMonthlyBaselines,
+  ] = useState(
+    loadLuloMonthlyBaselines
+  );
+
   useEffect(
     () => {
       savePositions(
@@ -2494,6 +2516,17 @@ export default function YieldFarmingPage() {
     },
     [
       monthlyBackfills,
+    ]
+  );
+
+  useEffect(
+    () => {
+      saveLuloMonthlyBaselines(
+        luloMonthlyBaselines
+      );
+    },
+    [
+      luloMonthlyBaselines,
     ]
   );
 
@@ -3175,8 +3208,121 @@ export default function YieldFarmingPage() {
         return;
       }
 
-      const now =
-        new Date();
+      const monthKey =
+        getCurrentMonthKey();
+
+      if (
+        monthKey <
+        MONTHLY_TRACKING_START
+      ) {
+        return;
+      }
+
+      /*
+       * Lulo's public account response gives us live lifetime interest,
+       * but not an exact month-to-date history. So we keep a persistent
+       * lifetime-interest baseline for each month.
+       *
+       * September 2026 is seeded at the known actual $6.90 you confirmed.
+       * From this point forward, new live Lulo interest is added to that
+       * amount automatically instead of using an APY estimate.
+       */
+      setLuloMonthlyBaselines(
+        (current) => {
+          let changed =
+            false;
+
+          const next = {
+            ...current,
+          };
+
+          luloProjects.forEach(
+            (project) => {
+              if (
+                !project?.id
+              ) {
+                return;
+              }
+
+              const lifetimeInterest =
+                Number(
+                  project.lulo_lifetime_interest_usd
+                );
+
+              if (
+                !Number.isFinite(
+                  lifetimeInterest
+                ) ||
+                lifetimeInterest <
+                  0
+              ) {
+                return;
+              }
+
+              const projectKey =
+                String(
+                  project.id
+                );
+
+              const projectMonths = {
+                ...(
+                  next[
+                    projectKey
+                  ] ||
+                  {}
+                ),
+              };
+
+              if (
+                projectMonths[
+                  monthKey
+                ]
+              ) {
+                return;
+              }
+
+              projectMonths[
+                monthKey
+              ] = {
+                lifetimeInterestAtBaseline:
+                  lifetimeInterest,
+                openingEarned:
+                  monthKey ===
+                  "2026-09"
+                    ? LULO_SEPTEMBER_2026_OPENING_EARNED
+                    : 0,
+                createdAt:
+                  new Date().toISOString(),
+              };
+
+              next[
+                projectKey
+              ] =
+                projectMonths;
+
+              changed =
+                true;
+            }
+          );
+
+          return changed
+            ? next
+            : current;
+        }
+      );
+    },
+    [
+      luloProjects,
+    ]
+  );
+
+  useEffect(
+    () => {
+      if (
+        !luloProjects.length
+      ) {
+        return;
+      }
 
       const monthKey =
         getCurrentMonthKey();
@@ -3210,19 +3356,55 @@ export default function YieldFarmingPage() {
                   project.id
                 );
 
-              const existing =
-                next[
+              const baseline =
+                luloMonthlyBaselines?.[
                   projectKey
-                ] || {};
+                ]?.[
+                  monthKey
+                ];
 
               if (
-                Object.prototype.hasOwnProperty.call(
-                  existing,
-                  monthKey
+                !baseline
+              ) {
+                return;
+              }
+
+              const lifetimeInterest =
+                Number(
+                  project.lulo_lifetime_interest_usd
+                );
+
+              const baselineLifetime =
+                Number(
+                  baseline.lifetimeInterestAtBaseline
+                );
+
+              if (
+                !Number.isFinite(
+                  lifetimeInterest
+                ) ||
+                !Number.isFinite(
+                  baselineLifetime
                 )
               ) {
                 return;
               }
+
+              const openingEarned =
+                Number(
+                  baseline.openingEarned
+                ) || 0;
+
+              const liveEarnedSinceBaseline =
+                Math.max(
+                  0,
+                  lifetimeInterest -
+                    baselineLifetime
+                );
+
+              const targetMonthEarned =
+                openingEarned +
+                liveEarnedSinceBaseline;
 
               const tracked =
                 getTrackedLuloMonthEarnings(
@@ -3230,54 +3412,50 @@ export default function YieldFarmingPage() {
                   monthKey
                 );
 
-              const estimate =
-                estimateLuloMonthToDate(
-                  project,
-                  now
+              /*
+               * Existing lulo_yield transactions are already counted by
+               * buildProjectIncome(), so the backfill only supplies the
+               * remainder needed to reach the live month total.
+               */
+              const backfill =
+                Number(
+                  Math.max(
+                    0,
+                    targetMonthEarned -
+                      tracked
+                  ).toFixed(
+                    6
+                  )
                 );
 
-              const lifetimeInterest =
+              const existing =
+                next[
+                  projectKey
+                ] || {};
+
+              const previousBackfill =
                 Number(
-                  project.lulo_lifetime_interest_usd
+                  existing?.[
+                    monthKey
+                  ]
                 ) || 0;
 
-              let targetMonthEarned =
-                estimate;
-
               if (
-                lifetimeInterest >
-                0
+                Math.abs(
+                  previousBackfill -
+                    backfill
+                ) <
+                0.000001
               ) {
-                targetMonthEarned =
-                  Math.min(
-                    estimate,
-                    lifetimeInterest
-                  );
+                return;
               }
-
-              targetMonthEarned =
-                Math.max(
-                  tracked,
-                  targetMonthEarned
-                );
-
-              const backfill =
-                Math.max(
-                  0,
-                  targetMonthEarned -
-                    tracked
-                );
 
               next[
                 projectKey
               ] = {
                 ...existing,
                 [monthKey]:
-                  Number(
-                    backfill.toFixed(
-                      6
-                    )
-                  ),
+                  backfill,
               };
 
               changed =
@@ -3293,6 +3471,7 @@ export default function YieldFarmingPage() {
     },
     [
       luloProjects,
+      luloMonthlyBaselines,
     ]
   );
 
