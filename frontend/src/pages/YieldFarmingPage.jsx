@@ -33,6 +33,8 @@ const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 
 const MONTHLY_TRACKING_START = "2026-09";
 const LULO_SEPTEMBER_2026_OPENING_EARNED = 6.9;
+const RATEX_ACCOUNTING_VERSION = 2;
+const RATEX_LEGACY_INITIAL_QUANTITY = 606.27;
 const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
 
 function readObject(key) {
@@ -1384,7 +1386,8 @@ function isRatexMatured(
 }
 
 function createRatexProjectCard(
-  snapshot
+  snapshot,
+  ratexHistory
 ) {
   if (
     !snapshot ||
@@ -1399,6 +1402,16 @@ function createRatexProjectCard(
   ) {
     return null;
   }
+
+  const positionKey =
+    getRatexPositionKey(
+      snapshot
+    );
+
+  const trackedPosition =
+    ratexHistory?.positions?.[
+      positionKey
+    ] || null;
 
   const maturityDate =
     new Date(
@@ -1424,11 +1437,114 @@ function createRatexProjectCard(
           )
         );
 
+  const currentValueUsd =
+    Number(
+      snapshot.currentValueUsd
+    ) || 0;
+
+  const quantity =
+    Number(
+      snapshot.quantity
+    ) || 0;
+
+  const priceUsd =
+    Number(
+      snapshot.priceUsd
+    ) ||
+    (
+      quantity > 0
+        ? currentValueUsd /
+          quantity
+        : 0
+    );
+
+  const maturityValueUsd =
+    Number(
+      snapshot.maturityValueUsd
+    ) || quantity;
+
+  let earnedUsd =
+    Number(
+      trackedPosition?.lastEarnedUsd
+    );
+
+  let adjustedCostBasisUsd =
+    Number(
+      trackedPosition?.costBasisUsd
+    );
+
+  /*
+   * If the page is rendering before the history migration effect has
+   * finished, calculate the corrected value immediately so a deposit
+   * never flashes as "earnings".
+   */
+  if (
+    !trackedPosition ||
+    Number(
+      trackedPosition.accountingVersion
+    ) !==
+      RATEX_ACCOUNTING_VERSION
+  ) {
+    const legacyCostBasis =
+      Number(
+        snapshot.costBasisUsd
+      ) ||
+      Number(
+        trackedPosition?.costBasisUsd
+      ) ||
+      0;
+
+    const addedQuantity =
+      Math.max(
+        0,
+        quantity -
+          RATEX_LEGACY_INITIAL_QUANTITY
+      );
+
+    adjustedCostBasisUsd =
+      legacyCostBasis +
+      (
+        addedQuantity *
+        priceUsd
+      );
+
+    earnedUsd =
+      Math.max(
+        0,
+        currentValueUsd -
+          adjustedCostBasisUsd
+      );
+  }
+
+  if (
+    !Number.isFinite(
+      earnedUsd
+    )
+  ) {
+    earnedUsd = 0;
+  }
+
+  if (
+    !Number.isFinite(
+      adjustedCostBasisUsd
+    )
+  ) {
+    adjustedCostBasisUsd =
+      Number(
+        snapshot.costBasisUsd
+      ) || 0;
+  }
+
+  const projectedProfitUsd =
+    Math.max(
+      0,
+      maturityValueUsd -
+        adjustedCostBasisUsd
+    );
+
   const asset = {
     id:
-      getRatexPositionKey(
-        snapshot
-      ),
+      positionKey,
     asset:
       "PTONyc",
     allocationSymbol:
@@ -1436,44 +1552,34 @@ function createRatexProjectCard(
     strategy:
       "Fixed Yield",
     balance:
-      Number(
-        snapshot.currentValueUsd
-      ) || 0,
-    quantity:
-      Number(
-        snapshot.quantity
-      ) || 0,
+      currentValueUsd,
+    quantity,
     price:
-      Number(
-        snapshot.priceUsd
-      ) || 0,
+      priceUsd,
     apy:
       Number(
         snapshot.fixedApy
       ) || 0,
     maturity:
       snapshot.maturity,
-    maturityValueUsd:
-      Number(
-        snapshot.maturityValueUsd
-      ) || 0,
-    projectedProfitUsd:
-      Number(
-        snapshot.projectedProfitUsd
-      ) || 0,
+    maturityValueUsd,
+    projectedProfitUsd,
     remainingYieldUsd:
       Number(
         snapshot.remainingYieldUsd
-      ) || 0,
+      ) ||
+      Math.max(
+        0,
+        maturityValueUsd -
+          currentValueUsd
+      ),
     daysRemaining,
     sourceLabel:
       "RateX",
   };
 
   return {
-    id: `ratex-project-${getRatexPositionKey(
-      snapshot
-    )}`,
+    id: `ratex-project-${positionKey}`,
     platform:
       "RateX",
     autoSynced:
@@ -1483,9 +1589,7 @@ function createRatexProjectCard(
     weightedApy:
       asset.apy,
     earned:
-      Number(
-        snapshot.earnedUsd
-      ) || 0,
+      earnedUsd,
     lastSyncedAt:
       snapshot.syncedAt ||
       null,
@@ -1678,10 +1782,21 @@ function updateRatexHistoryFromSnapshot(
       snapshot.quantity
     ) || 0;
 
-  const earnedUsd =
+  const currentValueUsd =
     Number(
-      snapshot.earnedUsd
+      snapshot.currentValueUsd
     ) || 0;
+
+  const priceUsd =
+    Number(
+      snapshot.priceUsd
+    ) ||
+    (
+      quantity > 0
+        ? currentValueUsd /
+          quantity
+        : 0
+    );
 
   const existing =
     next.positions[
@@ -1714,7 +1829,139 @@ function updateRatexHistoryFromSnapshot(
           null,
         lastEarnedUsd:
           0,
+        quantity:
+          0,
+        costBasisUsd:
+          0,
+        principalAddedUsd:
+          0,
       };
+
+    const previousQuantity =
+      Number(
+        previous.quantity
+      ) || 0;
+
+    const legacyCostBasis =
+      Number(
+        snapshot.costBasisUsd
+      ) ||
+      Number(
+        previous.costBasisUsd
+      ) ||
+      0;
+
+    let adjustedCostBasisUsd =
+      Number(
+        previous.costBasisUsd
+      ) || 0;
+
+    let principalAddedUsd =
+      Number(
+        previous.principalAddedUsd
+      ) || 0;
+
+    const isLegacyRecord =
+      Number(
+        previous.accountingVersion
+      ) !==
+        RATEX_ACCOUNTING_VERSION;
+
+    if (
+      isLegacyRecord
+    ) {
+      /*
+       * The original RateX position was 606.27 PTONyc bought with
+       * $600. Older accounting treated every dollar above that $600
+       * as yield, so a later deposit looked like instant earnings.
+       *
+       * One-time migration:
+       *   original lot -> keep the original $600 basis
+       *   extra tokens -> treat their current purchase value as principal
+       *
+       * This immediately repairs the already-inflated September number.
+       */
+      const addedQuantity =
+        Math.max(
+          0,
+          quantity -
+            RATEX_LEGACY_INITIAL_QUANTITY
+        );
+
+      const addedPrincipalUsd =
+        addedQuantity *
+        priceUsd;
+
+      adjustedCostBasisUsd =
+        legacyCostBasis +
+        addedPrincipalUsd;
+
+      principalAddedUsd =
+        Math.max(
+          0,
+          addedPrincipalUsd
+        );
+    } else if (
+      previousQuantity > 0
+    ) {
+      const quantityDelta =
+        quantity -
+        previousQuantity;
+
+      if (
+        quantityDelta >
+        0.000001
+      ) {
+        /*
+         * New PTONyc appeared in the wallet. This is a deposit /
+         * principal addition, NOT yield.
+         */
+        const addedPrincipalUsd =
+          quantityDelta *
+          priceUsd;
+
+        adjustedCostBasisUsd +=
+          addedPrincipalUsd;
+
+        principalAddedUsd +=
+          addedPrincipalUsd;
+      } else if (
+        quantityDelta <
+        -0.000001
+      ) {
+        /*
+         * If tokens leave the position, reduce the tracked cost basis
+         * proportionally so the remaining position keeps its true P/L.
+         */
+        adjustedCostBasisUsd =
+          previousQuantity >
+          0
+            ? adjustedCostBasisUsd *
+              (
+                quantity /
+                previousQuantity
+              )
+            : 0;
+      }
+    } else if (
+      !(adjustedCostBasisUsd > 0)
+    ) {
+      adjustedCostBasisUsd =
+        currentValueUsd;
+    }
+
+    adjustedCostBasisUsd =
+      Math.max(
+        0,
+        adjustedCostBasisUsd
+      );
+
+    const earnedUsd =
+      Math.max(
+        0,
+        currentValueUsd -
+          adjustedCostBasisUsd
+      );
 
     const baselines = {
       ...(
@@ -1762,6 +2009,11 @@ function updateRatexHistoryFromSnapshot(
         ]
       ) || 0;
 
+    /*
+     * Because deposits increase the cost basis at the same time they
+     * increase position value, earnedUsd does not jump when you deposit.
+     * Only actual PT appreciation above principal changes this number.
+     */
     monthlyEarnings[
       monthKey
     ] =
@@ -1778,10 +2030,24 @@ function updateRatexHistoryFromSnapshot(
         snapshot.maturity
       );
 
+    const maturityValueUsd =
+      Number(
+        snapshot.maturityValueUsd
+      ) || quantity;
+
+    const projectedProfitUsd =
+      Math.max(
+        0,
+        maturityValueUsd -
+          adjustedCostBasisUsd
+      );
+
     next.positions[
       key
     ] = {
       ...previous,
+      accountingVersion:
+        RATEX_ACCOUNTING_VERSION,
       key,
       platform:
         "RateX",
@@ -1808,29 +2074,36 @@ function updateRatexHistoryFromSnapshot(
         ) || 0,
       costBasisUsd:
         Number(
-          snapshot.costBasisUsd
-        ) ||
+          adjustedCostBasisUsd.toFixed(
+            8
+          )
+        ),
+      principalAddedUsd:
         Number(
-          previous.costBasisUsd
-        ) ||
-        0,
+          principalAddedUsd.toFixed(
+            8
+          )
+        ),
       quantity,
       finalQuantity:
         quantity,
+      lastPriceUsd:
+        priceUsd,
       lastValueUsd:
-        Number(
-          snapshot.currentValueUsd
-        ) || 0,
-      maturityValueUsd:
-        Number(
-          snapshot.maturityValueUsd
-        ) || 0,
+        currentValueUsd,
+      maturityValueUsd,
       lastEarnedUsd:
-        earnedUsd,
+        Number(
+          earnedUsd.toFixed(
+            8
+          )
+        ),
       projectedProfitUsd:
         Number(
-          snapshot.projectedProfitUsd
-        ) || 0,
+          projectedProfitUsd.toFixed(
+            8
+          )
+        ),
       monthlyBaselines:
         baselines,
       monthlyEarnings,
@@ -4111,7 +4384,8 @@ export default function YieldFarmingPage() {
 
         const ratexProject =
           createRatexProjectCard(
-            ratexSnapshot
+            ratexSnapshot,
+            ratexHistory
           );
 
         const manualProjects =
@@ -4134,6 +4408,7 @@ export default function YieldFarmingPage() {
       [
         luloProjects,
         ratexSnapshot,
+        ratexHistory,
         manualPositions,
       ]
     );
