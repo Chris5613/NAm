@@ -1,213 +1,499 @@
-import { useEffect, useState } from "react";
-import { cryptoCacheApi } from "@/lib/api";
+import { useEffect, useMemo, useState } from "react";
+import {
+  getStoredProjectCryptoPortfolio,
+  refreshProjectCryptoPortfolio,
+} from "@/lib/projectCryptoPortfolio";
 import { Card, CardContent } from "@/components/ui/card";
-import { ChevronDown, ChevronRight, Coins } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Bitcoin,
+  ChevronDown,
+  ChevronRight,
+  CircleDollarSign,
+  RefreshCw,
+  TrendingUp,
+  Wallet,
+} from "lucide-react";
 
-const CHAIN_META = {
-  bitcoin: { name: "Bitcoin", icon: "https://assets.coingecko.com/coins/images/1/small/bitcoin.png" },
-  solana: { name: "Solana", icon: "https://assets.coingecko.com/coins/images/4128/small/solana.png" },
-  ethereum: { name: "Ethereum", icon: "https://assets.coingecko.com/coins/images/279/small/ethereum.png" },
-  bsc: { name: "BNB Chain", icon: "https://assets.coingecko.com/coins/images/825/small/bnb-icon2_2x.png" },
-  polygon: { name: "Polygon", icon: "https://assets.coingecko.com/coins/images/4713/small/polygon.png" },
-  avalanche: { name: "Avalanche", icon: "https://assets.coingecko.com/coins/images/12559/small/Avalanche_Circle_RedWhite_Trans.png" },
-  arbitrum: { name: "Arbitrum", icon: "https://assets.coingecko.com/coins/images/16547/small/photo_2023-03-29_21.47.00.jpeg" },
-  optimism: { name: "Optimism", icon: "https://assets.coingecko.com/coins/images/25244/small/Optimism.png" },
-  base: { name: "Base", icon: "https://assets.coingecko.com/asset_platforms/images/131/small/base.jpeg" },
-  tron: { name: "Tron", icon: "https://assets.coingecko.com/coins/images/1094/small/tron-logo.png" },
-  fantom: { name: "Fantom", icon: "https://assets.coingecko.com/coins/images/4001/small/Fantom_round.png" },
-  custom: { name: "Other", icon: "" },
-};
-
-function formatCurrency(v) {
-  if (!v && v !== 0) return "$0.00";
-  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 }).format(v);
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 2,
+  }).format(Number(value) || 0);
 }
 
-export default function CryptoBreakdown({ defaultOpen = false, dailyChange = 0 }) {
-  const [cache, setCache] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [cryptoOpen, setCryptoOpen] = useState(defaultOpen);
-  const [expandedChain, setExpandedChain] = useState(null);
+function formatPercent(value) {
+  return `${(Number(value) || 0).toFixed(2)}%`;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await cryptoCacheApi.get();
-        if (!cancelled) setCache(res.data);
-      } catch {
-        if (!cancelled) setCache({ total: 0, chains: [], tokens: [] });
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, []);
+function formatAmount(value, digits = 6) {
+  const number = Number(value) || 0;
 
-  if (loading) {
+  return number.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: digits,
+  });
+}
+
+function formatSyncTime(value) {
+  if (!value) return "Pending";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Pending";
+
+  return date.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function Logo({ entry }) {
+  if (entry?.logo) {
     return (
-      <Card className="border-border/40 bg-card">
-        <CardContent className="p-6 text-center text-muted-foreground text-sm">Loading crypto breakdown…</CardContent>
-      </Card>
-    );
-  }
-
-  const chains = (cache?.chains || [])
-    .filter(c => (c.value || 0) > 0.01)
-    .slice()
-    .sort((a, b) => (b.value || 0) - (a.value || 0));
-  const total = cache?.total || 0;
-
-  if (chains.length === 0 && total < 0.01) {
-    return (
-      <Card className="border-border/40 bg-card">
-        <CardContent className="p-6 text-center text-muted-foreground text-sm">
-          No crypto data yet. Open the Crypto tab and add a wallet to populate this breakdown.
-        </CardContent>
-      </Card>
+      <img
+        src={entry.logo}
+        alt=""
+        className="h-9 w-9 rounded-xl object-cover"
+      />
     );
   }
 
   return (
+    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/50 bg-secondary text-xs font-semibold text-muted-foreground">
+      {(entry?.platform || "?").slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="rounded-xl border border-border/40 bg-white/[0.02] px-3 py-2.5">
+      <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-sm font-semibold text-foreground">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function ProjectEntry({ entry }) {
+  const [open, setOpen] = useState(false);
+  const assets = Array.isArray(entry?.assets) ? entry.assets : [];
+
+  return (
+    <Card className="overflow-hidden border-border/50 bg-card/70">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          {open ? (
+            <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+          )}
+
+          <Logo entry={entry} />
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate font-semibold text-foreground">
+                {entry.platform}
+              </p>
+
+              {entry.live && (
+                <span className="rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                  Live
+                </span>
+              )}
+            </div>
+
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {assets.length} position{assets.length === 1 ? "" : "s"}
+              {entry.lastSyncedAt
+                ? ` · synced ${formatSyncTime(entry.lastSyncedAt)}`
+                : ""}
+            </p>
+          </div>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <p className="font-mono text-xl font-semibold text-foreground">
+            {formatCurrency(entry.balance)}
+          </p>
+
+          {Number(entry.apy) > 0 ? (
+            <p className="mt-0.5 text-xs font-mono text-emerald-400">
+              {formatPercent(entry.apy)} APY
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {formatCurrency(entry.lifetimeUsd || entry.earned)} lifetime earned
+            </p>
+          )}
+        </div>
+      </button>
+
+      {open && (
+        <CardContent className="border-t border-border/40 px-5 pb-5 pt-4">
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <Stat
+              label="Current Value"
+              value={formatCurrency(entry.balance)}
+            />
+            <Stat
+              label="Lifetime Earned"
+              value={formatCurrency(entry.lifetimeUsd || entry.earned)}
+            />
+            <Stat
+              label="This Month"
+              value={
+                entry.monthUsd == null
+                  ? "—"
+                  : formatCurrency(entry.monthUsd)
+              }
+            />
+            <Stat
+              label="Est. Monthly"
+              value={formatCurrency(entry.estimatedMonthlyUsd)}
+            />
+          </div>
+
+          {assets.length > 0 && (
+            <div className="mt-4 overflow-hidden rounded-xl border border-border/40">
+              <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 border-b border-border/40 bg-white/[0.02] px-4 py-2 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span>Asset</span>
+                <span className="text-right">Amount</span>
+                <span className="text-right">APY</span>
+                <span className="text-right">Value</span>
+              </div>
+
+              {assets.map((asset, index) => (
+                <div
+                  key={`${entry.id}-${asset.asset}-${index}`}
+                  className="grid grid-cols-[1.2fr_1fr_1fr_1fr] gap-3 border-b border-border/20 px-4 py-3 text-sm last:border-b-0"
+                >
+                  <div>
+                    <p className="font-medium text-foreground">{asset.asset}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {asset.strategy || "Position"}
+                    </p>
+                  </div>
+
+                  <div className="self-center text-right font-mono text-xs text-muted-foreground">
+                    {asset.quantity == null
+                      ? "—"
+                      : formatAmount(asset.quantity, 8)}
+                  </div>
+
+                  <div className="self-center text-right font-mono text-xs text-muted-foreground">
+                    {Number(asset.apy) > 0
+                      ? formatPercent(asset.apy)
+                      : "—"}
+                  </div>
+
+                  <div className="self-center text-right font-mono font-medium text-foreground">
+                    {formatCurrency(asset.balance)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+function BitcoinEntry({ bitcoin }) {
+  const [open, setOpen] = useState(false);
+  const wallets = Array.isArray(bitcoin?.wallets) ? bitcoin.wallets : [];
+
+  return (
+    <Card className="overflow-hidden border-amber-500/20 bg-card/70">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          {open ? (
+            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          )}
+
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
+            <Bitcoin className="h-5 w-5" />
+          </div>
+
+          <div>
+            <p className="font-semibold text-foreground">Bitcoin Holdings</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {wallets.length} wallet{wallets.length === 1 ? "" : "s"}
+            </p>
+          </div>
+        </div>
+
+        <div className="text-right">
+          <p className="font-mono text-xl font-semibold text-foreground">
+            {formatCurrency(bitcoin?.value)}
+          </p>
+          <p className="mt-0.5 text-xs font-mono text-muted-foreground">
+            {formatAmount(bitcoin?.amount, 8)} BTC
+          </p>
+        </div>
+      </button>
+
+      {open && (
+        <CardContent className="border-t border-border/40 px-5 pb-5 pt-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <Stat label="BTC" value={formatAmount(bitcoin?.amount, 8)} />
+            <Stat label="BTC Price" value={formatCurrency(bitcoin?.price)} />
+            <Stat label="Value" value={formatCurrency(bitcoin?.value)} />
+          </div>
+
+          {wallets.length > 0 && (
+            <div className="mt-4 space-y-2">
+              {wallets.map((wallet) => (
+                <div
+                  key={wallet.walletId}
+                  className="flex items-center justify-between rounded-xl border border-border/40 bg-white/[0.02] px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-foreground">
+                      {wallet.label || "Bitcoin Wallet"}
+                    </p>
+                    <p className="truncate font-mono text-[10px] text-muted-foreground">
+                      {wallet.address}
+                    </p>
+                  </div>
+
+                  <div className="shrink-0 text-right">
+                    <p className="font-mono text-sm font-medium text-foreground">
+                      {formatCurrency(wallet.value)}
+                    </p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      {formatAmount(wallet.amount, 8)} BTC
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      )}
+    </Card>
+  );
+}
+
+export default function CryptoBreakdown({
+  defaultOpen = false,
+  dailyChange = 0,
+}) {
+  const [portfolio, setPortfolio] = useState(() =>
+    getStoredProjectCryptoPortfolio(),
+  );
+  const [cryptoOpen, setCryptoOpen] = useState(defaultOpen);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const next = await refreshProjectCryptoPortfolio();
+        if (!cancelled) setPortfolio(next);
+      } catch {
+        // Keep the last stored values visible.
+      }
+    };
+
+    refresh();
+
+    const handleUpdate = (event) => {
+      if (!cancelled && event?.detail) {
+        setPortfolio(event.detail);
+      }
+    };
+
+    window.addEventListener("project-crypto-updated", handleUpdate);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("project-crypto-updated", handleUpdate);
+    };
+  }, []);
+
+  const entries = useMemo(
+    () =>
+      [...(portfolio?.projectEntries || [])].sort(
+        (a, b) => (Number(b.balance) || 0) - (Number(a.balance) || 0),
+      ),
+    [portfolio],
+  );
+
+  const summary = portfolio?.summary || {};
+  const bitcoin = portfolio?.bitcoin || {};
+  const positive = Number(dailyChange) >= 0;
+
+  const handleRefresh = async (event) => {
+    event.stopPropagation();
+    setRefreshing(true);
+
+    try {
+      const next = await refreshProjectCryptoPortfolio({ force: true });
+      setPortfolio(next);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  return (
     <div className="space-y-3" data-testid="crypto-breakdown">
-      {/* Level 1: Crypto top card */}
       <Card
-        className="border-border/40 bg-card hover:border-white/10 transition-colors cursor-pointer"
+        className="border-border/40 bg-card hover:border-white/10 transition-colors"
         data-testid="crypto-top-card"
-        onClick={() => setCryptoOpen(!cryptoOpen)}
       >
         <CardContent className="p-5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+          <div className="flex items-center justify-between gap-4">
+            <button
+              type="button"
+              onClick={() => setCryptoOpen((value) => !value)}
+              className="flex min-w-0 flex-1 items-center gap-3 text-left"
+            >
               {cryptoOpen ? (
-                <ChevronDown className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
               ) : (
-                <ChevronRight className="w-4 h-4 text-muted-foreground" strokeWidth={1.5} />
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
               )}
-              <div className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center">
-                <Coins className="w-4 h-4 text-foreground" strokeWidth={1.5} />
+
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-secondary">
+                <Wallet className="h-4 w-4 text-foreground" />
               </div>
+
               <div>
-                <span className="font-semibold text-foreground text-lg">Crypto</span>
-                <p className="text-xs text-muted-foreground mt-0.5">{chains.length} network{chains.length === 1 ? "" : "s"}</p>
+                <p className="text-lg font-semibold text-foreground">Crypto</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Project Income + Bitcoin
+                </p>
+              </div>
+            </button>
+
+            <div className="flex items-center gap-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleRefresh}
+                disabled={refreshing}
+                className="border-border/40"
+              >
+                <RefreshCw
+                  className={`mr-2 h-3.5 w-3.5 ${
+                    refreshing ? "animate-spin" : ""
+                  }`}
+                />
+                Refresh
+              </Button>
+
+              <div className="min-w-[130px] text-right">
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="font-mono text-base font-bold text-foreground">
+                  {formatCurrency(summary.cryptoTotal)}
+                </p>
+                <p
+                  className={`mt-1 text-xs font-mono ${
+                    positive ? "text-emerald-500" : "text-rose-500"
+                  }`}
+                >
+                  {positive ? "+" : "-"}
+                  {formatCurrency(Math.abs(Number(dailyChange) || 0))} today
+                </p>
               </div>
             </div>
-<div className="text-right min-w-[120px]">
-  <p className="text-xs text-muted-foreground">Total</p>
-
-  <p className="font-mono text-base font-bold text-foreground">
-    {formatCurrency(total)}
-  </p>
-
-  <p
-    className={`text-xs font-mono mt-1 ${
-      dailyChange >= 0 ? "text-emerald-500" : "text-rose-500"
-    }`}
-  >
-    {dailyChange >= 0 ? "+" : "-"}
-    {formatCurrency(Math.abs(dailyChange))} today
-  </p>
-</div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Level 2: Chain sub-cards */}
       {cryptoOpen && (
-        <div className="ml-6 space-y-2" data-testid="crypto-chains-list">
-          {chains.map((c) => {
-            const meta = CHAIN_META[c.chain] || { name: c.chain, icon: "" };
-            const pct = total > 0 ? ((c.value / total) * 100).toFixed(1) : "0.0";
-            const isExpanded = expandedChain === c.chain;
-            const tokens = (c.tokens || [])
-              .filter(t => (t.usd_value || 0) > 0.01)
-              .slice()
-              .sort((a, b) => (b.usd_value || 0) - (a.usd_value || 0));
-            return (
-              <div key={c.chain}>
-                <Card
-                  className="border-border/30 bg-secondary/30 hover:border-white/10 transition-colors cursor-pointer"
-                  data-testid={`chain-box-${c.chain}`}
-                  onClick={() => setExpandedChain(isExpanded ? null : c.chain)}
-                >
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        {isExpanded ? (
-                          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />
-                        ) : (
-                          <ChevronRight className="w-3.5 h-3.5 text-muted-foreground" strokeWidth={1.5} />
-                        )}
-                        {meta.icon ? (
-                          <img src={meta.icon} alt="" className="w-6 h-6 rounded-full object-contain" onError={e => (e.target.style.display = "none")} />
-                        ) : (
-                          <div className="w-6 h-6 rounded-full bg-secondary flex items-center justify-center">
-                            <Coins className="w-3 h-3 text-muted-foreground" strokeWidth={1.5} />
-                          </div>
-                        )}
-                        <span className="font-medium text-foreground">{meta.name}</span>
-                        <span className="text-xs font-mono text-muted-foreground bg-secondary/60 px-2 py-0.5 rounded">{pct}%</span>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <p className="text-[10px] text-muted-foreground">Tokens</p>
-                          <p className="font-mono text-xs text-foreground">{tokens.length}</p>
-                        </div>
-                        <div className="text-right min-w-[110px]">
-                          <p className="text-[10px] text-muted-foreground">Value</p>
-                          <p className="font-mono text-sm font-medium text-foreground">{formatCurrency(c.value)}</p>
-                        </div>
-                      </div>
-                    </div>
+        <div className="ml-6 space-y-5">
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-foreground">Project Income</p>
+                <p className="text-xs text-muted-foreground">
+                  The same programs tracked on your Project Income page
+                </p>
+              </div>
+
+              <p className="font-mono text-sm font-semibold text-foreground">
+                {formatCurrency(summary.projectBalance)}
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <Stat
+                label="Total Earned"
+                value={formatCurrency(summary.totalEarned)}
+              />
+              <Stat
+                label="Weighted APY"
+                value={formatPercent(summary.weightedApy)}
+              />
+              <Stat
+                label="Est. Monthly"
+                value={formatCurrency(summary.estimatedMonthlyIncome)}
+              />
+              <Stat
+                label="Active Positions"
+                value={String(summary.activePositions || 0)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              {entries.length > 0 ? (
+                entries.map((entry) => (
+                  <ProjectEntry key={entry.id} entry={entry} />
+                ))
+              ) : (
+                <Card className="border-border/40 bg-card/70">
+                  <CardContent className="flex items-center gap-3 p-5 text-sm text-muted-foreground">
+                    <CircleDollarSign className="h-4 w-4" />
+                    No Project Income positions are stored yet.
                   </CardContent>
                 </Card>
+              )}
+            </div>
+          </section>
 
-                {/* Level 3: Tokens */}
-                {isExpanded && tokens.length > 0 && (
-                  <div className="ml-8 mt-2 mb-2 space-y-1.5" data-testid={`chain-tokens-${c.chain}`}>
-                    {tokens.map((t, i) => (
-                      <Card key={`${t.symbol}-${i}`} className="border-border/20 bg-secondary/20">
-                        <CardContent className="px-4 py-2.5 flex items-center justify-between">
-                          <div className="flex items-center gap-2.5">
-                            {t.icon_url ? (
-                              <img src={t.icon_url} alt="" className="w-5 h-5 rounded-full" onError={e => (e.target.style.display = "none")} />
-                            ) : (
-                              <div className="w-5 h-5 rounded-full bg-secondary flex items-center justify-center">
-                                <span className="text-[9px] font-bold text-muted-foreground">{(t.symbol || "?")[0]}</span>
-                              </div>
-                            )}
-                            <span className="text-sm font-medium text-foreground">{t.symbol}</span>
-                            {t.name && <span className="text-xs text-muted-foreground">{t.name}</span>}
-                          </div>
-                          <div className="flex items-center gap-6">
-                            <span className="font-mono text-xs text-muted-foreground">
-                              {t.amount < 0.0001 ? (t.amount || 0).toExponential(2) : (t.amount || 0).toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                            </span>
-                            <span className="font-mono text-xs text-muted-foreground min-w-[80px] text-right">
-                              {t.price > 0 ? formatCurrency(t.price) : "-"}
-                            </span>
-                            <span className="font-mono text-sm text-foreground min-w-[100px] text-right font-medium">
-                              {formatCurrency(t.usd_value)}
-                            </span>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-
-                {isExpanded && tokens.length === 0 && (
-                  <div className="ml-8 mt-2 mb-2">
-                    <Card className="border-border/20 bg-secondary/20">
-                      <CardContent className="px-4 py-3">
-                        <p className="text-xs text-muted-foreground">No token details cached yet. Open the Crypto tab and refresh.</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-                )}
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="font-semibold text-foreground">Bitcoin</p>
+                <p className="text-xs text-muted-foreground">
+                  Kept separate from Project Income
+                </p>
               </div>
-            );
-          })}
+
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Live wallet value
+              </div>
+            </div>
+
+            <BitcoinEntry bitcoin={bitcoin} />
+          </section>
+
+          {Array.isArray(portfolio?.errors) && portfolio.errors.length > 0 && (
+            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
+              {portfolio.errors.join(" · ")}
+            </div>
+          )}
         </div>
       )}
     </div>
