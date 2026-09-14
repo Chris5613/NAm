@@ -3,8 +3,13 @@ import { proxyFetch } from "./cors-proxy";
 export const LOOPSCALE_WALLET =
   "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM";
 
-const ACTIVE_FILTER_TYPE =
-  0;
+/*
+ * You opened this ONyc Loop in September 2026.
+ * Keeping the original start month lets Project Income
+ * correctly calculate future month-to-month P&L deltas.
+ */
+export const LOOPSCALE_ONYC_STARTED_AT =
+  "2026-09-13T00:00:00-07:00";
 
 const LOOPSCALE_PAGE_SIZE =
   25;
@@ -29,528 +34,269 @@ function normalizePercent(
     toNumber(value);
 
   if (
-    !Number.isFinite(
-      raw
-    )
+    !(raw > 0)
   ) {
     return 0;
   }
 
   /*
-   * Loopscale returns APY values as fractions.
+   * Supports both:
    *
-   * 0.1747 = 17.47%
+   * 0.1747 -> 17.47%
+   * 17.47  -> 17.47%
    */
-  return Math.abs(
-    raw
-  ) <= 1
+  return raw <= 1
     ? raw * 100
     : raw;
 }
 
-function toIsoFromUnix(
+function normalizeText(
   value
 ) {
-  const raw =
-    toNumber(value);
-
-  if (
-    !(raw > 0)
-  ) {
-    return null;
-  }
-
-  const millis =
-    raw >
-    10_000_000_000
-      ? raw
-      : raw * 1000;
-
-  const date =
-    new Date(
-      millis
-    );
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return null;
-  }
-
-  return date.toISOString();
+  return String(
+    value ?? ""
+  )
+    .trim()
+    .toLowerCase();
 }
 
-function latestPoint(
-  points
+function isLoopscaleElement(
+  element
 ) {
-  const rows =
-    Array.isArray(
-      points
+  const text = [
+    element?.platformId,
+    element?.name,
+    element?.label,
+    element?.data?.link,
+    element?.data?.contract,
+  ]
+    .map(
+      normalizeText
     )
-      ? points.filter(
-          Boolean
-        )
+    .join(" ");
+
+  return text.includes(
+    "loopscale"
+  );
+}
+
+function getLeveragePositions(
+  element
+) {
+  const isolated =
+    Array.isArray(
+      element?.data
+        ?.isolated
+        ?.positions
+    )
+      ? element.data
+          .isolated
+          .positions
       : [];
 
-  if (
-    !rows.length
-  ) {
-    return null;
-  }
-
-  const actualRows =
-    rows.filter(
-      (
-        row
-      ) =>
-        row?.isProjection !==
-        true
-    );
-
-  const pool =
-    actualRows.length
-      ? actualRows
-      : rows;
+  const cross =
+    Array.isArray(
+      element?.data
+        ?.cross
+        ?.positions
+    )
+      ? element.data
+          .cross
+          .positions
+      : [];
 
   return [
-    ...pool,
-  ].sort(
-    (
-      a,
-      b
-    ) =>
-      toNumber(
-        b?.date
-      ) -
-      toNumber(
-        a?.date
-      )
-  )[0];
+    ...isolated,
+    ...cross,
+  ];
 }
 
-function normalizeItems(
-  payload
+function isOnycPosition(
+  position
 ) {
-  /*
-   * Current Loopscale response.
-   */
-  if (
-    Array.isArray(
-      payload?.items
+  const text = [
+    position?.name,
+    position?.address,
+    position?.ref,
+  ]
+    .map(
+      normalizeText
     )
-  ) {
-    return payload.items;
-  }
-
-  /*
-   * Older response format.
-   */
-  if (
-    Array.isArray(
-      payload
-    )
-  ) {
-    return payload.flatMap(
-      (
-        entry
-      ) =>
-        Array.isArray(
-          entry?.loanInfos
-        )
-          ? entry.loanInfos
-          : []
-    );
-  }
-
-  if (
-    Array.isArray(
-      payload?.loanInfos
-    )
-  ) {
-    return payload.loanInfos;
-  }
-
-  return [];
-}
-
-function getPositionValuePoint(
-  item
-) {
-  return latestPoint(
-    item?.pnl
-      ?.positionValueData
-      ?.dataPoints
-  );
-}
-
-function getPnlPoint(
-  item
-) {
-  return latestPoint(
-    item?.pnl
-      ?.pnlData
-      ?.dataPoints
-  );
-}
-
-function getRatePoint(
-  item
-) {
-  return latestPoint(
-    item?.pnl
-      ?.rateHistoryData
-      ?.dataPoints
-  );
-}
-
-function isLoopPosition(
-  item
-) {
-  const ledgers =
-    Array.isArray(
-      item?.ledgers
-    )
-      ? item.ledgers
-      : [];
-
-  return ledgers.some(
-    (
-      ledger
-    ) =>
-      Boolean(
-        ledger?.isLoop
-      )
-  );
-}
-
-function isActivePosition(
-  item
-) {
-  if (
-    item?.loan?.closed ===
-    true
-  ) {
-    return false;
-  }
-
-  return true;
-}
-
-function getNetPositionValueUsd(
-  item
-) {
-  const positionPoint =
-    getPositionValuePoint(
-      item
-    );
-
-  const pnlPoint =
-    getPnlPoint(
-      item
-    );
-
-  /*
-   * This is Loopscale's own net position value.
-   * Prefer it over doing our own collateral - debt math.
-   */
-  const direct =
-    toNumber(
-      positionPoint
-        ?.netPositionValueUsd
-    ) ||
-    toNumber(
-      pnlPoint
-        ?.netPositionValueUsd
-    );
-
-  if (
-    direct >
-    0
-  ) {
-    return direct;
-  }
-
-  /*
-   * Fallback only.
-   */
-  return Math.max(
-    0,
-    toNumber(
-      item?.collateralUsd
-    ) -
-      toNumber(
-        item?.principalUsd
-      ) -
-      toNumber(
-        item?.interestAccruedUsd
-      )
-  );
-}
-
-function getNetPositionTokenAmount(
-  item
-) {
-  const positionPoint =
-    getPositionValuePoint(
-      item
-    );
-
-  const pnlPoint =
-    getPnlPoint(
-      item
-    );
+    .join(" ");
 
   return (
-    toNumber(
-      positionPoint
-        ?.netPositionValueTokenAmount
+    text.includes(
+      "onyc"
     ) ||
-    toNumber(
-      pnlPoint
-        ?.netPositionValueTokenAmount
-    ) ||
-    0
+    text.includes(
+      "onre"
+    )
   );
 }
 
-function getPnlUsd(
-  item
+function chooseOnycPosition(
+  element
 ) {
-  /*
-   * Loopscale exposes pnlUsd directly.
-   * This already adjusts for net inflows/outflows.
-   */
-  const direct =
-    Number(
-      item?.pnlUsd
+  const positions =
+    getLeveragePositions(
+      element
     );
 
   if (
-    Number.isFinite(
-      direct
-    )
+    !positions.length
   ) {
-    return direct;
+    return null;
   }
 
-  const nested =
-    Number(
-      item?.pnl?.usdPnl
-    );
+  return (
+    positions.find(
+      isOnycPosition
+    ) ||
+    positions[0]
+  );
+}
 
-  if (
-    Number.isFinite(
-      nested
-    )
+function getElementValue(
+  element
+) {
+  const candidates = [
+    element?.value,
+    element?.data?.value,
+    element?.data
+      ?.isolated?.value,
+    element?.data
+      ?.cross?.value,
+  ];
+
+  for (
+    const candidate of
+    candidates
   ) {
-    return nested;
-  }
+    const value =
+      Number(candidate);
 
-  const pnlPoint =
-    getPnlPoint(
-      item
-    );
-
-  const point =
-    Number(
-      pnlPoint?.usdPnl
-    );
-
-  if (
-    Number.isFinite(
-      point
-    )
-  ) {
-    return point;
+    if (
+      Number.isFinite(
+        value
+      ) &&
+      value >
+        0
+    ) {
+      return value;
+    }
   }
 
   return 0;
 }
 
-function getNetApyPct(
-  item,
-  aggregate
+function getElementPnl(
+  element
 ) {
-  const ratePoint =
-    getRatePoint(
-      item
-    );
-
-  const pointApy =
-    Number(
-      ratePoint?.netApy
+  const positions =
+    getLeveragePositions(
+      element
     );
 
   if (
-    Number.isFinite(
-      pointApy
-    )
+    !positions.length
   ) {
-    return normalizePercent(
-      pointApy
-    );
+    return 0;
   }
 
-  return normalizePercent(
-    aggregate?.wAvgApy
+  return positions.reduce(
+    (
+      sum,
+      position
+    ) =>
+      sum +
+      (
+        Number(
+          position?.pnlValue
+        ) || 0
+      ),
+    0
   );
 }
 
-function chooseLoopPosition(
-  items
+function getMarkPrice(
+  position
 ) {
-  const active =
-    (
-      items ||
-      []
-    ).filter(
-      isActivePosition
+  const price =
+    Number(
+      position?.markPrice
     );
 
+  return (
+    Number.isFinite(
+      price
+    ) &&
+    price >
+      0
+  )
+    ? price
+    : 0;
+}
+
+function getPositionQuantity(
+  positionValueUsd,
+  position
+) {
+  const markPrice =
+    getMarkPrice(
+      position
+    );
+
+  /*
+   * This gives us the equity-equivalent ONyc amount,
+   * matching Loopscale's:
+   *
+   * 874.53 ONyc   $1,001.83
+   */
   if (
-    !active.length
+    markPrice >
+      0 &&
+    positionValueUsd >
+      0
   ) {
-    return null;
+    return (
+      positionValueUsd /
+      markPrice
+    );
   }
 
-  /*
-   * First prefer positions Loopscale itself marks as Loops.
-   */
-  const loops =
-    active.filter(
-      isLoopPosition
+  const size =
+    Number(
+      position?.size
     );
 
-  const candidates =
-    loops.length
-      ? loops
-      : active;
-
-  /*
-   * If more than one exists, use the largest active position.
-   */
-  return [
-    ...candidates,
-  ].sort(
-    (
-      a,
-      b
-    ) =>
-      getNetPositionValueUsd(
-        b
-      ) -
-      getNetPositionValueUsd(
-        a
-      )
-  )[0];
+  return (
+    Number.isFinite(
+      size
+    ) &&
+    size >
+      0
+  )
+    ? size
+    : 0;
 }
 
-function getCollateralSymbol(
-  item
+async function fetchJupiterPortfolio(
+  walletAddress,
+  filtered = true
 ) {
-  const collateral =
-    Array.isArray(
-      item?.collateral
-    )
-      ? item.collateral
-      : [];
-
-  const breakdown =
-    Array.isArray(
-      item?.collateralBreakdown
-    )
-      ? item.collateralBreakdown
-      : [];
-
-  const identifiers = [
-    ...collateral.map(
-      (
-        row
-      ) =>
-        row?.assetIdentifier
-    ),
-
-    ...breakdown.map(
-      (
-        row
-      ) =>
-        row?.assetIdentifier
-    ),
-  ]
-    .filter(
-      Boolean
-    )
-    .map(
-      (
-        value
-      ) =>
-        String(
-          value
-        )
-    );
-
-  const onyc =
-    identifiers.find(
-      (
-        value
-      ) =>
-        value
-          .toLowerCase()
-          .includes(
-            "onyc"
-          )
-    );
-
-  return onyc
-    ? "ONyc"
-    : "ONyc";
-}
-
-export async function getLoopscaleOnycSnapshot(
-  walletAddress =
-    LOOPSCALE_WALLET
-) {
-  /*
-   * Intentionally use a MINIMAL filter.
-   *
-   * The previous version added orderFundingTypes and assetTypes.
-   * Those filters were causing Loopscale to return no positions.
-   *
-   * We fetch the wallet's active loans and identify the Loop
-   * from ledgers[].isLoop instead.
-   */
-  const requestBody = {
-    borrowers: [
-      walletAddress,
-    ],
-
-    filterType:
-      ACTIVE_FILTER_TYPE,
-
-    includePnl:
-      true,
-
-    page:
-      1,
-
-    pageSize:
-      LOOPSCALE_PAGE_SIZE,
-
-    sortSide:
-      1,
-
-    sortType:
-      2,
-  };
+  const query =
+    filtered
+      ? "?platforms=loopscale"
+      : "";
 
   const response =
     await proxyFetch(
-      "/loopscale/v1/markets/loans/info",
+      `/jupiter-portfolio/portfolio/v1/positions/${encodeURIComponent(
+        walletAddress
+      )}${query}`,
       {
         method:
-          "POST",
+          "GET",
 
         cache:
           "no-store",
@@ -558,15 +304,7 @@ export async function getLoopscaleOnycSnapshot(
         headers: {
           Accept:
             "application/json",
-
-          "Content-Type":
-            "application/json",
         },
-
-        body:
-          JSON.stringify(
-            requestBody
-          ),
       }
     );
 
@@ -585,7 +323,7 @@ export async function getLoopscaleOnycSnapshot(
         : null;
   } catch {
     throw new Error(
-      `Loopscale returned non-JSON data: ${raw.slice(
+      `Jupiter Portfolio returned non-JSON data: ${raw.slice(
         0,
         180
       )}`
@@ -597,118 +335,488 @@ export async function getLoopscaleOnycSnapshot(
   ) {
     throw new Error(
       payload?.detail ||
-        payload?.error
-          ?.message ||
+        payload?.error ||
         payload?.message ||
-        `Loopscale returned HTTP ${response.status}`
+        `Jupiter Portfolio returned HTTP ${response.status}`
     );
   }
 
-  const items =
-    normalizeItems(
+  return payload;
+}
+
+function chooseLoopscaleElement(
+  payload
+) {
+  const elements =
+    Array.isArray(
+      payload?.elements
+    )
+      ? payload.elements
+      : [];
+
+  if (
+    !elements.length
+  ) {
+    return null;
+  }
+
+  /*
+   * First choice:
+   * explicit Loopscale leverage position.
+   */
+  const exact =
+    elements.find(
+      (
+        element
+      ) =>
+        isLoopscaleElement(
+          element
+        ) &&
+        normalizeText(
+          element?.type
+        ) ===
+          "leverage"
+    );
+
+  if (
+    exact
+  ) {
+    return exact;
+  }
+
+  /*
+   * Second choice:
+   * anything Jupiter identifies as Loopscale.
+   */
+  const loopscale =
+    elements.find(
+      isLoopscaleElement
+    );
+
+  if (
+    loopscale
+  ) {
+    return loopscale;
+  }
+
+  /*
+   * Last-resort fallback:
+   * if Jupiter's Loopscale fetcher ran but did not attach
+   * the platform name normally, look for a leverage
+   * position whose underlying asset says ONyc.
+   */
+  const onycLeverage =
+    elements.find(
+      (
+        element
+      ) =>
+        normalizeText(
+          element?.type
+        ) ===
+          "leverage" &&
+        getLeveragePositions(
+          element
+        ).some(
+          isOnycPosition
+        )
+    );
+
+  return (
+    onycLeverage ||
+    null
+  );
+}
+
+function getFetcherError(
+  payload
+) {
+  const reports =
+    Array.isArray(
+      payload?.fetcherReports
+    )
+      ? payload.fetcherReports
+      : [];
+
+  const loopscaleReport =
+    reports.find(
+      (
+        report
+      ) =>
+        normalizeText(
+          report?.id
+        ).includes(
+          "loopscale"
+        )
+    );
+
+  if (
+    loopscaleReport?.error
+  ) {
+    return String(
+      loopscaleReport.error
+    );
+  }
+
+  return "";
+}
+
+/*
+ * Loopscale direct API is used only for metadata now.
+ *
+ * If it returns nothing, that does NOT break the position.
+ * Jupiter remains the primary live source.
+ */
+async function fetchLoopscaleMetadata(
+  walletAddress
+) {
+  try {
+    const response =
+      await proxyFetch(
+        "/loopscale/v1/markets/loans/info",
+        {
+          method:
+            "POST",
+
+          cache:
+            "no-store",
+
+          headers: {
+            Accept:
+              "application/json",
+
+            "Content-Type":
+              "application/json",
+          },
+
+          body:
+            JSON.stringify({
+              borrowers: [
+                walletAddress,
+              ],
+
+              filterType:
+                0,
+
+              /*
+               * Official Loopscale field:
+               * 2 = Loop
+               */
+              orderFundingType:
+                2,
+
+              /*
+               * Normal SPL token collateral.
+               */
+              assetTypes:
+                0,
+
+              /*
+               * Try the first pagination index.
+               */
+              page:
+                0,
+
+              pageSize:
+                LOOPSCALE_PAGE_SIZE,
+
+              sortDirection:
+                1,
+
+              sortType:
+                2,
+            }),
+        }
+      );
+
+    if (
+      !response.ok
+    ) {
+      return null;
+    }
+
+    const payload =
+      await response.json();
+
+    let items =
+      [];
+
+    if (
+      Array.isArray(
+        payload
+      )
+    ) {
+      items =
+        payload.flatMap(
+          (
+            entry
+          ) =>
+            Array.isArray(
+              entry?.loanInfos
+            )
+              ? entry.loanInfos
+              : []
+        );
+    } else if (
+      Array.isArray(
+        payload?.loanInfos
+      )
+    ) {
+      items =
+        payload.loanInfos;
+    }
+
+    const active =
+      items.find(
+        (
+          item
+        ) =>
+          item?.loan
+            ?.closed !==
+          true
+      );
+
+    if (
+      !active
+    ) {
+      return null;
+    }
+
+    const startTimeRaw =
+      Number(
+        active?.loan
+          ?.startTime
+      );
+
+    const startTime =
+      Number.isFinite(
+        startTimeRaw
+      ) &&
+      startTimeRaw >
+        0
+        ? new Date(
+            startTimeRaw >
+            10_000_000_000
+              ? startTimeRaw
+              : startTimeRaw *
+                1000
+          ).toISOString()
+        : null;
+
+    return {
+      loanAddress:
+        active?.loan
+          ?.address ||
+        null,
+
+      startTime,
+
+      raw:
+        active,
+    };
+  } catch (
+    error
+  ) {
+    console.warn(
+      "Loopscale metadata lookup failed:",
+      error
+    );
+
+    return null;
+  }
+}
+
+async function getJupiterLoopscalePosition(
+  walletAddress
+) {
+  /*
+   * Start with only Loopscale to keep the response small.
+   */
+  let payload =
+    await fetchJupiterPortfolio(
+      walletAddress,
+      true
+    );
+
+  let element =
+    chooseLoopscaleElement(
       payload
     );
 
-  console.log(
-    "[Loopscale] active loans:",
-    items
-  );
+  /*
+   * If Jupiter's platform filter behaves differently,
+   * retry the wallet's full portfolio.
+   */
+  if (
+    !element
+  ) {
+    payload =
+      await fetchJupiterPortfolio(
+        walletAddress,
+        false
+      );
+
+    element =
+      chooseLoopscaleElement(
+        payload
+      );
+  }
 
   if (
-    !items.length
+    !element
   ) {
+    const fetcherError =
+      getFetcherError(
+        payload
+      );
+
     throw new Error(
-      `Loopscale returned 0 active loans for wallet ${walletAddress}.`
+      fetcherError
+        ? `Jupiter could not load Loopscale: ${fetcherError}`
+        : "Jupiter Portfolio did not return the Loopscale ONyc Loop."
     );
   }
 
-  const item =
-    chooseLoopPosition(
-      items
+  return {
+    payload,
+    element,
+  };
+}
+
+export async function getLoopscaleOnycSnapshot(
+  walletAddress =
+    LOOPSCALE_WALLET
+) {
+  const [
+    jupiterResult,
+    metadataResult,
+  ] =
+    await Promise.allSettled(
+      [
+        getJupiterLoopscalePosition(
+          walletAddress
+        ),
+
+        fetchLoopscaleMetadata(
+          walletAddress
+        ),
+      ]
     );
 
   if (
-    !item
+    jupiterResult.status !==
+    "fulfilled"
   ) {
-    throw new Error(
-      "Loopscale returned loans, but none could be selected as an active position."
-    );
+    throw jupiterResult.reason;
   }
 
-  console.log(
-    "[Loopscale] selected position:",
-    item
-  );
+  const {
+    element,
+  } =
+    jupiterResult.value;
 
-  const aggregate =
-    payload?.aggregate ||
-    null;
+  const metadata =
+    metadataResult.status ===
+    "fulfilled"
+      ? metadataResult.value
+      : null;
+
+  const position =
+    chooseOnycPosition(
+      element
+    );
 
   const positionValueUsd =
-    getNetPositionValueUsd(
-      item
+    getElementValue(
+      element
     );
 
-  const quantity =
-    getNetPositionTokenAmount(
-      item
+  if (
+    !(
+      positionValueUsd >
+      0
+    )
+  ) {
+    throw new Error(
+      "Jupiter found Loopscale, but returned a $0 position value."
     );
+  }
 
   const pnlUsd =
-    getPnlUsd(
-      item
+    getElementPnl(
+      element
     );
 
   const netApy =
-    getNetApyPct(
-      item,
-      aggregate
-    );
-
-  const loanAddress =
-    String(
-      item?.loan
-        ?.address ||
-        item?.loanAddress ||
-        "loopscale-onyc"
-    );
-
-  const startTime =
-    toIsoFromUnix(
-      item?.loan
-        ?.startTime
+    normalizePercent(
+      element?.netApy
     );
 
   const priceUsd =
-    quantity >
-    0
-      ? positionValueUsd /
-        quantity
-      : 0;
+    getMarkPrice(
+      position
+    );
+
+  const quantity =
+    getPositionQuantity(
+      positionValueUsd,
+      position
+    );
+
+  const collateralUsd =
+    toNumber(
+      position
+        ?.collateralValue
+    ) ||
+    toNumber(
+      element?.data
+        ?.cross
+        ?.collateralValue
+    );
+
+  const leverage =
+    toNumber(
+      position?.leverage
+    ) ||
+    toNumber(
+      element?.data
+        ?.cross
+        ?.leverage
+    );
+
+  const loanAddress =
+    metadata
+      ?.loanAddress ||
+    element?.data
+      ?.contract ||
+    element?.data
+      ?.ref ||
+    "loopscale-onyc";
+
+  const startTime =
+    metadata
+      ?.startTime ||
+    LOOPSCALE_ONYC_STARTED_AT;
 
   const dailyNetYieldUsd =
-    toNumber(
-      aggregate
-        ?.dailyCollateralYieldUsd
-    ) -
-    toNumber(
-      aggregate
-        ?.dailyInterestUsd
-    ) -
-    toNumber(
-      aggregate
-        ?.dailyPrincipalYieldUsd
-    );
+    (
+      positionValueUsd *
+      (
+        netApy /
+        100
+      )
+    ) /
+    365;
 
   return {
     walletAddress,
 
-    loanAddress,
+    loanAddress:
+      String(
+        loanAddress
+      ),
 
     asset:
-      getCollateralSymbol(
-        item
-      ),
+      "ONyc",
 
     strategy:
       "ONyc Loop",
@@ -725,36 +833,38 @@ export async function getLoopscaleOnycSnapshot(
 
     startTime,
 
-    collateralUsd:
-      toNumber(
-        item?.collateralUsd
-      ),
+    collateralUsd,
+
+    leverage,
 
     principalUsd:
-      toNumber(
-        item?.principalUsd
-      ),
+      0,
 
     interestAccruedUsd:
-      toNumber(
-        item?.interestAccruedUsd
-      ),
+      0,
 
     pendingYieldUsd:
-      toNumber(
-        item?.pendingYieldUsd
+      Math.max(
+        0,
+        pnlUsd
       ),
 
     dailyNetYieldUsd,
 
     source:
-      "loopscale",
+      "jupiter_portfolio",
 
     syncedAt:
       new Date()
         .toISOString(),
 
-    raw:
-      item,
+    raw: {
+      jupiter:
+        element,
+
+      loopscale:
+        metadata?.raw ||
+        null,
+    },
   };
 }
