@@ -124,7 +124,7 @@ def _fetch(
         raise HTTPException(
             status_code=502,
             detail="Upstream returned a non-JSON response.",
-        ) from errorm error
+        ) from error
 
 
 @router.api_route(
