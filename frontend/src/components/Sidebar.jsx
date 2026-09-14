@@ -5,7 +5,6 @@ import { useAuth } from "@/lib/AuthContext";
 import {
   DollarSign,
   CircleDollarSign,
-  Volleyball,
   ReceiptText,
   ChevronLeft,
   ChevronRight,
@@ -14,14 +13,30 @@ import {
 } from "lucide-react";
 
 const NAV_ITEMS = [
-  { path: "/", label: "Net Worth", icon: DollarSign },
-  { path: "/yield-farming", label: "Project Income", icon: CircleDollarSign },
-  { path: "/spending", label: "Spending", icon: ReceiptText },
+  {
+    path: "/",
+    label: "Net Worth",
+    icon: DollarSign,
+  },
+  {
+    path: "/yield-farming",
+    label: "Project Income",
+    icon: CircleDollarSign,
+  },
+  {
+    path: "/spending",
+    label: "Spending",
+    icon: ReceiptText,
+  },
 ];
 
 export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
+  const [collapsed, setCollapsed] =
+    useState(false);
+
+  const [importOpen, setImportOpen] =
+    useState(false);
+
   const { user, logout } = useAuth();
 
   return (
@@ -33,20 +48,32 @@ export default function Sidebar() {
     >
       <div className="flex items-center justify-between border-b border-border/40 p-4">
         {!collapsed && (
-          <h2 className="text-lg font-semibold tracking-tight text-foreground">
+          <h2 className="text-xl font-semibold tracking-tight text-foreground">
             Wealth
           </h2>
         )}
 
         <button
-          onClick={() => setCollapsed((value) => !value)}
+          onClick={() =>
+            setCollapsed((value) => !value)
+          }
           className="flex h-8 w-8 items-center justify-center rounded-md border border-border/40 text-muted-foreground hover:bg-white/5 hover:text-foreground"
-          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={
+            collapsed
+              ? "Expand sidebar"
+              : "Collapse sidebar"
+          }
         >
           {collapsed ? (
-            <ChevronRight className="h-4 w-4" strokeWidth={1.5} />
+            <ChevronRight
+              className="h-4 w-4"
+              strokeWidth={1.5}
+            />
           ) : (
-            <ChevronLeft className="h-4 w-4" strokeWidth={1.5} />
+            <ChevronLeft
+              className="h-4 w-4"
+              strokeWidth={1.5}
+            />
           )}
         </button>
       </div>
@@ -60,55 +87,99 @@ export default function Sidebar() {
             key={item.path}
             to={item.path}
             end={item.path === "/"}
-            title={collapsed ? item.label : undefined}
+            title={
+              collapsed
+                ? item.label
+                : undefined
+            }
             className={({ isActive }) =>
-              `flex items-center rounded-md py-2.5 text-sm font-medium transition-colors ${
-                collapsed ? "justify-center px-2" : "gap-3 px-3"
+              `flex items-center rounded-md py-2.5 text-[15px] font-medium transition-colors ${
+                collapsed
+                  ? "justify-center px-2"
+                  : "gap-3 px-3"
               } ${
                 isActive
                   ? "bg-white/10 text-foreground"
                   : "text-muted-foreground hover:bg-white/5 hover:text-foreground"
               }`
             }
-            data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
+            data-testid={`nav-${item.label
+              .toLowerCase()
+              .replace(/\s+/g, "-")}`}
           >
-            <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-            {!collapsed && <span>{item.label}</span>}
+            <item.icon
+              className="h-[18px] w-[18px] flex-shrink-0"
+              strokeWidth={1.5}
+            />
+
+            {!collapsed && (
+              <span>{item.label}</span>
+            )}
           </NavLink>
         ))}
       </nav>
 
       <div className="space-y-1 border-t border-border/40 px-3 py-3">
         {!collapsed && user && (
-          <p className="px-3 pb-1 text-xs text-muted-foreground">
-            Signed in as <span className="text-foreground">{user.username}</span>
+          <p className="px-3 pb-1 text-[13px] text-muted-foreground">
+            Signed in as{" "}
+            <span className="text-foreground">
+              {user.username}
+            </span>
           </p>
         )}
 
         <button
           onClick={() => setImportOpen(true)}
-          title={collapsed ? "Import data" : undefined}
-          className={`flex w-full items-center rounded-md py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground ${
-            collapsed ? "justify-center px-2" : "gap-3 px-3"
+          title={
+            collapsed
+              ? "Import data"
+              : undefined
+          }
+          className={`flex w-full items-center rounded-md py-2.5 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground ${
+            collapsed
+              ? "justify-center px-2"
+              : "gap-3 px-3"
           }`}
         >
-          <DatabaseBackup className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-          {!collapsed && <span>Import data</span>}
+          <DatabaseBackup
+            className="h-[18px] w-[18px] flex-shrink-0"
+            strokeWidth={1.5}
+          />
+
+          {!collapsed && (
+            <span>Import data</span>
+          )}
         </button>
 
         <button
           onClick={logout}
-          title={collapsed ? "Sign out" : undefined}
-          className={`flex w-full items-center rounded-md py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground ${
-            collapsed ? "justify-center px-2" : "gap-3 px-3"
+          title={
+            collapsed
+              ? "Sign out"
+              : undefined
+          }
+          className={`flex w-full items-center rounded-md py-2.5 text-[15px] font-medium text-muted-foreground transition-colors hover:bg-white/5 hover:text-foreground ${
+            collapsed
+              ? "justify-center px-2"
+              : "gap-3 px-3"
           }`}
         >
-          <LogOut className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-          {!collapsed && <span>Sign out</span>}
+          <LogOut
+            className="h-[18px] w-[18px] flex-shrink-0"
+            strokeWidth={1.5}
+          />
+
+          {!collapsed && (
+            <span>Sign out</span>
+          )}
         </button>
       </div>
 
-      <ImportDataDialog open={importOpen} onOpenChange={setImportOpen} />
+      <ImportDataDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+      />
     </aside>
   );
 }
