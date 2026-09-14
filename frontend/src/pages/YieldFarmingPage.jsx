@@ -6885,6 +6885,54 @@ export default function YieldFarmingPage() {
   );
 }
 
+function IncomeProjection({
+  daily = 0,
+  monthly = 0,
+  yearly = 0,
+}) {
+  return (
+    <div className="mt-1 flex flex-wrap justify-end gap-x-2 gap-y-0.5 text-[11px] tabular-nums text-muted-foreground">
+      <span>
+        {formatCurrency(daily)}/day
+      </span>
+
+      <span>·</span>
+
+      <span>
+        {formatCurrency(monthly)}/month
+      </span>
+
+      <span>·</span>
+
+      <span>
+        {formatCurrency(yearly)}/year
+      </span>
+    </div>
+  );
+}
+
+function getProjectProjections(project) {
+  const assets = Array.isArray(
+    project?.assets
+  )
+    ? project.assets
+    : [];
+
+  const yearly = assets.reduce(
+    (sum, asset) =>
+      sum +
+      (Number(asset?.balance) || 0) *
+        ((Number(asset?.apy) || 0) / 100),
+    0
+  );
+
+  return {
+    daily: yearly / 365,
+    monthly: yearly / 12,
+    yearly,
+  };
+}
+
 function ProjectCard({
   project,
   collapsed,
@@ -6893,34 +6941,27 @@ function ProjectCard({
   logo,
   onLogoChange,
 }) {
+  const projections =
+    getProjectProjections(project);
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
       <button
         type="button"
-        onClick={
-          onToggle
-        }
+        onClick={onToggle}
         className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
       >
         <div className="flex min-w-0 items-center gap-3">
           <ProjectLogoButton
-            platform={
-              project.platform
-            }
-            logo={
-              logo
-            }
-            onLogoChange={
-              onLogoChange
-            }
+            platform={project.platform}
+            logo={logo}
+            onLogoChange={onLogoChange}
           />
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="truncate text-lg font-semibold">
-                {
-                  project.platform
-                }
+                {project.platform}
               </h3>
 
               {project.autoSynced && (
@@ -6943,23 +6984,25 @@ function ProjectCard({
           </div>
         </div>
 
-        <div className="text-right">
+        <div className="shrink-0 text-right">
           <div className="text-2xl font-semibold tabular-nums">
             {formatCurrency(
               project.totalBalance
             )}
           </div>
+
+          <IncomeProjection
+            daily={projections.daily}
+            monthly={projections.monthly}
+            yearly={projections.yearly}
+          />
         </div>
       </button>
 
       {!collapsed && (
         <ProjectPositionsSection
-          project={
-            project
-          }
-          onDeletePosition={
-            onDeletePosition
-          }
+          project={project}
+          onDeletePosition={onDeletePosition}
         />
       )}
     </div>
@@ -7043,12 +7086,11 @@ function UnetworkProjectCard({
             )}
           </div>
 
-          <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-            {formatCurrency(
-              stats?.lifetimeUsd
-            )}{" "}
-            lifetime earned
-          </div>
+          <IncomeProjection
+            daily={stats?.estimatedDailyUsd}
+            monthly={stats?.estimatedMonthlyUsd}
+            yearly={stats?.estimatedYearlyUsd}
+          />
         </div>
       </button>
 
@@ -7209,12 +7251,11 @@ function SaladProjectCard({
             )}
           </div>
 
-          <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-            {formatCurrency(
-              stats?.lifetimeUsd
-            )}{" "}
-            lifetime earned
-          </div>
+          <IncomeProjection
+            daily={stats?.estimatedDailyUsd}
+            monthly={stats?.estimatedMonthlyUsd}
+            yearly={stats?.estimatedYearlyUsd}
+          />
         </div>
       </button>
 
@@ -7370,10 +7411,21 @@ function RollerCoinProjectCard({
             )}
           </div>
 
-          <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
-            {(Number(
-              stats?.lifetimeTrx
-            ) || 0).toFixed(10)} TRX
+          <div className="shrink-0 text-right">
+            <div className="text-2xl font-semibold tabular-nums">
+              {formatCurrency(
+                stats?.lifetimeUsd
+              )}
+            </div>
+
+            <IncomeProjection
+              daily={stats?.todayUsd}
+              monthly={stats?.monthUsd}
+              yearly={
+                (Number(stats?.todayUsd) || 0) *
+                365
+              }
+            />
           </div>
         </div>
       </button>
