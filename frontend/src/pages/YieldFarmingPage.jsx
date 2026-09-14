@@ -51,64 +51,6 @@ function saveLuloDailyHistory(history) {
   localStorage.setItem(LULO_DAILY_HISTORY_KEY, JSON.stringify(history));
 }
 
-function recordLuloDailyEarnings(lifetimeInterestUsd) {
-  const today = getDateKey();
-  const history = loadLuloDailyHistory();
-  const currentLifetime = Number(lifetimeInterestUsd) || 0;
-
-  const lastEntry = history[history.length - 1];
-
-  if (!lastEntry) {
-    const firstHistory = [
-      {
-        date: today,
-        lifetimeInterest: currentLifetime,
-        earned: 0,
-      },
-    ];
-
-    saveLuloDailyHistory(firstHistory);
-    return firstHistory;
-  }
-
-  if (lastEntry.date === today) {
-    const previousLifetime =
-      history.length > 1
-        ? Number(history[history.length - 2].lifetimeInterest) || 0
-        : currentLifetime;
-
-    const updatedHistory = [
-      ...history.slice(0, -1),
-      {
-        date: today,
-        lifetimeInterest: currentLifetime,
-        earned: Math.max(0, currentLifetime - previousLifetime),
-      },
-    ];
-
-    saveLuloDailyHistory(updatedHistory);
-    return updatedHistory;
-  }
-
-  const earnedToday = Math.max(
-    0,
-    currentLifetime - (Number(lastEntry.lifetimeInterest) || 0)
-  );
-
-  const updatedHistory = [
-    ...history,
-    {
-      date: today,
-      lifetimeInterest: currentLifetime,
-      earned: earnedToday,
-    },
-  ].slice(-60);
-
-  saveLuloDailyHistory(updatedHistory);
-  return updatedHistory;
-}
-
-recordLuloDailyEarnings(lulo_lifetime_interest_usd);
 
 const MONTHLY_TRACKING_START = "2026-09";
 const LULO_SEPTEMBER_2026_OPENING_EARNED = 7.76;
