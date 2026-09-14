@@ -1702,6 +1702,10 @@ function createLuloProjectCard(project) {
     transactions:
       project.transactions || [],
     assets,
+    luloFiveDayAverageUsd:
+  Number(
+    project.lulo_five_day_average_usd
+  ) || 0,
   };
 }
 
@@ -6939,22 +6943,27 @@ function getLuloFiveDayAverage(project) {
 
 function getProjectProjections(project) {
   const isLulo =
-    String(project?.platform || "").toLowerCase() ===
-    "lulo";
+    String(
+      project?.platform || ""
+    ).toLowerCase() === "lulo";
 
   if (isLulo) {
-    const daily = getLuloFiveDayAverage(project);
+    const daily =
+      Number(
+        project?.luloFiveDayAverageUsd
+      ) ||
+      getLuloFiveDayAverage(project);
 
-    if (daily > 0) {
-      return {
-        daily,
-        monthly: daily * 30.4375,
-        yearly: daily * 365,
-      };
-    }
+    return {
+      daily,
+      monthly: daily * 30.4375,
+      yearly: daily * 365,
+    };
   }
 
-  const assets = Array.isArray(project?.assets)
+  const assets = Array.isArray(
+    project?.assets
+  )
     ? project.assets
     : [];
 
