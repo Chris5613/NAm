@@ -13,12 +13,14 @@ import urllib.request
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from starlette.requests import ClientDisconnect
 
 from ..auth import current_user
 from ..models import User
 
-router = APIRouter(prefix="/api/market", tags=["market"])
+router = APIRouter(
+    prefix="/api/market",
+    tags=["market"],
+)
 
 CACHE_TTL_SECONDS = 45
 _cache: dict[str, tuple[float, Any]] = {}
@@ -27,47 +29,88 @@ _cache: dict[str, tuple[float, Any]] = {}
 def _provider_config() -> dict[str, dict[str, Any]]:
     """Built per call so .env changes apply without restarting."""
     return {
-        "coingecko": {"base": "https://api.coingecko.com/api/v3"},
+        "coingecko": {
+            "base": "https://api.coingecko.com/api/v3",
+        },
         "finnhub": {
             "base": "https://finnhub.io/api/v1",
-            "query": {"token": os.getenv("FINNHUB_API_KEY", "")},
+            "query": {
+                "token": os.getenv(
+                    "FINNHUB_API_KEY",
+                    "",
+                ),
+            },
         },
         "coinstats": {
             "base": "https://openapiv1.coinstats.app",
-            "headers": {"X-API-KEY": os.getenv("COINSTATS_KEY", "")},
+            "headers": {
+                "X-API-KEY": os.getenv(
+                    "COINSTATS_KEY",
+                    "",
+                ),
+            },
         },
         "jupiter": {
             "base": "https://lite-api.jup.ag",
-            "headers": {"x-api-key": os.getenv("JUPITER_API_KEY", "")}
+            "headers": {
+                "x-api-key": os.getenv(
+                    "JUPITER_API_KEY",
+                    "",
+                ),
+            }
             if os.getenv("JUPITER_API_KEY")
             else {},
         },
         "jupiter-portfolio": {
             "base": "https://api.jup.ag",
-            "headers": {"x-api-key": os.getenv("JUPITER_API_KEY", "")}
+            "headers": {
+                "x-api-key": os.getenv(
+                    "JUPITER_API_KEY",
+                    "",
+                ),
+            }
             if os.getenv("JUPITER_API_KEY")
             else {},
         },
-        "bitcoin": {"base": "https://blockchain.info"},
-        "nosana": {"base": "https://dashboard.k8s.prd.nos.ci/api"},
-        "mlb": {"base": "https://statsapi.mlb.com/api/v1"},
-        "lulo": {"base": "https://api.lulo.fi"},
-        "ratex": {"base": "https://api.rate-x.io"},
-        "loopscale": {"base": "https://tars.loopscale.com"},
+        "bitcoin": {
+            "base": "https://blockchain.info",
+        },
+        "nosana": {
+            "base": "https://dashboard.k8s.prd.nos.ci/api",
+        },
+        "mlb": {
+            "base": "https://statsapi.mlb.com/api/v1",
+        },
+        "lulo": {
+            "base": "https://api.lulo.fi",
+        },
+        "ratex": {
+            "base": "https://api.rate-x.io",
+        },
+        "loopscale": {
+            "base": "https://tars.loopscale.com",
+        },
         "solana": {
             "base": os.getenv(
                 "SOLANA_RPC_URL",
                 "https://api.mainnet-beta.solana.com",
-            )
+            ),
         },
         "ebay": {
             "base": f"https://{os.getenv('RAPIDAPI_EBAY_HOST', '')}",
             "headers": {
-                "X-RapidAPI-Key": os.getenv("RAPIDAPI_KEY", ""),
-                "X-RapidAPI-Host": os.getenv("RAPIDAPI_EBAY_HOST", ""),
+                "X-RapidAPI-Key": os.getenv(
+                    "RAPIDAPI_KEY",
+                    "",
+                ),
+                "X-RapidAPI-Host": os.getenv(
+                    "RAPIDAPI_EBAY_HOST",
+                    "",
+                ),
             },
         },
     }
+
 
 def _fetch(
     url: str,
@@ -97,7 +140,10 @@ def _fetch(
     except TimeoutError as error:
         raise HTTPException(
             status_code=504,
-            detail="The upstream service took too long to respond. Please try again.",
+            detail=(
+                "The upstream service took too long to respond. "
+                "Please try again."
+            ),
         ) from error
 
     except urllib.error.HTTPError as error:
@@ -150,7 +196,11 @@ async def public_mlb_proxy(
 
     url = (
         f'{config["base"]}/{path.lstrip("/")}'
-        + (f"?{params}" if params else "")
+        + (
+            f"?{params}"
+            if params
+            else ""
+        )
     )
 
     cache_key = f"mlb:{url}"
@@ -164,17 +214,11 @@ async def public_mlb_proxy(
     ):
         return cached[1]
 
-try:
     body = (
         await request.body()
         if request.method == "POST"
         else None
     )
-except ClientDisconnect as error:
-    raise HTTPException(
-        status_code=499,
-        detail="Request cancelled by client.",
-    ) from error
 
     data = _fetch(
         url,
@@ -202,9 +246,7 @@ async def proxy(
 ) -> Any:
     providers = _provider_config()
 
-    config = providers.get(
-        provider
-    )
+    config = providers.get(provider)
 
     if not config:
         raise HTTPException(
@@ -220,18 +262,16 @@ async def proxy(
 
     if (
         not config["base"]
-        or config["base"].endswith(
-            "//"
-        )
+        or config["base"].endswith("//")
     ):
         raise HTTPException(
             status_code=503,
-            detail=f"{provider} is not configured on the backend.",
+            detail=(
+                f"{provider} is not configured on the backend."
+            ),
         )
 
-    params = dict(
-        request.query_params
-    )
+    params = dict(request.query_params)
 
     params.update(
         config.get(
@@ -242,18 +282,12 @@ async def proxy(
 
     if (
         provider == "coinstats"
-        and path.startswith(
-            "portfolio/defi"
-        )
-        and not params.get(
-            "portfolioId"
-        )
+        and path.startswith("portfolio/defi")
+        and not params.get("portfolioId")
     ):
-        params["portfolioId"] = (
-            os.getenv(
-                "COINSTATS_PORTFOLIO_ID",
-                "",
-            )
+        params["portfolioId"] = os.getenv(
+            "COINSTATS_PORTFOLIO_ID",
+            "",
         )
 
     query = urllib.parse.urlencode(
@@ -282,13 +316,9 @@ async def proxy(
         )
     )
 
-    cache_key = (
-        f"{provider}:{url}"
-    )
+    cache_key = f"{provider}:{url}"
 
-    cached = _cache.get(
-        cache_key
-    )
+    cached = _cache.get(cache_key)
 
     if (
         cached
@@ -317,8 +347,7 @@ async def proxy(
             "ratex",
             "loopscale",
         }
-        and request.method
-        == "POST"
+        and request.method == "POST"
     ):
         headers[
             "Content-Type"
@@ -341,9 +370,7 @@ async def proxy(
 @router.post("/solana/rpc")
 async def solana_rpc(
     payload: dict[str, Any],
-    user: User = Depends(
-        current_user
-    ),
+    user: User = Depends(current_user),
 ) -> Any:
     """Solana's JSON-RPC needs POST, and only read methods are allowed through."""
     allowed = {
@@ -370,12 +397,7 @@ async def solana_rpc(
     return _fetch(
         endpoint,
         {
-            "Content-Type":
-                "application/json"
+            "Content-Type": "application/json",
         },
-        json.dumps(
-            payload
-        ).encode(
-            "utf-8"
-        ),
+        json.dumps(payload).encode("utf-8"),
     )
