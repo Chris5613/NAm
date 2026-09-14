@@ -5717,6 +5717,87 @@ export default function YieldFarmingPage() {
       ]
     );
 
+
+  const sortedProgramCards =
+    useMemo(
+      () => {
+        const items = [
+          ...projectCards.map(
+            (
+              project
+            ) => ({
+              type:
+                "project",
+
+              key:
+                project.id,
+
+              amount:
+                Number(
+                  project.totalBalance
+                ) || 0,
+
+              project,
+            })
+          ),
+
+          {
+            type:
+              "rollercoin",
+
+            key:
+              "rollercoin-project",
+
+            amount:
+              Number(
+                rollerCoinStats?.lifetimeUsd
+              ) || 0,
+          },
+
+          {
+            type:
+              "salad",
+
+            key:
+              "salad-project",
+
+            amount:
+              Number(
+                saladStats?.currentBalance
+              ) || 0,
+          },
+
+          {
+            type:
+              "unetwork",
+
+            key:
+              "unetwork-project",
+
+            amount:
+              Number(
+                unetworkStats?.currentBalance
+              ) || 0,
+          },
+        ];
+
+        return items.sort(
+          (
+            a,
+            b
+          ) =>
+            b.amount -
+            a.amount
+        );
+      },
+      [
+        projectCards,
+        rollerCoinStats,
+        saladStats,
+        unetworkStats,
+      ]
+    );
+
   const completedRatexPositions =
     useMemo(
       () =>
@@ -6140,167 +6221,204 @@ export default function YieldFarmingPage() {
           </Card>
         ) : (
           <div className="space-y-4">
-            {projectCards.map(
-              (project) => (
-                <ProjectCard
-                  key={
-                    project.id
-                  }
-                  project={
-                    project
-                  }
-                  collapsed={
-                    !expandedProjects.has(
-                      project.id
-                    )
-                  }
-                  onToggle={() =>
-                    toggleProject(
-                      project.id
-                    )
-                  }
-                  onDeletePosition={
-                    deletePosition
-                  }
-                  logo={
-                    projectLogos[
-                      project.id
-                    ] || ""
-                  }
-                  onLogoChange={(
-                    dataUrl
-                  ) =>
-                    setProjectLogo(
-                      project.id,
+            {sortedProgramCards.map(
+              (
+                item
+              ) => {
+                if (
+                  item.type ===
+                  "project"
+                ) {
+                  const project =
+                    item.project;
+
+                  return (
+                    <ProjectCard
+                      key={
+                        item.key
+                      }
+                      project={
+                        project
+                      }
+                      collapsed={
+                        !expandedProjects.has(
+                          project.id
+                        )
+                      }
+                      onToggle={() =>
+                        toggleProject(
+                          project.id
+                        )
+                      }
+                      onDeletePosition={
+                        deletePosition
+                      }
+                      logo={
+                        projectLogos[
+                          project.id
+                        ] || ""
+                      }
+                      onLogoChange={(
+                        dataUrl
+                      ) =>
+                        setProjectLogo(
+                          project.id,
+                          dataUrl
+                        )
+                      }
+                    />
+                  );
+                }
+
+                if (
+                  item.type ===
+                  "rollercoin"
+                ) {
+                  return (
+                    <RollerCoinProjectCard
+                      key={
+                        item.key
+                      }
+                      tracker={
+                        rollerCoinTracker
+                      }
+                      stats={
+                        rollerCoinStats
+                      }
+                      connected={
+                        rollerCoinConnected
+                      }
+                      authenticated={
+                        rollerCoinAuthenticated
+                      }
+                      rollerCoinOpen={
+                        rollerCoinOpen
+                      }
+                      syncing={
+                        rollerCoinSyncing
+                      }
+                      message={
+                        rollerCoinMessage
+                      }
+                      from={
+                        rollerCoinFrom
+                      }
+                      to={
+                        rollerCoinTo
+                      }
+                      onFromChange={
+                        setRollerCoinFrom
+                      }
+                      onToChange={
+                        setRollerCoinTo
+                      }
+                      onSync={
+                        syncRollerCoinRange
+                      }
+                      onRefresh={
+                        requestRollerCoinLatest
+                      }
+                      logo={
+                        projectLogos[
+                          "rollercoin-project"
+                        ] || ""
+                      }
+                      onLogoChange={(
+                        dataUrl
+                      ) =>
+                        setProjectLogo(
+                          "rollercoin-project",
+                          dataUrl
+                        )
+                      }
+                    />
+                  );
+                }
+
+                if (
+                  item.type ===
+                  "salad"
+                ) {
+                  return (
+                    <SaladProjectCard
+                      key={
+                        item.key
+                      }
+                      tracker={
+                        saladTracker
+                      }
+                      connected={
+                        saladConnected
+                      }
+                      stats={
+                        saladStats
+                      }
+                      syncing={
+                        saladSyncing
+                      }
+                      message={
+                        saladMessage
+                      }
+                      onRefresh={
+                        syncSaladBalance
+                      }
+                      logo={
+                        projectLogos[
+                          "salad-project"
+                        ] || ""
+                      }
+                      onLogoChange={(
+                        dataUrl
+                      ) =>
+                        setProjectLogo(
+                          "salad-project",
+                          dataUrl
+                        )
+                      }
+                    />
+                  );
+                }
+
+                return (
+                  <UnetworkProjectCard
+                    key={
+                      item.key
+                    }
+                    tracker={
+                      unetworkTracker
+                    }
+                    connected={
+                      unetworkConnected
+                    }
+                    stats={
+                      unetworkStats
+                    }
+                    syncing={
+                      unetworkSyncing
+                    }
+                    message={
+                      unetworkMessage
+                    }
+                    onRefresh={
+                      syncUnetworkBalance
+                    }
+                    logo={
+                      projectLogos[
+                        "unetwork-project"
+                      ] || ""
+                    }
+                    onLogoChange={(
                       dataUrl
-                    )
-                  }
-                />
-              )
+                    ) =>
+                      setProjectLogo(
+                        "unetwork-project",
+                        dataUrl
+                      )
+                    }
+                  />
+                );
+              }
             )}
-
-            <RollerCoinProjectCard
-              tracker={
-                rollerCoinTracker
-              }
-              stats={
-                rollerCoinStats
-              }
-              connected={
-                rollerCoinConnected
-              }
-              authenticated={
-                rollerCoinAuthenticated
-              }
-              rollerCoinOpen={
-                rollerCoinOpen
-              }
-              syncing={
-                rollerCoinSyncing
-              }
-              message={
-                rollerCoinMessage
-              }
-              from={
-                rollerCoinFrom
-              }
-              to={
-                rollerCoinTo
-              }
-              onFromChange={
-                setRollerCoinFrom
-              }
-              onToChange={
-                setRollerCoinTo
-              }
-              onSync={
-                syncRollerCoinRange
-              }
-              onRefresh={
-                requestRollerCoinLatest
-              }
-              logo={
-                projectLogos[
-                  "rollercoin-project"
-                ] || ""
-              }
-              onLogoChange={(
-                dataUrl
-              ) =>
-                setProjectLogo(
-                  "rollercoin-project",
-                  dataUrl
-                )
-              }
-            />
-
-            <SaladProjectCard
-              tracker={
-                saladTracker
-              }
-              connected={
-                saladConnected
-              }
-              stats={
-                saladStats
-              }
-              syncing={
-                saladSyncing
-              }
-              message={
-                saladMessage
-              }
-              onRefresh={
-                syncSaladBalance
-              }
-              logo={
-                projectLogos[
-                  "salad-project"
-                ] || ""
-              }
-              onLogoChange={(
-                dataUrl
-              ) =>
-                setProjectLogo(
-                  "salad-project",
-                  dataUrl
-                )
-              }
-            />
-
-            <UnetworkProjectCard
-              tracker={
-                unetworkTracker
-              }
-              connected={
-                unetworkConnected
-              }
-              stats={
-                unetworkStats
-              }
-              syncing={
-                unetworkSyncing
-              }
-              message={
-                unetworkMessage
-              }
-              onRefresh={
-                syncUnetworkBalance
-              }
-              logo={
-                projectLogos[
-                  "unetwork-project"
-                ] || ""
-              }
-              onLogoChange={(
-                dataUrl
-              ) =>
-                setProjectLogo(
-                  "unetwork-project",
-                  dataUrl
-                )
-              }
-            />
           </div>
         )}
       </section>
