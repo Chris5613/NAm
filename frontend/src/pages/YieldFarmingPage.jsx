@@ -317,6 +317,36 @@ function loadUnetworkTracker() {
         parsed.withdrawals
       ) || 0,
 
+    /*
+     * Unetwork's allocation history can be incomplete compared with
+     * the live rewards_get_balance value. These fields let us treat
+     * the first live balance as the starting earned amount, then add
+     * only NEW allocations that appear after that baseline.
+     */
+    openingEarnedUsd:
+      Number(
+        parsed.openingEarnedUsd
+      ) || 0,
+
+    allocationsBaselineUsd:
+      Number(
+        parsed.allocationsBaselineUsd
+      ) || 0,
+
+    openingMonth:
+      parsed.openingMonth ||
+      null,
+
+    openingMonthRowsBaselineUsd:
+      Number(
+        parsed.openingMonthRowsBaselineUsd
+      ) || 0,
+
+    baselineInitialized:
+      Boolean(
+        parsed.baselineInitialized
+      ),
+
     lastSyncedAt:
       parsed.lastSyncedAt ||
       null,
@@ -339,29 +369,35 @@ function saveUnetworkTracker(
   );
 }
 
-function getUnetworkTrackerStats(
+function getUnetworkMonthTotals(
   tracker
 ) {
-  const rows =
-    Object.entries(
-      tracker?.daily ||
-        {}
-    );
+  const totals = {};
 
-  const currentMonth =
-    getCurrentMonthKey();
-
-  let lifetimeUsd =
-    0;
-
-  let monthUsd =
-    0;
-
-  rows.forEach(
+  Object.entries(
+    tracker?.daily ||
+      {}
+  ).forEach(
     ([
       date,
       entry,
     ]) => {
+      const monthKey =
+        String(
+          date || ""
+        ).slice(
+          0,
+          7
+        );
+
+      if (
+        !/^\d{4}-\d{2}$/.test(
+          monthKey
+        )
+      ) {
+        return;
+      }
+
       const usd =
         typeof entry ===
           "number"
@@ -370,21 +406,118 @@ function getUnetworkTrackerStats(
               entry?.usd
             ) || 0;
 
-      lifetimeUsd +=
+      totals[
+        monthKey
+      ] =
+        (
+          Number(
+            totals[
+              monthKey
+            ]
+          ) || 0
+        ) +
         usd;
-
-      if (
-        String(date).slice(
-          0,
-          7
-        ) ===
-        currentMonth
-      ) {
-        monthUsd +=
-          usd;
-      }
     }
   );
+
+  return totals;
+}
+
+function getUnetworkTrackerStats(
+  tracker
+) {
+  const monthTotals =
+    getUnetworkMonthTotals(
+      tracker
+    );
+
+  const currentMonth =
+    getCurrentMonthKey();
+
+  const rowsLifetimeUsd =
+    Object.values(
+      monthTotals
+    ).reduce(
+      (
+        sum,
+        amount
+      ) =>
+        sum +
+        (
+          Number(
+            amount
+          ) || 0
+        ),
+      0
+    );
+
+  const baselineInitialized =
+    Boolean(
+      tracker?.baselineInitialized
+    );
+
+  const openingEarnedUsd =
+    Number(
+      tracker?.openingEarnedUsd
+    ) || 0;
+
+  const allocationsBaselineUsd =
+    Number(
+      tracker?.allocationsBaselineUsd
+    ) || 0;
+
+  const openingMonth =
+    tracker?.openingMonth ||
+    null;
+
+  const openingMonthRowsBaselineUsd =
+    Number(
+      tracker?.openingMonthRowsBaselineUsd
+    ) || 0;
+
+  /*
+   * The initial live balance is the minimum amount we know the user
+   * has already earned. Allocation rows may omit earlier rewards.
+   *
+   * After that first baseline, only newly appearing allocation
+   * earnings are added so we never double-count the original rows.
+   */
+  /*
+   * Lifetime earned should come from the full allocation history.
+   * This preserves the real all-time total (for example $200+)
+   * instead of resetting lifetime earned to the current $1.99 balance.
+   *
+   * The opening balance baseline is only for CURRENT MONTH income.
+   */
+  const lifetimeUsd =
+    Math.max(
+      rowsLifetimeUsd,
+      openingEarnedUsd
+    );
+
+  const rawCurrentMonthUsd =
+    Number(
+      monthTotals[
+        currentMonth
+      ]
+    ) || 0;
+
+  let monthUsd =
+    rawCurrentMonthUsd;
+
+  if (
+    baselineInitialized &&
+    openingMonth ===
+      currentMonth
+  ) {
+    monthUsd =
+      openingEarnedUsd +
+      Math.max(
+        0,
+        rawCurrentMonthUsd -
+          openingMonthRowsBaselineUsd
+      );
+  }
 
   const currentDay =
     Math.max(
@@ -397,9 +530,23 @@ function getUnetworkTrackerStats(
       ) || 1
     );
 
+  /*
+   * Assumption requested for Unetwork projections:
+   * $1.00 earned per day.
+   *
+   * This affects Estimated Monthly Income and
+   * Estimated Yearly Income only. Actual monthly
+   * Project Income still comes from the tracker.
+   */
   const estimatedDailyUsd =
-    monthUsd /
-    currentDay;
+    1;
+
+  const estimatedYearlyUsd =
+    365;
+
+  const estimatedMonthlyUsd =
+    estimatedYearlyUsd /
+    12;
 
   return {
     currentBalance:
@@ -418,22 +565,22 @@ function getUnetworkTrackerStats(
 
     estimatedDailyUsd,
 
-    estimatedMonthlyUsd:
-      estimatedDailyUsd *
-      30.4375,
+    estimatedMonthlyUsd,
 
-    estimatedYearlyUsd:
-      estimatedDailyUsd *
-      365,
+    estimatedYearlyUsd,
 
     lastSyncedAt:
       tracker?.lastSyncedAt ||
       null,
 
     transactionCount:
-      rows.length,
+      Object.keys(
+        tracker?.daily ||
+          {}
+      ).length,
   };
 }
+
 
 function loadRollerCoinTracker() {
   const parsed =
@@ -774,6 +921,90 @@ function formatDate(value) {
       year: "numeric",
     }
   );
+}
+
+
+function getProjectIncomeLogo(
+  platform,
+  projectLogos
+) {
+  const logos =
+    projectLogos &&
+    typeof projectLogos ===
+      "object"
+      ? projectLogos
+      : {};
+
+  const normalized =
+    String(
+      platform || ""
+    )
+      .trim()
+      .toLowerCase();
+
+  const fixedKeys = {
+    rollercoin:
+      "rollercoin-project",
+    salad:
+      "salad-project",
+    unetwork:
+      "unetwork-project",
+  };
+
+  const fixedKey =
+    fixedKeys[
+      normalized
+    ];
+
+  if (
+    fixedKey &&
+    logos[
+      fixedKey
+    ]
+  ) {
+    return logos[
+      fixedKey
+    ];
+  }
+
+  const prefix =
+    normalized ===
+    "lulo"
+      ? "lulo-project-"
+      : normalized ===
+        "ratex"
+        ? "ratex-project-"
+        : "";
+
+  if (
+    prefix
+  ) {
+    const match =
+      Object.entries(
+        logos
+      ).find(
+        ([
+          key,
+          value,
+        ]) =>
+          String(
+            key
+          ).startsWith(
+            prefix
+          ) &&
+          Boolean(
+            value
+          )
+      );
+
+    if (
+      match
+    ) {
+      return match[1];
+    }
+  }
+
+  return "";
 }
 
 function getInitials(
@@ -2540,28 +2771,87 @@ function buildProjectIncome(
     }
   );
 
+  const unetworkMonthTotals =
+    getUnetworkMonthTotals(
+      unetworkTracker
+    );
+
+  const unetworkBaselineInitialized =
+    Boolean(
+      unetworkTracker
+        ?.baselineInitialized
+    );
+
+  const unetworkOpeningMonth =
+    unetworkTracker
+      ?.openingMonth ||
+    null;
+
   Object.entries(
-    unetworkTracker?.daily ||
-      {}
+    unetworkMonthTotals
   ).forEach(
     ([
-      date,
-      entry,
+      monthKey,
+      rawAmount,
     ]) => {
-      addEarning(
-        getMonthKey(
-          date
-        ),
-        "Unetwork",
-        typeof entry ===
-          "number"
-          ? Number(entry) || 0
-          : Number(
-              entry?.usd
+      let amount =
+        Number(
+          rawAmount
+        ) || 0;
+
+      if (
+        unetworkBaselineInitialized &&
+        monthKey ===
+          unetworkOpeningMonth
+      ) {
+        amount =
+          (
+            Number(
+              unetworkTracker
+                ?.openingEarnedUsd
             ) || 0
+          ) +
+          Math.max(
+            0,
+            amount -
+              (
+                Number(
+                  unetworkTracker
+                    ?.openingMonthRowsBaselineUsd
+                ) || 0
+              )
+          );
+      }
+
+      addEarning(
+        monthKey,
+        "Unetwork",
+        amount
       );
     }
   );
+
+  /*
+   * If the allocation endpoint had no rows on the first sync, still
+   * make the opening balance appear as this month's starting income.
+   */
+  if (
+    unetworkBaselineInitialized &&
+    unetworkOpeningMonth &&
+    !Object.prototype.hasOwnProperty.call(
+      unetworkMonthTotals,
+      unetworkOpeningMonth
+    )
+  ) {
+    addEarning(
+      unetworkOpeningMonth,
+      "Unetwork",
+      Number(
+        unetworkTracker
+          ?.openingEarnedUsd
+      ) || 0
+    );
+  }
 
   return Array.from(
     monthMap.values()
@@ -4732,6 +5022,104 @@ export default function YieldFarmingPage() {
               ),
             };
 
+            const incomingRowsLifetimeUsd =
+              rows.reduce(
+                (
+                  sum,
+                  row
+                ) =>
+                  sum +
+                  (
+                    Number(
+                      row?.usd
+                    ) || 0
+                  ),
+                0
+              );
+
+            const currentMonth =
+              getCurrentMonthKey();
+
+            const incomingOpeningMonthRowsUsd =
+              rows.reduce(
+                (
+                  sum,
+                  row
+                ) =>
+                  String(
+                    row?.date ||
+                      ""
+                  ).slice(
+                    0,
+                    7
+                  ) ===
+                  currentMonth
+                    ? sum +
+                      (
+                        Number(
+                          row?.usd
+                        ) || 0
+                      )
+                    : sum,
+                0
+              );
+
+            /*
+             * One-time baseline/migration:
+             *
+             * The extension can return $1.55 of allocation history
+             * while rewards_get_balance says $1.99 is currently
+             * available. The live balance proves at least $1.99 has
+             * already been earned, so start Unetwork at $1.99.
+             *
+             * Existing allocation rows become the baseline and are
+             * NOT added on top of that $1.99. Only future allocation
+             * growth is added afterward.
+             */
+            const needsBaseline =
+              !Boolean(
+                current?.baselineInitialized
+              );
+
+            const openingEarnedUsd =
+              needsBaseline
+                ? currentBalance
+                : (
+                    Number(
+                      current
+                        ?.openingEarnedUsd
+                    ) || 0
+                  );
+
+            const allocationsBaselineUsd =
+              needsBaseline
+                ? incomingRowsLifetimeUsd
+                : (
+                    Number(
+                      current
+                        ?.allocationsBaselineUsd
+                    ) || 0
+                  );
+
+            const openingMonth =
+              needsBaseline
+                ? currentMonth
+                : (
+                    current
+                      ?.openingMonth ||
+                    currentMonth
+                  );
+
+            const openingMonthRowsBaselineUsd =
+              needsBaseline
+                ? incomingOpeningMonthRowsUsd
+                : (
+                    Number(
+                      current
+                        ?.openingMonthRowsBaselineUsd
+                    ) || 0
+                  );
+
             /*
              * Preferred path:
              * rewards_get_allocations gives us actual dated
@@ -4884,6 +5272,17 @@ export default function YieldFarmingPage() {
 
               initialized:
                 true,
+
+              baselineInitialized:
+                true,
+
+              openingEarnedUsd,
+
+              allocationsBaselineUsd,
+
+              openingMonth,
+
+              openingMonthRowsBaselineUsd,
 
               currentBalance,
 
@@ -5933,6 +6332,9 @@ export default function YieldFarmingPage() {
         }
         saladTracker={
           saladTracker
+        }
+        projectLogos={
+          projectLogos
         }
       />
     </div>
@@ -6999,6 +7401,7 @@ function ProjectIncomeSection({
   selectedYear,
   onSelectYear,
   saladTracker,
+  projectLogos,
 }) {
   const currentYear =
     getCurrentYear();
@@ -7295,6 +7698,9 @@ function ProjectIncomeSection({
           month={
             selectedMonth
           }
+          projectLogos={
+            projectLogos
+          }
           onClose={() =>
             onSelectMonth(
               null
@@ -7308,6 +7714,7 @@ function ProjectIncomeSection({
 
 function ProjectIncomeModal({
   month,
+  projectLogos,
   onClose,
 }) {
   const total =
@@ -7447,11 +7854,29 @@ function ProjectIncomeModal({
                     >
                       <div className="flex items-center justify-between gap-4">
                         <div className="flex min-w-0 items-center gap-3">
-                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-white/[0.04] text-[10px] font-bold">
-                            {getInitials(
-                              platform.platform
-                            )}
-                          </div>
+                          {getProjectIncomeLogo(
+                            platform.platform,
+                            projectLogos
+                          ) ? (
+                            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-border/60 bg-white/[0.04]">
+                              <img
+                                src={
+                                  getProjectIncomeLogo(
+                                    platform.platform,
+                                    projectLogos
+                                  )
+                                }
+                                alt={`${platform.platform} logo`}
+                                className="h-full w-full object-cover"
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-white/[0.04] text-[10px] font-bold">
+                              {getInitials(
+                                platform.platform
+                              )}
+                            </div>
+                          )}
 
                           <span className="truncate font-medium">
                             {
