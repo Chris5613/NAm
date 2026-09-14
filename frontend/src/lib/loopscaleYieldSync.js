@@ -9,6 +9,9 @@ const LOOP_FUNDING_TYPE =
 const ACTIVE_FILTER_TYPE =
   0;
 
+const LOOPSCALE_PAGE_SIZE =
+  25;
+
 function toNumber(
   value
 ) {
@@ -36,14 +39,9 @@ function normalizePercent(
     return 0;
   }
 
-  /*
-   * Loopscale documents APYs as fractional values:
-   * 0.1747 = 17.47%.
-   *
-   * Keep support for an already-percent value too.
-   */
-  return Math.abs(raw) <=
-    1
+  return Math.abs(
+    raw
+  ) <= 1
     ? raw * 100
     : raw;
 }
@@ -67,7 +65,9 @@ function toIsoFromUnix(
       : raw * 1000;
 
   const date =
-    new Date(millis);
+    new Date(
+      millis
+    );
 
   if (
     Number.isNaN(
@@ -139,15 +139,6 @@ function normalizeItems(
     return payload.items;
   }
 
-  /*
-   * Older Loopscale response shape:
-   * [
-   *   {
-   *     totalCount,
-   *     loanInfos: [...]
-   *   }
-   * ]
-   */
   if (
     Array.isArray(
       payload
@@ -199,10 +190,6 @@ function isLoopPosition(
     return true;
   }
 
-  /*
-   * The request itself is filtered to funding type 2 (Loop),
-   * so older response shapes may not include isLoop.
-   */
   return true;
 }
 
@@ -266,11 +253,6 @@ function getNetPositionValueUsd(
     return direct;
   }
 
-  /*
-   * Fallback for responses without PnL data points.
-   *
-   * Net position ~= collateral - debt - accrued borrow interest.
-   */
   return Math.max(
     0,
     toNumber(
@@ -330,7 +312,9 @@ function getPnlUsd(
     candidates
   ) {
     const value =
-      Number(candidate);
+      Number(
+        candidate
+      );
 
     if (
       Number.isFinite(
@@ -368,10 +352,6 @@ function getNetApyPct(
     );
   }
 
-  /*
-   * Aggregate APY is only a fallback. The rate-history netApy
-   * is the field that should line up with the Loop position UI.
-   */
   return normalizePercent(
     aggregate?.wAvgApy
   );
@@ -393,6 +373,7 @@ function getCollateralSymbol(
           )
         : []
     ),
+
     ...(
       Array.isArray(
         item?.collateral
@@ -406,12 +387,16 @@ function getCollateralSymbol(
         : []
     ),
   ]
-    .filter(Boolean)
+    .filter(
+      Boolean
+    )
     .map(
       (
         value
       ) =>
-        String(value)
+        String(
+          value
+        )
     );
 
   const onyc =
@@ -456,11 +441,6 @@ function chooseOnycLoop(
     return null;
   }
 
-  /*
-   * The account currently has one active ONyc Loop.
-   * If more loops are added later, prefer the largest live
-   * net position so we do not accidentally pick a dust loan.
-   */
   return [
     ...activeLoops,
   ].sort(
@@ -501,12 +481,6 @@ export async function getLoopscaleOnycSnapshot(
 
         body:
           JSON.stringify({
-            /*
-             * Loopscale enums:
-             * filterType 0 = Active
-             * orderFundingTypes 2 = Loop
-             * assetTypes 0 = normal SPL token
-             */
             borrowers: [
               walletAddress,
             ],
@@ -528,7 +502,7 @@ export async function getLoopscaleOnycSnapshot(
               1,
 
             pageSize:
-              100,
+              LOOPSCALE_PAGE_SIZE,
 
             sortSide:
               1,
@@ -566,7 +540,8 @@ export async function getLoopscaleOnycSnapshot(
   ) {
     throw new Error(
       payload?.detail ||
-        payload?.error?.message ||
+        payload?.error
+          ?.message ||
         payload?.message ||
         `Loopscale returned HTTP ${response.status}`
     );
@@ -617,14 +592,16 @@ export async function getLoopscaleOnycSnapshot(
 
   const loanAddress =
     String(
-      item?.loan?.address ||
+      item?.loan
+        ?.address ||
         item?.loanAddress ||
         "loopscale-onyc"
     );
 
   const startTime =
     toIsoFromUnix(
-      item?.loan?.startTime
+      item?.loan
+        ?.startTime
     );
 
   const priceUsd =
