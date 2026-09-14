@@ -69,21 +69,66 @@ def _provider_config() -> dict[str, dict[str, Any]]:
         },
     }
 
-    except TimeoutError as error:
-        raise HTTPException(
-            status_code=504,
-            detail="The upstream service took too long to respond. Please try again.",
-        ) from error
-    except ClientDisconnect as error:
-        raise HTTPException(
-            status_code=499,
-            detail="Client disconnected before the request could be completed.",
-        ) from error
 def _fetch(
     url: str,
     headers: dict[str, str],
     body: bytes | None = None,
 ) -> Any:
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method="POST" if body else "GET",
+        headers={
+            "Accept": "application/json",
+            "User-Agent": "NetWorthTracker/1.0",
+            **headers,
+        },
+    )
+
+    try:
+        with urllib.request.urlopen(
+            request,
+            timeout=20,
+        ) as response:
+            return json.loads(
+                response.read().decode("utf-8")
+            )
+    except TimeoutError as error:
+        raise HTTPException(
+            status_code=504,
+            detail="The upstream service took too long to respond. Please try again.",
+        ) from error
+    except urllib.error.HTTPError as error:
+        detail = (
+            error.read()
+            .decode(
+                "utf-8",
+                errors="replace",
+            )[:200]
+        )
+
+        raise HTTPException(
+            status_code=error.code,
+            detail=f"Upstream error: {detail}",
+        ) from error
+
+    except TimeoutError as error:
+        raise HTTPException(
+            status_code=504,
+            detail="The upstream service took too long to respond. Please try again.",
+        ) from error
+
+    except urllib.error.URLError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Could not reach the upstream service.",
+        ) from error
+
+    except json.JSONDecodeError as error:
+        raise HTTPException(
+            status_code=502,
+            detail="Upstream returned a non-JSON response.",
+        ) from error -> Any:
     request = urllib.request.Request(
         url,
         data=body,
