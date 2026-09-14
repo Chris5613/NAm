@@ -7404,13 +7404,6 @@ function RollerCoinProjectCard({
           </div>
         </div>
 
-        <div className="shrink-0 text-right">
-          <div className="text-2xl font-semibold tabular-nums">
-            {formatCurrency(
-              stats?.lifetimeUsd
-            )}
-          </div>
-
           <div className="shrink-0 text-right">
             <div className="text-2xl font-semibold tabular-nums">
               {formatCurrency(
