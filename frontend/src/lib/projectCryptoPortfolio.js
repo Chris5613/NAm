@@ -1,236 +1,609 @@
-import "@/App.css";
-import { useEffect, useState } from "react";
-import { toast } from "sonner";
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
-import Sidebar from "@/components/Sidebar";
-import Dashboard from "@/pages/Dashboard";
-import InvestmentOverview from "@/pages/InvestmentOverview";
-import CloudPage from "@/pages/CloudPage";
-import YieldFarmingPage from "@/pages/YieldFarmingPage";
-import { Toaster } from "@/components/ui/sonner";
-import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
-import SpendingPage from "../pages/SpendingPage";
-import {
-  AuthProvider,
-  useAuth,
-} from "@/lib/AuthContext";
-import LoginScreen from "@/components/LoginScreen";
-import {
-  hydrate,
-  resetStore,
-  setStoreErrorHandler,
-} from "@/lib/serverStore";
-import {
-  seedProjectCryptoCache,
-  startProjectCryptoAutoSync,
-} from "@/lib/projectCryptoPortfolio";
-import { Loader2 } from "lucide-react";
+import { projectsApi, walletsApi } from "./api";
+import { localStorage as storage } from "./localStorage";
 
-let kryptexExtensionListenerStarted = false;
+const PORTFOLIO_CACHE_KEY = "project_crypto_portfolio_v1";
+const WALLET_BALANCE_CACHE_KEY = "crypto_wallet_balance_cache";
+const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
 
-function App() {
-  useEffect(() => {
-    if (kryptexExtensionListenerStarted) {
-      return;
+let refreshPromise = null;
+
+function number(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function getMonthKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  return `${date.getFullYear()}-${String(
+    date.getMonth() + 1
+  ).padStart(2, "0")}`;
+}
+
+function transactionAmount(transactions, monthKey = null) {
+  return (
+    Array.isArray(transactions) ? transactions : []
+  ).reduce((sum, transaction) => {
+    if (
+      transaction?.type &&
+      transaction.type !== "earning"
+    ) {
+      return sum;
     }
 
-    kryptexExtensionListenerStarted = true;
-    installKryptexExtensionListener();
-  }, []);
+    if (
+      monthKey &&
+      getMonthKey(transaction?.date) !== monthKey
+    ) {
+      return sum;
+    }
 
-  /*
-   * Keep Project Income + Bitcoin current regardless
-   * of which page in NAm is open.
-   *
-   * Lulo, RateX, Loopscale and BTC refresh here.
-   * The resulting total is also written to the existing
-   * crypto cache used by the Net Worth dashboard.
-   */
-  useEffect(() => {
-    const stop =
-      startProjectCryptoAutoSync();
+    return sum + number(transaction?.amount);
+  }, 0);
+}
 
-    return stop;
-  }, []);
+function projectBalance(project) {
+  const liveBalance = [
+    project?.lulo_total_balance_usd,
+    project?.totalBalance,
+    project?.currentBalance,
+    project?.current_balance,
+    project?.balance,
+    project?.value,
+  ].find(
+    (value) =>
+      Number.isFinite(Number(value)) &&
+      Number(value) >= 0
+  );
 
-  return (
-    <div className="min-h-screen bg-background">
-      <BrowserRouter>
-        <Sidebar />
+  if (liveBalance !== undefined) {
+    return number(liveBalance);
+  }
 
-        <main className="pl-56 min-h-screen">
-          <div className="w-full p-6 py-8">
-            <Routes>
-              <Route
-                path="/"
-                element={<Dashboard />}
-              />
+  return Math.max(0, number(project?.invested));
+}
 
-              <Route
-                path="/investments"
-                element={
-                  <InvestmentOverview />
-                }
-              />
+function projectEarned(project) {
+  const stored = [
+    project?.lulo_lifetime_interest_usd,
+    project?.lifetimeUsd,
+    project?.lifetime_usd,
+    project?.earned,
+  ].find((value) => Number.isFinite(Number(value)));
 
-              {/*
-               * CryptoPage is retired.
-               *
-               * Old bookmarks still work, but now land
-               * on Net Worth where the Crypto tab lives.
-               */}
-              <Route
-                path="/crypto"
-                element={
-                  <Navigate
-                    to="/"
-                    replace
-                  />
-                }
-              />
+  return stored === undefined
+    ? transactionAmount(project?.transactions)
+    : number(stored);
+}
 
-              <Route
-                path="/yield-farming"
-                element={
-                  <YieldFarmingPage />
-                }
-              />
+function projectMonthEarned(project) {
+  const stored = [
+    project?.monthUsd,
+    project?.month_usd,
+  ].find((value) => Number.isFinite(Number(value)));
 
-              <Route
-                path="/spending"
-                element={<SpendingPage />}
-              />
+  return stored === undefined
+    ? transactionAmount(
+        project?.transactions,
+        getMonthKey()
+      )
+    : number(stored);
+}
 
-              <Route
-                path="/cloud"
-                element={<CloudPage />}
-              />
-            </Routes>
-          </div>
-        </main>
-      </BrowserRouter>
-    </div>
+function projectApy(project) {
+  return number(
+    project?.lulo_weighted_apy ??
+      project?.weightedApy ??
+      project?.weighted_apy ??
+      project?.apy
   );
 }
 
-function AuthGate() {
-  const {
-    user,
-    loading,
-  } = useAuth();
+function projectAssets(project, balance, apy) {
+  const source = Array.isArray(project?.assets)
+    ? project.assets
+    : Array.isArray(project?.positions)
+      ? project.positions
+      : [];
 
-  const [
-    storeReady,
-    setStoreReady,
-  ] = useState(false);
+  if (source.length) {
+    return source.map((asset, index) => ({
+      ...asset,
 
-  const [
-    storeError,
-    setStoreError,
-  ] = useState("");
+      id:
+        asset?.id ||
+        `${
+          project?.id ||
+          project?.name ||
+          "project"
+        }-${index}`,
 
-  /*
-   * Pages read the server-backed store synchronously,
-   * so hydrate first.
-   *
-   * Immediately after hydration we rebuild the crypto
-   * cache from:
-   *
-   * Project Income + Bitcoin
-   *
-   * That means Dashboard sees the new Crypto total on
-   * its very first render instead of waiting for the
-   * retired Crypto page to populate it.
-   */
-  useEffect(() => {
-    if (!user) {
-      resetStore();
-      setStoreReady(false);
-      return;
+      asset:
+        asset?.asset ||
+        asset?.symbol ||
+        asset?.name ||
+        "Position",
+
+      strategy:
+        asset?.strategy ||
+        asset?.type ||
+        "Yield",
+
+      balance: number(
+        asset?.balance ??
+          asset?.value ??
+          asset?.total_value
+      ),
+
+      quantity:
+        asset?.quantity ??
+        asset?.amount ??
+        null,
+
+      apy: number(asset?.apy ?? apy),
+    }));
+  }
+
+  if (!(balance > 0)) {
+    return [];
+  }
+
+  return [
+    {
+      id: `${
+        project?.id ||
+        project?.name ||
+        "project"
+      }-position`,
+
+      asset:
+        project?.symbol ||
+        project?.asset ||
+        project?.name ||
+        "Position",
+
+      strategy:
+        project?.strategy ||
+        project?.category ||
+        "Yield",
+
+      balance,
+      quantity: project?.quantity ?? null,
+      apy,
+    },
+  ];
+}
+
+function toProjectEntry(project, index) {
+  const balance = projectBalance(project);
+  const apy = projectApy(project);
+  const lifetimeUsd = projectEarned(project);
+  const monthUsd = projectMonthEarned(project);
+
+  return {
+    id: project?.id || `project-${index}`,
+
+    platform:
+      project?.platform ||
+      project?.name ||
+      "Project",
+
+    logo:
+      project?.logo ||
+      project?.logo_url ||
+      "",
+
+    live: Boolean(
+      project?.autoSynced ||
+        project?.live ||
+        project?.yield_tracking ||
+        project?.last_synced_at ||
+        project?.lulo_last_synced_at
+    ),
+
+    balance,
+    apy,
+    earned: lifetimeUsd,
+    lifetimeUsd,
+    monthUsd,
+
+    estimatedMonthlyUsd:
+      balance > 0 && apy > 0
+        ? (balance * (apy / 100)) / 12
+        : 0,
+
+    lastSyncedAt:
+      project?.lastSyncedAt ||
+      project?.last_synced_at ||
+      project?.lulo_last_synced_at ||
+      null,
+
+    assets: projectAssets(
+      project,
+      balance,
+      apy
+    ),
+  };
+}
+
+function readWalletBalanceCache() {
+  const cache = storage.get(
+    WALLET_BALANCE_CACHE_KEY
+  );
+
+  return cache && typeof cache === "object"
+    ? cache
+    : {};
+}
+
+function saveWalletBalance(walletId, data) {
+  const cache = readWalletBalanceCache();
+
+  cache[walletId] = {
+    savedAt: Date.now(),
+    data,
+  };
+
+  storage.set(
+    WALLET_BALANCE_CACHE_KEY,
+    cache
+  );
+}
+
+function buildBitcoin(wallets, balanceCache) {
+  const bitcoinWallets = (
+    Array.isArray(wallets) ? wallets : []
+  ).filter(
+    (wallet) => wallet?.chain === "bitcoin"
+  );
+
+  const entries = bitcoinWallets.map(
+    (wallet) => {
+      const balance =
+        balanceCache?.[wallet.id]?.data || {};
+
+      const token = (
+        Array.isArray(balance.tokens)
+          ? balance.tokens
+          : []
+      ).find(
+        (item) =>
+          String(
+            item?.symbol || ""
+          ).toUpperCase() === "BTC"
+      );
+
+      return {
+        id: wallet.id,
+
+        label:
+          wallet.label ||
+          "Bitcoin Wallet",
+
+        address: wallet.address || "",
+        amount: number(token?.amount),
+        price: number(token?.price),
+
+        value: number(
+          token?.usd_value ??
+            balance?.total_usd
+        ),
+      };
     }
+  );
 
-    let cancelled = false;
+  return {
+    balance: entries.reduce(
+      (sum, wallet) =>
+        sum + wallet.value,
+      0
+    ),
 
-    setStoreErrorHandler(
-      (message) =>
-        toast.error(message)
+    wallets: entries,
+  };
+}
+
+function createPortfolio(
+  projects,
+  wallets,
+  balanceCache,
+  errors = []
+) {
+  const projectEntries = (
+    Array.isArray(projects) ? projects : []
+  )
+    .filter(
+      (project) =>
+        project?.inactive !== true &&
+        project?.is_inactive !== true
+    )
+    .map(toProjectEntry);
+
+  const bitcoin = buildBitcoin(
+    wallets,
+    balanceCache
+  );
+
+  const projectBalanceTotal =
+    projectEntries.reduce(
+      (sum, entry) =>
+        sum + entry.balance,
+      0
     );
 
-    hydrate()
-      .then(() => {
-        try {
-          seedProjectCryptoCache();
-        } catch (error) {
-          console.warn(
-            "Could not seed Project Income crypto cache:",
-            error
-          );
-        }
+  const totalEarned =
+    projectEntries.reduce(
+      (sum, entry) =>
+        sum + entry.lifetimeUsd,
+      0
+    );
 
-        if (!cancelled) {
-          setStoreReady(true);
-        }
-      })
-      .catch((error) => {
-        if (!cancelled) {
-          setStoreError(
-            error.message ||
-              "Could not load your data."
-          );
-        }
-      });
+  const estimatedMonthlyIncome =
+    projectEntries.reduce(
+      (sum, entry) =>
+        sum +
+        entry.estimatedMonthlyUsd,
+      0
+    );
 
-    return () => {
-      cancelled = true;
-    };
-  }, [user]);
+  const weightedApy =
+    projectBalanceTotal > 0
+      ? projectEntries.reduce(
+          (sum, entry) =>
+            sum +
+            entry.balance * entry.apy,
+          0
+        ) / projectBalanceTotal
+      : 0;
+
+  return {
+    projectEntries,
+    bitcoin,
+
+    summary: {
+      projectBalance:
+        projectBalanceTotal,
+
+      bitcoinBalance:
+        bitcoin.balance,
+
+      cryptoTotal:
+        projectBalanceTotal +
+        bitcoin.balance,
+
+      totalEarned,
+      weightedApy,
+      estimatedMonthlyIncome,
+
+      activePositions:
+        projectEntries.reduce(
+          (sum, entry) =>
+            sum +
+            Math.max(
+              1,
+              entry.assets.length
+            ),
+          0
+        ),
+    },
+
+    errors,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function savePortfolio(portfolio) {
+  storage.set(
+    PORTFOLIO_CACHE_KEY,
+    portfolio
+  );
+
+  storage.setCryptoCache({
+    ...storage.getCryptoCache(),
+
+    total:
+      portfolio.summary.cryptoTotal,
+
+    projectPortfolio: portfolio,
+
+    updated_at:
+      portfolio.updatedAt,
+  });
+
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent(
+        "project-crypto-updated",
+        {
+          detail: portfolio,
+        }
+      )
+    );
+  }
+
+  return portfolio;
+}
+
+export function getStoredProjectCryptoPortfolio() {
+  const saved = storage.get(
+    PORTFOLIO_CACHE_KEY
+  );
 
   if (
-    loading ||
-    (
-      user &&
-      !storeReady &&
-      !storeError
-    )
+    saved?.summary &&
+    Array.isArray(saved?.projectEntries)
   ) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return saved;
   }
 
-  if (storeError) {
-    return (
-      <div className="flex min-h-screen items-center justify-center p-6 text-center">
-        <div>
-          <p className="font-semibold">
-            Could not load your data
-          </p>
-
-          <p className="mt-2 text-sm text-muted-foreground">
-            {storeError}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  return user
-    ? <App />
-    : <LoginScreen />;
+  return createPortfolio(
+    storage.getProjects(),
+    storage.getWallets(),
+    readWalletBalanceCache()
+  );
 }
 
-export default function Root() {
-  return (
-    <AuthProvider>
-      <AuthGate />
-      <Toaster />
-    </AuthProvider>
+export function seedProjectCryptoCache() {
+  return savePortfolio(
+    createPortfolio(
+      storage.getProjects(),
+      storage.getWallets(),
+      readWalletBalanceCache()
+    )
   );
+}
+
+export async function refreshProjectCryptoPortfolio() {
+  if (refreshPromise) {
+    return refreshPromise;
+  }
+
+  refreshPromise = (async () => {
+    const errors = [];
+
+    let projects =
+      storage.getProjects();
+
+    let wallets =
+      storage.getWallets();
+
+    try {
+      const response =
+        await projectsApi.accrueApyTransactions();
+
+      projects =
+        response?.data || projects;
+    } catch (error) {
+      errors.push(
+        error?.message ||
+          "Project Income refresh failed"
+      );
+    }
+
+    try {
+      const response =
+        await walletsApi.getAll();
+
+      wallets =
+        response?.data || wallets;
+
+      await Promise.all(
+        wallets
+          .filter(
+            (wallet) =>
+              wallet?.chain ===
+                "bitcoin" &&
+              wallet?.id
+          )
+          .map(async (wallet) => {
+            try {
+              const balanceResponse =
+                await walletsApi.getBalances(
+                  wallet.id
+                );
+
+              if (
+                !balanceResponse?.data
+                  ?.unavailable
+              ) {
+                saveWalletBalance(
+                  wallet.id,
+                  balanceResponse.data
+                );
+              }
+            } catch (error) {
+              errors.push(
+                `${
+                  wallet.label ||
+                  "Bitcoin wallet"
+                }: ${
+                  error?.message ||
+                  "refresh failed"
+                }`
+              );
+            }
+          })
+      );
+    } catch (error) {
+      errors.push(
+        error?.message ||
+          "Bitcoin refresh failed"
+      );
+    }
+
+    return savePortfolio(
+      createPortfolio(
+        projects,
+        wallets,
+        readWalletBalanceCache(),
+        errors
+      )
+    );
+  })().finally(() => {
+    refreshPromise = null;
+  });
+
+  return refreshPromise;
+}
+
+export function startProjectCryptoAutoSync() {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const refresh = () => {
+    refreshProjectCryptoPortfolio().catch(
+      (error) => {
+        console.warn(
+          "Project crypto refresh failed:",
+          error
+        );
+      }
+    );
+  };
+
+  refresh();
+
+  const interval = window.setInterval(
+    refresh,
+    AUTO_SYNC_INTERVAL_MS
+  );
+
+  window.addEventListener(
+    "focus",
+    refresh
+  );
+
+  window.addEventListener(
+    "crypto-holding-updated",
+    refresh
+  );
+
+  window.addEventListener(
+    "rollercoin-sync-complete",
+    refresh
+  );
+
+  return () => {
+    window.clearInterval(interval);
+
+    window.removeEventListener(
+      "focus",
+      refresh
+    );
+
+    window.removeEventListener(
+      "crypto-holding-updated",
+      refresh
+    );
+
+    window.removeEventListener(
+      "rollercoin-sync-complete",
+      refresh
+    );
+  };
 }
