@@ -21,6 +21,9 @@ const PORTFOLIO_CACHE_KEY =
 const WALLET_BALANCE_CACHE_KEY =
   "crypto_wallet_balance_cache";
 
+const SALAD_TRACKER_KEY =
+  "project_income_salad_tracker_v1";
+
 const AUTO_SYNC_INTERVAL_MS =
   5 * 60 * 1000;
 
@@ -120,7 +123,6 @@ function projectEarned(project) {
   const stored = [
     project
       ?.lulo_lifetime_interest_usd,
-
     project?.lifetimeUsd,
     project?.lifetime_usd,
     project?.earned,
@@ -312,10 +314,7 @@ function toProjectEntry(
 
     balance,
     apy,
-
-    earned:
-      lifetimeUsd,
-
+    earned: lifetimeUsd,
     lifetimeUsd,
     monthUsd,
 
@@ -465,11 +464,68 @@ function buildBitcoin(
     amount,
     price,
     value,
-
-    // Dashboard uses balance.
     balance: value,
-
     wallets: entries,
+  };
+}
+
+function createSaladEntry() {
+  const tracker = storage.get(
+    SALAD_TRACKER_KEY
+  );
+
+  if (
+    !tracker ||
+    typeof tracker !== "object"
+  ) {
+    return null;
+  }
+
+  const balance = number(
+    tracker.currentBalance
+  );
+
+  if (
+    !tracker.initialized &&
+    !(balance > 0)
+  ) {
+    return null;
+  }
+
+  return {
+    id: "salad-live",
+    platform: "Salad",
+    logo: "",
+    live: true,
+    balance,
+    apy: 0,
+
+    earned: number(
+      tracker.lifetimeBalance
+    ),
+
+    lifetimeUsd: number(
+      tracker.lifetimeBalance
+    ),
+
+    monthUsd: 0,
+    estimatedMonthlyUsd: 0,
+
+    lastSyncedAt:
+      tracker.lastSyncedAt ||
+      null,
+
+    assets: [
+      {
+        id: "salad-balance",
+        asset: "Salad Balance",
+        strategy: "Compute Earnings",
+        balance,
+        quantity: null,
+        price: null,
+        apy: 0,
+      },
+    ],
   };
 }
 
@@ -620,7 +676,9 @@ function createPortfolio(
         (entry) =>
           String(
             entry?.platform || ""
-          ).toLowerCase()
+          )
+            .trim()
+            .toLowerCase()
       )
     );
 
@@ -629,18 +687,38 @@ function createPortfolio(
       ? projects
       : []
   )
-    .filter(
-      (project) =>
+    .filter((project) => {
+      const projectName = String(
+        project?.platform ||
+        project?.name ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const trackingType = String(
+        project?.yield_tracking ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+      return (
         project?.inactive !== true &&
-        project?.is_inactive !== true
-    )
+        project?.is_inactive !== true &&
+        projectName !== "kryptex" &&
+        trackingType !== "kryptex"
+      );
+    })
     .map(toProjectEntry)
     .filter(
       (entry) =>
         !externalNames.has(
           String(
             entry?.platform || ""
-          ).toLowerCase()
+          )
+            .trim()
+            .toLowerCase()
         )
     );
 
@@ -780,18 +858,24 @@ export function getStoredProjectCryptoPortfolio() {
     return saved;
   }
 
+  const saladEntry =
+    createSaladEntry();
+
   return createPortfolio(
     storage.getProjects(),
     storage.getWallets(),
-    readWalletBalanceCache()
+    readWalletBalanceCache(),
+    [],
+    saladEntry
+      ? [saladEntry]
+      : []
   );
 }
 
 export function seedProjectCryptoCache() {
-  const previous =
-    storage.get(
-      PORTFOLIO_CACHE_KEY
-    );
+  const previous = storage.get(
+    PORTFOLIO_CACHE_KEY
+  );
 
   const savedExternalEntries = (
     Array.isArray(
@@ -802,7 +886,9 @@ export function seedProjectCryptoCache() {
   ).filter((entry) => {
     const platform = String(
       entry?.platform || ""
-    ).toLowerCase();
+    )
+      .trim()
+      .toLowerCase();
 
     return (
       platform === "ratex" ||
@@ -810,13 +896,24 @@ export function seedProjectCryptoCache() {
     );
   });
 
+  const saladEntry =
+    createSaladEntry();
+
+  const externalEntries = [
+    ...savedExternalEntries,
+
+    ...(saladEntry
+      ? [saladEntry]
+      : []),
+  ];
+
   return savePortfolio(
     createPortfolio(
       storage.getProjects(),
       storage.getWallets(),
       readWalletBalanceCache(),
       [],
-      savedExternalEntries
+      externalEntries
     )
   );
 }
@@ -998,9 +1095,13 @@ export async function refreshProjectCryptoPortfolio() {
       );
     }
 
+    const saladEntry =
+      createSaladEntry();
+
     const externalEntries = [
       ratexEntry,
       loopscaleEntry,
+      saladEntry,
     ].filter(Boolean);
 
     return savePortfolio(
@@ -1060,6 +1161,11 @@ export function startProjectCryptoAutoSync() {
     refresh
   );
 
+  window.addEventListener(
+    "salad-sync-complete",
+    refresh
+  );
+
   return () => {
     window.clearInterval(
       interval
@@ -1077,6 +1183,11 @@ export function startProjectCryptoAutoSync() {
 
     window.removeEventListener(
       "rollercoin-sync-complete",
+      refresh
+    );
+
+    window.removeEventListener(
+      "salad-sync-complete",
       refresh
     );
   };
