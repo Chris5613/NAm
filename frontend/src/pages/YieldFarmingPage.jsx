@@ -108,7 +108,7 @@ function recordLuloDailyEarnings(lifetimeInterestUsd) {
   return updatedHistory;
 }
 
-recordLuloDailyEarnings(project.lulo_lifetime_interest_usd);
+recordLuloDailyEarnings(lulo_lifetime_interest_usd);
 
 const MONTHLY_TRACKING_START = "2026-09";
 const LULO_SEPTEMBER_2026_OPENING_EARNED = 7.76;
@@ -7088,9 +7088,9 @@ function ProjectCard({
           </div>
 
 <IncomeProjection
-  daily={project.dailyIncome}
-  monthly={project.monthlyIncome}
-  yearly={project.yearlyIncome}
+  daily={projections.daily}
+  monthly={projections.monthly}
+  yearly={projections.yearly}
 />
         </div>
       </button>
