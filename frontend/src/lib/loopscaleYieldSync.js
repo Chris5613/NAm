@@ -3,9 +3,6 @@ import { proxyFetch } from "./cors-proxy";
 export const LOOPSCALE_WALLET =
   "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM";
 
-const LOOP_FUNDING_TYPE =
-  2;
-
 const ACTIVE_FILTER_TYPE =
   0;
 
@@ -39,6 +36,11 @@ function normalizePercent(
     return 0;
   }
 
+  /*
+   * Loopscale returns APY values as fractions.
+   *
+   * 0.1747 = 17.47%
+   */
   return Math.abs(
     raw
   ) <= 1
@@ -131,6 +133,9 @@ function latestPoint(
 function normalizeItems(
   payload
 ) {
+  /*
+   * Current Loopscale response.
+   */
   if (
     Array.isArray(
       payload?.items
@@ -139,6 +144,9 @@ function normalizeItems(
     return payload.items;
   }
 
+  /*
+   * Older response format.
+   */
   if (
     Array.isArray(
       payload
@@ -165,32 +173,6 @@ function normalizeItems(
   }
 
   return [];
-}
-
-function isLoopPosition(
-  item
-) {
-  const ledgers =
-    Array.isArray(
-      item?.ledgers
-    )
-      ? item.ledgers
-      : [];
-
-  if (
-    ledgers.some(
-      (
-        ledger
-      ) =>
-        Boolean(
-          ledger?.isLoop
-        )
-    )
-  ) {
-    return true;
-  }
-
-  return true;
 }
 
 function getPositionValuePoint(
@@ -223,6 +205,39 @@ function getRatePoint(
   );
 }
 
+function isLoopPosition(
+  item
+) {
+  const ledgers =
+    Array.isArray(
+      item?.ledgers
+    )
+      ? item.ledgers
+      : [];
+
+  return ledgers.some(
+    (
+      ledger
+    ) =>
+      Boolean(
+        ledger?.isLoop
+      )
+  );
+}
+
+function isActivePosition(
+  item
+) {
+  if (
+    item?.loan?.closed ===
+    true
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
 function getNetPositionValueUsd(
   item
 ) {
@@ -236,6 +251,10 @@ function getNetPositionValueUsd(
       item
     );
 
+  /*
+   * This is Loopscale's own net position value.
+   * Prefer it over doing our own collateral - debt math.
+   */
   const direct =
     toNumber(
       positionPoint
@@ -253,6 +272,9 @@ function getNetPositionValueUsd(
     return direct;
   }
 
+  /*
+   * Fallback only.
+   */
   return Math.max(
     0,
     toNumber(
@@ -296,33 +318,52 @@ function getNetPositionTokenAmount(
 function getPnlUsd(
   item
 ) {
+  /*
+   * Loopscale exposes pnlUsd directly.
+   * This already adjusts for net inflows/outflows.
+   */
+  const direct =
+    Number(
+      item?.pnlUsd
+    );
+
+  if (
+    Number.isFinite(
+      direct
+    )
+  ) {
+    return direct;
+  }
+
+  const nested =
+    Number(
+      item?.pnl?.usdPnl
+    );
+
+  if (
+    Number.isFinite(
+      nested
+    )
+  ) {
+    return nested;
+  }
+
   const pnlPoint =
     getPnlPoint(
       item
     );
 
-  const candidates = [
-    item?.pnlUsd,
-    item?.pnl?.usdPnl,
-    pnlPoint?.usdPnl,
-  ];
+  const point =
+    Number(
+      pnlPoint?.usdPnl
+    );
 
-  for (
-    const candidate of
-    candidates
+  if (
+    Number.isFinite(
+      point
+    )
   ) {
-    const value =
-      Number(
-        candidate
-      );
-
-    if (
-      Number.isFinite(
-        value
-      )
-    ) {
-      return value;
-    }
+    return point;
   }
 
   return 0;
@@ -357,34 +398,85 @@ function getNetApyPct(
   );
 }
 
+function chooseLoopPosition(
+  items
+) {
+  const active =
+    (
+      items ||
+      []
+    ).filter(
+      isActivePosition
+    );
+
+  if (
+    !active.length
+  ) {
+    return null;
+  }
+
+  /*
+   * First prefer positions Loopscale itself marks as Loops.
+   */
+  const loops =
+    active.filter(
+      isLoopPosition
+    );
+
+  const candidates =
+    loops.length
+      ? loops
+      : active;
+
+  /*
+   * If more than one exists, use the largest active position.
+   */
+  return [
+    ...candidates,
+  ].sort(
+    (
+      a,
+      b
+    ) =>
+      getNetPositionValueUsd(
+        b
+      ) -
+      getNetPositionValueUsd(
+        a
+      )
+  )[0];
+}
+
 function getCollateralSymbol(
   item
 ) {
+  const collateral =
+    Array.isArray(
+      item?.collateral
+    )
+      ? item.collateral
+      : [];
+
+  const breakdown =
+    Array.isArray(
+      item?.collateralBreakdown
+    )
+      ? item.collateralBreakdown
+      : [];
+
   const identifiers = [
-    ...(
-      Array.isArray(
-        item?.collateralBreakdown
-      )
-        ? item.collateralBreakdown.map(
-            (
-              row
-            ) =>
-              row?.assetIdentifier
-          )
-        : []
+    ...collateral.map(
+      (
+        row
+      ) =>
+        row?.assetIdentifier
     ),
 
-    ...(
-      Array.isArray(
-        item?.collateral
-      )
-        ? item.collateral.map(
-            (
-              row
-            ) =>
-              row?.assetIdentifier
-          )
-        : []
+    ...breakdown.map(
+      (
+        row
+      ) =>
+        row?.assetIdentifier
     ),
   ]
     .filter(
@@ -416,51 +508,43 @@ function getCollateralSymbol(
     : "ONyc";
 }
 
-function chooseOnycLoop(
-  items
-) {
-  const activeLoops =
-    (
-      items ||
-      []
-    )
-      .filter(
-        (
-          item
-        ) =>
-          !item?.loan
-            ?.closed
-      )
-      .filter(
-        isLoopPosition
-      );
-
-  if (
-    !activeLoops.length
-  ) {
-    return null;
-  }
-
-  return [
-    ...activeLoops,
-  ].sort(
-    (
-      a,
-      b
-    ) =>
-      getNetPositionValueUsd(
-        b
-      ) -
-      getNetPositionValueUsd(
-        a
-      )
-  )[0];
-}
-
 export async function getLoopscaleOnycSnapshot(
   walletAddress =
     LOOPSCALE_WALLET
 ) {
+  /*
+   * Intentionally use a MINIMAL filter.
+   *
+   * The previous version added orderFundingTypes and assetTypes.
+   * Those filters were causing Loopscale to return no positions.
+   *
+   * We fetch the wallet's active loans and identify the Loop
+   * from ledgers[].isLoop instead.
+   */
+  const requestBody = {
+    borrowers: [
+      walletAddress,
+    ],
+
+    filterType:
+      ACTIVE_FILTER_TYPE,
+
+    includePnl:
+      true,
+
+    page:
+      1,
+
+    pageSize:
+      LOOPSCALE_PAGE_SIZE,
+
+    sortSide:
+      1,
+
+    sortType:
+      2,
+  };
+
   const response =
     await proxyFetch(
       "/loopscale/v1/markets/loans/info",
@@ -480,36 +564,9 @@ export async function getLoopscaleOnycSnapshot(
         },
 
         body:
-          JSON.stringify({
-            borrowers: [
-              walletAddress,
-            ],
-
-            filterType:
-              ACTIVE_FILTER_TYPE,
-
-            includePnl:
-              true,
-
-            orderFundingTypes:
-              LOOP_FUNDING_TYPE,
-
-            assetTypes: [
-              0,
-            ],
-
-            page:
-              1,
-
-            pageSize:
-              LOOPSCALE_PAGE_SIZE,
-
-            sortSide:
-              1,
-
-            sortType:
-              2,
-          }),
+          JSON.stringify(
+            requestBody
+          ),
       }
     );
 
@@ -552,8 +609,21 @@ export async function getLoopscaleOnycSnapshot(
       payload
     );
 
+  console.log(
+    "[Loopscale] active loans:",
+    items
+  );
+
+  if (
+    !items.length
+  ) {
+    throw new Error(
+      `Loopscale returned 0 active loans for wallet ${walletAddress}.`
+    );
+  }
+
   const item =
-    chooseOnycLoop(
+    chooseLoopPosition(
       items
     );
 
@@ -561,9 +631,14 @@ export async function getLoopscaleOnycSnapshot(
     !item
   ) {
     throw new Error(
-      "Loopscale returned no active Loop position for this wallet."
+      "Loopscale returned loans, but none could be selected as an active position."
     );
   }
+
+  console.log(
+    "[Loopscale] selected position:",
+    item
+  );
 
   const aggregate =
     payload?.aggregate ||
@@ -611,6 +686,20 @@ export async function getLoopscaleOnycSnapshot(
         quantity
       : 0;
 
+  const dailyNetYieldUsd =
+    toNumber(
+      aggregate
+        ?.dailyCollateralYieldUsd
+    ) -
+    toNumber(
+      aggregate
+        ?.dailyInterestUsd
+    ) -
+    toNumber(
+      aggregate
+        ?.dailyPrincipalYieldUsd
+    );
+
   return {
     walletAddress,
 
@@ -656,21 +745,7 @@ export async function getLoopscaleOnycSnapshot(
         item?.pendingYieldUsd
       ),
 
-    dailyNetYieldUsd:
-      (
-        toNumber(
-          aggregate
-            ?.dailyCollateralYieldUsd
-        ) -
-        toNumber(
-          aggregate
-            ?.dailyInterestUsd
-        ) -
-        toNumber(
-          aggregate
-            ?.dailyPrincipalYieldUsd
-        )
-      ),
+    dailyNetYieldUsd,
 
     source:
       "loopscale",
