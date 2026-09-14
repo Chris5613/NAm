@@ -30,6 +30,7 @@ const MONTHLY_SNAPSHOT_KEY = "yield_monthly_snapshots_v1";
 const RATEX_HISTORY_KEY = "yield_ratex_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
+const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 
 const MONTHLY_TRACKING_START = "2026-09";
 const LULO_SEPTEMBER_2026_OPENING_EARNED = 7.76;
@@ -285,6 +286,152 @@ function getSaladTrackerStats(
     lastSyncedAt:
       tracker?.lastSyncedAt ||
       null,
+  };
+}
+
+
+function loadUnetworkTracker() {
+  const parsed =
+    readObject(
+      UNETWORK_TRACKER_KEY
+    );
+
+  return {
+    initialized:
+      Boolean(
+        parsed.initialized
+      ),
+
+    currentBalance:
+      Number(
+        parsed.currentBalance
+      ) || 0,
+
+    lastBalance:
+      Number(
+        parsed.lastBalance
+      ) || 0,
+
+    withdrawals:
+      Number(
+        parsed.withdrawals
+      ) || 0,
+
+    lastSyncedAt:
+      parsed.lastSyncedAt ||
+      null,
+
+    daily:
+      parsed.daily &&
+      typeof parsed.daily ===
+        "object"
+        ? parsed.daily
+        : {},
+  };
+}
+
+function saveUnetworkTracker(
+  value
+) {
+  saveObject(
+    UNETWORK_TRACKER_KEY,
+    value
+  );
+}
+
+function getUnetworkTrackerStats(
+  tracker
+) {
+  const rows =
+    Object.entries(
+      tracker?.daily ||
+        {}
+    );
+
+  const currentMonth =
+    getCurrentMonthKey();
+
+  let lifetimeUsd =
+    0;
+
+  let monthUsd =
+    0;
+
+  rows.forEach(
+    ([
+      date,
+      entry,
+    ]) => {
+      const usd =
+        typeof entry ===
+          "number"
+          ? Number(entry) || 0
+          : Number(
+              entry?.usd
+            ) || 0;
+
+      lifetimeUsd +=
+        usd;
+
+      if (
+        String(date).slice(
+          0,
+          7
+        ) ===
+        currentMonth
+      ) {
+        monthUsd +=
+          usd;
+      }
+    }
+  );
+
+  const currentDay =
+    Math.max(
+      1,
+      Number(
+        getTodayKey().slice(
+          8,
+          10
+        )
+      ) || 1
+    );
+
+  const estimatedDailyUsd =
+    monthUsd /
+    currentDay;
+
+  return {
+    currentBalance:
+      Number(
+        tracker?.currentBalance
+      ) || 0,
+
+    monthUsd,
+
+    lifetimeUsd,
+
+    withdrawals:
+      Number(
+        tracker?.withdrawals
+      ) || 0,
+
+    estimatedDailyUsd,
+
+    estimatedMonthlyUsd:
+      estimatedDailyUsd *
+      30.4375,
+
+    estimatedYearlyUsd:
+      estimatedDailyUsd *
+      365,
+
+    lastSyncedAt:
+      tracker?.lastSyncedAt ||
+      null,
+
+    transactionCount:
+      rows.length,
   };
 }
 
@@ -2152,7 +2299,8 @@ function buildProjectIncome(
   ratexHistory,
   saladTracker,
   monthlyBackfills,
-  rollerCoinTracker
+  rollerCoinTracker,
+  unetworkTracker
 ) {
   const monthMap =
     new Map();
@@ -2388,6 +2536,29 @@ function buildProjectIncome(
         Number(
           entry?.usd
         ) || 0
+      );
+    }
+  );
+
+  Object.entries(
+    unetworkTracker?.daily ||
+      {}
+  ).forEach(
+    ([
+      date,
+      entry,
+    ]) => {
+      addEarning(
+        getMonthKey(
+          date
+        ),
+        "Unetwork",
+        typeof entry ===
+          "number"
+          ? Number(entry) || 0
+          : Number(
+              entry?.usd
+            ) || 0
       );
     }
   );
@@ -2681,6 +2852,28 @@ export default function YieldFarmingPage() {
   );
 
   const [
+    unetworkTracker,
+    setUnetworkTracker,
+  ] = useState(
+    loadUnetworkTracker
+  );
+
+  const [
+    unetworkConnected,
+    setUnetworkConnected,
+  ] = useState(false);
+
+  const [
+    unetworkSyncing,
+    setUnetworkSyncing,
+  ] = useState(false);
+
+  const [
+    unetworkMessage,
+    setUnetworkMessage,
+  ] = useState("");
+
+  const [
     rollerCoinTracker,
     setRollerCoinTracker,
   ] = useState(
@@ -2856,6 +3049,17 @@ export default function YieldFarmingPage() {
     },
     [
       rollerCoinTracker,
+    ]
+  );
+
+  useEffect(
+    () => {
+      saveUnetworkTracker(
+        unetworkTracker
+      );
+    },
+    [
+      unetworkTracker,
     ]
   );
 
@@ -4454,6 +4658,485 @@ export default function YieldFarmingPage() {
     ]
   );
 
+
+  const importUnetworkPayload =
+    useCallback(
+      (
+        payload
+      ) => {
+        if (
+          !payload
+        ) {
+          return;
+        }
+
+        const rawMicros =
+          Number(
+            payload?.balance_micros ??
+              payload?.balanceMicros
+          );
+
+        const explicitUsd =
+          Number(
+            payload?.balance_usd ??
+              payload?.balanceUsd
+          );
+
+        const currentBalance =
+          Number.isFinite(
+            explicitUsd
+          )
+            ? explicitUsd
+            : (
+                Number.isFinite(
+                  rawMicros
+                )
+                  ? rawMicros /
+                    1_000_000
+                  : NaN
+              );
+
+        if (
+          !Number.isFinite(
+            currentBalance
+          ) ||
+          currentBalance <
+            0
+        ) {
+          setUnetworkSyncing(
+            false
+          );
+
+          setUnetworkMessage(
+            "Unetwork returned an invalid balance."
+          );
+
+          return;
+        }
+
+        const rows =
+          Array.isArray(
+            payload?.rows
+          )
+            ? payload.rows
+            : [];
+
+        setUnetworkTracker(
+          (
+            current
+          ) => {
+            const nextDaily = {
+              ...(
+                current?.daily ||
+                {}
+              ),
+            };
+
+            /*
+             * Preferred path:
+             * rewards_get_allocations gives us actual dated
+             * earnings, so withdrawals never affect income.
+             */
+            if (
+              rows.length
+            ) {
+              rows.forEach(
+                (
+                  row
+                ) => {
+                  const date =
+                    String(
+                      row?.date ||
+                        ""
+                    ).slice(
+                      0,
+                      10
+                    );
+
+                  const usd =
+                    Number(
+                      row?.usd
+                    );
+
+                  if (
+                    !date ||
+                    !Number.isFinite(
+                      usd
+                    ) ||
+                    usd <
+                      0
+                  ) {
+                    return;
+                  }
+
+                  nextDaily[
+                    date
+                  ] = {
+                    usd,
+
+                    micros:
+                      Number(
+                        row?.micros
+                      ) || 0,
+
+                    count:
+                      Number(
+                        row?.count
+                      ) || 0,
+
+                    syncedAt:
+                      payload?.synced_at ||
+                      payload?.syncedAt ||
+                      new Date().toISOString(),
+                  };
+                }
+              );
+            } else {
+              /*
+               * Balance-only fallback:
+               * first sync counts the available balance once.
+               * Later increases are earnings; decreases are
+               * withdrawals and never subtract from income.
+               */
+              const previousBalance =
+                Number(
+                  current?.lastBalance
+                ) || 0;
+
+              const initialized =
+                Boolean(
+                  current?.initialized
+                );
+
+              const positiveDelta =
+                initialized
+                  ? Math.max(
+                      0,
+                      currentBalance -
+                        previousBalance
+                    )
+                  : currentBalance;
+
+              if (
+                positiveDelta >
+                0
+              ) {
+                const today =
+                  getTodayKey();
+
+                const previousEntry =
+                  nextDaily[
+                    today
+                  ];
+
+                const previousUsd =
+                  typeof previousEntry ===
+                    "number"
+                    ? Number(
+                        previousEntry
+                      ) || 0
+                    : Number(
+                        previousEntry?.usd
+                      ) || 0;
+
+                nextDaily[
+                  today
+                ] = {
+                  usd:
+                    Number(
+                      (
+                        previousUsd +
+                        positiveDelta
+                      ).toFixed(
+                        8
+                      )
+                    ),
+
+                  micros:
+                    0,
+
+                  count:
+                    0,
+
+                  syncedAt:
+                    payload?.synced_at ||
+                    payload?.syncedAt ||
+                    new Date().toISOString(),
+                };
+              }
+            }
+
+            const previousBalance =
+              Number(
+                current?.lastBalance
+              ) || 0;
+
+            const withdrawal =
+              current?.initialized &&
+              currentBalance <
+                previousBalance
+                ? previousBalance -
+                  currentBalance
+                : 0;
+
+            return {
+              ...current,
+
+              initialized:
+                true,
+
+              currentBalance,
+
+              lastBalance:
+                currentBalance,
+
+              withdrawals:
+                (
+                  Number(
+                    current?.withdrawals
+                  ) || 0
+                ) +
+                withdrawal,
+
+              daily:
+                nextDaily,
+
+              lastSyncedAt:
+                payload?.synced_at ||
+                payload?.syncedAt ||
+                new Date().toISOString(),
+            };
+          }
+        );
+
+        setUnetworkConnected(
+          true
+        );
+
+        setUnetworkSyncing(
+          false
+        );
+
+        setUnetworkMessage(
+          rows.length
+            ? `Synced ${rows.length} Unetwork earning day${rows.length === 1 ? "" : "s"}.`
+            : "Unetwork balance synced."
+        );
+      },
+      []
+    );
+
+  const requestUnetworkLatest =
+    useCallback(
+      () => {
+        window.postMessage(
+          {
+            source:
+              "unetwork-app",
+
+            type:
+              "REQUEST_LATEST",
+          },
+          window.location.origin
+        );
+
+        window.postMessage(
+          {
+            source:
+              "unetwork-app",
+
+            type:
+              "REQUEST_STATUS",
+          },
+          window.location.origin
+        );
+      },
+      []
+    );
+
+  const syncUnetworkBalance =
+    useCallback(
+      () => {
+        setUnetworkSyncing(
+          true
+        );
+
+        setUnetworkMessage(
+          "Syncing Unetwork earnings…"
+        );
+
+        window.postMessage(
+          {
+            source:
+              "unetwork-app",
+
+            type:
+              "SYNC_NOW",
+          },
+          window.location.origin
+        );
+      },
+      []
+    );
+
+  useEffect(
+    () => {
+      const handleMessage =
+        (
+          event
+        ) => {
+          if (
+            event.origin !==
+              window.location.origin ||
+            event.source !==
+              window
+          ) {
+            return;
+          }
+
+          const data =
+            event.data;
+
+          if (
+            data?.source !==
+            "unetwork-ext"
+          ) {
+            return;
+          }
+
+          if (
+            data.type ===
+            "READY"
+          ) {
+            setUnetworkConnected(
+              true
+            );
+
+            requestUnetworkLatest();
+
+            return;
+          }
+
+          if (
+            data.type ===
+            "UNETWORK_STATUS"
+          ) {
+            setUnetworkConnected(
+              Boolean(
+                data.payload?.unetworkOpen ||
+                data.payload?.lastPayload
+              )
+            );
+
+            if (
+              data.payload?.lastPayload
+            ) {
+              importUnetworkPayload(
+                data.payload.lastPayload
+              );
+            }
+
+            return;
+          }
+
+          if (
+            data.type ===
+              "UNETWORK_PUSH" ||
+            data.type ===
+              "UNETWORK_SYNC_RESULT"
+          ) {
+            setUnetworkConnected(
+              true
+            );
+
+            if (
+              data.payload
+            ) {
+              importUnetworkPayload(
+                data.payload
+              );
+            } else {
+              setUnetworkSyncing(
+                false
+              );
+            }
+
+            return;
+          }
+
+          if (
+            data.type ===
+              "UNETWORK_SYNC_ERROR" ||
+            data.type ===
+              "UNETWORK_ERROR"
+          ) {
+            setUnetworkConnected(
+              true
+            );
+
+            setUnetworkSyncing(
+              false
+            );
+
+            setUnetworkMessage(
+              data.error ||
+                "Unetwork sync failed. Open Unetwork and make sure you are signed in."
+            );
+          }
+        };
+
+      window.addEventListener(
+        "message",
+        handleMessage
+      );
+
+      const firstRequest =
+        window.setTimeout(
+          requestUnetworkLatest,
+          500
+        );
+
+      const secondRequest =
+        window.setTimeout(
+          requestUnetworkLatest,
+          1500
+        );
+
+      const handleFocus =
+        () =>
+          requestUnetworkLatest();
+
+      window.addEventListener(
+        "focus",
+        handleFocus
+      );
+
+      return () => {
+        window.removeEventListener(
+          "message",
+          handleMessage
+        );
+
+        window.removeEventListener(
+          "focus",
+          handleFocus
+        );
+
+        window.clearTimeout(
+          firstRequest
+        );
+
+        window.clearTimeout(
+          secondRequest
+        );
+      };
+    },
+    [
+      importUnetworkPayload,
+      requestUnetworkLatest,
+    ]
+  );
+
   const syncLivePositions =
     useCallback(
       async () => {
@@ -4524,6 +5207,7 @@ export default function YieldFarmingPage() {
         }
 
         requestSaladLatest();
+        requestUnetworkLatest();
 
         if (
           errors.length
@@ -4538,6 +5222,7 @@ export default function YieldFarmingPage() {
       [
         applyProjectData,
         requestSaladLatest,
+        requestUnetworkLatest,
       ]
     );
 
@@ -4580,6 +5265,17 @@ export default function YieldFarmingPage() {
         ),
       [
         rollerCoinTracker,
+      ]
+    );
+
+  const unetworkStats =
+    useMemo(
+      () =>
+        getUnetworkTrackerStats(
+          unetworkTracker
+        ),
+      [
+        unetworkTracker,
       ]
     );
 
@@ -4679,7 +5375,8 @@ export default function YieldFarmingPage() {
           ratexHistory,
           saladTracker,
           monthlyBackfills,
-          rollerCoinTracker
+          rollerCoinTracker,
+          unetworkTracker
         ),
       [
         luloProjects,
@@ -4687,6 +5384,7 @@ export default function YieldFarmingPage() {
         saladTracker,
         monthlyBackfills,
         rollerCoinTracker,
+        unetworkTracker,
       ]
     );
 
@@ -4778,6 +5476,11 @@ export default function YieldFarmingPage() {
             Number(
               saladStats?.estimatedYearlyUsd
             ) || 0
+          ) +
+          (
+            Number(
+              unetworkStats?.estimatedYearlyUsd
+            ) || 0
           );
 
         const weightedApy =
@@ -4827,6 +5530,11 @@ export default function YieldFarmingPage() {
             Number(
               saladStats?.lifetimeUsd
             ) || 0
+          ) +
+          (
+            Number(
+              unetworkStats?.lifetimeUsd
+            ) || 0
           );
 
         return {
@@ -4840,6 +5548,11 @@ export default function YieldFarmingPage() {
               saladTracker?.initialized
                 ? 1
                 : 0
+            ) +
+            (
+              unetworkTracker?.initialized
+                ? 1
+                : 0
             ),
           totalEarned,
         };
@@ -4850,6 +5563,8 @@ export default function YieldFarmingPage() {
         rollerCoinStats,
         saladStats,
         saladTracker,
+        unetworkStats,
+        unetworkTracker,
       ]
     );
 
@@ -5153,6 +5868,40 @@ export default function YieldFarmingPage() {
                 )
               }
             />
+
+            <UnetworkProjectCard
+              tracker={
+                unetworkTracker
+              }
+              connected={
+                unetworkConnected
+              }
+              stats={
+                unetworkStats
+              }
+              syncing={
+                unetworkSyncing
+              }
+              message={
+                unetworkMessage
+              }
+              onRefresh={
+                syncUnetworkBalance
+              }
+              logo={
+                projectLogos[
+                  "unetwork-project"
+                ] || ""
+              }
+              onLogoChange={(
+                dataUrl
+              ) =>
+                setProjectLogo(
+                  "unetwork-project",
+                  dataUrl
+                )
+              }
+            />
           </div>
         )}
       </section>
@@ -5266,6 +6015,173 @@ function ProjectCard({
             onDeletePosition
           }
         />
+      )}
+    </div>
+  );
+}
+
+
+function UnetworkProjectCard({
+  tracker,
+  connected,
+  stats,
+  syncing,
+  message,
+  onRefresh,
+  logo,
+  onLogoChange,
+}) {
+  const [
+    expanded,
+    setExpanded,
+  ] = useState(false);
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
+      <button
+        type="button"
+        onClick={() =>
+          setExpanded(
+            (value) =>
+              !value
+          )
+        }
+        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
+      >
+        <div className="flex min-w-0 items-center gap-3">
+          <ProjectLogoButton
+            platform="Unetwork"
+            logo={
+              logo
+            }
+            onLogoChange={
+              onLogoChange
+            }
+          />
+
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="truncate text-lg font-semibold">
+                Unetwork
+              </h3>
+
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                  connected
+                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+                    : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                }`}
+              >
+                <Wifi className="h-3 w-3" />
+                {connected
+                  ? "LIVE"
+                  : "OFFLINE"}
+              </span>
+            </div>
+
+            <div className="mt-0.5 text-xs text-muted-foreground">
+              1 position
+              {tracker?.lastSyncedAt
+                ? ` · synced ${formatSyncTime(
+                    tracker.lastSyncedAt
+                  )}`
+                : ""}
+            </div>
+          </div>
+        </div>
+
+        <div className="shrink-0 text-right">
+          <div className="text-2xl font-semibold tabular-nums">
+            {formatCurrency(
+              stats?.currentBalance
+            )}
+          </div>
+
+          <div className="mt-0.5 text-xs tabular-nums text-muted-foreground">
+            {formatCurrency(
+              stats?.lifetimeUsd
+            )}{" "}
+            lifetime earned
+          </div>
+        </div>
+      </button>
+
+      {expanded && (
+        <div className="border-t border-border/40 px-5 pb-5 pt-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                This month
+              </div>
+
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.monthUsd
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Available
+              </div>
+
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.currentBalance
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Lifetime earned
+              </div>
+
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.lifetimeUsd
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                Withdrawn
+              </div>
+
+              <div className="mt-1 text-lg font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.withdrawals
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              {message ||
+                (connected
+                  ? "Unetwork extension connected. Balance and dated rewards sync automatically."
+                  : "Install the Unetwork Earnings Bridge, open Unetwork, and make sure you are signed in.")}
+            </p>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={
+                onRefresh
+              }
+              disabled={
+                syncing
+              }
+            >
+              {syncing
+                ? "Syncing..."
+                : "Refresh"}
+            </Button>
+          </div>
+        </div>
       )}
     </div>
   );
