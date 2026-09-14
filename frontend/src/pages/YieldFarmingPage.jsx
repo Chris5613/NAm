@@ -32,7 +32,8 @@ const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 
 const MONTHLY_TRACKING_START = "2026-09";
-const LULO_SEPTEMBER_2026_OPENING_EARNED = 6.9;
+const LULO_SEPTEMBER_2026_OPENING_EARNED = 7.76;
+const LULO_MONTHLY_ACCOUNTING_VERSION = 3;
 const RATEX_ACCOUNTING_VERSION = 2;
 const RATEX_LEGACY_INITIAL_QUANTITY = 606.27;
 const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
@@ -2215,6 +2216,27 @@ function buildProjectIncome(
     []
   ).forEach(
     (project) => {
+      const projectBackfills =
+        monthlyBackfills?.[
+          String(
+            project.id
+          )
+        ] || {};
+
+      /*
+       * Once a Lulo month has a tracked monthly total, that value is
+       * authoritative. Do not also add old lulo_yield transactions for
+       * the same month. Older versions used transactions + a remainder
+       * backfill, which is what allowed a withdrawal accounting jump to
+       * inflate September income to $31.77.
+       */
+      const authoritativeMonths =
+        new Set(
+          Object.keys(
+            projectBackfills
+          )
+        );
+
       const transactions =
         Array.isArray(
           project?.transactions
@@ -2251,6 +2273,14 @@ function buildProjectIncome(
                 transaction.created_at
             );
 
+          if (
+            authoritativeMonths.has(
+              monthKey
+            )
+          ) {
+            return;
+          }
+
           addEarning(
             monthKey,
             "Lulo",
@@ -2258,13 +2288,6 @@ function buildProjectIncome(
           );
         }
       );
-
-      const projectBackfills =
-        monthlyBackfills?.[
-          String(
-            project.id
-          )
-        ] || {};
 
       Object.entries(
         projectBackfills
@@ -3492,13 +3515,16 @@ export default function YieldFarmingPage() {
       }
 
       /*
-       * Lulo's public account response gives us live lifetime interest,
-       * but not an exact month-to-date history. So we keep a persistent
-       * lifetime-interest baseline for each month.
+       * Lulo monthly income is tracked as a monotonic total instead of
+       * being rebuilt from Lulo's raw lifetime-interest counter.
        *
-       * September 2026 is seeded at the known actual $6.90 you confirmed.
-       * From this point forward, new live Lulo interest is added to that
-       * amount automatically instead of using an APY estimate.
+       * Why: deposits and withdrawals can change Lulo's accounting
+       * fields even though no yield was earned. We detect a meaningful
+       * principal balance change, preserve the month-to-date income, and
+       * simply re-anchor the lifetime-interest counter at the new value.
+       *
+       * Version 3 also repairs September 2026 to the last known-good
+       * amount ($7.76) from immediately before the withdrawal.
        */
       setLuloMonthlyBaselines(
         (current) => {
@@ -3508,6 +3534,12 @@ export default function YieldFarmingPage() {
           const next = {
             ...current,
           };
+
+          const now =
+            new Date();
+
+          const nowIso =
+            now.toISOString();
 
           luloProjects.forEach(
             (project) => {
@@ -3522,11 +3554,21 @@ export default function YieldFarmingPage() {
                   project.lulo_lifetime_interest_usd
                 );
 
+              const balanceUsd =
+                Number(
+                  project.lulo_total_balance_usd
+                );
+
               if (
                 !Number.isFinite(
                   lifetimeInterest
                 ) ||
                 lifetimeInterest <
+                  0 ||
+                !Number.isFinite(
+                  balanceUsd
+                ) ||
+                balanceUsd <
                   0
               ) {
                 return;
@@ -3546,35 +3588,234 @@ export default function YieldFarmingPage() {
                 ),
               };
 
-              if (
+              const previous =
                 projectMonths[
                   monthKey
-                ]
+                ];
+
+              /*
+               * One-time migration from the old baseline/remainder
+               * accounting. The old September data has already been
+               * contaminated by the withdrawal, so re-anchor it now.
+               */
+              if (
+                !previous ||
+                Number(
+                  previous.version
+                ) !==
+                  LULO_MONTHLY_ACCOUNTING_VERSION
               ) {
+                projectMonths[
+                  monthKey
+                ] = {
+                  version:
+                    LULO_MONTHLY_ACCOUNTING_VERSION,
+                  monthEarned:
+                    monthKey ===
+                    "2026-09"
+                      ? LULO_SEPTEMBER_2026_OPENING_EARNED
+                      : 0,
+                  lastLifetimeInterest:
+                    lifetimeInterest,
+                  lastBalanceUsd:
+                    balanceUsd,
+                  createdAt:
+                    nowIso,
+                  lastSyncedAt:
+                    nowIso,
+                };
+
+                next[
+                  projectKey
+                ] =
+                  projectMonths;
+
+                changed =
+                  true;
+
                 return;
               }
 
-              projectMonths[
-                monthKey
-              ] = {
-                lifetimeInterestAtBaseline:
+              const previousInterest =
+                Number(
+                  previous.lastLifetimeInterest
+                );
+
+              const previousBalance =
+                Number(
+                  previous.lastBalanceUsd
+                );
+
+              let monthEarned =
+                Number(
+                  previous.monthEarned
+                ) || 0;
+
+              const interestDelta =
+                Number.isFinite(
+                  previousInterest
+                )
+                  ? (
+                      lifetimeInterest -
+                      previousInterest
+                    )
+                  : 0;
+
+              const balanceDelta =
+                Number.isFinite(
+                  previousBalance
+                )
+                  ? (
+                      balanceUsd -
+                      previousBalance
+                    )
+                  : 0;
+
+              const referenceBalance =
+                Math.max(
+                  balanceUsd,
+                  Number.isFinite(
+                    previousBalance
+                  )
+                    ? previousBalance
+                    : 0
+                );
+
+              const cashFlowThreshold =
+                Math.max(
+                  5,
+                  referenceBalance *
+                    0.0025
+                );
+
+              const principalMoved =
+                Number.isFinite(
+                  previousBalance
+                ) &&
+                Math.abs(
+                  balanceDelta
+                ) >=
+                  cashFlowThreshold;
+
+              let acceptInterestDelta =
+                false;
+
+              if (
+                !principalMoved &&
+                interestDelta >
+                  0
+              ) {
+                const previousSyncMs =
+                  new Date(
+                    previous.lastSyncedAt ||
+                      previous.createdAt ||
+                      nowIso
+                  ).getTime();
+
+                const elapsedDays =
+                  Number.isFinite(
+                    previousSyncMs
+                  )
+                    ? Math.max(
+                        (
+                          now.getTime() -
+                          previousSyncMs
+                        ) /
+                          86400000,
+                        1 / 1440
+                      )
+                    : 1 / 1440;
+
+                const apy =
+                  Math.max(
+                    0,
+                    Number(
+                      project.lulo_weighted_apy
+                    ) || 0
+                  );
+
+                const expectedInterest =
+                  referenceBalance *
+                  (
+                    apy /
+                    100
+                  ) *
+                  (
+                    elapsedDays /
+                    365
+                  );
+
+                const plausibleLimit =
+                  Math.max(
+                    0.5,
+                    (
+                      expectedInterest *
+                      5
+                    ) +
+                      0.1
+                  );
+
+                acceptInterestDelta =
+                  interestDelta <=
+                  plausibleLimit;
+              }
+
+              if (
+                acceptInterestDelta
+              ) {
+                monthEarned +=
+                  interestDelta;
+              }
+
+              const updated = {
+                ...previous,
+                version:
+                  LULO_MONTHLY_ACCOUNTING_VERSION,
+                monthEarned:
+                  Number(
+                    Math.max(
+                      0,
+                      monthEarned
+                    ).toFixed(
+                      6
+                    )
+                  ),
+                lastLifetimeInterest:
                   lifetimeInterest,
-                openingEarned:
-                  monthKey ===
-                  "2026-09"
-                    ? LULO_SEPTEMBER_2026_OPENING_EARNED
-                    : 0,
-                createdAt:
-                  new Date().toISOString(),
+                lastBalanceUsd:
+                  balanceUsd,
+                lastSyncedAt:
+                  nowIso,
+                lastCashFlowAt:
+                  principalMoved
+                    ? nowIso
+                    : (
+                        previous.lastCashFlowAt ||
+                        null
+                      ),
               };
 
-              next[
-                projectKey
-              ] =
-                projectMonths;
+              if (
+                JSON.stringify(
+                  updated
+                ) !==
+                JSON.stringify(
+                  previous
+                )
+              ) {
+                projectMonths[
+                  monthKey
+                ] =
+                  updated;
 
-              changed =
-                true;
+                next[
+                  projectKey
+                ] =
+                  projectMonths;
+
+                changed =
+                  true;
+              }
             }
           );
 
@@ -3607,6 +3848,11 @@ export default function YieldFarmingPage() {
         return;
       }
 
+      /*
+       * monthlyBackfills now stores the authoritative Lulo month total.
+       * buildProjectIncome() ignores legacy lulo_yield transactions for
+       * months that have one of these totals, preventing double counting.
+       */
       setMonthlyBackfills(
         (current) => {
           let changed =
@@ -3629,7 +3875,7 @@ export default function YieldFarmingPage() {
                   project.id
                 );
 
-              const baseline =
+              const tracker =
                 luloMonthlyBaselines?.[
                   projectKey
                 ]?.[
@@ -3637,88 +3883,51 @@ export default function YieldFarmingPage() {
                 ];
 
               if (
-                !baseline
+                !tracker ||
+                Number(
+                  tracker.version
+                ) !==
+                  LULO_MONTHLY_ACCOUNTING_VERSION
               ) {
                 return;
               }
 
-              const lifetimeInterest =
+              const monthEarned =
                 Number(
-                  project.lulo_lifetime_interest_usd
-                );
-
-              const baselineLifetime =
-                Number(
-                  baseline.lifetimeInterestAtBaseline
+                  tracker.monthEarned
                 );
 
               if (
                 !Number.isFinite(
-                  lifetimeInterest
+                  monthEarned
                 ) ||
-                !Number.isFinite(
-                  baselineLifetime
-                )
+                monthEarned <
+                  0
               ) {
                 return;
               }
-
-              const openingEarned =
-                Number(
-                  baseline.openingEarned
-                ) || 0;
-
-              const liveEarnedSinceBaseline =
-                Math.max(
-                  0,
-                  lifetimeInterest -
-                    baselineLifetime
-                );
-
-              const targetMonthEarned =
-                openingEarned +
-                liveEarnedSinceBaseline;
-
-              const tracked =
-                getTrackedLuloMonthEarnings(
-                  project,
-                  monthKey
-                );
-
-              /*
-               * Existing lulo_yield transactions are already counted by
-               * buildProjectIncome(), so the backfill only supplies the
-               * remainder needed to reach the live month total.
-               */
-              const backfill =
-                Number(
-                  Math.max(
-                    0,
-                    targetMonthEarned -
-                      tracked
-                  ).toFixed(
-                    6
-                  )
-                );
 
               const existing =
                 next[
                   projectKey
                 ] || {};
 
-              const previousBackfill =
+              const previousValue =
                 Number(
                   existing?.[
                     monthKey
                   ]
-                ) || 0;
+                );
 
               if (
+                Number.isFinite(
+                  previousValue
+                ) &&
                 Math.abs(
-                  previousBackfill -
-                    backfill
+                  previousValue -
+                    monthEarned
                 ) <
-                0.000001
+                  0.000001
               ) {
                 return;
               }
@@ -3728,7 +3937,7 @@ export default function YieldFarmingPage() {
               ] = {
                 ...existing,
                 [monthKey]:
-                  backfill,
+                  monthEarned,
               };
 
               changed =
