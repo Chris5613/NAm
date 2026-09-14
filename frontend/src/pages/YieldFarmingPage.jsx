@@ -108,26 +108,6 @@ function recordLuloDailyEarnings(lifetimeInterestUsd) {
   return updatedHistory;
 }
 
-function getLuloFiveDayAverage() {
-  const today = getDateKey();
-
-  const completedDays = loadLuloDailyHistory()
-    .filter((entry) => entry.date !== today)
-    .filter((entry) => Number(entry.earned) >= 0)
-    .slice(-5);
-
-  if (!completedDays.length) {
-    return 0;
-  }
-
-  const total = completedDays.reduce(
-    (sum, entry) => sum + (Number(entry.earned) || 0),
-    0
-  );
-
-  return total / completedDays.length;
-}
-
 recordLuloDailyEarnings(project.lulo_lifetime_interest_usd);
 
 const MONTHLY_TRACKING_START = "2026-09";
