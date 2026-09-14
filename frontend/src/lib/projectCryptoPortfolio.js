@@ -254,17 +254,24 @@ function saveWalletBalance(walletId, data) {
   );
 }
 
-function buildBitcoin(wallets, balanceCache) {
+function buildBitcoin(
+  wallets,
+  balanceCache
+) {
   const bitcoinWallets = (
     Array.isArray(wallets) ? wallets : []
   ).filter(
-    (wallet) => wallet?.chain === "bitcoin"
+    (wallet) =>
+      String(
+        wallet?.chain || ""
+      ).toLowerCase() === "bitcoin"
   );
 
   const entries = bitcoinWallets.map(
     (wallet) => {
       const balance =
-        balanceCache?.[wallet.id]?.data || {};
+        balanceCache?.[wallet.id]?.data ||
+        {};
 
       const token = (
         Array.isArray(balance.tokens)
@@ -277,36 +284,63 @@ function buildBitcoin(wallets, balanceCache) {
           ).toUpperCase() === "BTC"
       );
 
+      const amount = number(
+        token?.amount
+      );
+
+      const price = number(
+        token?.price
+      );
+
+      const value = number(
+        token?.usd_value ??
+          balance?.total_usd ??
+          amount * price
+      );
+
       return {
         id: wallet.id,
+        walletId: wallet.id,
 
         label:
           wallet.label ||
           "Bitcoin Wallet",
 
-        address: wallet.address || "",
-        amount: number(token?.amount),
-        price: number(token?.price),
+        address:
+          wallet.address || "",
 
-        value: number(
-          token?.usd_value ??
-            balance?.total_usd
-        ),
+        amount,
+        price,
+        value,
       };
     }
   );
 
-  return {
-    balance: entries.reduce(
-      (sum, wallet) =>
-        sum + wallet.value,
-      0
-    ),
+  const amount = entries.reduce(
+    (sum, wallet) =>
+      sum + wallet.amount,
+    0
+  );
 
+  const value = entries.reduce(
+    (sum, wallet) =>
+      sum + wallet.value,
+    0
+  );
+
+  const price =
+    entries.find(
+      (wallet) => wallet.price > 0
+    )?.price || 0;
+
+  return {
+    amount,
+    price,
+    value,
+    balance: value,
     wallets: entries,
   };
 }
-
 function createPortfolio(
   projects,
   wallets,
