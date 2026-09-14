@@ -14,7 +14,7 @@ import CloudPage from "@/pages/CloudPage";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import { Toaster } from "@/components/ui/sonner";
 import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
-import SpendingPage from "./pages/SpendingPage";
+import SpendingPage from "../pages/SpendingPage";
 import {
   AuthProvider,
   useAuth,
