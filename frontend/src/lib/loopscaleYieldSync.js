@@ -9,23 +9,22 @@ export const LOOPSCALE_ONYC_STARTED_AT =
   "2026-09-13T00:00:00-07:00";
 
 /*
- * First position screenshot:
+ * First Loopscale screenshot:
  *
- * position value: $1,001.83
+ * Position value: $1,001.83
  * P&L:            +$1.96
  *
- * Starting equity:
+ * Implied starting equity:
  * $999.87
  *
- * Only used if Loopscale does not return P&L directly.
+ * Used only if Loopscale does not return P&L directly.
  */
 const LOOPSCALE_INITIAL_EQUITY_USD =
   999.87;
 
 /*
- * Last known net APY from Loopscale itself.
- *
- * Only a fallback. Live API values take priority.
+ * Used only if the API response does not expose
+ * a live net APY.
  */
 const FALLBACK_NET_APY =
   17.47;
@@ -48,14 +47,13 @@ function toNumber(
     typeof value ===
     "string"
   ) {
-    const cleaned =
-      value.replace(
-        /[^0-9.-]/g,
-        ""
-      );
-
     const number =
-      Number(cleaned);
+      Number(
+        value.replace(
+          /[^0-9.-]/g,
+          ""
+        )
+      );
 
     return Number.isFinite(
       number
@@ -106,12 +104,6 @@ function toPercent(
     return 0;
   }
 
-  /*
-   * Support both:
-   *
-   * 0.1747 -> 17.47%
-   * 17.47  -> 17.47%
-   */
   return Math.abs(
     number
   ) <= 1
@@ -139,6 +131,92 @@ function safeStringify(
   } catch {
     return "";
   }
+}
+
+async function fetchPortfolioPositions(
+  walletAddress
+) {
+  /*
+   * The Loopscale API error explicitly tells us
+   * this endpoint expects a JSON field named:
+   *
+   * wallet
+   */
+  const response =
+    await proxyFetch(
+      `${PORTFOLIO_ENDPOINT}?wallet=${encodeURIComponent(
+        walletAddress
+      )}&t=${Date.now()}`,
+      {
+        method:
+          "POST",
+
+        cache:
+          "no-store",
+
+        headers: {
+          Accept:
+            "application/json",
+
+          "Content-Type":
+            "application/json",
+        },
+
+        body:
+          JSON.stringify({
+            wallet:
+              walletAddress,
+          }),
+      }
+    );
+
+  const raw =
+    await response.text();
+
+  let payload =
+    null;
+
+  try {
+    payload =
+      raw
+        ? JSON.parse(
+            raw
+          )
+        : null;
+  } catch {
+    throw new Error(
+      `Loopscale returned non-JSON data: ${raw.slice(
+        0,
+        200
+      )}`
+    );
+  }
+
+  if (
+    !response.ok
+  ) {
+    const detail =
+      payload?.detail ||
+      payload?.error
+        ?.message ||
+      payload?.error ||
+      payload?.message ||
+      raw.slice(
+        0,
+        200
+      );
+
+    throw new Error(
+      `Loopscale portfolio API returned ${response.status}: ${detail}`
+    );
+  }
+
+  console.log(
+    "[Loopscale] Raw portfolio response:",
+    payload
+  );
+
+  return payload;
 }
 
 function collectObjects(
@@ -208,539 +286,6 @@ function collectObjects(
   );
 
   return output;
-}
-
-function hasMeaningfulPayload(
-  payload
-) {
-  if (
-    payload === null ||
-    payload === undefined
-  ) {
-    return false;
-  }
-
-  if (
-    Array.isArray(
-      payload
-    )
-  ) {
-    return (
-      payload.length >
-      0
-    );
-  }
-
-  if (
-    typeof payload !==
-    "object"
-  ) {
-    return true;
-  }
-
-  const keys =
-    Object.keys(
-      payload
-    );
-
-  if (
-    !keys.length
-  ) {
-    return false;
-  }
-
-  const obviousArrays = [
-    payload?.positions,
-    payload?.items,
-    payload?.data,
-    payload?.portfolioPositions,
-  ];
-
-  const presentArrays =
-    obviousArrays.filter(
-      Array.isArray
-    );
-
-  if (
-    presentArrays.length
-  ) {
-    return presentArrays.some(
-      (
-        array
-      ) =>
-        array.length >
-        0
-    );
-  }
-
-  return true;
-}
-
-async function parseResponse(
-  response
-) {
-  const raw =
-    await response.text();
-
-  let payload =
-    null;
-
-  try {
-    payload =
-      raw
-        ? JSON.parse(
-            raw
-          )
-        : null;
-  } catch {
-    return {
-      ok: false,
-
-      status:
-        response.status,
-
-      payload:
-        null,
-
-      error:
-        `Non-JSON response: ${raw.slice(
-          0,
-          180
-        )}`,
-    };
-  }
-
-  if (
-    !response.ok
-  ) {
-    return {
-      ok: false,
-
-      status:
-        response.status,
-
-      payload,
-
-      error:
-        payload?.detail ||
-        payload?.error
-          ?.message ||
-        payload?.error ||
-        payload?.message ||
-        `HTTP ${response.status}`,
-    };
-  }
-
-  return {
-    ok: true,
-
-    status:
-      response.status,
-
-    payload,
-
-    error:
-      "",
-  };
-}
-
-async function fetchPortfolioPositions(
-  walletAddress
-) {
-  /*
-   * We know this endpoint accepts a wallet address,
-   * but we're making the client tolerant of the exact
-   * parameter name.
-   */
-  const getAttempts = [
-    {
-      name:
-        "walletAddress",
-
-      url:
-        `${PORTFOLIO_ENDPOINT}` +
-        `?walletAddress=${encodeURIComponent(
-          walletAddress
-        )}`,
-    },
-
-    {
-      name:
-        "wallet",
-
-      url:
-        `${PORTFOLIO_ENDPOINT}` +
-        `?wallet=${encodeURIComponent(
-          walletAddress
-        )}`,
-    },
-
-    {
-      name:
-        "address",
-
-      url:
-        `${PORTFOLIO_ENDPOINT}` +
-        `?address=${encodeURIComponent(
-          walletAddress
-        )}`,
-    },
-
-    {
-      name:
-        "owner",
-
-      url:
-        `${PORTFOLIO_ENDPOINT}` +
-        `?owner=${encodeURIComponent(
-          walletAddress
-        )}`,
-    },
-  ];
-
-  const errors =
-    [];
-
-  for (
-    const attempt of
-    getAttempts
-  ) {
-    try {
-      const response =
-        await proxyFetch(
-          attempt.url,
-          {
-            method:
-              "GET",
-
-            cache:
-              "no-store",
-
-            headers: {
-              Accept:
-                "application/json",
-            },
-          }
-        );
-
-      const result =
-        await parseResponse(
-          response
-        );
-
-      if (
-        result.ok &&
-        hasMeaningfulPayload(
-          result.payload
-        )
-      ) {
-        console.log(
-          `[Loopscale] Portfolio endpoint succeeded with ${attempt.name}:`,
-          result.payload
-        );
-
-        return result.payload;
-      }
-
-      errors.push(
-        `${attempt.name}: ${
-          result.error ||
-          "empty response"
-        }`
-      );
-    } catch (
-      error
-    ) {
-      errors.push(
-        `${attempt.name}: ${
-          error?.message ||
-          "request failed"
-        }`
-      );
-    }
-  }
-
-  /*
-   * Final fallback:
-   * POST the wallet address.
-   *
-   * The query value is intentionally unique so our
-   * backend proxy does not reuse a cached POST response.
-   */
-  try {
-    const response =
-      await proxyFetch(
-        `${PORTFOLIO_ENDPOINT}?namRequest=walletAddress`,
-        {
-          method:
-            "POST",
-
-          cache:
-            "no-store",
-
-          headers: {
-            Accept:
-              "application/json",
-
-            "Content-Type":
-              "application/json",
-          },
-
-          body:
-            JSON.stringify({
-              walletAddress,
-            }),
-        }
-      );
-
-    const result =
-      await parseResponse(
-        response
-      );
-
-    if (
-      result.ok &&
-      hasMeaningfulPayload(
-        result.payload
-      )
-    ) {
-      console.log(
-        "[Loopscale] Portfolio endpoint succeeded with POST walletAddress:",
-        result.payload
-      );
-
-      return result.payload;
-    }
-
-    errors.push(
-      `POST: ${
-        result.error ||
-        "empty response"
-      }`
-    );
-  } catch (
-    error
-  ) {
-    errors.push(
-      `POST: ${
-        error?.message ||
-        "request failed"
-      }`
-    );
-  }
-
-  throw new Error(
-    `Loopscale portfolio endpoint returned no positions. ${errors.join(
-      " | "
-    )}`
-  );
-}
-
-function scorePositionObject(
-  object,
-  path
-) {
-  if (
-    !object ||
-    typeof object !==
-      "object"
-  ) {
-    return 0;
-  }
-
-  const json =
-    safeStringify(
-      object
-    )
-      .toLowerCase();
-
-  const pathText =
-    path
-      .join(" ")
-      .toLowerCase();
-
-  let score =
-    0;
-
-  if (
-    json.includes(
-      "onyc"
-    )
-  ) {
-    score +=
-      100;
-  }
-
-  if (
-    json.includes(
-      "usdc"
-    )
-  ) {
-    score +=
-      80;
-  }
-
-  if (
-    json.includes(
-      "loopscale"
-    )
-  ) {
-    score +=
-      60;
-  }
-
-  if (
-    json.includes(
-      "loop"
-    )
-  ) {
-    score +=
-      20;
-  }
-
-  if (
-    (
-      json.includes(
-        "suppl"
-      ) ||
-      json.includes(
-        "collateral"
-      )
-    ) &&
-    (
-      json.includes(
-        "borrow"
-      ) ||
-      json.includes(
-        "debt"
-      )
-    )
-  ) {
-    score +=
-      60;
-  }
-
-  if (
-    json.includes(
-      "positionvalue"
-    ) ||
-    json.includes(
-      "netpositionvalue"
-    ) ||
-    json.includes(
-      "equity"
-    )
-  ) {
-    score +=
-      30;
-  }
-
-  if (
-    json.includes(
-      "pnl"
-    )
-  ) {
-    score +=
-      15;
-  }
-
-  if (
-    json.includes(
-      "apy"
-    )
-  ) {
-    score +=
-      15;
-  }
-
-  if (
-    pathText.includes(
-      "position"
-    )
-  ) {
-    score +=
-      10;
-  }
-
-  return score;
-}
-
-function findPositionObject(
-  payload
-) {
-  const records =
-    collectObjects(
-      payload
-    );
-
-  const scored =
-    records
-      .map(
-        (
-          record
-        ) => ({
-          ...record,
-
-          score:
-            scorePositionObject(
-              record.value,
-              record.path
-            ),
-
-          size:
-            safeStringify(
-              record.value
-            ).length,
-        })
-      )
-      .filter(
-        (
-          record
-        ) =>
-          record.score >
-          0
-      )
-      .sort(
-        (
-          a,
-          b
-        ) => {
-          if (
-            b.score !==
-            a.score
-          ) {
-            return (
-              b.score -
-              a.score
-            );
-          }
-
-          /*
-           * Prefer the smaller matching object.
-           * That's usually the actual position rather
-           * than the entire API response.
-           */
-          return (
-            a.size -
-            b.size
-          );
-        }
-      );
-
-  if (
-    scored.length
-  ) {
-    console.log(
-      "[Loopscale] Selected position object:",
-      scored[0]
-        .value
-    );
-
-    return scored[0]
-      .value;
-  }
-
-  return payload;
 }
 
 function candidateSymbolText(
@@ -930,9 +475,6 @@ function findTokenObject(
           return {
             object,
 
-            path:
-              record.path,
-
             score,
           };
         }
@@ -954,8 +496,107 @@ function findTokenObject(
       );
 
   return (
-    scored[0] ||
+    scored[0]
+      ?.object ||
     null
+  );
+}
+
+function findNumericByKeys(
+  root,
+  keys
+) {
+  const wanted =
+    keys.map(
+      normalizeText
+    );
+
+  const records =
+    collectObjects(
+      root
+    ).sort(
+      (
+        a,
+        b
+      ) =>
+        a.path.length -
+        b.path.length
+    );
+
+  for (
+    const record of
+    records
+  ) {
+    if (
+      !record.value ||
+      Array.isArray(
+        record.value
+      )
+    ) {
+      continue;
+    }
+
+    for (
+      const [
+        key,
+        value,
+      ] of Object.entries(
+        record.value
+      )
+    ) {
+      if (
+        !wanted.includes(
+          normalizeText(
+            key
+          )
+        )
+      ) {
+        continue;
+      }
+
+      const number =
+        typeof value ===
+          "string"
+          ? Number(
+              value.replace(
+                /[^0-9.-]/g,
+                ""
+              )
+            )
+          : Number(value);
+
+      if (
+        Number.isFinite(
+          number
+        )
+      ) {
+        return number;
+      }
+    }
+  }
+
+  return null;
+}
+
+function findPercentByKeys(
+  root,
+  keys
+) {
+  const value =
+    findNumericByKeys(
+      root,
+      keys
+    );
+
+  if (
+    value ===
+    null
+  ) {
+    return 0;
+  }
+
+  return toPercent(
+    value
   );
 }
 
@@ -1050,7 +691,7 @@ function extractTokenValue(
 
   if (
     direct !==
-      null
+    null
   ) {
     return toNumber(
       direct
@@ -1067,11 +708,144 @@ function extractTokenValue(
   );
 }
 
-function findNumericByKeys(
+function findPositionObject(
+  payload
+) {
+  const records =
+    collectObjects(
+      payload
+    );
+
+  const scored =
+    records
+      .map(
+        (
+          record
+        ) => {
+          const json =
+            safeStringify(
+              record.value
+            )
+              .toLowerCase();
+
+          let score =
+            0;
+
+          if (
+            json.includes(
+              "onyc"
+            )
+          ) {
+            score +=
+              100;
+          }
+
+          if (
+            json.includes(
+              "usdc"
+            )
+          ) {
+            score +=
+              80;
+          }
+
+          if (
+            json.includes(
+              "loop"
+            )
+          ) {
+            score +=
+              40;
+          }
+
+          if (
+            json.includes(
+              "collateral"
+            )
+          ) {
+            score +=
+              30;
+          }
+
+          if (
+            json.includes(
+              "borrow"
+            )
+          ) {
+            score +=
+              30;
+          }
+
+          if (
+            json.includes(
+              "apy"
+            )
+          ) {
+            score +=
+              15;
+          }
+
+          if (
+            json.includes(
+              "pnl"
+            )
+          ) {
+            score +=
+              15;
+          }
+
+          return {
+            value:
+              record.value,
+
+            score,
+
+            size:
+              json.length,
+          };
+        }
+      )
+      .filter(
+        (
+          record
+        ) =>
+          record.score >
+          0
+      )
+      .sort(
+        (
+          a,
+          b
+        ) => {
+          if (
+            b.score !==
+            a.score
+          ) {
+            return (
+              b.score -
+              a.score
+            );
+          }
+
+          return (
+            a.size -
+            b.size
+          );
+        }
+      );
+
+  return (
+    scored[0]
+      ?.value ||
+    payload
+  );
+}
+
+function findStringByKeys(
   root,
   keys
 ) {
-  const normalizedKeys =
+  const wanted =
     keys.map(
       normalizeText
     );
@@ -1080,18 +854,6 @@ function findNumericByKeys(
     collectObjects(
       root
     );
-
-  /*
-   * Shallow objects first.
-   */
-  records.sort(
-    (
-      a,
-      b
-    ) =>
-      a.path.length -
-      b.path.length
-  );
 
   for (
     const record of
@@ -1114,63 +876,22 @@ function findNumericByKeys(
         record.value
       )
     ) {
-      const normalizedKey =
-        normalizeText(
-          key
-        );
-
       if (
-        !normalizedKeys.includes(
-          normalizedKey
-        )
-      ) {
-        continue;
-      }
-
-      const number =
+        wanted.includes(
+          normalizeText(
+            key
+          )
+        ) &&
         typeof value ===
-          "string"
-          ? Number(
-              value.replace(
-                /[^0-9.-]/g,
-                ""
-              )
-            )
-          : Number(value);
-
-      if (
-        Number.isFinite(
-          number
-        )
+          "string" &&
+        value
       ) {
-        return number;
+        return value;
       }
     }
   }
 
   return null;
-}
-
-function findPercentByKeys(
-  root,
-  keys
-) {
-  const value =
-    findNumericByKeys(
-      root,
-      keys
-    );
-
-  if (
-    value ===
-    null
-  ) {
-    return 0;
-  }
-
-  return toPercent(
-    value
-  );
 }
 
 function getTokenApy(
@@ -1212,71 +933,6 @@ function getTokenApy(
   );
 }
 
-function findStringByKeys(
-  root,
-  keys
-) {
-  const wanted =
-    keys.map(
-      normalizeText
-    );
-
-  const records =
-    collectObjects(
-      root
-    ).sort(
-      (
-        a,
-        b
-      ) =>
-        a.path.length -
-        b.path.length
-    );
-
-  for (
-    const record of
-    records
-  ) {
-    if (
-      !record.value ||
-      Array.isArray(
-        record.value
-      )
-    ) {
-      continue;
-    }
-
-    for (
-      const [
-        key,
-        value,
-      ] of Object.entries(
-        record.value
-      )
-    ) {
-      if (
-        !wanted.includes(
-          normalizeText(
-            key
-          )
-        )
-      ) {
-        continue;
-      }
-
-      if (
-        typeof value ===
-          "string" &&
-        value
-      ) {
-        return value;
-      }
-    }
-  }
-
-  return null;
-}
-
 function buildSnapshot(
   payload,
   walletAddress
@@ -1286,29 +942,19 @@ function buildSnapshot(
       payload
     );
 
-  const onycRecord =
+  const onyc =
     findTokenObject(
       position,
       "ONyc",
       "supplied"
     );
 
-  const usdcRecord =
+  const usdc =
     findTokenObject(
       position,
       "USDC",
       "borrowed"
     );
-
-  const onyc =
-    onycRecord
-      ?.object ||
-    null;
-
-  const usdc =
-    usdcRecord
-      ?.object ||
-    null;
 
   const suppliedOnyc =
     extractTokenAmount(
@@ -1340,7 +986,7 @@ function buildSnapshot(
       usdc
     );
 
-  const directPositionValue =
+  const directValue =
     findNumericByKeys(
       position,
       [
@@ -1349,8 +995,8 @@ function buildSnapshot(
         "netValueUsd",
         "equityUsd",
         "equityValueUsd",
-        "totalValueUsd",
         "portfolioValueUsd",
+        "totalValueUsd",
       ]
     );
 
@@ -1362,23 +1008,23 @@ function buildSnapshot(
     );
 
   const positionValueUsd =
-    directPositionValue !==
+    directValue !==
       null &&
-    directPositionValue >
+    directValue >
       0
-      ? directPositionValue
+      ? directValue
       : calculatedValue;
 
   if (
     !(positionValueUsd > 0)
   ) {
     console.log(
-      "[Loopscale] Unparsed portfolio payload:",
+      "[Loopscale] Raw unparsed portfolio:",
       payload
     );
 
     throw new Error(
-      "Loopscale returned the portfolio position, but NAm could not determine its USD value."
+      "Loopscale returned data, but NAm could not determine the position value."
     );
   }
 
@@ -1389,9 +1035,9 @@ function buildSnapshot(
         "pnlUsd",
         "usdPnl",
         "pnlValue",
+        "netPnlUsd",
         "profitLossUsd",
         "profitUsd",
-        "netPnlUsd",
       ]
     );
 
@@ -1425,10 +1071,6 @@ function buildSnapshot(
       "borrowed"
     );
 
-  /*
-   * If Loopscale does not give a direct net APY,
-   * calculate it from the supplied and borrowed legs.
-   */
   if (
     !(netApy > 0) &&
     positionValueUsd >
@@ -1473,16 +1115,14 @@ function buildSnapshot(
   }
 
   /*
-   * Equity-equivalent ONyc.
-   *
-   * The actual supplied ONyc is stored separately.
+   * Equity-equivalent ONyc balance.
    */
   const quantity =
     onycPrice >
       0
       ? positionValueUsd /
         onycPrice
-      : 0;
+      : suppliedOnyc;
 
   const health =
     findNumericByKeys(
@@ -1508,28 +1148,12 @@ function buildSnapshot(
     ) ||
     "loopscale-onyc";
 
-  const startTime =
-    findStringByKeys(
-      position,
-      [
-        "startTime",
-        "createdAt",
-        "openedAt",
-        "created_at",
-      ]
-    ) ||
-    LOOPSCALE_ONYC_STARTED_AT;
-
   const yearlyNetIncome =
     positionValueUsd *
     (
       netApy /
       100
     );
-
-  const dailyNetYieldUsd =
-    yearlyNetIncome /
-    365;
 
   return {
     walletAddress,
@@ -1557,11 +1181,13 @@ function buildSnapshot(
     netApy,
 
     health:
-      health !== null
+      health !==
+      null
         ? health
         : 0,
 
-    startTime,
+    startTime:
+      LOOPSCALE_ONYC_STARTED_AT,
 
     collateralUsd:
       suppliedUsd,
@@ -1578,7 +1204,9 @@ function buildSnapshot(
         pnlUsd
       ),
 
-    dailyNetYieldUsd,
+    dailyNetYieldUsd:
+      yearlyNetIncome /
+      365,
 
     suppliedApy,
 
@@ -1613,11 +1241,6 @@ export async function getLoopscaleOnycSnapshot(
       walletAddress
     );
 
-  console.log(
-    "[Loopscale] Earn portfolio raw response:",
-    payload
-  );
-
   const snapshot =
     buildSnapshot(
       payload,
@@ -1625,7 +1248,7 @@ export async function getLoopscaleOnycSnapshot(
     );
 
   console.log(
-    "[Loopscale] Live ONyc Loop snapshot:",
+    "[Loopscale] Live ONyc Loop:",
     snapshot
   );
 
