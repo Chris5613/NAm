@@ -13,6 +13,7 @@ import urllib.request
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from starlette.requests import ClientDisconnect
 
 from ..auth import current_user
 from ..models import User
@@ -68,7 +69,16 @@ def _provider_config() -> dict[str, dict[str, Any]]:
         },
     }
 
-
+    except TimeoutError as error:
+        raise HTTPException(
+            status_code=504,
+            detail="The upstream service took too long to respond. Please try again.",
+        ) from error
+    except ClientDisconnect as error:
+        raise HTTPException(
+            status_code=499,
+            detail="Client disconnected before the request could be completed.",
+        ) from error
 def _fetch(
     url: str,
     headers: dict[str, str],
@@ -158,11 +168,17 @@ async def public_mlb_proxy(
     ):
         return cached[1]
 
+try:
     body = (
         await request.body()
         if request.method == "POST"
         else None
     )
+except ClientDisconnect as error:
+    raise HTTPException(
+        status_code=499,
+        detail="Request cancelled by client.",
+    ) from error
 
     data = _fetch(
         url,
