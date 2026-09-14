@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
 import { projectsApi } from "@/lib/api";
 import { getRatexPtonycSnapshot } from "@/lib/ratexYieldSync";
+import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ const MONTHLY_BACKFILL_KEY = "yield_monthly_earnings_backfill_v1";
 const LULO_MONTHLY_BASELINE_KEY = "yield_lulo_monthly_baselines_v1";
 const MONTHLY_SNAPSHOT_KEY = "yield_monthly_snapshots_v1";
 const RATEX_HISTORY_KEY = "yield_ratex_position_history_v1";
+const LOOPSCALE_HISTORY_KEY = "yield_loopscale_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
@@ -133,6 +135,31 @@ function loadRatexHistory() {
 function saveRatexHistory(value) {
   saveObject(
     RATEX_HISTORY_KEY,
+    value
+  );
+}
+
+function loadLoopscaleHistory() {
+  const parsed =
+    readObject(
+      LOOPSCALE_HISTORY_KEY
+    );
+
+  return {
+    positions:
+      parsed.positions &&
+      typeof parsed.positions ===
+        "object"
+        ? parsed.positions
+        : {},
+  };
+}
+
+function saveLoopscaleHistory(
+  value
+) {
+  saveObject(
+    LOOPSCALE_HISTORY_KEY,
     value
   );
 }
@@ -949,6 +976,8 @@ function getProjectIncomeLogo(
       "salad-project",
     unetwork:
       "unetwork-project",
+    loopscale:
+      "loopscale-project",
   };
 
   const fixedKey =
@@ -1978,6 +2007,275 @@ function createRatexProjectCard(
   };
 }
 
+
+function getLoopscalePositionKey(
+  snapshot
+) {
+  return String(
+    snapshot?.loanAddress ||
+      "loopscale-onyc"
+  );
+}
+
+function updateLoopscaleHistoryFromSnapshot(
+  history,
+  snapshot
+) {
+  if (
+    !snapshot ||
+    !(
+      Number(
+        snapshot.positionValueUsd
+      ) >
+      0
+    )
+  ) {
+    return history;
+  }
+
+  const positionKey =
+    getLoopscalePositionKey(
+      snapshot
+    );
+
+  const currentMonth =
+    getCurrentMonthKey();
+
+  const startMonth =
+    getMonthKey(
+      snapshot.startTime
+    );
+
+  const pnlUsd =
+    Number(
+      snapshot.pnlUsd
+    ) || 0;
+
+  const existing =
+    history?.positions?.[
+      positionKey
+    ] || {};
+
+  const monthlyEarnings = {
+    ...(
+      existing.monthlyEarnings ||
+      {}
+    ),
+  };
+
+  const monthBaselines = {
+    ...(
+      existing.monthBaselines ||
+      {}
+    ),
+  };
+
+  if (
+    !Number.isFinite(
+      Number(
+        monthBaselines[
+          currentMonth
+        ]
+      )
+    )
+  ) {
+    /*
+     * The position was opened this month, so its current Loopscale
+     * P&L is this month's income. For a position discovered in a
+     * later month, start from the P&L at discovery instead.
+     */
+    monthBaselines[
+      currentMonth
+    ] =
+      startMonth ===
+      currentMonth
+        ? 0
+        : pnlUsd;
+  }
+
+  const baseline =
+    Number(
+      monthBaselines[
+        currentMonth
+      ]
+    ) || 0;
+
+  monthlyEarnings[
+    currentMonth
+  ] =
+    Number(
+      Math.max(
+        0,
+        pnlUsd -
+          baseline
+      ).toFixed(
+        8
+      )
+    );
+
+  return {
+    ...history,
+
+    positions: {
+      ...(
+        history?.positions ||
+        {}
+      ),
+
+      [positionKey]: {
+        ...existing,
+
+        key:
+          positionKey,
+
+        loanAddress:
+          snapshot.loanAddress ||
+          positionKey,
+
+        asset:
+          snapshot.asset ||
+          "ONyc",
+
+        startTime:
+          snapshot.startTime ||
+          existing.startTime ||
+          null,
+
+        lastPnlUsd:
+          pnlUsd,
+
+        lastValueUsd:
+          Number(
+            snapshot.positionValueUsd
+          ) || 0,
+
+        lastApy:
+          Number(
+            snapshot.netApy
+          ) || 0,
+
+        lastSyncedAt:
+          snapshot.syncedAt ||
+          new Date().toISOString(),
+
+        monthBaselines,
+
+        monthlyEarnings,
+      },
+    },
+  };
+}
+
+function createLoopscaleProjectCard(
+  snapshot
+) {
+  if (
+    !snapshot ||
+    !(
+      Number(
+        snapshot.positionValueUsd
+      ) >
+      0
+    )
+  ) {
+    return null;
+  }
+
+  const positionValueUsd =
+    Number(
+      snapshot.positionValueUsd
+    ) || 0;
+
+  const quantity =
+    Number(
+      snapshot.quantity
+    ) || 0;
+
+  const priceUsd =
+    Number(
+      snapshot.priceUsd
+    ) ||
+    (
+      quantity >
+      0
+        ? positionValueUsd /
+          quantity
+        : 0
+    );
+
+  const netApy =
+    Number(
+      snapshot.netApy
+    ) || 0;
+
+  const pnlUsd =
+    Number(
+      snapshot.pnlUsd
+    ) || 0;
+
+  const asset = {
+    id:
+      `loopscale-${getLoopscalePositionKey(
+        snapshot
+      )}`,
+
+    asset:
+      "ONyc",
+
+    allocationSymbol:
+      "ONyc",
+
+    strategy:
+      "Loop",
+
+    balance:
+      positionValueUsd,
+
+    quantity,
+
+    price:
+      priceUsd,
+
+    apy:
+      netApy,
+
+    sourceLabel:
+      "Loopscale",
+  };
+
+  return {
+    id:
+      "loopscale-project",
+
+    platform:
+      "Loopscale",
+
+    autoSynced:
+      true,
+
+    totalBalance:
+      positionValueUsd,
+
+    weightedApy:
+      netApy,
+
+    /*
+     * Loopscale's pnlUsd is flow-adjusted by its API, so deposits
+     * and withdrawals do not get counted as earnings.
+     */
+    earned:
+      pnlUsd,
+
+    lastSyncedAt:
+      snapshot.syncedAt ||
+      null,
+
+    assets: [
+      asset,
+    ],
+  };
+}
+
 function groupManualPositions(
   positions
 ) {
@@ -2528,6 +2826,7 @@ function updateRatexHistoryFromSnapshot(
 function buildProjectIncome(
   luloProjects,
   ratexHistory,
+  loopscaleHistory,
   saladTracker,
   monthlyBackfills,
   rollerCoinTracker,
@@ -2701,6 +3000,31 @@ function buildProjectIncome(
           addEarning(
             monthKey,
             "RateX",
+            amount
+          );
+        }
+      );
+    }
+  );
+
+  Object.values(
+    loopscaleHistory?.positions ||
+      {}
+  ).forEach(
+    (
+      position
+    ) => {
+      Object.entries(
+        position.monthlyEarnings ||
+          {}
+      ).forEach(
+        ([
+          monthKey,
+          amount,
+        ]) => {
+          addEarning(
+            monthKey,
+            "Loopscale",
             amount
           );
         }
@@ -3117,6 +3441,19 @@ export default function YieldFarmingPage() {
     loadRatexHistory
   );
 
+
+  const [
+    loopscaleSnapshot,
+    setLoopscaleSnapshot,
+  ] = useState(null);
+
+  const [
+    loopscaleHistory,
+    setLoopscaleHistory,
+  ] = useState(
+    loadLoopscaleHistory
+  );
+
   const [
     saladTracker,
     setSaladTracker,
@@ -3317,6 +3654,18 @@ export default function YieldFarmingPage() {
     },
     [
       ratexHistory,
+    ]
+  );
+
+
+  useEffect(
+    () => {
+      saveLoopscaleHistory(
+        loopscaleHistory
+      );
+    },
+    [
+      loopscaleHistory,
     ]
   );
 
@@ -4487,6 +4836,45 @@ export default function YieldFarmingPage() {
     ]
   );
 
+
+  useEffect(
+    () => {
+      if (
+        !loopscaleSnapshot
+      ) {
+        return;
+      }
+
+      setLoopscaleHistory(
+        (
+          current
+        ) => {
+          const next =
+            updateLoopscaleHistoryFromSnapshot(
+              current,
+              loopscaleSnapshot
+            );
+
+          if (
+            JSON.stringify(
+              next
+            ) ===
+            JSON.stringify(
+              current
+            )
+          ) {
+            return current;
+          }
+
+          return next;
+        }
+      );
+    },
+    [
+      loopscaleSnapshot,
+    ]
+  );
+
   const importSaladPayload =
     useCallback(
       (payload) => {
@@ -5605,6 +5993,29 @@ export default function YieldFarmingPage() {
           );
         }
 
+        try {
+          const snapshot =
+            await getLoopscaleOnycSnapshot();
+
+          setLoopscaleSnapshot(
+            snapshot
+          );
+        } catch (
+          error
+        ) {
+          console.error(
+            "Yield page Loopscale sync failed:",
+            error
+          );
+
+          errors.push(
+            `Loopscale: ${
+              error?.message ||
+              "sync failed"
+            }`
+          );
+        }
+
         requestSaladLatest();
         requestUnetworkLatest();
 
@@ -5692,6 +6103,11 @@ export default function YieldFarmingPage() {
             ratexHistory
           );
 
+        const loopscaleProject =
+          createLoopscaleProjectCard(
+            loopscaleSnapshot
+          );
+
         const manualProjects =
           groupManualPositions(
             manualPositions
@@ -5706,6 +6122,13 @@ export default function YieldFarmingPage() {
                 ]
               : []
           ),
+          ...(
+            loopscaleProject
+              ? [
+                  loopscaleProject,
+                ]
+              : []
+          ),
           ...manualProjects,
         ];
       },
@@ -5713,6 +6136,7 @@ export default function YieldFarmingPage() {
         luloProjects,
         ratexSnapshot,
         ratexHistory,
+        loopscaleSnapshot,
         manualPositions,
       ]
     );
@@ -5853,6 +6277,7 @@ export default function YieldFarmingPage() {
         buildProjectIncome(
           luloProjects,
           ratexHistory,
+          loopscaleHistory,
           saladTracker,
           monthlyBackfills,
           rollerCoinTracker,
@@ -5861,6 +6286,7 @@ export default function YieldFarmingPage() {
       [
         luloProjects,
         ratexHistory,
+        loopscaleHistory,
         saladTracker,
         monthlyBackfills,
         rollerCoinTracker,
