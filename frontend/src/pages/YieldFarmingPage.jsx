@@ -6295,26 +6295,58 @@ export default function YieldFarmingPage() {
       ]
     );
 
-  const summary =
-    useMemo(
-      () => {
-        const portfolioBalance =
-          allAssets.reduce(
+const summary =
+  useMemo(
+    () => {
+      const portfolioBalance =
+        allAssets.reduce(
+          (
+            sum,
+            asset
+          ) =>
+            sum +
             (
-              sum,
-              asset
+              Number(
+                asset.balance
+              ) || 0
+            ),
+          0
+        );
+
+      const luloAnnualYield =
+        projectCards
+          .filter(
+            (project) =>
+              String(
+                project?.platform || ""
+              ).toLowerCase() ===
+              "lulo"
+          )
+          .reduce(
+            (
+              total,
+              project
             ) =>
-              sum +
+              total +
               (
                 Number(
-                  asset.balance
+                  project?.luloFiveDayAverageUsd
                 ) || 0
-              ),
+              ) *
+                365,
             0
           );
 
-        const annualYield =
-          allAssets.reduce(
+      const nonLuloAnnualYield =
+        allAssets
+          .filter(
+            (asset) =>
+              String(
+                asset?.sourceLabel || ""
+              ).toLowerCase() !==
+              "lulo"
+          )
+          .reduce(
             (
               sum,
               asset
@@ -6322,115 +6354,114 @@ export default function YieldFarmingPage() {
               sum +
               (
                 Number(
-                  asset.balance
+                  asset?.balance
                 ) || 0
               ) *
                 (
                   (
                     Number(
-                      asset.apy
+                      asset?.apy
                     ) || 0
                   ) /
                   100
                 ),
             0
-          ) +
-          365 +
-          (
-            Number(
-              saladStats?.estimatedYearlyUsd
-            ) || 0
-          ) +
-          (
-            Number(
-              unetworkStats?.estimatedYearlyUsd
-            ) || 0
           );
 
-        const weightedApy =
-          portfolioBalance >
-          0
-            ? allAssets.reduce(
+      const annualYield =
+        nonLuloAnnualYield +
+        luloAnnualYield +
+        365 +
+        1.2 * 365 +
+        (
+          Number(
+            unetworkStats?.estimatedYearlyUsd
+          ) || 0
+        );
+
+      const weightedApy =
+        portfolioBalance > 0
+          ? allAssets.reduce(
+              (
+                sum,
+                asset
+              ) =>
+                sum +
                 (
-                  sum,
-                  asset
-                ) =>
-                  sum +
+                  Number(
+                    asset.balance
+                  ) || 0
+                ) *
                   (
                     Number(
-                      asset.balance
+                      asset.apy
                     ) || 0
-                  ) *
-                    (
-                      Number(
-                        asset.apy
-                      ) || 0
-                    ),
-                0
-              ) /
-              portfolioBalance
-            : 0;
+                  ),
+              0
+            ) /
+            portfolioBalance
+          : 0;
 
-        const totalEarned =
-          projectCards.reduce(
-            (
-              sum,
-              project
-            ) =>
-              sum +
-              (
-                Number(
-                  project.earned
-                ) || 0
-              ),
-            0
-          ) +
+      const totalEarned =
+        projectCards.reduce(
           (
-            Number(
-              rollerCoinStats?.lifetimeUsd
-            ) || 0
-          ) +
-          (
-            Number(
-              saladStats?.lifetimeUsd
-            ) || 0
-          ) +
-          (
-            Number(
-              unetworkStats?.lifetimeUsd
-            ) || 0
-          );
-
-        return {
-          portfolioBalance,
-          weightedApy,
-          annualYield,
-          activePositions:
-            projectCards.length +
-            1 +
+            sum,
+            project
+          ) =>
+            sum +
             (
-              saladTracker?.initialized
-                ? 1
-                : 0
-            ) +
-            (
-              unetworkTracker?.initialized
-                ? 1
-                : 0
+              Number(
+                project.earned
+              ) || 0
             ),
-          totalEarned,
-        };
-      },
-      [
-        allAssets,
-        projectCards,
-        rollerCoinStats,
-        saladStats,
-        saladTracker,
-        unetworkStats,
-        unetworkTracker,
-      ]
-    );
+          0
+        ) +
+        (
+          Number(
+            rollerCoinStats?.lifetimeUsd
+          ) || 0
+        ) +
+        (
+          Number(
+            saladStats?.lifetimeUsd
+          ) || 0
+        ) +
+        (
+          Number(
+            unetworkStats?.lifetimeUsd
+          ) || 0
+        );
+
+      return {
+        portfolioBalance,
+        weightedApy,
+        annualYield,
+        activePositions:
+          projectCards.length +
+          1 +
+          (
+            saladTracker?.initialized
+              ? 1
+              : 0
+          ) +
+          (
+            unetworkTracker?.initialized
+              ? 1
+              : 0
+          ),
+        totalEarned,
+      };
+    },
+    [
+      allAssets,
+      projectCards,
+      rollerCoinStats,
+      saladStats,
+      saladTracker,
+      unetworkStats,
+      unetworkTracker,
+    ]
+  );
 
   function deletePosition(
     id
