@@ -6886,6 +6886,24 @@ function getLuloFiveDayAverage(project) {
   const todayKey = getTodayKey();
   const totalsByDay = new Map();
 
+  const balance =
+    Number(project?.totalBalance) ||
+    Number(project?.lulo_total_balance_usd) ||
+    0;
+
+  const apy =
+    Number(project?.weightedApy) ||
+    Number(project?.lulo_weighted_apy) ||
+    0;
+
+  const expectedDailyIncome =
+    balance * (apy / 100) / 365;
+
+  const maximumValidDailyIncome = Math.max(
+    2,
+    expectedDailyIncome * 8 + 0.25
+  );
+
   (Array.isArray(project?.transactions)
     ? project.transactions
     : []
@@ -6917,22 +6935,23 @@ function getLuloFiveDayAverage(project) {
     );
   });
 
-  const lastFiveDays = [...totalsByDay.entries()]
+  const validDays = [...totalsByDay.entries()]
+    .filter(([, amount]) => amount <= maximumValidDailyIncome)
     .sort(([firstDate], [secondDate]) =>
       secondDate.localeCompare(firstDate)
     )
     .slice(0, 5);
 
-  if (!lastFiveDays.length) {
+  if (!validDays.length) {
     return 0;
   }
 
-  const totalEarned = lastFiveDays.reduce(
+  const totalEarned = validDays.reduce(
     (sum, [, amount]) => sum + amount,
     0
   );
 
-  return totalEarned / lastFiveDays.length;
+  return totalEarned / validDays.length;
 }
 
 function getProjectProjections(project) {
