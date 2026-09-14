@@ -429,7 +429,8 @@ const [
   accountResult,
   poolsResult,
   customAccountResult,
-  performanceResult,
+  v0PerformanceResult,
+  v1PerformanceResult,
 ] = await Promise.allSettled([
   getJson(
     "v1/account.getAccount",
@@ -455,6 +456,16 @@ const [
       groupBy: "day",
     }
   ),
+
+  getJson(
+    "v1/account.performance.getPerformance",
+    walletAddress,
+    {
+      timeframe: "30D",
+      timezone: "UTC",
+      groupBy: "day",
+    }
+  ),
 ]);
 
   const account =
@@ -471,8 +482,21 @@ const [
     fulfilledValue(
       customAccountResult
     );
-    const performance =
-  fulfilledValue(performanceResult);
+    const v0Performance =
+  fulfilledValue(v0PerformanceResult);
+
+const v1Performance =
+  fulfilledValue(v1PerformanceResult);
+
+const performance = [
+  ...(Array.isArray(v0Performance)
+    ? v0Performance
+    : []),
+
+  ...(Array.isArray(v1Performance)
+    ? v1Performance
+    : []),
+];
 
 const startOfTodayUtc = new Date();
 startOfTodayUtc.setUTCHours(
@@ -482,11 +506,51 @@ startOfTodayUtc.setUTCHours(
   0
 );
 
-const dailyPerformance = (
-  Array.isArray(performance)
-    ? performance
-    : []
-)
+const performanceByDay = new Map();
+
+[
+  ...(Array.isArray(v0Performance)
+    ? v0Performance
+    : []),
+
+  ...(Array.isArray(v1Performance)
+    ? v1Performance
+    : []),
+].forEach((row) => {
+  const date = new Date(
+    row.fromTimestamp
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  const amount = Object.values(
+    row?.balanceChanges || {}
+  ).reduce(
+    (total, token) =>
+      total +
+      (Number(token?.balance_change) || 0),
+    0
+  );
+
+  const previous =
+    performanceByDay.get(date) || {
+      date,
+      amount: 0,
+      fromTimestamp:
+        Number(row.fromTimestamp) || 0,
+      toTimestamp:
+        Number(row.toTimestamp) || 0,
+    };
+
+  performanceByDay.set(date, {
+    ...previous,
+    amount: previous.amount + amount,
+  });
+});
+
+const dailyPerformance = [
+  ...performanceByDay.values(),
+].filter((row) => row.amount > 0)
   .map((row) => {
     const amount = Object.values(
       row?.balanceChanges || {}
