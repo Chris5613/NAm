@@ -57,6 +57,20 @@ function getUsdPrice(
   );
 }
 
+function isValidYtPrice(
+  value
+) {
+  const number =
+    toNumber(
+      value
+    );
+
+  return (
+    number > 0 &&
+    number < 1
+  );
+}
+
 function buildRatexCid() {
   const hex =
     "0123456789abcdef";
@@ -206,6 +220,19 @@ function normalizeRatexApy(
   return raw;
 }
 
+function getSecurityId(
+  trade
+) {
+  return String(
+    trade?.SecurityID ??
+      trade?.securityId ??
+      trade?.symbol ??
+      ""
+  )
+    .trim()
+    .toLowerCase();
+}
+
 async function getRatexLiveMarket() {
   const result =
     await ratexRpc(
@@ -226,7 +253,15 @@ async function getRatexLiveMarket() {
             result?.data
           )
           ? result.data
-          : [];
+          : (
+              result &&
+              typeof result ===
+                "object"
+            )
+            ? Object.values(
+                result
+              )
+            : [];
 
   if (
     !trades.length
@@ -236,124 +271,185 @@ async function getRatexLiveMarket() {
     );
   }
 
-  const exactMarket =
-    trades.find(
+  const exactId =
+    RATEX_SECURITY_ID.toLowerCase();
+
+  let candidates =
+    trades.filter(
       (
         trade
       ) =>
-        String(
-          trade?.SecurityID ??
-            ""
-        )
-          .trim()
-          .toLowerCase() ===
-        RATEX_SECURITY_ID.toLowerCase()
+        getSecurityId(
+          trade
+        ) === exactId
     );
-
-  const fallbackMarket =
-    trades.find(
-      (
-        trade
-      ) => {
-        const id =
-          String(
-            trade?.SecurityID ??
-              ""
-          )
-            .trim()
-            .toLowerCase();
-
-        return (
-          id.includes(
-            "onyc"
-          ) &&
-          id.endsWith(
-            "-2609"
-          )
-        );
-      }
-    );
-
-  const market =
-    exactMarket ||
-    fallbackMarket;
 
   if (
-    !market
+    !candidates.length
+  ) {
+    candidates =
+      trades.filter(
+        (
+          trade
+        ) => {
+          const id =
+            getSecurityId(
+              trade
+            );
+
+          return (
+            id.includes(
+              "onyc"
+            ) &&
+            id.endsWith(
+              "-2609"
+            )
+          );
+        }
+      );
+  }
+
+  if (
+    !candidates.length
   ) {
     throw new Error(
       `RateX could not find ${RATEX_SECURITY_ID}.`
     );
   }
 
-  const ytPrice =
+  /*
+   * Prefer the RateX row that actually has a valid
+   * SettlePrice.
+   *
+   * RateX uses SettlePrice for the YT settlement price.
+   * LastPrice is NOT what we want for the displayed
+   * PTONyc valuation.
+   */
+  const market =
+    candidates.find(
+      (
+        trade
+      ) =>
+        isValidYtPrice(
+          trade?.SettlePrice
+        )
+    ) ||
+    candidates.find(
+      (
+        trade
+      ) =>
+        isValidYtPrice(
+          trade?.LastPrice
+        )
+    ) ||
+    candidates[0];
+
+  const settlePrice =
     toNumber(
-      market.LastPrice
+      market?.SettlePrice
     );
 
+  const lastPrice =
+    toNumber(
+      market?.LastPrice
+    );
+
+  let ytPrice =
+    0;
+
+  let marketPriceSource =
+    "none";
+
   if (
-    ytPrice < 0 ||
-    ytPrice >= 1
+    isValidYtPrice(
+      settlePrice
+    )
+  ) {
+    ytPrice =
+      settlePrice;
+
+    marketPriceSource =
+      "ratex_settle_price";
+  } else if (
+    isValidYtPrice(
+      lastPrice
+    )
+  ) {
+    /*
+     * LastPrice is only a fallback.
+     */
+    ytPrice =
+      lastPrice;
+
+    marketPriceSource =
+      "ratex_last_price";
+  }
+
+  if (
+    !(ytPrice > 0)
   ) {
     throw new Error(
-      `RateX returned invalid YT price ${market.LastPrice} for ${RATEX_SECURITY_ID}.`
+      `RateX returned no valid YT price for ${RATEX_SECURITY_ID}.`
     );
   }
 
   /*
-   * RateX's LastPrice is the YT price.
-   *
    * PT + YT = 1
    *
-   * Therefore:
+   * Example:
    *
-   * PT price = 1 - YT price
-   *
-   * DO NOT multiply this by IndexPrice.
-   *
-   * Example from RateX:
    * YT = 0.00615
+   * PT = 1 - 0.00615
    * PT = 0.99385
    */
   const ptPrice =
     1 -
     ytPrice;
 
-  const priceUsd =
-    ptPrice;
+  if (
+    !(ptPrice > 0) ||
+    ptPrice > 1
+  ) {
+    throw new Error(
+      `RateX returned invalid derived PT price ${ptPrice}.`
+    );
+  }
 
   const fixedApy =
     normalizeRatexApy(
-      market.Yield
+      market?.Yield
     );
 
   return {
     securityId:
       String(
-        market.SecurityID ||
+        market?.SecurityID ??
           RATEX_SECURITY_ID
       ),
 
-    priceUsd,
+    priceUsd:
+      ptPrice,
 
     ptPrice,
 
     ytPrice,
 
-    /*
-     * Keep IndexPrice for diagnostics only.
-     * It is NOT used to calculate the PTONyc USD value.
-     */
-    indexPrice:
-      toNumber(
-        market.IndexPrice
-      ),
+    settlePrice,
+
+    lastPrice,
+
+    marketPriceSource,
 
     fixedApy,
 
+    indexPrice:
+      toNumber(
+        market?.IndexPrice
+      ),
+
     availableLiquidity:
       toNumber(
-        market.AvaLiquidity
+        market?.AvaLiquidity
       ),
 
     raw:
@@ -642,6 +738,8 @@ export async function getRatexPtonycSnapshot(
         );
 
       priceSource =
+        liveMarket
+          ?.marketPriceSource ||
         "ratex_live";
     }
 
@@ -669,7 +767,7 @@ export async function getRatexPtonycSnapshot(
   }
 
   /*
-   * Jupiter is only a backup if RateX itself fails.
+   * Jupiter only runs if RateX itself fails.
    */
   if (
     !(priceUsd > 0)
@@ -690,7 +788,7 @@ export async function getRatexPtonycSnapshot(
   }
 
   /*
-   * Absolute last fallback.
+   * Absolute final fallback.
    */
   if (
     !(priceUsd > 0)
@@ -777,6 +875,16 @@ export async function getRatexPtonycSnapshot(
         ?.ytPrice ??
       null,
 
+    ratexSettlePrice:
+      liveMarket
+        ?.settlePrice ??
+      null,
+
+    ratexLastPrice:
+      liveMarket
+        ?.lastPrice ??
+      null,
+
     ratexIndexPrice:
       liveMarket
         ?.indexPrice ??
@@ -788,8 +896,9 @@ export async function getRatexPtonycSnapshot(
       null,
 
     source:
-      priceSource ===
-      "ratex_live"
+      priceSource.startsWith(
+        "ratex_"
+      )
         ? "solana_rpc+ratex_live"
         : "solana_rpc",
 
