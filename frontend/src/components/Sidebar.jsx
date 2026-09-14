@@ -1,12 +1,9 @@
-
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import ImportDataDialog from "@/components/ImportDataDialog";
 import { useAuth } from "@/lib/AuthContext";
 import {
   DollarSign,
-  BarChart3,
-  Bitcoin,
   CircleDollarSign,
   Volleyball,
   ReceiptText,
@@ -18,12 +15,9 @@ import {
 
 const NAV_ITEMS = [
   { path: "/", label: "Net Worth", icon: DollarSign },
-  { path: "/crypto", label: "Crypto", icon: Bitcoin },
   { path: "/yield-farming", label: "Project Income", icon: CircleDollarSign },
   { path: "/spending", label: "Spending", icon: ReceiptText },
 ];
-
-
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
@@ -79,7 +73,6 @@ export default function Sidebar() {
             data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, "-")}`}
           >
             <item.icon className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
-
             {!collapsed && <span>{item.label}</span>}
           </NavLink>
         ))}
@@ -91,6 +84,7 @@ export default function Sidebar() {
             Signed in as <span className="text-foreground">{user.username}</span>
           </p>
         )}
+
         <button
           onClick={() => setImportOpen(true)}
           title={collapsed ? "Import data" : undefined}
@@ -101,6 +95,7 @@ export default function Sidebar() {
           <DatabaseBackup className="h-4 w-4 flex-shrink-0" strokeWidth={1.5} />
           {!collapsed && <span>Import data</span>}
         </button>
+
         <button
           onClick={logout}
           title={collapsed ? "Sign out" : undefined}
