@@ -7190,6 +7190,14 @@ function SaladProjectCard({
     setExpanded,
   ] = useState(false);
 
+  const dailyIncome = 1.2;
+
+const monthlyIncome =
+  dailyIncome * 30.4375;
+
+const yearlyIncome =
+  dailyIncome * 365;
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
       <button
@@ -7252,9 +7260,9 @@ function SaladProjectCard({
           </div>
 
           <IncomeProjection
-            daily={stats?.estimatedDailyUsd}
-            monthly={stats?.estimatedMonthlyUsd}
-            yearly={stats?.estimatedYearlyUsd}
+            daily={dailyIncome}
+            monthly={monthlyIncome}
+            yearly={yearlyIncome}
           />
         </div>
       </button>
@@ -7358,6 +7366,15 @@ function RollerCoinProjectCard({
     setExpanded,
   ] = useState(false);
 
+
+  const dailyIncome = 1;
+
+const monthlyIncome =
+  dailyIncome * 30.4375;
+
+const yearlyIncome =
+  dailyIncome * 365;
+
   return (
     <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
       <button
@@ -7404,6 +7421,8 @@ function RollerCoinProjectCard({
           </div>
         </div>
 
+        <div className="shrink-0 text-right">
+
           <div className="shrink-0 text-right">
             <div className="text-2xl font-semibold tabular-nums">
               {formatCurrency(
@@ -7411,14 +7430,11 @@ function RollerCoinProjectCard({
               )}
             </div>
 
-            <IncomeProjection
-              daily={stats?.todayUsd}
-              monthly={stats?.monthUsd}
-              yearly={
-                (Number(stats?.todayUsd) || 0) *
-                365
-              }
-            />
+<IncomeProjection
+  daily={dailyIncome}
+  monthly={monthlyIncome}
+  yearly={yearlyIncome}
+/>
           </div>
         </div>
       </button>
