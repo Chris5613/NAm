@@ -21,7 +21,6 @@ const NAV_ITEMS = [
   { path: "/crypto", label: "Crypto", icon: Bitcoin },
   { path: "/yield-farming", label: "Project Income", icon: CircleDollarSign },
   { path: "/spending", label: "Spending", icon: ReceiptText },
-  { path: "/cloud", label: "Gamble", icon: Volleyball },
 ];
 
 
