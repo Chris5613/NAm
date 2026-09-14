@@ -33,6 +33,102 @@ const LOOPSCALE_HISTORY_KEY = "yield_loopscale_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
+const LULO_DAILY_HISTORY_KEY = "lulo_daily_earnings_history_v1";
+
+function getDateKey(date = new Date()) {
+  return date.toISOString().slice(0, 10);
+}
+
+function loadLuloDailyHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(LULO_DAILY_HISTORY_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveLuloDailyHistory(history) {
+  localStorage.setItem(LULO_DAILY_HISTORY_KEY, JSON.stringify(history));
+}
+
+function recordLuloDailyEarnings(lifetimeInterestUsd) {
+  const today = getDateKey();
+  const history = loadLuloDailyHistory();
+  const currentLifetime = Number(lifetimeInterestUsd) || 0;
+
+  const lastEntry = history[history.length - 1];
+
+  if (!lastEntry) {
+    const firstHistory = [
+      {
+        date: today,
+        lifetimeInterest: currentLifetime,
+        earned: 0,
+      },
+    ];
+
+    saveLuloDailyHistory(firstHistory);
+    return firstHistory;
+  }
+
+  if (lastEntry.date === today) {
+    const previousLifetime =
+      history.length > 1
+        ? Number(history[history.length - 2].lifetimeInterest) || 0
+        : currentLifetime;
+
+    const updatedHistory = [
+      ...history.slice(0, -1),
+      {
+        date: today,
+        lifetimeInterest: currentLifetime,
+        earned: Math.max(0, currentLifetime - previousLifetime),
+      },
+    ];
+
+    saveLuloDailyHistory(updatedHistory);
+    return updatedHistory;
+  }
+
+  const earnedToday = Math.max(
+    0,
+    currentLifetime - (Number(lastEntry.lifetimeInterest) || 0)
+  );
+
+  const updatedHistory = [
+    ...history,
+    {
+      date: today,
+      lifetimeInterest: currentLifetime,
+      earned: earnedToday,
+    },
+  ].slice(-60);
+
+  saveLuloDailyHistory(updatedHistory);
+  return updatedHistory;
+}
+
+function getLuloFiveDayAverage() {
+  const today = getDateKey();
+
+  const completedDays = loadLuloDailyHistory()
+    .filter((entry) => entry.date !== today)
+    .filter((entry) => Number(entry.earned) >= 0)
+    .slice(-5);
+
+  if (!completedDays.length) {
+    return 0;
+  }
+
+  const total = completedDays.reduce(
+    (sum, entry) => sum + (Number(entry.earned) || 0),
+    0
+  );
+
+  return total / completedDays.length;
+}
+
+recordLuloDailyEarnings(project.lulo_lifetime_interest_usd);
 
 const MONTHLY_TRACKING_START = "2026-09";
 const LULO_SEPTEMBER_2026_OPENING_EARNED = 7.76;
@@ -1588,165 +1684,118 @@ function getRollerCoinStats(
   };
 }
 
-function createLuloProjectCard(
-  project
-) {
+function createLuloProjectCard(project) {
   const assets = [];
 
-  const totalBalance =
-    Number(
-      project.lulo_total_balance_usd
-    ) || 0;
-
-  const usdcBalance =
-    Number(
-      project.lulo_usdc_balance_usd
-    ) || 0;
-
+  const totalBalance = Number(project.lulo_total_balance_usd) || 0;
+  const usdcBalance = Number(project.lulo_usdc_balance_usd) || 0;
   const protectedBalance =
-    Number(
-      project.lulo_protected_balance_usd
-    ) || 0;
+    Number(project.lulo_protected_balance_usd) || 0;
 
   const savedUsdsBalance =
-    Number(
-      project.lulo_usds_balance_usd
-    ) || 0;
+    Number(project.lulo_usds_balance_usd) || 0;
 
-  const derivedUsdsBalance =
-    Math.max(
-      0,
-      totalBalance -
-        usdcBalance -
-        protectedBalance
-    );
+  const derivedUsdsBalance = Math.max(
+    0,
+    totalBalance - usdcBalance - protectedBalance
+  );
 
   const usdsBalance =
-    savedUsdsBalance >
-    0
+    savedUsdsBalance > 0
       ? savedUsdsBalance
       : derivedUsdsBalance;
 
-  if (
-    usdsBalance >
-    0
-  ) {
+  const weightedApy =
+    Number(project.lulo_weighted_apy) || 0;
+
+  const apyDailyIncome =
+    totalBalance * (weightedApy / 100) / 365;
+
+  const fiveDayAverage =
+    Number(project.lulo_five_day_average_usd) || 0;
+
+  const dailyIncome =
+    fiveDayAverage > 0
+      ? fiveDayAverage
+      : apyDailyIncome;
+
+  const monthlyIncome = dailyIncome * 30.4375;
+  const yearlyIncome = dailyIncome * 365;
+
+  if (usdsBalance > 0) {
     assets.push({
       id: `lulo-usds-${project.id}`,
       asset: "USDS",
-      strategy:
-        "Lending",
-      balance:
-        usdsBalance,
-      quantity:
-        usdsBalance,
+      strategy: "Lending",
+      balance: usdsBalance,
+      quantity: usdsBalance,
       price: 1,
       apy:
-        Number(
-          project.lulo_usds_apy
-        ) ||
-        Number(
-          project.lulo_weighted_apy
-        ) ||
+        Number(project.lulo_usds_apy) ||
+        weightedApy ||
         0,
-      sourceLabel:
-        "Lulo",
+      sourceLabel: "Lulo",
     });
   }
 
-  if (
-    usdcBalance >
-    0
-  ) {
+  if (usdcBalance > 0) {
     assets.push({
       id: `lulo-usdc-${project.id}`,
       asset: "USDC",
-      strategy:
-        "Lending",
-      balance:
-        usdcBalance,
-      quantity:
-        usdcBalance,
+      strategy: "Lending",
+      balance: usdcBalance,
+      quantity: usdcBalance,
       price: 1,
       apy:
-        Number(
-          project.lulo_regular_apy
-        ) || 0,
-      sourceLabel:
-        "Lulo",
+        Number(project.lulo_regular_apy) || 0,
+      sourceLabel: "Lulo",
     });
   }
 
-  if (
-    protectedBalance >
-    0
-  ) {
+  if (protectedBalance > 0) {
     assets.push({
       id: `lulo-protected-${project.id}`,
-      asset:
-        "Protected",
-      strategy:
-        "Protected Lending",
-      balance:
-        protectedBalance,
-      quantity:
-        protectedBalance,
+      asset: "Protected",
+      strategy: "Protected Lending",
+      balance: protectedBalance,
+      quantity: protectedBalance,
       price: 1,
       apy:
-        Number(
-          project.lulo_protected_apy
-        ) || 0,
-      sourceLabel:
-        "Lulo",
+        Number(project.lulo_protected_apy) || 0,
+      sourceLabel: "Lulo",
     });
   }
 
-  if (
-    !assets.length &&
-    totalBalance >
-      0
-  ) {
+  if (!assets.length && totalBalance > 0) {
     assets.push({
       id: `lulo-total-${project.id}`,
-      asset:
-        "Stablecoins",
-      strategy:
-        "Lending",
-      balance:
-        totalBalance,
+      asset: "Stablecoins",
+      strategy: "Lending",
+      balance: totalBalance,
       quantity: null,
       price: null,
-      apy:
-        Number(
-          project.lulo_weighted_apy
-        ) || 0,
-      sourceLabel:
-        "Lulo",
+      apy: weightedApy,
+      sourceLabel: "Lulo",
     });
   }
 
   return {
     id: `lulo-project-${project.id}`,
-    platform:
-      "Lulo",
-    autoSynced:
-      true,
+    platform: "Lulo",
+    autoSynced: true,
     totalBalance,
-    weightedApy:
-      Number(
-        project.lulo_weighted_apy
-      ) || 0,
+    weightedApy,
+    dailyIncome,
+    monthlyIncome,
+    yearlyIncome,
     earned:
-      Number(
-        project.lulo_lifetime_interest_usd
-      ) ||
-      Number(
-        project.earned
-      ) ||
+      Number(project.lulo_lifetime_interest_usd) ||
+      Number(project.earned) ||
       0,
     lastSyncedAt:
-      project.lulo_last_synced_at ||
-      null,
+      project.lulo_last_synced_at || null,
+    transactions:
+      project.transactions || [],
     assets,
   };
 }
@@ -6911,10 +6960,77 @@ function IncomeProjection({
   );
 }
 
+function getLuloFiveDayAverage(project) {
+  const todayKey = getTodayKey();
+  const totalsByDay = new Map();
+
+  (Array.isArray(project?.transactions)
+    ? project.transactions
+    : []
+  ).forEach((transaction) => {
+    if (transaction?.source !== "lulo_yield") {
+      return;
+    }
+
+    const dateKey = String(
+      transaction.source_date ||
+        transaction.date ||
+        transaction.created_at ||
+        ""
+    ).slice(0, 10);
+
+    const amount = Number(transaction.amount) || 0;
+
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(dateKey) ||
+      dateKey === todayKey ||
+      amount <= 0
+    ) {
+      return;
+    }
+
+    totalsByDay.set(
+      dateKey,
+      (totalsByDay.get(dateKey) || 0) + amount
+    );
+  });
+
+  const lastFiveDays = [...totalsByDay.entries()]
+    .sort(([firstDate], [secondDate]) =>
+      secondDate.localeCompare(firstDate)
+    )
+    .slice(0, 5);
+
+  if (!lastFiveDays.length) {
+    return 0;
+  }
+
+  const totalEarned = lastFiveDays.reduce(
+    (sum, [, amount]) => sum + amount,
+    0
+  );
+
+  return totalEarned / lastFiveDays.length;
+}
+
 function getProjectProjections(project) {
-  const assets = Array.isArray(
-    project?.assets
-  )
+  const isLulo =
+    String(project?.platform || "").toLowerCase() ===
+    "lulo";
+
+  if (isLulo) {
+    const daily = getLuloFiveDayAverage(project);
+
+    if (daily > 0) {
+      return {
+        daily,
+        monthly: daily * 30.4375,
+        yearly: daily * 365,
+      };
+    }
+  }
+
+  const assets = Array.isArray(project?.assets)
     ? project.assets
     : [];
 
@@ -6991,11 +7107,11 @@ function ProjectCard({
             )}
           </div>
 
-          <IncomeProjection
-            daily={projections.daily}
-            monthly={projections.monthly}
-            yearly={projections.yearly}
-          />
+<IncomeProjection
+  daily={project.dailyIncome}
+  monthly={project.monthlyIncome}
+  yearly={project.yearlyIncome}
+/>
         </div>
       </button>
 
