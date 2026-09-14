@@ -23,7 +23,7 @@ const TOKEN_PROGRAM_ID =
   "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA";
 
 const LAST_KNOWN_PTONYC_PRICE =
-  0.99229;
+  0.99385;
 
 function toNumber(value) {
   const number =
@@ -44,7 +44,9 @@ function getUsdPrice(
       Number(value)
     )
   ) {
-    return Number(value);
+    return Number(
+      value
+    );
   }
 
   return Number(
@@ -192,10 +194,6 @@ function normalizeRatexApy(
     return 0;
   }
 
-  /*
-   * RateX queryTrade returns Yield as a decimal:
-   * 0.1347 = 13.47%.
-   */
   if (
     raw <= 1
   ) {
@@ -305,36 +303,24 @@ async function getRatexLiveMarket() {
   /*
    * RateX's LastPrice is the YT price.
    *
-   * PT + YT = underlying.
+   * PT + YT = 1
+   *
    * Therefore:
    *
-   * PT price = 1 - YT price.
+   * PT price = 1 - YT price
+   *
+   * DO NOT multiply this by IndexPrice.
+   *
+   * Example from RateX:
+   * YT = 0.00615
+   * PT = 0.99385
    */
   const ptPrice =
     1 -
     ytPrice;
 
-  /*
-   * ONyc is USD-denominated.
-   *
-   * RateX exposes IndexPrice for the underlying.
-   * It is normally ~1 for ONyc, but using it means
-   * our USD valuation follows RateX more accurately.
-   */
-  const indexPriceRaw =
-    toNumber(
-      market.IndexPrice
-    );
-
-  const indexPrice =
-    indexPriceRaw >
-    0
-      ? indexPriceRaw
-      : 1;
-
   const priceUsd =
-    ptPrice *
-    indexPrice;
+    ptPrice;
 
   const fixedApy =
     normalizeRatexApy(
@@ -354,7 +340,14 @@ async function getRatexLiveMarket() {
 
     ytPrice,
 
-    indexPrice,
+    /*
+     * Keep IndexPrice for diagnostics only.
+     * It is NOT used to calculate the PTONyc USD value.
+     */
+    indexPrice:
+      toNumber(
+        market.IndexPrice
+      ),
 
     fixedApy,
 
@@ -524,10 +517,6 @@ export async function getRatexPtonycSnapshot(
   walletAddress =
     RATEX_WALLET
 ) {
-  /*
-   * Quantity comes directly from Solana.
-   * Price/APY come directly from RateX.
-   */
   const [
     accountsResult,
     ratexResult,
@@ -680,8 +669,7 @@ export async function getRatexPtonycSnapshot(
   }
 
   /*
-   * Jupiter Price V3 is ONLY a fallback now.
-   * It is no longer the primary source.
+   * Jupiter is only a backup if RateX itself fails.
    */
   if (
     !(priceUsd > 0)
@@ -702,8 +690,7 @@ export async function getRatexPtonycSnapshot(
   }
 
   /*
-   * Last-resort display fallback.
-   * If you see this source, live pricing failed.
+   * Absolute last fallback.
    */
   if (
     !(priceUsd > 0)
@@ -719,11 +706,6 @@ export async function getRatexPtonycSnapshot(
     quantity *
     priceUsd;
 
-  /*
-   * PTONyc redeems at maturity.
-   * Existing page-level accounting handles deposits
-   * separately from actual earnings.
-   */
   const maturityValueUsd =
     quantity;
 
