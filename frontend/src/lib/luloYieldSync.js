@@ -5,47 +5,28 @@ import {
 const USDS_MINT =
   "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA";
 
-const MIN_CASH_FLOW_USD =
-  10;
+const MIN_CASH_FLOW_USD = 10;
 
 function toDayKey(date) {
-  const parsed =
-    new Date(date);
+  const parsed = new Date(date);
 
-  if (
-    Number.isNaN(
-      parsed.getTime()
-    )
-  ) {
+  if (Number.isNaN(parsed.getTime())) {
     return null;
   }
 
   return new Date(
     parsed.getTime() -
-      parsed.getTimezoneOffset() *
-        60000
+      parsed.getTimezoneOffset() * 60000
   )
     .toISOString()
-    .slice(
-      0,
-      10
-    );
+    .slice(0, 10);
 }
 
-function firstFiniteNumber(
-  ...values
-) {
-  for (
-    const value of values
-  ) {
-    const number =
-      Number(value);
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
 
-    if (
-      Number.isFinite(
-        number
-      )
-    ) {
+    if (Number.isFinite(number)) {
       return number;
     }
   }
@@ -53,37 +34,19 @@ function firstFiniteNumber(
   return 0;
 }
 
-function getElapsedDays(
-  from,
-  to = new Date()
-) {
-  const fromMs =
-    new Date(
-      from
-    ).getTime();
-
-  const toMs =
-    new Date(
-      to
-    ).getTime();
+function getElapsedDays(from, to = new Date()) {
+  const fromMs = new Date(from).getTime();
+  const toMs = new Date(to).getTime();
 
   if (
-    !Number.isFinite(
-      fromMs
-    ) ||
-    !Number.isFinite(
-      toMs
-    ) ||
+    !Number.isFinite(fromMs) ||
+    !Number.isFinite(toMs) ||
     toMs <= fromMs
   ) {
     return 0;
   }
 
-  return (
-    toMs -
-    fromMs
-  ) /
-    86400000;
+  return (toMs - fromMs) / 86400000;
 }
 
 function getExpectedYield(
@@ -92,28 +55,13 @@ function getExpectedYield(
   elapsedDays
 ) {
   const safeBalance =
-    Math.max(
-      0,
-      Number(
-        balance
-      ) || 0
-    );
+    Math.max(0, Number(balance) || 0);
 
   const safeApy =
-    Math.max(
-      0,
-      Number(
-        apy
-      ) || 0
-    );
+    Math.max(0, Number(apy) || 0);
 
   const safeDays =
-    Math.max(
-      0,
-      Number(
-        elapsedDays
-      ) || 0
-    );
+    Math.max(0, Number(elapsedDays) || 0);
 
   if (
     safeBalance <= 0 ||
@@ -125,14 +73,8 @@ function getExpectedYield(
 
   return (
     safeBalance *
-    (
-      safeApy /
-      100
-    ) *
-    (
-      safeDays /
-      365
-    )
+    (safeApy / 100) *
+    (safeDays / 365)
   );
 }
 
@@ -141,29 +83,15 @@ function getInterestDeltaLimit(
   apy,
   elapsedDays
 ) {
-  const expected =
-    getExpectedYield(
-      balance,
-      apy,
-      elapsedDays
-    );
+  const expected = getExpectedYield(
+    balance,
+    apy,
+    elapsedDays
+  );
 
-  /*
-   * Give the API a very generous tolerance.
-   *
-   * Real Lulo yield should be nowhere near 8x
-   * the expected amount over the same interval.
-   *
-   * The $2 floor avoids flagging small rounding /
-   * delayed-accounting changes.
-   */
   return Math.max(
     2,
-    (
-      expected *
-      8
-    ) +
-      0.25
+    expected * 8 + 0.25
   );
 }
 
@@ -176,156 +104,86 @@ function sanitizeLuloTransactions(
   }
 ) {
   const transactions = [];
-
-  let ignoredArtifactUsd =
-    0;
+  let ignoredArtifactUsd = 0;
 
   (
-    Array.isArray(
-      originalTransactions
-    )
+    Array.isArray(originalTransactions)
       ? originalTransactions
       : []
-  ).forEach(
-    (
-      transaction
-    ) => {
-      if (
-        transaction?.source !==
-        "lulo_yield"
-      ) {
-        transactions.push(
-          transaction
-        );
-
-        return;
-      }
-
-      const amount =
-        Number(
-          transaction?.amount
-        ) || 0;
-
-      if (
-        !(amount > 0)
-      ) {
-        transactions.push(
-          transaction
-        );
-
-        return;
-      }
-
-      const interestFrom =
-        Number(
-          transaction
-            ?.interest_from_usd
-        );
-
-      const interestTo =
-        Number(
-          transaction
-            ?.interest_to_usd
-        );
-
-      const encodedDelta =
-        (
-          Number.isFinite(
-            interestFrom
-          ) &&
-          Number.isFinite(
-            interestTo
-          )
-        )
-          ? (
-              interestTo -
-              interestFrom
-            )
-          : 0;
-
-      const elapsedDays =
-        getElapsedDays(
-          transaction
-            ?.sync_from,
-          transaction
-            ?.sync_to ||
-            transaction
-              ?.updated_at ||
-            transaction
-              ?.created_at ||
-            now
-        );
-
-      /*
-       * Only auto-remove something when we have enough
-       * timing information to confidently say the yield
-       * jump was impossible.
-       */
-      if (
-        !(elapsedDays > 0)
-      ) {
-        transactions.push(
-          transaction
-        );
-
-        return;
-      }
-
-      const maxPlausibleDelta =
-        getInterestDeltaLimit(
-          balance,
-          apy,
-          elapsedDays
-        );
-
-      const deltaMatchesAmount =
-        encodedDelta >
-          0 &&
-        Math.abs(
-          encodedDelta -
-            amount
-        ) <=
-          Math.max(
-            0.05,
-            amount *
-              0.05
-          );
-
-      const isImpossibleYieldJump =
-        amount >
-          maxPlausibleDelta &&
-        deltaMatchesAmount;
-
-      if (
-        isImpossibleYieldJump
-      ) {
-        /*
-         * This is almost certainly an accounting jump
-         * caused by principal moving in/out of Lulo.
-         *
-         * Do not count it as income.
-         */
-        ignoredArtifactUsd +=
-          amount;
-
-        return;
-      }
-
-      transactions.push(
-        transaction
-      );
+  ).forEach((transaction) => {
+    if (
+      transaction?.source !==
+      "lulo_yield"
+    ) {
+      transactions.push(transaction);
+      return;
     }
-  );
+
+    const amount =
+      Number(transaction?.amount) || 0;
+
+    if (!(amount > 0)) {
+      transactions.push(transaction);
+      return;
+    }
+
+    const interestFrom = Number(
+      transaction?.interest_from_usd
+    );
+
+    const interestTo = Number(
+      transaction?.interest_to_usd
+    );
+
+    const encodedDelta =
+      Number.isFinite(interestFrom) &&
+      Number.isFinite(interestTo)
+        ? interestTo - interestFrom
+        : 0;
+
+    const elapsedDays = getElapsedDays(
+      transaction?.sync_from,
+      transaction?.sync_to ||
+        transaction?.updated_at ||
+        transaction?.created_at ||
+        now
+    );
+
+    if (!(elapsedDays > 0)) {
+      transactions.push(transaction);
+      return;
+    }
+
+    const maxPlausibleDelta =
+      getInterestDeltaLimit(
+        balance,
+        apy,
+        elapsedDays
+      );
+
+    const deltaMatchesAmount =
+      encodedDelta > 0 &&
+      Math.abs(encodedDelta - amount) <=
+        Math.max(0.05, amount * 0.05);
+
+    const isImpossibleYieldJump =
+      amount > maxPlausibleDelta &&
+      deltaMatchesAmount;
+
+    if (isImpossibleYieldJump) {
+      ignoredArtifactUsd += amount;
+      return;
+    }
+
+    transactions.push(transaction);
+  });
 
   return {
     transactions,
 
-    ignoredArtifactUsd:
-      Number(
-        ignoredArtifactUsd.toFixed(
-          8
-        )
-      ),
+    ignoredArtifactUsd: Number(
+      ignoredArtifactUsd.toFixed(8)
+    ),
   };
 }
 
@@ -340,34 +198,23 @@ async function getJson(
     _: String(Date.now()),
   });
 
-  const response =
-    await proxyFetch(
-      `/lulo/${path}?${params.toString()}`,
-      {
-        method:
-          "GET",
-
-        cache:
-          "no-store",
-
-        headers: {
-          Accept:
-            "application/json",
-        },
-      }
-    );
+  const response = await proxyFetch(
+    `/lulo/${path}?${params.toString()}`,
+    {
+      method: "GET",
+      cache: "no-store",
+      headers: {
+        Accept: "application/json",
+      },
+    }
+  );
 
   const contentType =
-    response.headers.get(
-      "content-type"
-    ) || "";
+    response.headers.get("content-type") || "";
 
-  const raw =
-    await response.text();
+  const raw = await response.text();
 
-  if (
-    !response.ok
-  ) {
+  if (!response.ok) {
     throw new Error(
       `Lulo ${path} returned HTTP ${response.status}: ${raw.slice(
         0,
@@ -382,17 +229,14 @@ async function getJson(
     )
   ) {
     throw new Error(
-      `Lulo ${path} returned non-JSON content (${contentType || "unknown"}): ${raw.slice(
-        0,
-        220
-      )}`
+      `Lulo ${path} returned non-JSON content (${
+        contentType || "unknown"
+      }): ${raw.slice(0, 220)}`
     );
   }
 
   try {
-    return JSON.parse(
-      raw
-    );
+    return JSON.parse(raw);
   } catch {
     throw new Error(
       `Lulo ${path} returned invalid JSON: ${raw.slice(
@@ -403,219 +247,88 @@ async function getJson(
   }
 }
 
-function fulfilledValue(
-  result
-) {
-  return (
-    result?.status ===
-    "fulfilled"
-      ? result.value
-      : null
-  );
+function fulfilledValue(result) {
+  return result?.status === "fulfilled"
+    ? result.value
+    : null;
 }
 
 export async function getLuloYieldSnapshot(
   walletAddress
 ) {
-  if (
-    !walletAddress
-  ) {
+  if (!walletAddress) {
     throw new Error(
       "Lulo wallet address is missing."
     );
   }
 
-const [
-  accountResult,
-  poolsResult,
-  customAccountResult,
-  v0PerformanceResult,
-  v1PerformanceResult,
-] = await Promise.allSettled([
-  getJson(
-    "v1/account.getAccount",
-    walletAddress
-  ),
+  const thirtyDaysAgo =
+    Date.now() - 30 * 24 * 60 * 60 * 1000;
 
-  getJson(
-    "v1/pool.getPools",
-    walletAddress
-  ),
+  const [
+    accountResult,
+    poolsResult,
+    customAccountResult,
+    v0PerformanceResult,
+    v1PerformanceResult,
+  ] = await Promise.allSettled([
+    getJson(
+      "v1/account.getAccount",
+      walletAddress
+    ),
 
-  getJson(
-    "v0/account.getAccount",
-    walletAddress
-  ),
+    getJson(
+      "v1/pool.getPools",
+      walletAddress
+    ),
 
-  getJson(
-    "v0/account.performance.getPerformance",
-    walletAddress,
-    {
-      timeframe: "30D",
-      timezone: "UTC",
-      groupBy: "day",
-    }
-  ),
+    getJson(
+      "v0/account.getAccount",
+      walletAddress
+    ),
 
-  getJson(
-    "v1/account.performance.getPerformance",
-    walletAddress,
-    {
-      timeframe: "30D",
-      timezone: "UTC",
-      groupBy: "day",
-    }
-  ),
-]);
+    getJson(
+      "v0/account.performance.getPerformance",
+      walletAddress,
+      {
+        timeframe: "30D",
+        timezone: "UTC",
+        groupBy: "day",
+      }
+    ),
 
-  const account =
-    fulfilledValue(
-      accountResult
-    );
+    getJson(
+      "v1/account.performance.getPerformance",
+      walletAddress,
+      {
+        startDate: String(thirtyDaysAgo),
+        endDate: String(Date.now()),
+        groupBy: "day",
+      }
+    ),
+  ]);
 
-  const pools =
-    fulfilledValue(
-      poolsResult
-    );
+  const account = fulfilledValue(accountResult);
+
+  const pools = fulfilledValue(poolsResult);
 
   const customAccount =
-    fulfilledValue(
-      customAccountResult
-    );
-    const v0Performance =
-  fulfilledValue(v0PerformanceResult);
+    fulfilledValue(customAccountResult);
 
-const v1Performance =
-  fulfilledValue(v1PerformanceResult);
+  const v0Performance =
+    fulfilledValue(v0PerformanceResult);
 
-const performance = [
-  ...(Array.isArray(v0Performance)
-    ? v0Performance
-    : []),
+  const v1Performance =
+    fulfilledValue(v1PerformanceResult);
 
-  ...(Array.isArray(v1Performance)
-    ? v1Performance
-    : []),
-];
-
-const startOfTodayUtc = new Date();
-startOfTodayUtc.setUTCHours(
-  0,
-  0,
-  0,
-  0
-);
-
-const performanceByDay = new Map();
-
-[
-  ...(Array.isArray(v0Performance)
-    ? v0Performance
-    : []),
-
-  ...(Array.isArray(v1Performance)
-    ? v1Performance
-    : []),
-].forEach((row) => {
-  const date = new Date(
-    row.fromTimestamp
-  )
-    .toISOString()
-    .slice(0, 10);
-
-  const amount = Object.values(
-    row?.balanceChanges || {}
-  ).reduce(
-    (total, token) =>
-      total +
-      (Number(token?.balance_change) || 0),
-    0
-  );
-
-  const previous =
-    performanceByDay.get(date) || {
-      date,
-      amount: 0,
-      fromTimestamp:
-        Number(row.fromTimestamp) || 0,
-      toTimestamp:
-        Number(row.toTimestamp) || 0,
-    };
-
-  performanceByDay.set(date, {
-    ...previous,
-    amount: previous.amount + amount,
-  });
-});
-
-const dailyPerformance = [
-  ...performanceByDay.values(),
-].filter((row) => row.amount > 0)
-  .map((row) => {
-    const amount = Object.values(
-      row?.balanceChanges || {}
-    ).reduce(
-      (total, token) =>
-        total +
-        (Number(token?.balance_change) || 0),
-      0
-    );
-
-    return {
-      date: new Date(
-        row.fromTimestamp
-      )
-        .toISOString()
-        .slice(0, 10),
-
-      amount,
-
-      fromTimestamp:
-        Number(row.fromTimestamp) || 0,
-
-      toTimestamp:
-        Number(row.toTimestamp) || 0,
-    };
-  })
-  .filter((row) => row.amount > 0);
-
-const lastFiveCompletedDays =
-  dailyPerformance
-    .filter(
-      (row) =>
-        row.toTimestamp <=
-        startOfTodayUtc.getTime()
-    )
-    .sort(
-      (first, second) =>
-        second.fromTimestamp -
-        first.fromTimestamp
-    )
-    .slice(0, 5);
-
-const fiveDayAverageUsd =
-  lastFiveCompletedDays.length > 0
-    ? lastFiveCompletedDays.reduce(
-        (total, row) =>
-          total + row.amount,
-        0
-      ) / lastFiveCompletedDays.length
-    : 0;
-
-  if (
-    accountResult.status ===
-    "rejected"
-  ) {
+  if (accountResult.status === "rejected") {
     console.warn(
       "Lulo v1 account request failed:",
       accountResult.reason
     );
   }
 
-  if (
-    poolsResult.status ===
-    "rejected"
-  ) {
+  if (poolsResult.status === "rejected") {
     console.warn(
       "Lulo pool request failed:",
       poolsResult.reason
@@ -633,153 +346,106 @@ const fiveDayAverageUsd =
   }
 
   if (
-    !account &&
-    !customAccount
+    v0PerformanceResult.status ===
+    "rejected"
   ) {
+    console.warn(
+      "Lulo v0 performance request failed:",
+      v0PerformanceResult.reason
+    );
+  }
+
+  if (
+    v1PerformanceResult.status ===
+    "rejected"
+  ) {
+    console.warn(
+      "Lulo v1 performance request failed:",
+      v1PerformanceResult.reason
+    );
+  }
+
+  if (!account && !customAccount) {
     const errors = [
       accountResult,
       customAccountResult,
     ]
       .filter(
-        (
-          result
-        ) =>
-          result.status ===
-          "rejected"
+        (result) =>
+          result.status === "rejected"
       )
       .map(
-        (
-          result
-        ) =>
-          result.reason
-            ?.message
+        (result) =>
+          result.reason?.message
       )
-      .filter(
-        Boolean
-      );
+      .filter(Boolean);
 
     throw new Error(
-      errors.join(
-        " | "
-      ) ||
+      errors.join(" | ") ||
         "Lulo account data is unavailable."
     );
   }
 
   const regularBalanceUsd =
     firstFiniteNumber(
-      account
-        ?.lusdUsdBalance,
-
-      account
-        ?.regularUsdBalance,
-
-      account
-        ?.regularBalanceUsd
+      account?.lusdUsdBalance,
+      account?.regularUsdBalance,
+      account?.regularBalanceUsd
     );
 
   const protectedBalanceUsd =
     firstFiniteNumber(
-      account
-        ?.pusdUsdBalance,
-
-      account
-        ?.protectedUsdBalance,
-
-      account
-        ?.protectedBalanceUsd
+      account?.pusdUsdBalance,
+      account?.protectedUsdBalance,
+      account?.protectedBalanceUsd
     );
 
-  const tokenBalances =
-    Array.isArray(
-      customAccount
-        ?.tokenBalances
-    )
-      ? customAccount
-          .tokenBalances
-      : [];
+  const tokenBalances = Array.isArray(
+    customAccount?.tokenBalances
+  )
+    ? customAccount.tokenBalances
+    : [];
 
-  const usdsToken =
-    tokenBalances.find(
-      (
-        token
-      ) =>
-        token?.mint ===
-        USDS_MINT
-    );
+  const usdsToken = tokenBalances.find(
+    (token) =>
+      token?.mint === USDS_MINT
+  );
 
   const usdsBalanceUsd =
     firstFiniteNumber(
-      usdsToken
-        ?.usdValue,
-
-      usdsToken
-        ?.valueUsd,
-
-      usdsToken
-        ?.value,
-
-      usdsToken
-        ?.balanceUsd
+      usdsToken?.usdValue,
+      usdsToken?.valueUsd,
+      usdsToken?.value,
+      usdsToken?.balanceUsd
     );
 
   const customBalanceUsd =
     firstFiniteNumber(
-      customAccount
-        ?.totalValue,
-
-      customAccount
-        ?.totalUsdValue,
-
-      customAccount
-        ?.usdValue,
-
+      customAccount?.totalValue,
+      customAccount?.totalUsdValue,
+      customAccount?.usdValue,
       usdsBalanceUsd
     );
 
   const v1TotalUsd =
     firstFiniteNumber(
-      account
-        ?.totalUsdValue,
-
-      account
-        ?.totalValue,
-
-      account
-        ?.usdValue
+      account?.totalUsdValue,
+      account?.totalValue,
+      account?.usdValue
     );
 
   let totalBalanceUsd =
-    Math.max(
-      0,
-      v1TotalUsd
-    ) +
-    Math.max(
-      0,
-      customBalanceUsd
-    );
+    Math.max(0, v1TotalUsd) +
+    Math.max(0, customBalanceUsd);
 
-  if (
-    !(v1TotalUsd > 0)
-  ) {
+  if (!(v1TotalUsd > 0)) {
     totalBalanceUsd =
-      Math.max(
-        0,
-        regularBalanceUsd
-      ) +
-      Math.max(
-        0,
-        protectedBalanceUsd
-      ) +
-      Math.max(
-        0,
-        customBalanceUsd
-      );
+      Math.max(0, regularBalanceUsd) +
+      Math.max(0, protectedBalanceUsd) +
+      Math.max(0, customBalanceUsd);
   }
 
-  if (
-    !(totalBalanceUsd > 0)
-  ) {
+  if (!(totalBalanceUsd > 0)) {
     throw new Error(
       "Lulo returned account data but no usable USD balance."
     );
@@ -787,96 +453,169 @@ const fiveDayAverageUsd =
 
   const regularApy =
     firstFiniteNumber(
-      pools
-        ?.regular?.apy
-    ) *
-    100;
+      pools?.regular?.apy
+    ) * 100;
 
   const protectedApy =
     firstFiniteNumber(
-      pools
-        ?.protected?.apy
-    ) *
-    100;
+      pools?.protected?.apy
+    ) * 100;
 
   const usdsApy =
     firstFiniteNumber(
-      customAccount
-        ?.realtimeAPY,
-
-      customAccount
-        ?.apy
+      customAccount?.realtimeAPY,
+      customAccount?.apy
     );
 
   const weightedApy =
-    totalBalanceUsd >
-    0
+    totalBalanceUsd > 0
       ? (
-          (
-            regularBalanceUsd *
-            regularApy
-          ) +
-          (
-            protectedBalanceUsd *
-            protectedApy
-          ) +
-          (
-            customBalanceUsd *
-            usdsApy
-          )
-        ) /
-        totalBalanceUsd
+          regularBalanceUsd * regularApy +
+          protectedBalanceUsd *
+            protectedApy +
+          customBalanceUsd * usdsApy
+        ) / totalBalanceUsd
       : 0;
 
   const customInterestEarnedUsd =
     firstFiniteNumber(
-      customAccount
-        ?.interestEarned,
-
-      customAccount
-        ?.totalInterestEarned,
-
-      customAccount
-        ?.totalInterest
+      customAccount?.interestEarned,
+      customAccount?.totalInterestEarned,
+      customAccount?.totalInterest
     );
 
   const accountInterestEarnedUsd =
     firstFiniteNumber(
-      account
-        ?.totalInterestEarned,
-
-      account
-        ?.interestEarned,
-
-      account
-        ?.totalInterest,
-
-      account
-        ?.earnedInterest
+      account?.totalInterestEarned,
+      account?.interestEarned,
+      account?.totalInterest,
+      account?.earnedInterest
     );
 
   const regularInterestEarnedUsd =
     firstFiniteNumber(
-      account
-        ?.regularInterestEarned,
-
-      account
-        ?.regularInterest
+      account?.regularInterestEarned,
+      account?.regularInterest
     );
 
   const protectedInterestEarnedUsd =
     firstFiniteNumber(
-      account
-        ?.protectedInterestEarned,
-
-      account
-        ?.protectedInterest
+      account?.protectedInterestEarned,
+      account?.protectedInterest
     );
+
+  const earningsByDay = new Map();
+
+  function addDailyEarning(
+    timestamp,
+    amount
+  ) {
+    const numericTimestamp =
+      Number(timestamp) || 0;
+
+    if (!(numericTimestamp > 0)) {
+      return;
+    }
+
+    const date = new Date(
+      numericTimestamp
+    )
+      .toISOString()
+      .slice(0, 10);
+
+    const previous =
+      earningsByDay.get(date) || {
+        date,
+        amount: 0,
+        timestamp: numericTimestamp,
+      };
+
+    earningsByDay.set(date, {
+      ...previous,
+      amount:
+        previous.amount +
+        (Number(amount) || 0),
+    });
+  }
+
+  (
+    Array.isArray(v0Performance)
+      ? v0Performance
+      : []
+  ).forEach((row) => {
+    const usdsEarnings = Object.values(
+      row?.balanceChanges || {}
+    ).reduce(
+      (total, token) =>
+        total +
+        (Number(token?.balance_change) || 0),
+      0
+    );
+
+    addDailyEarning(
+      row?.fromTimestamp,
+      usdsEarnings
+    );
+  });
+
+  (
+    Array.isArray(v1Performance)
+      ? v1Performance
+      : []
+  ).forEach((row) => {
+    const usdcEarnings =
+      (Number(
+        row?.regularInterestEarned
+      ) || 0) +
+      (Number(
+        row?.protectedInterestEarned
+      ) || 0);
+
+    addDailyEarning(
+      row?.date || row?.createdAt,
+      usdcEarnings
+    );
+  });
+
+  const dailyPerformance = [
+    ...earningsByDay.values(),
+  ].filter((row) => row.amount > 0);
+
+  const startOfTodayUtc = new Date();
+  startOfTodayUtc.setUTCHours(
+    0,
+    0,
+    0,
+    0
+  );
+
+  const lastFiveCompletedDays =
+    dailyPerformance
+      .filter(
+        (row) =>
+          row.timestamp <
+          startOfTodayUtc.getTime()
+      )
+      .sort(
+        (first, second) =>
+          second.timestamp -
+          first.timestamp
+      )
+      .slice(0, 5);
+
+  const fiveDayAverageUsd =
+    lastFiveCompletedDays.length > 0
+      ? lastFiveCompletedDays.reduce(
+          (total, row) =>
+            total + row.amount,
+          0
+        ) /
+        lastFiveCompletedDays.length
+      : 0;
 
   return {
     walletAddress,
-  dailyPerformance,
-  fiveDayAverageUsd,
+
     totalBalanceUsd,
 
     regularBalanceUsd,
@@ -908,22 +647,19 @@ const fiveDayAverageUsd =
 
     weightedApy,
 
+    dailyPerformance,
+
+    fiveDayAverageUsd,
+
     blockTime:
       firstFiniteNumber(
-        account
-          ?.blockTime,
+        account?.blockTime,
+        customAccount?.blockTime
+      ) || null,
 
-        customAccount
-          ?.blockTime
-      ) ||
-      null,
+    source: "lulo_api",
 
-    source:
-      "lulo_api",
-
-    syncedAt:
-      new Date()
-        .toISOString(),
+    syncedAt: new Date().toISOString(),
   };
 }
 
@@ -933,135 +669,84 @@ export function applyLuloYieldSnapshot(
   now = new Date()
 ) {
   if (
-    project
-      ?.yield_tracking !==
+    project?.yield_tracking !==
     "lulo_lending"
   ) {
     return project;
   }
 
-  const dayKey =
-    toDayKey(
-      now
-    );
+  const dayKey = toDayKey(now);
 
-  const totalBalanceUsd =
-    Number(
-      snapshot
-        ?.totalBalanceUsd
-    );
+  const totalBalanceUsd = Number(
+    snapshot?.totalBalanceUsd
+  );
 
   if (
-    !Number.isFinite(
-      totalBalanceUsd
-    ) ||
-    totalBalanceUsd <
-      0
+    !Number.isFinite(totalBalanceUsd) ||
+    totalBalanceUsd < 0
   ) {
     return project;
   }
 
   const weightedApy =
-    Number(
-      snapshot
-        ?.weightedApy
-    ) ||
-    Number(
-      project
-        ?.lulo_weighted_apy
-    ) ||
+    Number(snapshot?.weightedApy) ||
+    Number(project?.lulo_weighted_apy) ||
     0;
 
-  const previousBalance =
-    Number(
-      project
-        ?.lulo_last_balance_usd ??
-      project
-        ?.lulo_total_balance_usd
-    );
+  const previousBalance = Number(
+    project?.lulo_last_balance_usd ??
+      project?.lulo_total_balance_usd
+  );
 
   const hasPreviousBalance =
-    Number.isFinite(
-      previousBalance
-    ) &&
-    previousBalance >=
-      0;
+    Number.isFinite(previousBalance) &&
+    previousBalance >= 0;
 
-  /*
-   * First repair any already-created transaction that
-   * represented a principal movement as yield.
-   */
   const sanitized =
     sanitizeLuloTransactions(
-      project
-        ?.transactions,
+      project?.transactions,
       {
-        balance:
-          Math.max(
-            totalBalanceUsd,
-            hasPreviousBalance
-              ? previousBalance
-              : 0
-          ),
-
-        apy:
-          weightedApy,
-
+        balance: Math.max(
+          totalBalanceUsd,
+          hasPreviousBalance
+            ? previousBalance
+            : 0
+        ),
+        apy: weightedApy,
         now,
       }
     );
 
-  let transactions =
-    sanitized.transactions;
+  let transactions = sanitized.transactions;
 
-  const rawCurrentInterest =
-    Number(
-      snapshot
-        ?.totalInterestEarnedUsd
-    );
+  const rawCurrentInterest = Number(
+    snapshot?.totalInterestEarnedUsd
+  );
 
   const hasRawCurrentInterest =
-    Number.isFinite(
-      rawCurrentInterest
-    ) &&
-    rawCurrentInterest >=
-      0;
+    Number.isFinite(rawCurrentInterest) &&
+    rawCurrentInterest >= 0;
 
   const oldInterestOffset =
     Number(
-      project
-        ?.lulo_interest_offset_usd
+      project?.lulo_interest_offset_usd
     ) || 0;
 
   let interestOffset =
     oldInterestOffset +
     sanitized.ignoredArtifactUsd;
 
-  const previousRawInterest =
-    Number(
-      project
-        ?.lulo_last_raw_interest_usd
-    );
+  const previousRawInterest = Number(
+    project?.lulo_last_raw_interest_usd
+  );
 
   const hasPreviousRawInterest =
-    Number.isFinite(
-      previousRawInterest
-    ) &&
-    previousRawInterest >=
-      0;
+    Number.isFinite(previousRawInterest) &&
+    previousRawInterest >= 0;
 
-  /*
-   * Old versions did not save the raw counter separately.
-   *
-   * If we just removed one of their bogus transactions,
-   * the old lulo_last_interest_usd includes that same bad
-   * jump. Subtract it once during the migration.
-   */
-  const storedPreviousInterest =
-    Number(
-      project
-        ?.lulo_last_interest_usd
-    );
+  const storedPreviousInterest = Number(
+    project?.lulo_last_interest_usd
+  );
 
   let previousNormalizedInterest =
     hasPreviousRawInterest
@@ -1076,13 +761,11 @@ export function applyLuloYieldSnapshot(
         ? Math.max(
             0,
             storedPreviousInterest -
-              sanitized
-                .ignoredArtifactUsd
+              sanitized.ignoredArtifactUsd
           )
         : 0;
 
-  let detectedArtifactUsd =
-    0;
+  let detectedArtifactUsd = 0;
 
   if (
     hasRawCurrentInterest &&
@@ -1094,32 +777,24 @@ export function applyLuloYieldSnapshot(
 
     const balanceDelta =
       hasPreviousBalance
-        ? (
-            totalBalanceUsd -
-            previousBalance
-          )
+        ? totalBalanceUsd -
+          previousBalance
         : 0;
 
-    const elapsedDays =
-      Math.max(
-        getElapsedDays(
-          project
-            ?.lulo_last_synced_at,
-          now
-        ),
-        1 /
-          1440
-      );
+    const elapsedDays = Math.max(
+      getElapsedDays(
+        project?.lulo_last_synced_at,
+        now
+      ),
+      1 / 1440
+    );
 
     const referenceBalance =
       hasPreviousBalance
         ? (
-            (
-              previousBalance +
-              totalBalanceUsd
-            ) /
-            2
-          )
+            previousBalance +
+            totalBalanceUsd
+          ) / 2
         : totalBalanceUsd;
 
     const expectedInterest =
@@ -1136,35 +811,18 @@ export function applyLuloYieldSnapshot(
         elapsedDays
       );
 
-    const cashFlowThreshold =
-      Math.max(
-        MIN_CASH_FLOW_USD,
-        (
-          Math.max(
-            referenceBalance,
-            0
-          ) *
-          0.0025
-        )
-      );
+    const cashFlowThreshold = Math.max(
+      MIN_CASH_FLOW_USD,
+      Math.max(referenceBalance, 0) *
+        0.0025
+    );
 
     const withdrawalDetected =
-      balanceDelta <
-        -cashFlowThreshold;
+      balanceDelta < -cashFlowThreshold;
 
     const depositDetected =
-      balanceDelta >
-        cashFlowThreshold;
+      balanceDelta > cashFlowThreshold;
 
-    /*
-     * Withdrawal:
-     *
-     * A principal withdrawal can cause Lulo's reported
-     * lifetime-interest/accounting field to jump upward.
-     *
-     * Preserve only a small plausible amount of interest
-     * that could actually have accrued since the last sync.
-     */
     if (
       withdrawalDetected &&
       rawInterestDelta >
@@ -1173,29 +831,19 @@ export function applyLuloYieldSnapshot(
       const plausibleInterest =
         Math.max(
           0,
-          expectedInterest *
-            1.5
+          expectedInterest * 1.5
         );
 
-      detectedArtifactUsd =
-        Math.max(
-          0,
-          rawInterestDelta -
-            plausibleInterest
-        );
+      detectedArtifactUsd = Math.max(
+        0,
+        rawInterestDelta -
+          plausibleInterest
+      );
 
       interestOffset +=
         detectedArtifactUsd;
     }
 
-    /*
-     * Deposit:
-     *
-     * Some accounting systems can move the raw interest
-     * counter downward when more principal is deposited.
-     * Offset that reset as well so lifetime earnings stay
-     * continuous.
-     */
     if (
       depositDetected &&
       rawInterestDelta <
@@ -1204,10 +852,9 @@ export function applyLuloYieldSnapshot(
       interestOffset +=
         rawInterestDelta;
 
-      detectedArtifactUsd +=
-        Math.abs(
-          rawInterestDelta
-        );
+      detectedArtifactUsd += Math.abs(
+        rawInterestDelta
+      );
     }
   }
 
@@ -1220,41 +867,27 @@ export function applyLuloYieldSnapshot(
         )
       : previousNormalizedInterest;
 
-  /*
-   * Last safety check.
-   *
-   * If the normalized interest still jumps by an
-   * impossible amount during this tiny sync interval,
-   * freeze that portion rather than calling it income.
-   */
-  if (
-    hasRawCurrentInterest
-  ) {
-    const elapsedDays =
-      Math.max(
-        getElapsedDays(
-          project
-            ?.lulo_last_synced_at,
-          now
-        ),
-        1 /
-          1440
-      );
+  if (hasRawCurrentInterest) {
+    const elapsedDays = Math.max(
+      getElapsedDays(
+        project?.lulo_last_synced_at,
+        now
+      ),
+      1 / 1440
+    );
 
-    const referenceBalance =
-      Math.max(
-        totalBalanceUsd,
-        hasPreviousBalance
-          ? previousBalance
-          : 0
-      );
+    const referenceBalance = Math.max(
+      totalBalanceUsd,
+      hasPreviousBalance
+        ? previousBalance
+        : 0
+    );
 
-    const limit =
-      getInterestDeltaLimit(
-        referenceBalance,
-        weightedApy,
-        elapsedDays
-      );
+    const limit = getInterestDeltaLimit(
+      referenceBalance,
+      weightedApy,
+      elapsedDays
+    );
 
     const normalizedDelta =
       currentNormalizedInterest -
@@ -1262,13 +895,9 @@ export function applyLuloYieldSnapshot(
 
     if (
       normalizedDelta >
-        (
-          limit *
-          2
-        )
+      limit * 2
     ) {
-      interestOffset +=
-        normalizedDelta;
+      interestOffset += normalizedDelta;
 
       detectedArtifactUsd +=
         normalizedDelta;
@@ -1282,123 +911,82 @@ export function applyLuloYieldSnapshot(
     Number.isFinite(
       currentNormalizedInterest
     ) &&
-    currentNormalizedInterest >=
-      0;
+    currentNormalizedInterest >= 0;
 
   const initialEarned =
-    project
-      ?.lulo_initial_earned !=
-      null &&
+    project?.lulo_initial_earned != null &&
     Number.isFinite(
-      Number(
-        project
-          ?.lulo_initial_earned
-      )
+      Number(project?.lulo_initial_earned)
     )
-      ? Number(
-          project
-            .lulo_initial_earned
-        )
+      ? Number(project.lulo_initial_earned)
       : previousNormalizedInterest;
 
   if (
     dayKey &&
     hasNormalizedInterest
   ) {
-    const interestDelta =
-      Number(
-        Math.max(
-          0,
-          currentNormalizedInterest -
-            previousNormalizedInterest
-        ).toFixed(
-          6
-        )
-      );
+    const interestDelta = Number(
+      Math.max(
+        0,
+        currentNormalizedInterest -
+          previousNormalizedInterest
+      ).toFixed(6)
+    );
 
-    if (
-      interestDelta >
-      0
-    ) {
+    if (interestDelta > 0) {
       const existingIndex =
         transactions.findIndex(
-          (
-            transaction
-          ) =>
-            transaction
-              ?.source ===
+          (transaction) =>
+            transaction?.source ===
               "lulo_yield" &&
-            transaction
-              ?.source_date ===
+            transaction?.source_date ===
               dayKey
         );
 
-      if (
-        existingIndex >=
-        0
-      ) {
-        transactions =
-          transactions.map(
-            (
-              transaction,
-              index
-            ) =>
-              index ===
-              existingIndex
-                ? {
-                    ...transaction,
+      if (existingIndex >= 0) {
+        transactions = transactions.map(
+          (transaction, index) =>
+            index === existingIndex
+              ? {
+                  ...transaction,
 
-                    amount:
-                      Number(
-                        (
-                          (
-                            Number(
-                              transaction
-                                ?.amount
-                            ) ||
-                            0
-                          ) +
-                          interestDelta
-                        ).toFixed(
-                          6
-                        )
-                      ),
+                  amount: Number(
+                    (
+                      (Number(
+                        transaction?.amount
+                      ) || 0) +
+                      interestDelta
+                    ).toFixed(6)
+                  ),
 
-                    interest_to_usd:
-                      currentNormalizedInterest,
+                  interest_to_usd:
+                    currentNormalizedInterest,
 
-                    raw_interest_to_usd:
-                      hasRawCurrentInterest
-                        ? rawCurrentInterest
-                        : null,
+                  raw_interest_to_usd:
+                    hasRawCurrentInterest
+                      ? rawCurrentInterest
+                      : null,
 
-                    sync_to:
-                      now.toISOString(),
-                  }
-                : transaction
-          );
+                  sync_to:
+                    now.toISOString(),
+                }
+              : transaction
+        );
       } else {
         transactions.push({
-          type:
-            "earning",
+          type: "earning",
 
-          amount:
-            interestDelta,
+          amount: interestDelta,
 
-          category:
-            "Lulo Lending",
+          category: "Lulo Lending",
 
-          notes:
-            `Lulo interest (${dayKey})`,
+          notes: `Lulo interest (${dayKey})`,
 
-          date:
-            dayKey,
+          date: dayKey,
 
-          source:
-            "lulo_yield",
+          source: "lulo_yield",
 
-          source_date:
-            dayKey,
+          source_date: dayKey,
 
           interest_from_usd:
             previousNormalizedInterest,
@@ -1412,11 +1000,9 @@ export function applyLuloYieldSnapshot(
               : null,
 
           sync_from:
-            project
-              ?.lulo_last_synced_at,
+            project?.lulo_last_synced_at,
 
-          sync_to:
-            now.toISOString(),
+          sync_to: now.toISOString(),
         });
       }
     }
@@ -1426,45 +1012,29 @@ export function applyLuloYieldSnapshot(
     initialEarned +
     transactions
       .filter(
-        (
-          transaction
-        ) =>
-          transaction
-            ?.source ===
-            "lulo_yield"
+        (transaction) =>
+          transaction?.source ===
+          "lulo_yield"
       )
       .reduce(
-        (
-          total,
-          transaction
-        ) =>
+        (total, transaction) =>
           total +
-          (
-            Number(
-              transaction
-                ?.amount
-            ) ||
-            0
-          ),
+          (Number(
+            transaction?.amount
+          ) || 0),
         0
       );
 
   const configuredInvested =
-    Number(
-      project
-        ?.invested
-    ) ||
-    0;
+    Number(project?.invested) || 0;
 
   const usesMultiTokenBalance =
-    project
-      ?.lulo_balance_model ===
+    project?.lulo_balance_model ===
     "multi_token_v2";
 
   const invested =
     usesMultiTokenBalance &&
-    configuredInvested >
-      0
+    configuredInvested > 0
       ? configuredInvested
       : Math.max(
           0,
@@ -1474,23 +1044,15 @@ export function applyLuloYieldSnapshot(
 
   const priorIgnoredArtifacts =
     Number(
-      project
-        ?.lulo_ignored_interest_artifact_usd
+      project?.lulo_ignored_interest_artifact_usd
     ) || 0;
 
   const ignoredThisSync =
-    sanitized
-      .ignoredArtifactUsd +
+    sanitized.ignoredArtifactUsd +
     detectedArtifactUsd;
 
   return {
     ...project,
-
-      lulo_daily_performance:
-    snapshot.dailyPerformance || [],
-
-    lulo_five_day_average_usd:
-      Number(snapshot.fiveDayAverageUsd) || 0,
 
     invested,
 
@@ -1502,8 +1064,7 @@ export function applyLuloYieldSnapshot(
     lulo_initial_earned:
       initialEarned,
 
-    earned:
-      trackedEarned,
+    earned: trackedEarned,
 
     lulo_total_balance_usd:
       totalBalanceUsd,
@@ -1513,65 +1074,47 @@ export function applyLuloYieldSnapshot(
 
     lulo_regular_balance_usd:
       Number(
-        snapshot
-          ?.regularBalanceUsd
-      ) ||
-      0,
+        snapshot?.regularBalanceUsd
+      ) || 0,
 
     lulo_protected_balance_usd:
       Number(
-        snapshot
-          ?.protectedBalanceUsd
-      ) ||
-      0,
+        snapshot?.protectedBalanceUsd
+      ) || 0,
 
     lulo_usdc_balance_usd:
       Number(
-        snapshot
-          ?.usdcBalanceUsd
-      ) ||
-      0,
+        snapshot?.usdcBalanceUsd
+      ) || 0,
 
     lulo_usds_balance_usd:
       Number(
-        snapshot
-          ?.usdsBalanceUsd
-      ) ||
-      0,
+        snapshot?.usdsBalanceUsd
+      ) || 0,
 
     lulo_usds_apy:
-      Number(
-        snapshot
-          ?.usdsApy
-      ) ||
-      0,
+      Number(snapshot?.usdsApy) || 0,
 
     lulo_regular_apy:
       Number(
-        snapshot
-          ?.regularApy
-      ) ||
-      0,
+        snapshot?.regularApy
+      ) || 0,
 
     lulo_protected_apy:
       Number(
-        snapshot
-          ?.protectedApy
-      ) ||
-      0,
+        snapshot?.protectedApy
+      ) || 0,
 
-    lulo_weighted_apy:
-      weightedApy,
+    lulo_weighted_apy: weightedApy,
 
-    /*
-     * IMPORTANT:
-     * These two fields are now the NORMALIZED interest,
-     * not the unstable raw Lulo accounting counter.
-     *
-     * Your Project Income page already reads
-     * lulo_lifetime_interest_usd, so no JSX change is
-     * required.
-     */
+    lulo_daily_performance:
+      snapshot?.dailyPerformance || [],
+
+    lulo_five_day_average_usd:
+      Number(
+        snapshot?.fiveDayAverageUsd
+      ) || 0,
+
     lulo_lifetime_interest_usd:
       currentNormalizedInterest,
 
@@ -1583,35 +1126,27 @@ export function applyLuloYieldSnapshot(
         ? rawCurrentInterest
         : (
             Number(
-              project
-                ?.lulo_last_raw_interest_usd
+              project?.lulo_last_raw_interest_usd
             ) || 0
           ),
 
-    lulo_interest_offset_usd:
-      Number(
-        interestOffset.toFixed(
-          8
-        )
-      ),
+    lulo_interest_offset_usd: Number(
+      interestOffset.toFixed(8)
+    ),
 
     lulo_ignored_interest_artifact_usd:
       Number(
         (
           priorIgnoredArtifacts +
           ignoredThisSync
-        ).toFixed(
-          8
-        )
+        ).toFixed(8)
       ),
 
     lulo_last_cash_flow_at:
-      ignoredThisSync >
-      0.000001
+      ignoredThisSync > 0.000001
         ? now.toISOString()
         : (
-            project
-              ?.lulo_last_cash_flow_at ||
+            project?.lulo_last_cash_flow_at ||
             null
           ),
 
