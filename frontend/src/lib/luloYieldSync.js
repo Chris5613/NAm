@@ -331,18 +331,14 @@ function sanitizeLuloTransactions(
 
 async function getJson(
   path,
-  walletAddress
+  walletAddress,
+  extraParams = {}
 ) {
-  const params =
-    new URLSearchParams({
-      owner:
-        walletAddress,
-
-      _:
-        String(
-          Date.now()
-        ),
-    });
+  const params = new URLSearchParams({
+    owner: walletAddress,
+    ...extraParams,
+    _: String(Date.now()),
+  });
 
   const response =
     await proxyFetch(
@@ -429,29 +425,37 @@ export async function getLuloYieldSnapshot(
     );
   }
 
-  const [
-    accountResult,
-    poolsResult,
-    customAccountResult,
-  ] =
-    await Promise.allSettled(
-      [
-        getJson(
-          "v1/account.getAccount",
-          walletAddress
-        ),
+const [
+  accountResult,
+  poolsResult,
+  customAccountResult,
+  performanceResult,
+] = await Promise.allSettled([
+  getJson(
+    "v1/account.getAccount",
+    walletAddress
+  ),
 
-        getJson(
-          "v1/pool.getPools",
-          walletAddress
-        ),
+  getJson(
+    "v1/pool.getPools",
+    walletAddress
+  ),
 
-        getJson(
-          "v0/account.getAccount",
-          walletAddress
-        ),
-      ]
-    );
+  getJson(
+    "v0/account.getAccount",
+    walletAddress
+  ),
+
+  getJson(
+    "v0/account.performance.getPerformance",
+    walletAddress,
+    {
+      timeframe: "30D",
+      timezone: "UTC",
+      groupBy: "day",
+    }
+  ),
+]);
 
   const account =
     fulfilledValue(
@@ -467,6 +471,72 @@ export async function getLuloYieldSnapshot(
     fulfilledValue(
       customAccountResult
     );
+    const performance =
+  fulfilledValue(performanceResult);
+
+const startOfTodayUtc = new Date();
+startOfTodayUtc.setUTCHours(
+  0,
+  0,
+  0,
+  0
+);
+
+const dailyPerformance = (
+  Array.isArray(performance)
+    ? performance
+    : []
+)
+  .map((row) => {
+    const amount = Object.values(
+      row?.balanceChanges || {}
+    ).reduce(
+      (total, token) =>
+        total +
+        (Number(token?.balance_change) || 0),
+      0
+    );
+
+    return {
+      date: new Date(
+        row.fromTimestamp
+      )
+        .toISOString()
+        .slice(0, 10),
+
+      amount,
+
+      fromTimestamp:
+        Number(row.fromTimestamp) || 0,
+
+      toTimestamp:
+        Number(row.toTimestamp) || 0,
+    };
+  })
+  .filter((row) => row.amount > 0);
+
+const lastFiveCompletedDays =
+  dailyPerformance
+    .filter(
+      (row) =>
+        row.toTimestamp <=
+        startOfTodayUtc.getTime()
+    )
+    .sort(
+      (first, second) =>
+        second.fromTimestamp -
+        first.fromTimestamp
+    )
+    .slice(0, 5);
+
+const fiveDayAverageUsd =
+  lastFiveCompletedDays.length > 0
+    ? lastFiveCompletedDays.reduce(
+        (total, row) =>
+          total + row.amount,
+        0
+      ) / lastFiveCompletedDays.length
+    : 0;
 
   if (
     accountResult.status ===
@@ -741,7 +811,8 @@ export async function getLuloYieldSnapshot(
 
   return {
     walletAddress,
-
+  dailyPerformance,
+  fiveDayAverageUsd,
     totalBalanceUsd,
 
     regularBalanceUsd,
@@ -1350,6 +1421,12 @@ export function applyLuloYieldSnapshot(
 
   return {
     ...project,
+
+      lulo_daily_performance:
+    snapshot.dailyPerformance || [],
+
+    lulo_five_day_average_usd:
+      Number(snapshot.fiveDayAverageUsd) || 0,
 
     invested,
 

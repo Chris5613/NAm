@@ -33,23 +33,6 @@ const LOOPSCALE_HISTORY_KEY = "yield_loopscale_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
-const LULO_DAILY_HISTORY_KEY = "lulo_daily_earnings_history_v1";
-
-function getDateKey(date = new Date()) {
-  return date.toISOString().slice(0, 10);
-}
-
-function loadLuloDailyHistory() {
-  try {
-    return JSON.parse(localStorage.getItem(LULO_DAILY_HISTORY_KEY) || "[]");
-  } catch {
-    return [];
-  }
-}
-
-function saveLuloDailyHistory(history) {
-  localStorage.setItem(LULO_DAILY_HISTORY_KEY, JSON.stringify(history));
-}
 
 
 const MONTHLY_TRACKING_START = "2026-09";
