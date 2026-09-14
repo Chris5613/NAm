@@ -1,21 +1,50 @@
-import { projectsApi, walletsApi } from "./api";
-import { localStorage as storage } from "./localStorage";
+import {
+  projectsApi,
+  walletsApi,
+} from "./api";
 
-const PORTFOLIO_CACHE_KEY = "project_crypto_portfolio_v1";
-const WALLET_BALANCE_CACHE_KEY = "crypto_wallet_balance_cache";
-const AUTO_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+import {
+  localStorage as storage,
+} from "./localStorage";
+
+import {
+  getRatexPtonycSnapshot,
+} from "./ratexYieldSync";
+
+import {
+  getLoopscaleOnycSnapshot,
+} from "./loopscaleYieldSync";
+
+const PORTFOLIO_CACHE_KEY =
+  "project_crypto_portfolio_v1";
+
+const WALLET_BALANCE_CACHE_KEY =
+  "crypto_wallet_balance_cache";
+
+const AUTO_SYNC_INTERVAL_MS =
+  5 * 60 * 1000;
 
 let refreshPromise = null;
 
 function number(value) {
   const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
 }
 
-function getMonthKey(value = new Date()) {
-  const date = value instanceof Date ? value : new Date(value);
+function getMonthKey(
+  value = new Date()
+) {
+  const date =
+    value instanceof Date
+      ? value
+      : new Date(value);
 
-  if (Number.isNaN(date.getTime())) {
+  if (
+    Number.isNaN(date.getTime())
+  ) {
     return "";
   }
 
@@ -24,26 +53,39 @@ function getMonthKey(value = new Date()) {
   ).padStart(2, "0")}`;
 }
 
-function transactionAmount(transactions, monthKey = null) {
+function transactionAmount(
+  transactions,
+  monthKey = null
+) {
   return (
-    Array.isArray(transactions) ? transactions : []
-  ).reduce((sum, transaction) => {
-    if (
-      transaction?.type &&
-      transaction.type !== "earning"
-    ) {
-      return sum;
-    }
+    Array.isArray(transactions)
+      ? transactions
+      : []
+  ).reduce(
+    (sum, transaction) => {
+      if (
+        transaction?.type &&
+        transaction.type !== "earning"
+      ) {
+        return sum;
+      }
 
-    if (
-      monthKey &&
-      getMonthKey(transaction?.date) !== monthKey
-    ) {
-      return sum;
-    }
+      if (
+        monthKey &&
+        getMonthKey(
+          transaction?.date
+        ) !== monthKey
+      ) {
+        return sum;
+      }
 
-    return sum + number(transaction?.amount);
-  }, 0);
+      return (
+        sum +
+        number(transaction?.amount)
+      );
+    },
+    0
+  );
 }
 
 function projectBalance(project) {
@@ -56,42 +98,67 @@ function projectBalance(project) {
     project?.value,
   ].find(
     (value) =>
-      Number.isFinite(Number(value)) &&
+      Number.isFinite(
+        Number(value)
+      ) &&
       Number(value) >= 0
   );
 
-  if (liveBalance !== undefined) {
+  if (
+    liveBalance !== undefined
+  ) {
     return number(liveBalance);
   }
 
-  return Math.max(0, number(project?.invested));
+  return Math.max(
+    0,
+    number(project?.invested)
+  );
 }
 
 function projectEarned(project) {
   const stored = [
-    project?.lulo_lifetime_interest_usd,
+    project
+      ?.lulo_lifetime_interest_usd,
+
     project?.lifetimeUsd,
     project?.lifetime_usd,
     project?.earned,
-  ].find((value) => Number.isFinite(Number(value)));
+  ].find((value) =>
+    Number.isFinite(
+      Number(value)
+    )
+  );
 
-  return stored === undefined
-    ? transactionAmount(project?.transactions)
-    : number(stored);
+  if (stored !== undefined) {
+    return number(stored);
+  }
+
+  return transactionAmount(
+    project?.transactions
+  );
 }
 
-function projectMonthEarned(project) {
+function projectMonthEarned(
+  project
+) {
   const stored = [
     project?.monthUsd,
     project?.month_usd,
-  ].find((value) => Number.isFinite(Number(value)));
+  ].find((value) =>
+    Number.isFinite(
+      Number(value)
+    )
+  );
 
-  return stored === undefined
-    ? transactionAmount(
-        project?.transactions,
-        getMonthKey()
-      )
-    : number(stored);
+  if (stored !== undefined) {
+    return number(stored);
+  }
+
+  return transactionAmount(
+    project?.transactions,
+    getMonthKey()
+  );
 }
 
 function projectApy(project) {
@@ -103,49 +170,65 @@ function projectApy(project) {
   );
 }
 
-function projectAssets(project, balance, apy) {
-  const source = Array.isArray(project?.assets)
-    ? project.assets
-    : Array.isArray(project?.positions)
-      ? project.positions
-      : [];
+function projectAssets(
+  project,
+  balance,
+  apy
+) {
+  const source =
+    Array.isArray(project?.assets)
+      ? project.assets
+      : Array.isArray(
+            project?.positions
+          )
+        ? project.positions
+        : [];
 
-  if (source.length) {
-    return source.map((asset, index) => ({
-      ...asset,
+  if (source.length > 0) {
+    return source.map(
+      (asset, index) => ({
+        ...asset,
 
-      id:
-        asset?.id ||
-        `${
-          project?.id ||
-          project?.name ||
-          "project"
-        }-${index}`,
+        id:
+          asset?.id ||
+          `${
+            project?.id ||
+            project?.name ||
+            "project"
+          }-${index}`,
 
-      asset:
-        asset?.asset ||
-        asset?.symbol ||
-        asset?.name ||
-        "Position",
+        asset:
+          asset?.asset ||
+          asset?.symbol ||
+          asset?.name ||
+          "Position",
 
-      strategy:
-        asset?.strategy ||
-        asset?.type ||
-        "Yield",
+        strategy:
+          asset?.strategy ||
+          asset?.type ||
+          "Yield",
 
-      balance: number(
-        asset?.balance ??
-          asset?.value ??
-          asset?.total_value
-      ),
+        balance: number(
+          asset?.balance ??
+            asset?.value ??
+            asset?.total_value
+        ),
 
-      quantity:
-        asset?.quantity ??
-        asset?.amount ??
-        null,
+        quantity:
+          asset?.quantity ??
+          asset?.amount ??
+          null,
 
-      apy: number(asset?.apy ?? apy),
-    }));
+        price:
+          asset?.price ??
+          asset?.priceUsd ??
+          null,
+
+        apy: number(
+          asset?.apy ?? apy
+        ),
+      })
+    );
   }
 
   if (!(balance > 0)) {
@@ -172,20 +255,40 @@ function projectAssets(project, balance, apy) {
         "Yield",
 
       balance,
-      quantity: project?.quantity ?? null,
+
+      quantity:
+        project?.quantity ??
+        null,
+
+      price:
+        project?.price ??
+        null,
+
       apy,
     },
   ];
 }
 
-function toProjectEntry(project, index) {
-  const balance = projectBalance(project);
-  const apy = projectApy(project);
-  const lifetimeUsd = projectEarned(project);
-  const monthUsd = projectMonthEarned(project);
+function toProjectEntry(
+  project,
+  index
+) {
+  const balance =
+    projectBalance(project);
+
+  const apy =
+    projectApy(project);
+
+  const lifetimeUsd =
+    projectEarned(project);
+
+  const monthUsd =
+    projectMonthEarned(project);
 
   return {
-    id: project?.id || `project-${index}`,
+    id:
+      project?.id ||
+      `project-${index}`,
 
     platform:
       project?.platform ||
@@ -201,25 +304,34 @@ function toProjectEntry(project, index) {
       project?.autoSynced ||
         project?.live ||
         project?.yield_tracking ||
+        project?.lastSyncedAt ||
         project?.last_synced_at ||
-        project?.lulo_last_synced_at
+        project
+          ?.lulo_last_synced_at
     ),
 
     balance,
     apy,
-    earned: lifetimeUsd,
+
+    earned:
+      lifetimeUsd,
+
     lifetimeUsd,
     monthUsd,
 
     estimatedMonthlyUsd:
       balance > 0 && apy > 0
-        ? (balance * (apy / 100)) / 12
+        ? (
+            balance *
+            (apy / 100)
+          ) / 12
         : 0,
 
     lastSyncedAt:
       project?.lastSyncedAt ||
       project?.last_synced_at ||
-      project?.lulo_last_synced_at ||
+      project
+        ?.lulo_last_synced_at ||
       null,
 
     assets: projectAssets(
@@ -235,13 +347,20 @@ function readWalletBalanceCache() {
     WALLET_BALANCE_CACHE_KEY
   );
 
-  return cache && typeof cache === "object"
+  return (
+    cache &&
+    typeof cache === "object"
+  )
     ? cache
     : {};
 }
 
-function saveWalletBalance(walletId, data) {
-  const cache = readWalletBalanceCache();
+function saveWalletBalance(
+  walletId,
+  data
+) {
+  const cache =
+    readWalletBalanceCache();
 
   cache[walletId] = {
     savedAt: Date.now(),
@@ -259,62 +378,70 @@ function buildBitcoin(
   balanceCache
 ) {
   const bitcoinWallets = (
-    Array.isArray(wallets) ? wallets : []
+    Array.isArray(wallets)
+      ? wallets
+      : []
   ).filter(
     (wallet) =>
       String(
         wallet?.chain || ""
-      ).toLowerCase() === "bitcoin"
+      ).toLowerCase() ===
+      "bitcoin"
   );
 
-  const entries = bitcoinWallets.map(
-    (wallet) => {
-      const balance =
-        balanceCache?.[wallet.id]?.data ||
-        {};
+  const entries =
+    bitcoinWallets.map(
+      (wallet) => {
+        const balance =
+          balanceCache?.[
+            wallet.id
+          ]?.data || {};
 
-      const token = (
-        Array.isArray(balance.tokens)
-          ? balance.tokens
-          : []
-      ).find(
-        (item) =>
-          String(
-            item?.symbol || ""
-          ).toUpperCase() === "BTC"
-      );
+        const token = (
+          Array.isArray(
+            balance.tokens
+          )
+            ? balance.tokens
+            : []
+        ).find(
+          (item) =>
+            String(
+              item?.symbol || ""
+            ).toUpperCase() ===
+            "BTC"
+        );
 
-      const amount = number(
-        token?.amount
-      );
+        const amount = number(
+          token?.amount
+        );
 
-      const price = number(
-        token?.price
-      );
+        const price = number(
+          token?.price
+        );
 
-      const value = number(
-        token?.usd_value ??
-          balance?.total_usd ??
-          amount * price
-      );
+        const value = number(
+          token?.usd_value ??
+            balance?.total_usd ??
+            amount * price
+        );
 
-      return {
-        id: wallet.id,
-        walletId: wallet.id,
+        return {
+          id: wallet.id,
+          walletId: wallet.id,
 
-        label:
-          wallet.label ||
-          "Bitcoin Wallet",
+          label:
+            wallet.label ||
+            "Bitcoin Wallet",
 
-        address:
-          wallet.address || "",
+          address:
+            wallet.address || "",
 
-        amount,
-        price,
-        value,
-      };
-    }
-  );
+          amount,
+          price,
+          value,
+        };
+      }
+    );
 
   const amount = entries.reduce(
     (sum, wallet) =>
@@ -330,49 +457,218 @@ function buildBitcoin(
 
   const price =
     entries.find(
-      (wallet) => wallet.price > 0
+      (wallet) =>
+        wallet.price > 0
     )?.price || 0;
 
   return {
     amount,
     price,
     value,
+
+    // Dashboard uses balance.
     balance: value,
+
     wallets: entries,
   };
 }
+
+function createRatexEntry(
+  snapshot
+) {
+  const quantity = number(
+    snapshot?.quantity
+  );
+
+  const balance = number(
+    snapshot?.currentValueUsd
+  );
+
+  if (
+    !(quantity > 0) ||
+    !(balance > 0)
+  ) {
+    return null;
+  }
+
+  const price = number(
+    snapshot?.priceUsd
+  );
+
+  const apy = number(
+    snapshot?.fixedApy
+  );
+
+  return {
+    id: "ratex-live",
+    platform: "RateX",
+    logo: "",
+    live: true,
+    balance,
+    apy,
+
+    earned: number(
+      snapshot?.earnedUsd
+    ),
+
+    lifetimeUsd: number(
+      snapshot?.earnedUsd
+    ),
+
+    monthUsd: 0,
+
+    estimatedMonthlyUsd:
+      balance > 0 && apy > 0
+        ? (
+            balance *
+            (apy / 100)
+          ) / 12
+        : 0,
+
+    lastSyncedAt:
+      snapshot?.syncedAt ||
+      new Date().toISOString(),
+
+    assets: [
+      {
+        id: "ratex-ptonyc",
+        asset: "PTONyc",
+        strategy: "Fixed Yield",
+        balance,
+        quantity,
+        price,
+        apy,
+      },
+    ],
+  };
+}
+
+function createLoopscaleEntry(
+  snapshot
+) {
+  const balance = number(
+    snapshot?.positionValueUsd
+  );
+
+  if (!(balance > 0)) {
+    return null;
+  }
+
+  const quantity = number(
+    snapshot?.quantity
+  );
+
+  const price = number(
+    snapshot?.priceUsd
+  );
+
+  const apy = number(
+    snapshot?.netApy
+  );
+
+  const earned = number(
+    snapshot?.pnlUsd
+  );
+
+  return {
+    id: "loopscale-live",
+    platform: "Loopscale",
+    logo: "",
+    live: true,
+    balance,
+    apy,
+    earned,
+    lifetimeUsd: earned,
+    monthUsd: 0,
+
+    estimatedMonthlyUsd:
+      balance > 0 && apy > 0
+        ? (
+            balance *
+            (apy / 100)
+          ) / 12
+        : 0,
+
+    lastSyncedAt:
+      snapshot?.syncedAt ||
+      new Date().toISOString(),
+
+    assets: [
+      {
+        id: "loopscale-onyc",
+        asset: "ONyc",
+        strategy: "Loop",
+        balance,
+        quantity,
+        price,
+        apy,
+      },
+    ],
+  };
+}
+
 function createPortfolio(
   projects,
   wallets,
   balanceCache,
-  errors = []
+  errors = [],
+  externalEntries = []
 ) {
+  const externalNames =
+    new Set(
+      externalEntries.map(
+        (entry) =>
+          String(
+            entry?.platform || ""
+          ).toLowerCase()
+      )
+    );
+
   const projectEntries = (
-    Array.isArray(projects) ? projects : []
+    Array.isArray(projects)
+      ? projects
+      : []
   )
     .filter(
       (project) =>
         project?.inactive !== true &&
         project?.is_inactive !== true
     )
-    .map(toProjectEntry);
+    .map(toProjectEntry)
+    .filter(
+      (entry) =>
+        !externalNames.has(
+          String(
+            entry?.platform || ""
+          ).toLowerCase()
+        )
+    );
 
-  const bitcoin = buildBitcoin(
-    wallets,
-    balanceCache
+  projectEntries.push(
+    ...externalEntries
   );
+
+  const bitcoin =
+    buildBitcoin(
+      wallets,
+      balanceCache
+    );
 
   const projectBalanceTotal =
     projectEntries.reduce(
       (sum, entry) =>
-        sum + entry.balance,
+        sum +
+        number(entry.balance),
       0
     );
 
   const totalEarned =
     projectEntries.reduce(
       (sum, entry) =>
-        sum + entry.lifetimeUsd,
+        sum +
+        number(
+          entry.lifetimeUsd
+        ),
       0
     );
 
@@ -380,7 +676,10 @@ function createPortfolio(
     projectEntries.reduce(
       (sum, entry) =>
         sum +
-        entry.estimatedMonthlyUsd,
+        number(
+          entry
+            .estimatedMonthlyUsd
+        ),
       0
     );
 
@@ -389,9 +688,13 @@ function createPortfolio(
       ? projectEntries.reduce(
           (sum, entry) =>
             sum +
-            entry.balance * entry.apy,
+            number(
+              entry.balance
+            ) *
+              number(entry.apy),
           0
-        ) / projectBalanceTotal
+        ) /
+        projectBalanceTotal
       : 0;
 
   return {
@@ -403,34 +706,30 @@ function createPortfolio(
         projectBalanceTotal,
 
       bitcoinBalance:
-        bitcoin.balance,
+        bitcoin.value,
 
       cryptoTotal:
         projectBalanceTotal +
-        bitcoin.balance,
+        bitcoin.value,
 
       totalEarned,
       weightedApy,
       estimatedMonthlyIncome,
 
       activePositions:
-        projectEntries.reduce(
-          (sum, entry) =>
-            sum +
-            Math.max(
-              1,
-              entry.assets.length
-            ),
-          0
-        ),
+        projectEntries.length,
     },
 
     errors,
-    updatedAt: new Date().toISOString(),
+
+    updatedAt:
+      new Date().toISOString(),
   };
 }
 
-function savePortfolio(portfolio) {
+function savePortfolio(
+  portfolio
+) {
   storage.set(
     PORTFOLIO_CACHE_KEY,
     portfolio
@@ -440,15 +739,20 @@ function savePortfolio(portfolio) {
     ...storage.getCryptoCache(),
 
     total:
-      portfolio.summary.cryptoTotal,
+      portfolio.summary
+        .cryptoTotal,
 
-    projectPortfolio: portfolio,
+    projectPortfolio:
+      portfolio,
 
     updated_at:
       portfolio.updatedAt,
   });
 
-  if (typeof window !== "undefined") {
+  if (
+    typeof window !==
+    "undefined"
+  ) {
     window.dispatchEvent(
       new CustomEvent(
         "project-crypto-updated",
@@ -469,7 +773,9 @@ export function getStoredProjectCryptoPortfolio() {
 
   if (
     saved?.summary &&
-    Array.isArray(saved?.projectEntries)
+    Array.isArray(
+      saved?.projectEntries
+    )
   ) {
     return saved;
   }
@@ -482,11 +788,35 @@ export function getStoredProjectCryptoPortfolio() {
 }
 
 export function seedProjectCryptoCache() {
+  const previous =
+    storage.get(
+      PORTFOLIO_CACHE_KEY
+    );
+
+  const savedExternalEntries = (
+    Array.isArray(
+      previous?.projectEntries
+    )
+      ? previous.projectEntries
+      : []
+  ).filter((entry) => {
+    const platform = String(
+      entry?.platform || ""
+    ).toLowerCase();
+
+    return (
+      platform === "ratex" ||
+      platform === "loopscale"
+    );
+  });
+
   return savePortfolio(
     createPortfolio(
       storage.getProjects(),
       storage.getWallets(),
-      readWalletBalanceCache()
+      readWalletBalanceCache(),
+      [],
+      savedExternalEntries
     )
   );
 }
@@ -499,6 +829,9 @@ export async function refreshProjectCryptoPortfolio() {
   refreshPromise = (async () => {
     const errors = [];
 
+    const previous =
+      getStoredProjectCryptoPortfolio();
+
     let projects =
       storage.getProjects();
 
@@ -507,14 +840,96 @@ export async function refreshProjectCryptoPortfolio() {
 
     try {
       const response =
-        await projectsApi.accrueApyTransactions();
+        await projectsApi
+          .accrueApyTransactions();
 
       projects =
-        response?.data || projects;
+        response?.data ||
+        projects;
     } catch (error) {
       errors.push(
         error?.message ||
           "Project Income refresh failed"
+      );
+    }
+
+    const previousRatex =
+      previous
+        ?.projectEntries
+        ?.find(
+          (entry) =>
+            String(
+              entry?.platform || ""
+            ).toLowerCase() ===
+            "ratex"
+        ) || null;
+
+    const previousLoopscale =
+      previous
+        ?.projectEntries
+        ?.find(
+          (entry) =>
+            String(
+              entry?.platform || ""
+            ).toLowerCase() ===
+            "loopscale"
+        ) || null;
+
+    let ratexEntry =
+      previousRatex;
+
+    let loopscaleEntry =
+      previousLoopscale;
+
+    const [
+      ratexResult,
+      loopscaleResult,
+    ] = await Promise.allSettled([
+      getRatexPtonycSnapshot(),
+      getLoopscaleOnycSnapshot(),
+    ]);
+
+    if (
+      ratexResult.status ===
+      "fulfilled"
+    ) {
+      const next =
+        createRatexEntry(
+          ratexResult.value
+        );
+
+      if (next) {
+        ratexEntry = next;
+      }
+    } else {
+      errors.push(
+        `RateX: ${
+          ratexResult.reason
+            ?.message ||
+          "refresh failed"
+        }`
+      );
+    }
+
+    if (
+      loopscaleResult.status ===
+      "fulfilled"
+    ) {
+      const next =
+        createLoopscaleEntry(
+          loopscaleResult.value
+        );
+
+      if (next) {
+        loopscaleEntry = next;
+      }
+    } else {
+      errors.push(
+        `Loopscale: ${
+          loopscaleResult.reason
+            ?.message ||
+          "refresh failed"
+        }`
       );
     }
 
@@ -523,30 +938,43 @@ export async function refreshProjectCryptoPortfolio() {
         await walletsApi.getAll();
 
       wallets =
-        response?.data || wallets;
+        response?.data ||
+        wallets;
+
+      const bitcoinWallets =
+        wallets.filter(
+          (wallet) =>
+            String(
+              wallet?.chain || ""
+            ).toLowerCase() ===
+              "bitcoin" &&
+            wallet?.id
+        );
 
       await Promise.all(
-        wallets
-          .filter(
-            (wallet) =>
-              wallet?.chain ===
-                "bitcoin" &&
-              wallet?.id
-          )
-          .map(async (wallet) => {
+        bitcoinWallets.map(
+          async (wallet) => {
             try {
-              const balanceResponse =
-                await walletsApi.getBalances(
-                  wallet.id
-                );
+              const response =
+                await walletsApi
+                  .getBalances(
+                    wallet.id
+                  );
 
               if (
-                !balanceResponse?.data
+                !response?.data
                   ?.unavailable
               ) {
                 saveWalletBalance(
                   wallet.id,
-                  balanceResponse.data
+                  response.data
+                );
+              } else {
+                errors.push(
+                  `${
+                    wallet.label ||
+                    "Bitcoin wallet"
+                  }: price unavailable`
                 );
               }
             } catch (error) {
@@ -560,7 +988,8 @@ export async function refreshProjectCryptoPortfolio() {
                 }`
               );
             }
-          })
+          }
+        )
       );
     } catch (error) {
       errors.push(
@@ -569,12 +998,18 @@ export async function refreshProjectCryptoPortfolio() {
       );
     }
 
+    const externalEntries = [
+      ratexEntry,
+      loopscaleEntry,
+    ].filter(Boolean);
+
     return savePortfolio(
       createPortfolio(
         projects,
         wallets,
         readWalletBalanceCache(),
-        errors
+        errors,
+        externalEntries
       )
     );
   })().finally(() => {
@@ -585,27 +1020,30 @@ export async function refreshProjectCryptoPortfolio() {
 }
 
 export function startProjectCryptoAutoSync() {
-  if (typeof window === "undefined") {
+  if (
+    typeof window ===
+    "undefined"
+  ) {
     return () => {};
   }
 
   const refresh = () => {
-    refreshProjectCryptoPortfolio().catch(
-      (error) => {
+    refreshProjectCryptoPortfolio()
+      .catch((error) => {
         console.warn(
           "Project crypto refresh failed:",
           error
         );
-      }
-    );
+      });
   };
 
   refresh();
 
-  const interval = window.setInterval(
-    refresh,
-    AUTO_SYNC_INTERVAL_MS
-  );
+  const interval =
+    window.setInterval(
+      refresh,
+      AUTO_SYNC_INTERVAL_MS
+    );
 
   window.addEventListener(
     "focus",
@@ -623,7 +1061,9 @@ export function startProjectCryptoAutoSync() {
   );
 
   return () => {
-    window.clearInterval(interval);
+    window.clearInterval(
+      interval
+    );
 
     window.removeEventListener(
       "focus",
