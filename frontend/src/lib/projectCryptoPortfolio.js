@@ -8,6 +8,10 @@ import {
 } from "./localStorage";
 
 import {
+  coinGeckoApi,
+} from "./external-apis";
+
+import {
   getRatexPtonycSnapshot,
 } from "./ratexYieldSync";
 
@@ -23,6 +27,12 @@ const WALLET_BALANCE_CACHE_KEY =
 
 const SALAD_TRACKER_KEY =
   "project_income_salad_tracker_v1";
+
+const ROLLERCOIN_TRACKER_KEY =
+  "project_income_rollercoin_tracker_v2";
+
+const ROLLERCOIN_HISTORICAL_TRX =
+  69.123738;
 
 const AUTO_SYNC_INTERVAL_MS =
   5 * 60 * 1000;
@@ -529,6 +539,148 @@ function createSaladEntry() {
   };
 }
 
+function getRollerCoinTracker() {
+  const tracker = storage.get(
+    ROLLERCOIN_TRACKER_KEY
+  );
+
+  return (
+    tracker &&
+    typeof tracker === "object"
+  )
+    ? tracker
+    : null;
+}
+
+function getRollerCoinTrxBalance(
+  tracker
+) {
+  if (!tracker) {
+    return 0;
+  }
+
+  const daily =
+    tracker.daily &&
+    typeof tracker.daily ===
+      "object"
+      ? tracker.daily
+      : {};
+
+  const trackedTrx =
+    Object.values(daily).reduce(
+      (sum, entry) => {
+        if (
+          typeof entry === "number"
+        ) {
+          return sum;
+        }
+
+        return (
+          sum +
+          number(
+            entry?.trx ??
+            entry?.sol
+          )
+        );
+      },
+      0
+    );
+
+  return (
+    trackedTrx +
+    ROLLERCOIN_HISTORICAL_TRX
+  );
+}
+
+function createRollerCoinEntry(
+  livePrice = 0
+) {
+  const tracker =
+    getRollerCoinTracker();
+
+  if (!tracker) {
+    return null;
+  }
+
+  const trxBalance =
+    getRollerCoinTrxBalance(
+      tracker
+    );
+
+  const trxPrice =
+    number(livePrice) > 0
+      ? number(livePrice)
+      : number(
+          tracker.lastTrxPrice ??
+          tracker.lastSolPrice
+        );
+
+  const balance =
+    trxBalance * trxPrice;
+
+  if (!(trxBalance > 0)) {
+    return null;
+  }
+
+  return {
+    id: "rollercoin-live",
+    platform: "RollerCoin",
+    logo: "",
+    live: true,
+
+    balance,
+    apy: 0,
+    earned: balance,
+    lifetimeUsd: balance,
+    monthUsd: 0,
+    estimatedMonthlyUsd: 0,
+
+    lastSyncedAt:
+      tracker.lastSyncedAt ||
+      null,
+
+    assets: [
+      {
+        id:
+          "rollercoin-trx-balance",
+
+        asset: "TRX",
+
+        strategy:
+          "RollerCoin Balance",
+
+        balance,
+        quantity: trxBalance,
+        price: trxPrice,
+        apy: 0,
+      },
+    ],
+  };
+}
+
+function saveRollerCoinPrice(
+  price
+) {
+  const tracker =
+    getRollerCoinTracker();
+
+  if (
+    !tracker ||
+    !(number(price) > 0)
+  ) {
+    return;
+  }
+
+  storage.set(
+    ROLLERCOIN_TRACKER_KEY,
+    {
+      ...tracker,
+      lastTrxPrice:
+        number(price),
+    }
+  );
+}
+
 function createRatexEntry(
   snapshot
 ) {
@@ -682,6 +834,13 @@ function createPortfolio(
       )
     );
 
+  const excludedProjects =
+    new Set([
+      "kryptex",
+      "rollercoin",
+      "salad",
+    ]);
+
   const projectEntries = (
     Array.isArray(projects)
       ? projects
@@ -706,7 +865,9 @@ function createPortfolio(
       return (
         project?.inactive !== true &&
         project?.is_inactive !== true &&
-        projectName !== "kryptex" &&
+        !excludedProjects.has(
+          projectName
+        ) &&
         trackingType !== "kryptex"
       );
     })
@@ -844,44 +1005,16 @@ function savePortfolio(
   return portfolio;
 }
 
-export function getStoredProjectCryptoPortfolio() {
+function getSavedLiveEntries() {
   const saved = storage.get(
     PORTFOLIO_CACHE_KEY
   );
 
-  if (
-    saved?.summary &&
+  return (
     Array.isArray(
       saved?.projectEntries
     )
-  ) {
-    return saved;
-  }
-
-  const saladEntry =
-    createSaladEntry();
-
-  return createPortfolio(
-    storage.getProjects(),
-    storage.getWallets(),
-    readWalletBalanceCache(),
-    [],
-    saladEntry
-      ? [saladEntry]
-      : []
-  );
-}
-
-export function seedProjectCryptoCache() {
-  const previous = storage.get(
-    PORTFOLIO_CACHE_KEY
-  );
-
-  const savedExternalEntries = (
-    Array.isArray(
-      previous?.projectEntries
-    )
-      ? previous.projectEntries
+      ? saved.projectEntries
       : []
   ).filter((entry) => {
     const platform = String(
@@ -895,26 +1028,27 @@ export function seedProjectCryptoCache() {
       platform === "loopscale"
     );
   });
+}
 
-  const saladEntry =
-    createSaladEntry();
-
+export function getStoredProjectCryptoPortfolio() {
   const externalEntries = [
-    ...savedExternalEntries,
+    ...getSavedLiveEntries(),
+    createSaladEntry(),
+    createRollerCoinEntry(),
+  ].filter(Boolean);
 
-    ...(saladEntry
-      ? [saladEntry]
-      : []),
-  ];
+  return createPortfolio(
+    storage.getProjects(),
+    storage.getWallets(),
+    readWalletBalanceCache(),
+    [],
+    externalEntries
+  );
+}
 
+export function seedProjectCryptoCache() {
   return savePortfolio(
-    createPortfolio(
-      storage.getProjects(),
-      storage.getWallets(),
-      readWalletBalanceCache(),
-      [],
-      externalEntries
-    )
+    getStoredProjectCryptoPortfolio()
   );
 }
 
@@ -978,12 +1112,18 @@ export async function refreshProjectCryptoPortfolio() {
     let loopscaleEntry =
       previousLoopscale;
 
+    let liveTrxPrice = 0;
+
     const [
       ratexResult,
       loopscaleResult,
+      trxPriceResult,
     ] = await Promise.allSettled([
       getRatexPtonycSnapshot(),
       getLoopscaleOnycSnapshot(),
+      coinGeckoApi.getPrice(
+        "tron"
+      ),
     ]);
 
     if (
@@ -1027,6 +1167,25 @@ export async function refreshProjectCryptoPortfolio() {
             ?.message ||
           "refresh failed"
         }`
+      );
+    }
+
+    if (
+      trxPriceResult.status ===
+      "fulfilled"
+    ) {
+      liveTrxPrice = number(
+        trxPriceResult.value
+      );
+
+      if (liveTrxPrice > 0) {
+        saveRollerCoinPrice(
+          liveTrxPrice
+        );
+      }
+    } else {
+      errors.push(
+        "TRX price refresh failed"
       );
     }
 
@@ -1095,13 +1254,14 @@ export async function refreshProjectCryptoPortfolio() {
       );
     }
 
-    const saladEntry =
-      createSaladEntry();
-
     const externalEntries = [
       ratexEntry,
       loopscaleEntry,
-      saladEntry,
+      createSaladEntry(),
+
+      createRollerCoinEntry(
+        liveTrxPrice
+      ),
     ].filter(Boolean);
 
     return savePortfolio(
