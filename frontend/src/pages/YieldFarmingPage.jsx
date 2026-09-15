@@ -2919,13 +2919,6 @@ function buildProjectIncome(
           )
         ] || {};
 
-      /*
-       * Once a Lulo month has a tracked monthly total, that value is
-       * authoritative. Do not also add old lulo_yield transactions for
-       * the same month. Older versions used transactions + a remainder
-       * backfill, which is what allowed a withdrawal accounting jump to
-       * inflate September income to $31.77.
-       */
       const authoritativeMonths =
         new Set(
           Object.keys(
@@ -3093,6 +3086,32 @@ function buildProjectIncome(
     );
   }
 
+  /*
+   * ROLLERCOIN
+   *
+   * For the CURRENT month:
+   *   Sum all TRX earned during the month first,
+   *   then value that total using the latest TRX price.
+   *
+   * This prevents September income from being stuck
+   * at old TRX prices that were saved when each day
+   * was originally imported.
+   *
+   * For PREVIOUS months:
+   *   Keep the historical stored USD amounts so
+   *   finalized months do not move when TRX moves.
+   */
+  const currentMonthKey =
+    getCurrentMonthKey();
+
+  const liveTrxPrice =
+    Number(
+      rollerCoinTracker?.lastTrxPrice
+    ) || 0;
+
+  const rollerCoinMonths =
+    {};
+
   Object.entries(
     rollerCoinTracker?.daily ||
       {}
@@ -3101,14 +3120,82 @@ function buildProjectIncome(
       date,
       entry,
     ]) => {
-      addEarning(
+      const monthKey =
         getMonthKey(
           date
-        ),
-        "RollerCoin",
+        );
+
+      if (
+        !monthKey
+      ) {
+        return;
+      }
+
+      if (
+        !rollerCoinMonths[
+          monthKey
+        ]
+      ) {
+        rollerCoinMonths[
+          monthKey
+        ] = {
+          trx: 0,
+          storedUsd: 0,
+        };
+      }
+
+      const trx =
+        Number(
+          entry?.trx ??
+            entry?.sol
+        ) || 0;
+
+      const storedUsd =
         Number(
           entry?.usd
-        ) || 0
+        ) || 0;
+
+      rollerCoinMonths[
+        monthKey
+      ].trx +=
+        trx;
+
+      rollerCoinMonths[
+        monthKey
+      ].storedUsd +=
+        storedUsd;
+    }
+  );
+
+  Object.entries(
+    rollerCoinMonths
+  ).forEach(
+    ([
+      monthKey,
+      values,
+    ]) => {
+      const trx =
+        Number(
+          values?.trx
+        ) || 0;
+
+      const storedUsd =
+        Number(
+          values?.storedUsd
+        ) || 0;
+
+      const amount =
+        monthKey ===
+          currentMonthKey &&
+        liveTrxPrice > 0
+          ? trx *
+            liveTrxPrice
+          : storedUsd;
+
+      addEarning(
+        monthKey,
+        "RollerCoin",
+        amount
       );
     }
   );
@@ -3173,10 +3260,6 @@ function buildProjectIncome(
     }
   );
 
-  /*
-   * If the allocation endpoint had no rows on the first sync, still
-   * make the opening balance appear as this month's starting income.
-   */
   if (
     unetworkBaselineInitialized &&
     unetworkOpeningMonth &&
@@ -3202,12 +3285,14 @@ function buildProjectIncome(
       (month) => ({
         monthKey:
           month.monthKey,
+
         total:
           Number(
             month.total.toFixed(
               6
             )
           ),
+
         platforms:
           Array.from(
             month.platforms.entries()
@@ -3218,6 +3303,7 @@ function buildProjectIncome(
                 amount,
               ]) => ({
                 platform,
+
                 amount:
                   Number(
                     amount.toFixed(
