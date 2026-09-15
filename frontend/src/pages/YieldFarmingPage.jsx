@@ -243,43 +243,49 @@ function getSaladTrackerStats(
       tracker?.lifetimeBalance
     ) || 0;
 
-  const exactMonthUsd =
+  const currentMonthDailyEntries =
     Object.entries(
-      tracker?.daily ||
-        {}
-    ).reduce(
+      tracker?.daily || {}
+    ).filter(
+      ([date]) =>
+        String(date).slice(
+          0,
+          7
+        ) === currentMonth
+    );
+
+  const exactMonthUsd =
+    currentMonthDailyEntries.reduce(
       (
         sum,
         [
-          date,
+          ,
           amount,
         ]
       ) =>
-        String(
-          date
-        ).slice(
-          0,
-          7
-        ) ===
-        currentMonth
-          ? sum +
-            (
-              Number(
-                amount
-              ) || 0
-            )
-          : sum,
+        sum +
+        (Number(
+          amount
+        ) || 0),
       0
     );
 
+  /*
+   * If Salad gives us dated earnings for this month,
+   * those rows are authoritative.
+   *
+   * If it does NOT give us dated earnings, do not try
+   * to reconstruct earnings by assuming every balance
+   * decrease was a withdrawal.
+   *
+   * In that case the live Salad balance is used as the
+   * current month's income.
+   */
   const monthUsd =
-    exactMonthUsd > 0
+    currentMonthDailyEntries.length >
+    0
       ? exactMonthUsd
-      : Number(
-          tracker?.monthlyEarnings?.[
-            currentMonth
-          ]
-        ) || 0;
+      : currentBalance;
 
   const currentDay =
     Math.max(
@@ -298,19 +304,28 @@ function getSaladTrackerStats(
 
   return {
     currentBalance,
+
     lifetimeUsd,
+
     monthUsd,
-    withdrawals:
-      Number(
-        tracker?.withdrawals
-      ) || 0,
+
+    /*
+     * Salad currently does not provide a reliable
+     * explicit withdrawal event in this sync payload.
+     * Do not infer one from balance differences.
+     */
+    withdrawals: 0,
+
     estimatedDailyUsd,
+
     estimatedMonthlyUsd:
       estimatedDailyUsd *
       30.4375,
+
     estimatedYearlyUsd:
       estimatedDailyUsd *
       365,
+
     lastSyncedAt:
       tracker?.lastSyncedAt ||
       null,
@@ -4833,290 +4848,255 @@ export default function YieldFarmingPage() {
     ]
   );
 
-  const importSaladPayload =
-    useCallback(
-      (payload) => {
-        const currentBalance =
-          Number(
-            payload?.currentBalance
-          );
-
-        const lifetimeBalance =
-          Number(
-            payload?.lifetimeBalance
-          );
-
-        if (
-          !Number.isFinite(
-            currentBalance
-          ) ||
-          !Number.isFinite(
-            lifetimeBalance
-          )
-        ) {
-          setSaladSyncing(
-            false
-          );
-
-          setSaladMessage(
-            "Salad returned an invalid balance payload."
-          );
-
-          return;
-        }
-
-        const syncedAt =
-          payload?.syncedAt ||
-          new Date().toISOString();
-
-        const incomingDaily =
-          payload?.daily &&
-          typeof payload.daily ===
-            "object"
-            ? payload.daily
-            : {};
-
-        setSaladTracker(
-          (current) => {
-            const daily = {
-              ...(
-                current?.daily ||
-                {}
-              ),
-            };
-
-            Object.entries(
-              incomingDaily
-            ).forEach(
-              ([
-                date,
-                amount,
-              ]) => {
-                const value =
-                  Number(
-                    amount
-                  ) || 0;
-
-                if (
-                  /^\d{4}-\d{2}-\d{2}$/.test(
-                    String(
-                      date
-                    )
-                  ) &&
-                  value >= 0
-                ) {
-                  daily[
-                    date
-                  ] = value;
-                }
-              }
-            );
-
-            const monthlyEarnings = {
-              ...(
-                current?.monthlyEarnings ||
-                {}
-              ),
-            };
-
-            const exactMonthly =
-              {};
-
-            Object.entries(
-              daily
-            ).forEach(
-              ([
-                date,
-                amount,
-              ]) => {
-                const monthKey =
-                  String(
-                    date
-                  ).slice(
-                    0,
-                    7
-                  );
-
-                exactMonthly[
-                  monthKey
-                ] =
-                  (
-                    Number(
-                      exactMonthly[
-                        monthKey
-                      ]
-                    ) || 0
-                  ) +
-                  (
-                    Number(
-                      amount
-                    ) || 0
-                  );
-              }
-            );
-
-            Object.entries(
-              exactMonthly
-            ).forEach(
-              ([
-                monthKey,
-                amount,
-              ]) => {
-                monthlyEarnings[
-                  monthKey
-                ] =
-                  Number(
-                    Number(
-                      amount
-                    ).toFixed(
-                      6
-                    )
-                  );
-              }
-            );
-
-            const monthKey =
-              getCurrentMonthKey();
-
-            const previousLifetime =
-              Number(
-                current?.lastLifetimeBalance
-              ) || 0;
-
-            const previousBalance =
-              Number(
-                current?.lastBalance
-              ) || 0;
-
-            const earnedDelta =
-              current?.initialized
-                ? Math.max(
-                    0,
-                    lifetimeBalance -
-                      previousLifetime
-                  )
-                : 0;
-
-            if (
-              !Object.keys(
-                incomingDaily
-              ).length
-            ) {
-              if (
-                !current?.initialized
-              ) {
-                monthlyEarnings[
-                  monthKey
-                ] =
-                  Number(
-                    Math.max(
-                      Number(
-                        monthlyEarnings[
-                          monthKey
-                        ]
-                      ) || 0,
-                      currentBalance
-                    ).toFixed(
-                      6
-                    )
-                  );
-              } else if (
-                earnedDelta > 0
-              ) {
-                monthlyEarnings[
-                  monthKey
-                ] =
-                  Number(
-                    (
-                      (
-                        Number(
-                          monthlyEarnings[
-                            monthKey
-                          ]
-                        ) || 0
-                      ) +
-                      earnedDelta
-                    ).toFixed(
-                      6
-                    )
-                  );
-              }
-            }
-
-            const expectedBalance =
-              previousBalance +
-              earnedDelta;
-
-            const withdrawalDelta =
-              current?.initialized
-                ? Math.max(
-                    0,
-                    expectedBalance -
-                      currentBalance
-                  )
-                : 0;
-
-            return {
-              ...current,
-              initialized:
-                true,
-              startedMonth:
-                current?.startedMonth ||
-                monthKey,
-              currentBalance,
-              lifetimeBalance,
-              lastBalance:
-                currentBalance,
-              lastLifetimeBalance:
-                lifetimeBalance,
-              lastSyncedAt:
-                syncedAt,
-              lastWithdrawalAt:
-                withdrawalDelta >
-                0.000001
-                  ? syncedAt
-                  : current?.lastWithdrawalAt ||
-                    null,
-              withdrawals:
-                Number(
-                  (
-                    (
-                      Number(
-                        current?.withdrawals
-                      ) || 0
-                    ) +
-                    withdrawalDelta
-                  ).toFixed(
-                    6
-                  )
-                ),
-              monthlyEarnings,
-              daily,
-            };
-          }
+const importSaladPayload =
+  useCallback(
+    (payload) => {
+      const currentBalance =
+        Number(
+          payload?.currentBalance
         );
 
-        setSaladConnected(
-          true
+      const lifetimeBalance =
+        Number(
+          payload?.lifetimeBalance
         );
 
+      if (
+        !Number.isFinite(
+          currentBalance
+        ) ||
+        !Number.isFinite(
+          lifetimeBalance
+        )
+      ) {
         setSaladSyncing(
           false
         );
 
-        const dayCount =
-          Object.keys(
-            incomingDaily
-          ).length;
-
         setSaladMessage(
-          dayCount
-            ? `Salad synced ${dayCount} earning day${dayCount === 1 ? "" : "s"}.`
-            : "Salad balance synced."
+          "Salad returned an invalid balance payload."
         );
-      },
-      []
-    );
+
+        return;
+      }
+
+      const syncedAt =
+        payload?.syncedAt ||
+        new Date().toISOString();
+
+      const incomingDaily =
+        payload?.daily &&
+        typeof payload.daily ===
+          "object"
+          ? payload.daily
+          : {};
+
+      setSaladTracker(
+        (current) => {
+          const daily = {
+            ...(
+              current?.daily ||
+              {}
+            ),
+          };
+
+          /*
+           * Merge any dated Salad earnings supplied
+           * by the extension.
+           */
+          Object.entries(
+            incomingDaily
+          ).forEach(
+            ([
+              date,
+              amount,
+            ]) => {
+              const value =
+                Number(
+                  amount
+                ) || 0;
+
+              if (
+                /^\d{4}-\d{2}-\d{2}$/.test(
+                  String(
+                    date
+                  )
+                ) &&
+                value >= 0
+              ) {
+                daily[
+                  date
+                ] =
+                  value;
+              }
+            }
+          );
+
+          const monthlyEarnings = {
+            ...(
+              current?.monthlyEarnings ||
+              {}
+            ),
+          };
+
+          /*
+           * Build exact monthly totals from
+           * dated earnings when available.
+           */
+          const exactMonthly =
+            {};
+
+          Object.entries(
+            daily
+          ).forEach(
+            ([
+              date,
+              amount,
+            ]) => {
+              const monthKey =
+                String(
+                  date
+                ).slice(
+                  0,
+                  7
+                );
+
+              exactMonthly[
+                monthKey
+              ] =
+                (
+                  Number(
+                    exactMonthly[
+                      monthKey
+                    ]
+                  ) || 0
+                ) +
+                (
+                  Number(
+                    amount
+                  ) || 0
+                );
+            }
+          );
+
+          Object.entries(
+            exactMonthly
+          ).forEach(
+            ([
+              monthKey,
+              amount,
+            ]) => {
+              monthlyEarnings[
+                monthKey
+              ] =
+                Number(
+                  Number(
+                    amount
+                  ).toFixed(
+                    6
+                  )
+                );
+            }
+          );
+
+          const monthKey =
+            getCurrentMonthKey();
+
+          /*
+           * If Salad provides NO dated earnings,
+           * do not try to reconstruct this month's
+           * income from lifetime-balance changes.
+           *
+           * Instead, use the live Salad balance as
+           * the current month's earned amount.
+           *
+           * Example:
+           * Available balance = $3.72
+           * No explicit withdrawal history
+           *
+           * This month = $3.72
+           * Available = $3.72
+           * Withdrawn = $0.00
+           */
+          if (
+            !Object.keys(
+              incomingDaily
+            ).length
+          ) {
+            monthlyEarnings[
+              monthKey
+            ] =
+              Number(
+                currentBalance.toFixed(
+                  6
+                )
+              );
+          }
+
+          return {
+            ...current,
+
+            initialized:
+              true,
+
+            startedMonth:
+              current?.startedMonth ||
+              monthKey,
+
+            currentBalance,
+
+            lifetimeBalance,
+
+            lastBalance:
+              currentBalance,
+
+            lastLifetimeBalance:
+              lifetimeBalance,
+
+            lastSyncedAt:
+              syncedAt,
+
+            /*
+             * Salad does not currently give us
+             * a reliable explicit withdrawal event.
+             *
+             * Do NOT infer withdrawals from a drop
+             * or mismatch in the available balance.
+             */
+            lastWithdrawalAt:
+              null,
+
+            withdrawals:
+              0,
+
+            monthlyEarnings,
+
+            daily,
+          };
+        }
+      );
+
+      setSaladConnected(
+        true
+      );
+
+      setSaladSyncing(
+        false
+      );
+
+      const dayCount =
+        Object.keys(
+          incomingDaily
+        ).length;
+
+      setSaladMessage(
+        dayCount
+          ? `Salad synced ${dayCount} earning day${dayCount === 1 ? "" : "s"}.`
+          : "Salad balance synced."
+      );
+    },
+    []
+  );
 
   const syncSaladBalance =
     useCallback(
