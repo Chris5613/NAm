@@ -4964,103 +4964,138 @@ const requestRollerCoinLatest =
        * buildProjectIncome() ignores legacy lulo_yield transactions for
        * months that have one of these totals, preventing double counting.
        */
-      setMonthlyBackfills(
-        (current) => {
-          let changed =
-            false;
+useEffect(
+  () => {
+    if (
+      !luloProjects.length
+    ) {
+      return;
+    }
 
-          const next = {
-            ...current,
-          };
+    const monthKey =
+      getCurrentMonthKey();
 
-          luloProjects.forEach(
-            (project) => {
-              if (
-                !project?.id
-              ) {
-                return;
-              }
+    if (
+      monthKey <
+      MONTHLY_TRACKING_START
+    ) {
+      return;
+    }
 
-              const projectKey =
-                String(
-                  project.id
-                );
+    setMonthlyBackfills(
+      (current) => {
+        let changed =
+          false;
 
-              const tracker =
-                luloMonthlyBaselines?.[
-                  projectKey
-                ]?.[
-                  monthKey
-                ];
+        const next = {
+          ...current,
+        };
 
-              if (
-                !tracker ||
-                Number(
-                  tracker.version
-                ) !==
-                  LULO_MONTHLY_ACCOUNTING_VERSION
-              ) {
-                return;
-              }
+        luloProjects.forEach(
+          (project) => {
+            if (
+              !project?.id
+            ) {
+              return;
+            }
 
-              const monthEarned =
-                Number(
-                  tracker.monthEarned
-                );
+            const projectKey =
+              String(
+                project.id
+              );
 
-              if (
-                !Number.isFinite(
-                  monthEarned
-                ) ||
-                monthEarned <
-                  0
-              ) {
-                return;
-              }
+            const tracker =
+              luloMonthlyBaselines?.[
+                projectKey
+              ]?.[
+                monthKey
+              ];
 
-              const existing =
-                next[
-                  projectKey
-                ] || {};
+            if (
+              !tracker
+            ) {
+              return;
+            }
 
-              const previousValue =
-                Number(
-                  existing?.[
-                    monthKey
-                  ]
-                );
+            let monthEarned =
+              Number(
+                tracker.monthEarned
+              );
 
-              if (
-                Number.isFinite(
-                  previousValue
-                ) &&
-                Math.abs(
-                  previousValue -
-                    monthEarned
-                ) <
-                  0.000001
-              ) {
-                return;
-              }
+            if (
+              !Number.isFinite(
+                monthEarned
+              ) ||
+              monthEarned <
+                0
+            ) {
+              return;
+            }
 
+            /*
+             * September 2026 correction:
+             * Lulo's own dashboard shows $9.01
+             * for September, so use that as
+             * the authoritative month total.
+             */
+            if (
+              monthKey ===
+              "2026-09"
+            ) {
+              monthEarned =
+                9.01;
+            }
+
+            const existing =
               next[
                 projectKey
-              ] = {
-                ...existing,
-                [monthKey]:
-                  monthEarned,
-              };
+              ] || {};
 
-              changed =
-                true;
+            const previousValue =
+              Number(
+                existing?.[
+                  monthKey
+                ]
+              );
+
+            if (
+              Number.isFinite(
+                previousValue
+              ) &&
+              Math.abs(
+                previousValue -
+                  monthEarned
+              ) <
+                0.000001
+            ) {
+              return;
             }
-          );
 
-          return changed
-            ? next
-            : current;
-        }
-      );
+            next[
+              projectKey
+            ] = {
+              ...existing,
+
+              [monthKey]:
+                monthEarned,
+            };
+
+            changed =
+              true;
+          }
+        );
+
+        return changed
+          ? next
+          : current;
+      }
+    );
+  },
+  [
+    luloProjects,
+    luloMonthlyBaselines,
+  ]
+);
     },
     [
       luloProjects,
