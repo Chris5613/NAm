@@ -67,8 +67,8 @@ const CATEGORY_CONFIG = {
     label: "Stocks",
     shortLabel: "Stocks",
     icon: TrendingUp,
-    color: "text-teal-400",
-    bar: "bg-teal-400",
+    color: "text-cyan-400",
+    bar: "bg-cyan-400",
   },
 
   crypto: {
@@ -268,7 +268,7 @@ function getMonthLabel(
 }
 
 /* =========================================================
-   CURRENCY FORMATTER
+   CURRENCY
 ========================================================= */
 
 function formatCurrency(
@@ -293,7 +293,7 @@ function formatCurrency(
 }
 
 /* =========================================================
-   CATEGORY DAILY CHANGES
+   DAILY CATEGORY CHANGE
 ========================================================= */
 
 function getCategoryDailyChanges(
@@ -345,7 +345,8 @@ function getCategoryDailyChanges(
       DAILY_CATEGORY_BASELINE_KEY,
 
       JSON.stringify({
-        dateKey: todayKey,
+        dateKey:
+          todayKey,
 
         baseline,
       })
@@ -380,8 +381,8 @@ function getCategoryDailyChanges(
     cash:
       (breakdown?.cash ||
         0) -
-      (saved.baseline?.cash ||
-        0),
+      (saved.baseline
+        ?.cash || 0),
 
     other:
       (breakdown?.other ||
@@ -420,7 +421,8 @@ function getDailyNetWorthChange(
 
       percentChange: 0,
 
-      dateKey: todayKey,
+      dateKey:
+        todayKey,
     };
   }
 
@@ -448,20 +450,24 @@ function getDailyNetWorthChange(
       DAILY_BASELINE_KEY,
 
       JSON.stringify({
-        dateKey: todayKey,
+        dateKey:
+          todayKey,
 
-        baseline: value,
+        baseline:
+          value,
       })
     );
 
     return {
-      baseline: value,
+      baseline:
+        value,
 
       change: 0,
 
       percentChange: 0,
 
-      dateKey: todayKey,
+      dateKey:
+        todayKey,
     };
   }
 
@@ -471,7 +477,8 @@ function getDailyNetWorthChange(
     ) || 0;
 
   const change =
-    value - baseline;
+    value -
+    baseline;
 
   const percentChange =
     baseline !== 0
@@ -487,16 +494,21 @@ function getDailyNetWorthChange(
 
     percentChange,
 
-    dateKey: todayKey,
+    dateKey:
+      todayKey,
   };
 }
 
 /* =========================================================
    MONTHLY HISTORY
 
-   This preserves your monthly behavior:
-   - current month updates the same point
-   - when the month changes, a new month point is created
+   Current month:
+   - stays in the same chart position
+   - value keeps updating
+
+   When a new month starts:
+   - previous month remains
+   - a new chart point is created automatically
 ========================================================= */
 
 function getMonthlyNetWorthHistory(
@@ -527,27 +539,34 @@ function getMonthlyNetWorthHistory(
 
   let history =
     Array.isArray(saved)
-      ? saved.map(
-          (item) => ({
-            monthKey:
-              item.monthKey,
+      ? saved
+          .filter(
+            (item) =>
+              item &&
+              typeof item.monthKey ===
+                "string"
+          )
+          .map(
+            (item) => ({
+              monthKey:
+                item.monthKey,
 
-            month:
-              item.month ||
-              item.label ||
-              item.time ||
-              monthLabel,
+              month:
+                item.month ||
+                item.label ||
+                item.time ||
+                item.monthKey,
 
-            value:
-              Number(
-                item.value
-              ) || 0,
+              value:
+                Number(
+                  item.value
+                ) || 0,
 
-            live:
-              item.monthKey ===
-              monthKey,
-          })
-        )
+              live:
+                item.monthKey ===
+                monthKey,
+            })
+          )
       : [];
 
   const currentIndex =
@@ -560,6 +579,20 @@ function getMonthlyNetWorthHistory(
   if (
     currentIndex >= 0
   ) {
+    history =
+      history.map(
+        (
+          item,
+          index
+        ) => ({
+          ...item,
+
+          live:
+            index ===
+            currentIndex,
+        })
+      );
+
     history[
       currentIndex
     ] = {
@@ -620,7 +653,7 @@ function getMonthlyNetWorthHistory(
 }
 
 /* =========================================================
-   NET WORTH CALCULATION
+   NET WORTH
 ========================================================= */
 
 function calculateNetWorth(
@@ -693,7 +726,7 @@ function calculateNetWorth(
 }
 
 /* =========================================================
-   ASSET ALLOCATION BAR
+   ALLOCATION BAR
 ========================================================= */
 
 function AllocationBar({
@@ -726,7 +759,9 @@ function AllocationBar({
     <div className="flex items-center gap-4">
       <Icon
         className={`h-5 w-5 shrink-0 ${config.color}`}
-        strokeWidth={1.8}
+        strokeWidth={
+          1.8
+        }
       />
 
       <div className="min-w-0 flex-1">
@@ -739,13 +774,13 @@ function AllocationBar({
             gap-3
           "
         >
-          <span className="text-sm text-slate-100">
+          <span className="text-sm text-foreground">
             {
               config.shortLabel
             }
           </span>
 
-          <span className="text-sm font-medium text-white">
+          <span className="text-sm font-medium text-foreground">
             {formatCurrency(
               value
             )}
@@ -757,13 +792,14 @@ function AllocationBar({
             h-2
             overflow-hidden
             rounded-full
-            bg-slate-800
+            bg-secondary
           "
         >
           <div
             className={`h-full rounded-full ${config.bar}`}
             style={{
-              width: `${width}%`,
+              width:
+                `${width}%`,
             }}
           />
         </div>
@@ -803,36 +839,38 @@ function HoldingRow({
         items-center
         gap-5
         border-t
-        border-slate-700/70
+        border-border/40
         px-6
         py-4
         text-left
-        transition
-        hover:bg-white/[0.035]
+        transition-colors
+        hover:bg-white/[0.03]
         focus:outline-none
-        focus-visible:bg-white/[0.05]
+        focus-visible:bg-white/[0.04]
       "
     >
       <div className="flex w-11 justify-center">
         <Icon
           className={`h-6 w-6 ${config.color}`}
-          strokeWidth={1.8}
+          strokeWidth={
+            1.8
+          }
         />
       </div>
 
       <div className="min-w-0 flex-1">
-        <p className="font-medium text-white">
+        <p className="font-medium text-foreground">
           {
             config.label
           }
         </p>
 
-        <p className="mt-0.5 text-sm text-slate-400">
+        <p className="mt-0.5 text-sm text-muted-foreground">
           {subtitle}
         </p>
       </div>
 
-      <p className="text-lg font-medium text-white">
+      <p className="text-lg font-medium text-foreground">
         {category ===
         "debts"
           ? "−"
@@ -849,10 +887,10 @@ function HoldingRow({
         className="
           h-5
           w-5
-          text-slate-400
+          text-muted-foreground
           transition
           group-hover:translate-x-0.5
-          group-hover:text-white
+          group-hover:text-foreground
         "
       />
     </button>
@@ -901,32 +939,44 @@ export default function Dashboard() {
   const [
     activeTab,
     setActiveTab,
-  ] = useState("all");
+  ] = useState(
+    "all"
+  );
 
   const [
     addDialogOpen,
     setAddDialogOpen,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
 
   const [
     lastUpdated,
     setLastUpdated,
-  ] = useState(null);
+  ] = useState(
+    null
+  );
 
   const [
     dailyNetWorthChange,
     setDailyNetWorthChange,
-  ] = useState(null);
+  ] = useState(
+    null
+  );
 
   const [
     dailyCategoryChanges,
     setDailyCategoryChanges,
-  ] = useState(null);
+  ] = useState(
+    null
+  );
 
   const [
     refreshingPrices,
     setRefreshingPrices,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
 
   const [
     holdingSearch,
@@ -936,15 +986,19 @@ export default function Dashboard() {
   const [
     detailsModalOpen,
     setDetailsModalOpen,
-  ] = useState(false);
+  ] = useState(
+    false
+  );
 
   const [
     selectedCategory,
     setSelectedCategory,
-  ] = useState(null);
+  ] = useState(
+    null
+  );
 
   /* =======================================================
-     LIVE HISTORY STORAGE
+     LIVE HISTORY
   ======================================================= */
 
   useEffect(() => {
@@ -964,10 +1018,12 @@ export default function Dashboard() {
     storage.setLiveHistory?.(
       trimmed
     );
-  }, [liveHistory]);
+  }, [
+    liveHistory,
+  ]);
 
   /* =======================================================
-     FETCH DATA
+     FETCH
   ======================================================= */
 
   const fetchData =
@@ -990,6 +1046,7 @@ export default function Dashboard() {
           const calculatedNetWorth =
             calculateNetWorth(
               storedAssets,
+
               cryptoTotal
             );
 
@@ -1090,10 +1147,12 @@ export default function Dashboard() {
       clearInterval(
         interval
       );
-  }, [fetchData]);
+  }, [
+    fetchData,
+  ]);
 
   /* =======================================================
-     MODAL ESC KEY
+     ESC CLOSE MODAL
   ======================================================= */
 
   useEffect(() => {
@@ -1103,18 +1162,19 @@ export default function Dashboard() {
       return;
     }
 
-    const handleKeyDown = (
-      event
-    ) => {
-      if (
-        event.key ===
-        "Escape"
-      ) {
-        setDetailsModalOpen(
-          false
-        );
-      }
-    };
+    const handleKeyDown =
+      (
+        event
+      ) => {
+        if (
+          event.key ===
+          "Escape"
+        ) {
+          setDetailsModalOpen(
+            false
+          );
+        }
+      };
 
     window.addEventListener(
       "keydown",
@@ -1172,7 +1232,7 @@ export default function Dashboard() {
     };
 
   /* =======================================================
-     ASSET CREATED
+     CREATED
   ======================================================= */
 
   const handleAssetCreated =
@@ -1185,7 +1245,7 @@ export default function Dashboard() {
     };
 
   /* =======================================================
-     REFRESH PRICES
+     REFRESH
   ======================================================= */
 
   const handleRefreshPrices =
@@ -1202,8 +1262,7 @@ export default function Dashboard() {
           await fetchData();
 
           toast.success(
-            result
-              ?.updatedCount >
+            result?.updatedCount >
               0
               ? `Updated ${result.updatedCount} asset prices`
               : "Prices are already up to date"
@@ -1225,21 +1284,27 @@ export default function Dashboard() {
         }
       },
 
-      [fetchData]
+      [
+        fetchData,
+      ]
     );
 
   const handleAssetUpdated =
-    () => fetchData();
+    () =>
+      fetchData();
 
   const handleAssetDeleted =
-    () => fetchData();
+    () =>
+      fetchData();
 
   /* =======================================================
-     OPEN / CLOSE HOLDING MODAL
+     MODAL
   ======================================================= */
 
   const openCategoryModal =
-    (category) => {
+    (
+      category
+    ) => {
       setSelectedCategory(
         category
       );
@@ -1260,7 +1325,9 @@ export default function Dashboard() {
      LOADING
   ======================================================= */
 
-  if (loading) {
+  if (
+    loading
+  ) {
     return (
       <div
         className="
@@ -1271,7 +1338,7 @@ export default function Dashboard() {
         "
         data-testid="loading-spinner"
       >
-        <div className="animate-pulse text-sm text-slate-400">
+        <div className="animate-pulse font-mono text-sm text-muted-foreground">
           Loading...
         </div>
       </div>
@@ -1279,7 +1346,7 @@ export default function Dashboard() {
   }
 
   /* =======================================================
-     DISPLAY DATA
+     DATA
   ======================================================= */
 
   const breakdown =
@@ -1316,7 +1383,9 @@ export default function Dashboard() {
   const maxAllocation =
     Math.max(
       ...allocationCategories.map(
-        (category) =>
+        (
+          category
+        ) =>
           Math.abs(
             breakdown[
               category
@@ -1330,28 +1399,36 @@ export default function Dashboard() {
   const assetCounts = {
     stocks:
       assets.filter(
-        (asset) =>
+        (
+          asset
+        ) =>
           asset.category ===
           "stocks"
       ).length,
 
     cash:
       assets.filter(
-        (asset) =>
+        (
+          asset
+        ) =>
           asset.category ===
           "cash"
       ).length,
 
     other:
       assets.filter(
-        (asset) =>
+        (
+          asset
+        ) =>
           asset.category ===
           "other"
       ).length,
 
     debts:
       assets.filter(
-        (asset) =>
+        (
+          asset
+        ) =>
           asset.category ===
           "debts"
       ).length,
@@ -1440,7 +1517,9 @@ export default function Dashboard() {
 
   const filteredHoldingRows =
     holdingRows.filter(
-      (row) => {
+      (
+        row
+      ) => {
         if (
           activeTab !==
             "all" &&
@@ -1485,8 +1564,14 @@ export default function Dashboard() {
   const todayPositive =
     todayChange >= 0;
 
-  const historyHasMultipleMonths =
-    history.length > 1;
+  const currentMonth =
+    history.find(
+      (
+        item
+      ) =>
+        item.monthKey ===
+        getMonthKey()
+    );
 
   /* =======================================================
      UI
@@ -1524,14 +1609,14 @@ export default function Dashboard() {
               font-semibold
               leading-none
               tracking-[-0.03em]
-              text-white
+              text-foreground
             "
             data-testid="page-title"
           >
             Net Worth
           </h1>
 
-          <p className="mt-2 text-lg text-slate-400">
+          <p className="mt-2 text-lg text-muted-foreground">
             Your wealth at a
             glance
           </p>
@@ -1549,22 +1634,22 @@ export default function Dashboard() {
                 list-none
                 items-center
                 gap-3
-                rounded-xl
+                rounded-lg
                 border
-                border-slate-700
-                bg-[#121b22]
+                border-border/60
+                bg-card
                 px-5
                 text-sm
                 font-medium
-                text-slate-100
-                transition
-                hover:bg-[#17232c]
+                text-foreground
+                transition-colors
+                hover:bg-secondary
               "
             >
               Actions
 
               <ChevronDown
-                className="h-4 w-4 text-slate-400"
+                className="h-4 w-4 text-muted-foreground"
                 strokeWidth={
                   1.8
                 }
@@ -1579,12 +1664,12 @@ export default function Dashboard() {
                 mt-2
                 w-52
                 overflow-hidden
-                rounded-xl
+                rounded-lg
                 border
-                border-slate-700
-                bg-[#111a21]
+                border-border/60
+                bg-card
                 p-1.5
-                shadow-2xl
+                shadow-xl
               "
             >
               <button
@@ -1597,12 +1682,13 @@ export default function Dashboard() {
                   w-full
                   items-center
                   gap-3
-                  rounded-lg
+                  rounded-md
                   px-3
                   py-2.5
                   text-sm
-                  text-slate-200
-                  hover:bg-white/5
+                  text-foreground
+                  transition-colors
+                  hover:bg-secondary
                 "
               >
                 <Camera className="h-4 w-4" />
@@ -1623,12 +1709,13 @@ export default function Dashboard() {
                   w-full
                   items-center
                   gap-3
-                  rounded-lg
+                  rounded-md
                   px-3
                   py-2.5
                   text-sm
-                  text-slate-200
-                  hover:bg-white/5
+                  text-foreground
+                  transition-colors
+                  hover:bg-secondary
                   disabled:opacity-50
                 "
               >
@@ -1655,12 +1742,13 @@ export default function Dashboard() {
                   w-full
                   items-center
                   gap-3
-                  rounded-lg
+                  rounded-md
                   px-3
                   py-2.5
                   text-sm
-                  text-slate-200
-                  hover:bg-white/5
+                  text-foreground
+                  transition-colors
+                  hover:bg-secondary
                 "
               >
                 <Download className="h-4 w-4" />
@@ -1675,12 +1763,13 @@ export default function Dashboard() {
                   cursor-pointer
                   items-center
                   gap-3
-                  rounded-lg
+                  rounded-md
                   px-3
                   py-2.5
                   text-sm
-                  text-slate-200
-                  hover:bg-white/5
+                  text-foreground
+                  transition-colors
+                  hover:bg-secondary
                 "
               >
                 <Upload className="h-4 w-4" />
@@ -1710,18 +1799,20 @@ export default function Dashboard() {
             data-testid="add-asset-btn"
             className="
               h-12
-              rounded-xl
-              bg-teal-400
+              rounded-lg
+              bg-white
               px-5
               text-[15px]
               font-semibold
-              text-slate-950
-              hover:bg-teal-300
+              text-black
+              hover:bg-neutral-200
             "
           >
             <Plus
               className="mr-2 h-5 w-5"
-              strokeWidth={2}
+              strokeWidth={
+                2
+              }
             />
 
             Add asset
@@ -1730,7 +1821,7 @@ export default function Dashboard() {
       </header>
 
       {/* =================================================
-          HERO + ASSET ALLOCATION
+          HERO + ALLOCATION
       ================================================= */}
 
       <section
@@ -1747,14 +1838,14 @@ export default function Dashboard() {
             relative
             min-h-[305px]
             overflow-hidden
-            rounded-xl
+            rounded-lg
             border
-            border-slate-700/80
-            bg-[#111a21]
+            border-border/40
+            bg-card
             p-6
           "
         >
-          <p className="text-lg text-slate-400">
+          <p className="text-lg text-muted-foreground">
             Total net worth
           </p>
 
@@ -1765,7 +1856,7 @@ export default function Dashboard() {
               font-semibold
               leading-none
               tracking-[-0.04em]
-              text-white
+              text-foreground
             "
           >
             {formatCurrency(
@@ -1811,7 +1902,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          {/* HISTORY AREA */}
+          {/* MONTHLY HISTORY STATUS */}
 
           <div
             className="
@@ -1823,7 +1914,7 @@ export default function Dashboard() {
               w-[45%]
               border-l
               border-dashed
-              border-slate-600/70
+              border-border
               lg:block
             "
           >
@@ -1836,7 +1927,7 @@ export default function Dashboard() {
                 w-3
                 -translate-x-1/2
                 rounded-full
-                bg-teal-400
+                bg-cyan-400
               "
             />
 
@@ -1851,72 +1942,52 @@ export default function Dashboard() {
                 text-center
               "
             >
-              {historyHasMultipleMonths ? (
-                <>
-                  <p className="font-medium text-slate-100">
-                    Net worth history
-                  </p>
+              <p className="font-medium text-foreground">
+                {currentMonth
+                  ? currentMonth.month
+                  : "Net worth history"}
+              </p>
 
-                  <p className="mt-2 text-sm text-slate-400">
-                    {
-                      history.length
-                    }{" "}
-                    monthly points
-                    tracked
-                  </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                {history.length ===
+                1
+                  ? "Your first monthly point is being tracked"
+                  : `${history.length} monthly points tracked`}
+              </p>
 
-                  <p className="mt-4 text-xs text-slate-500">
-                    A new point is
-                    added
-                    automatically
-                    each month
-                  </p>
-                </>
-              ) : (
-                <>
-                  <p className="font-medium text-slate-100">
-                    Your history
-                    starts here
-                  </p>
-
-                  <p className="mt-2 text-sm text-slate-400">
-                    Your current
-                    month is being
-                    tracked
-                  </p>
-
-                  <p className="mt-4 text-xs text-slate-500">
-                    The next month
-                    automatically
-                    creates a new
-                    point
-                  </p>
-                </>
-              )}
+              <p className="mt-4 text-xs text-muted-foreground">
+                A new position is
+                created automatically
+                when the next month
+                begins
+              </p>
             </div>
           </div>
         </div>
 
-        {/* ASSET ALLOCATION */}
+        {/* ALLOCATION */}
 
         <div
           className="
-            rounded-xl
+            rounded-lg
             border
-            border-slate-700/80
-            bg-[#111a21]
+            border-border/40
+            bg-card
             p-6
           "
         >
-          <h2 className="text-xl font-semibold text-white">
+          <h2 className="text-xl font-semibold text-foreground">
             Asset allocation
           </h2>
 
           <div className="mt-6 space-y-5">
             {[
               "stocks",
+
               "crypto",
+
               "cash",
+
               "other",
             ].map(
               (
@@ -1941,7 +2012,7 @@ export default function Dashboard() {
               )
             )}
 
-            <div className="border-t border-slate-700 pt-5">
+            <div className="border-t border-border/40 pt-5">
               <AllocationBar
                 category="debts"
                 value={
@@ -1958,16 +2029,16 @@ export default function Dashboard() {
       </section>
 
       {/* =================================================
-          YOUR HOLDINGS
+          HOLDINGS
       ================================================= */}
 
       <section
         className="
           overflow-hidden
-          rounded-xl
+          rounded-lg
           border
-          border-slate-700/80
-          bg-[#111a21]
+          border-border/40
+          bg-card
         "
       >
         <div
@@ -1982,7 +2053,7 @@ export default function Dashboard() {
             md:justify-between
           "
         >
-          <h2 className="text-xl font-semibold text-white">
+          <h2 className="text-xl font-semibold text-foreground">
             Your holdings
           </h2>
 
@@ -2014,16 +2085,19 @@ export default function Dashboard() {
                   h-10
                   min-w-[128px]
                   appearance-none
-                  rounded-lg
+                  rounded-md
                   border
-                  border-slate-700
-                  bg-[#111a21]
+                  border-border/60
+                  bg-background
                   pl-4
                   pr-10
                   text-sm
-                  text-slate-100
+                  text-foreground
                   outline-none
-                  focus:border-slate-500
+                  transition-colors
+                  focus:border-border
+                  focus:ring-1
+                  focus:ring-border
                 "
               >
                 <option value="all">
@@ -2060,7 +2134,7 @@ export default function Dashboard() {
                   h-4
                   w-4
                   -translate-y-1/2
-                  text-slate-400
+                  text-muted-foreground
                 "
               />
             </div>
@@ -2076,7 +2150,7 @@ export default function Dashboard() {
                   h-4
                   w-4
                   -translate-y-1/2
-                  text-slate-500
+                  text-muted-foreground
                 "
               />
 
@@ -2097,17 +2171,20 @@ export default function Dashboard() {
                 className="
                   h-10
                   w-full
-                  rounded-lg
+                  rounded-md
                   border
-                  border-slate-700
-                  bg-[#111a21]
+                  border-border/60
+                  bg-background
                   pl-10
                   pr-4
                   text-sm
-                  text-slate-100
+                  text-foreground
                   outline-none
-                  placeholder:text-slate-500
-                  focus:border-slate-500
+                  transition-colors
+                  placeholder:text-muted-foreground
+                  focus:border-border
+                  focus:ring-1
+                  focus:ring-border
                   sm:w-64
                 "
               />
@@ -2115,11 +2192,13 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* HOLDING ROWS */}
+        {/* ROWS */}
 
         <div>
           {filteredHoldingRows.map(
-            (row) => (
+            (
+              row
+            ) => (
               <HoldingRow
                 key={
                   row.category
@@ -2139,12 +2218,12 @@ export default function Dashboard() {
             <div
               className="
                 border-t
-                border-slate-700
+                border-border/40
                 px-6
                 py-10
                 text-center
                 text-sm
-                text-slate-400
+                text-muted-foreground
               "
             >
               No matching
@@ -2155,7 +2234,7 @@ export default function Dashboard() {
       </section>
 
       {/* =================================================
-          HOLDING DETAILS MODAL
+          DETAILS MODAL
       ================================================= */}
 
       {detailsModalOpen &&
@@ -2191,17 +2270,17 @@ export default function Dashboard() {
                 max-w-5xl
                 flex-col
                 overflow-hidden
-                rounded-2xl
+                rounded-lg
                 border
-                border-slate-700
-                bg-[#0f181f]
+                border-border/60
+                bg-card
                 shadow-2xl
               "
               role="dialog"
               aria-modal="true"
               aria-labelledby="holding-details-title"
             >
-              {/* MODAL HEADER */}
+              {/* HEADER */}
 
               <div
                 className="
@@ -2210,7 +2289,7 @@ export default function Dashboard() {
                   items-center
                   justify-between
                   border-b
-                  border-slate-700/80
+                  border-border/40
                   px-6
                   py-5
                 "
@@ -2230,8 +2309,8 @@ export default function Dashboard() {
                           w-11
                           items-center
                           justify-center
-                          rounded-xl
-                          bg-white/[0.04]
+                          rounded-md
+                          bg-secondary
                         "
                       >
                         <Icon
@@ -2254,7 +2333,7 @@ export default function Dashboard() {
                       className="
                         text-xl
                         font-semibold
-                        text-white
+                        text-foreground
                       "
                     >
                       {
@@ -2264,7 +2343,7 @@ export default function Dashboard() {
                       }
                     </h2>
 
-                    <p className="mt-1 text-sm text-slate-400">
+                    <p className="mt-1 text-sm text-muted-foreground">
                       {selectedCategory ===
                       "crypto"
                         ? "Projects and Bitcoin"
@@ -2294,7 +2373,7 @@ export default function Dashboard() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                  <p className="hidden text-xl font-semibold text-white sm:block">
+                  <p className="hidden text-xl font-semibold text-foreground sm:block">
                     {selectedCategory ===
                     "debts"
                       ? "−"
@@ -2320,11 +2399,11 @@ export default function Dashboard() {
                       w-10
                       items-center
                       justify-center
-                      rounded-lg
-                      text-slate-400
-                      transition
-                      hover:bg-white/[0.06]
-                      hover:text-white
+                      rounded-md
+                      text-muted-foreground
+                      transition-colors
+                      hover:bg-secondary
+                      hover:text-foreground
                     "
                     aria-label="Close details"
                   >
@@ -2340,12 +2419,12 @@ export default function Dashboard() {
 
               {/* MOBILE TOTAL */}
 
-              <div className="border-b border-slate-700/80 px-6 py-4 sm:hidden">
-                <p className="text-xs uppercase tracking-wide text-slate-500">
+              <div className="border-b border-border/40 px-6 py-4 sm:hidden">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
                   Total
                 </p>
 
-                <p className="mt-1 text-2xl font-semibold text-white">
+                <p className="mt-1 text-2xl font-semibold text-foreground">
                   {selectedCategory ===
                   "debts"
                     ? "−"
@@ -2361,7 +2440,7 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              {/* MODAL CONTENT */}
+              {/* CONTENT */}
 
               <div
                 className="
@@ -2411,7 +2490,7 @@ export default function Dashboard() {
         )}
 
       {/* =================================================
-          ADD ASSET DIALOG
+          ADD ASSET
       ================================================= */}
 
       <AddAssetDialog
@@ -2435,16 +2514,15 @@ export default function Dashboard() {
         allowStocks
       />
 
-      {/* These values stay active because they are part
-          of your original tracking behavior. */}
+      {/* Keeps lastUpdated alive without displaying it */}
 
-      <span className="hidden">
-        {String(
-          Boolean(
-            lastUpdated
-          )
-        )}
-      </span>
+      {lastUpdated && (
+        <span className="hidden">
+          {
+            lastUpdated.toISOString()
+          }
+        </span>
+      )}
     </div>
   );
 }
