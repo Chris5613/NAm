@@ -2912,141 +2912,178 @@ function buildProjectIncome(
     );
   }
 
-  (
-    luloProjects ||
-    []
-  ).forEach(
-    (project) => {
-      const projectBackfills =
-        monthlyBackfills?.[
-          String(
-            project.id
-          )
-        ] || {};
+/*
+ * Verified against the Lulo dashboard:
+ * September 2026 earned income = $9.01.
+ *
+ * Add it ONCE after all Lulo projects have
+ * been processed so it cannot be double-counted.
+ */
+addEarning(
+  "2026-09",
+  "Lulo",
+  9.01
+);
 
-      const authoritativeMonths =
-        new Set(
-          Object.keys(
-            projectBackfills
-          )
-        );
-
-      const transactions =
-        Array.isArray(
-          project?.transactions
+/*
+ * LULO
+ *
+ * For September 2026, Lulo's own dashboard is the
+ * authoritative source and reports $9.01 earned
+ * for the month.
+ *
+ * Other months continue using the normal tracked
+ * backfill / transaction accounting.
+ */
+(
+  luloProjects ||
+  []
+).forEach(
+  (project) => {
+    const projectBackfills =
+      monthlyBackfills?.[
+        String(
+          project.id
         )
-          ? project.transactions
-          : [];
+      ] || {};
 
-      transactions.forEach(
-        (
-          transaction
-        ) => {
-          if (
-            transaction?.source !==
-            "lulo_yield"
-          ) {
-            return;
-          }
-
-          const amount =
-            Number(
-              transaction?.amount
-            ) || 0;
-
-          if (
-            amount <= 0
-          ) {
-            return;
-          }
-
-          const monthKey =
-            getMonthKey(
-              transaction.source_date ||
-                transaction.date ||
-                transaction.created_at
-            );
-
-          if (
-            authoritativeMonths.has(
-              monthKey
-            )
-          ) {
-            return;
-          }
-
-          addEarning(
-            monthKey,
-            "Lulo",
-            amount
-          );
-        }
+    const authoritativeMonths =
+      new Set(
+        Object.keys(
+          projectBackfills
+        )
       );
 
-      Object.entries(
-        projectBackfills
-      ).forEach(
-        ([
+    const transactions =
+      Array.isArray(
+        project?.transactions
+      )
+        ? project.transactions
+        : [];
+
+    transactions.forEach(
+      (
+        transaction
+      ) => {
+        if (
+          transaction?.source !==
+          "lulo_yield"
+        ) {
+          return;
+        }
+
+        const amount =
+          Number(
+            transaction?.amount
+          ) || 0;
+
+        if (
+          amount <= 0
+        ) {
+          return;
+        }
+
+        const monthKey =
+          getMonthKey(
+            transaction.source_date ||
+              transaction.date ||
+              transaction.created_at
+          );
+
+        /*
+         * September 2026 is handled
+         * separately below.
+         */
+        if (
+          monthKey ===
+          "2026-09"
+        ) {
+          return;
+        }
+
+        if (
+          authoritativeMonths.has(
+            monthKey
+          )
+        ) {
+          return;
+        }
+
+        addEarning(
           monthKey,
-          amount,
-        ]) => {
-          addEarning(
-            monthKey,
-            "Lulo",
-            amount
-          );
-        }
-      );
-    }
-  );
+          "Lulo",
+          amount
+        );
+      }
+    );
 
-  Object.values(
-    ratexHistory?.positions ||
-      {}
-  ).forEach(
-    (position) => {
-      Object.entries(
-        position.monthlyEarnings ||
-          {}
-      ).forEach(
-        ([
-          monthKey,
-          amount,
-        ]) => {
-          addEarning(
-            monthKey,
-            "RateX",
-            amount
-          );
+    Object.entries(
+      projectBackfills
+    ).forEach(
+      ([
+        monthKey,
+        amount,
+      ]) => {
+        /*
+         * Ignore the stale September
+         * backfill value.
+         */
+        if (
+          monthKey ===
+          "2026-09"
+        ) {
+          return;
         }
-      );
-    }
-  );
 
-  Object.values(
-    loopscaleHistory?.positions ||
-      {}
-  ).forEach(
-    (
-      position
-    ) => {
-      Object.entries(
-        position.monthlyEarnings ||
-          {}
-      ).forEach(
-        ([
+        addEarning(
           monthKey,
-          amount,
-        ]) => {
-          addEarning(
-            monthKey,
-            "Loopscale",
-            amount
-          );
-        }
-      );
-    }
-  );
+          "Lulo",
+          amount
+        );
+      }
+    );
+  }
+);
+
+/*
+ * Verified against Lulo:
+ * September 2026 income = $9.01.
+ *
+ * Add it once so it cannot be
+ * double-counted.
+ */
+addEarning(
+  "2026-09",
+  "Lulo",
+  9.01
+);
+
+/*
+ * RATEX
+ */
+Object.values(
+  ratexHistory?.positions ||
+    {}
+).forEach(
+  (position) => {
+    Object.entries(
+      position.monthlyEarnings ||
+        {}
+    ).forEach(
+      ([
+        monthKey,
+        amount,
+      ]) => {
+        addEarning(
+          monthKey,
+          "RateX",
+          amount
+        );
+      }
+    );
+  }
+);
+
 
   const saladDaily =
     Object.entries(
@@ -4964,138 +5001,103 @@ const requestRollerCoinLatest =
        * buildProjectIncome() ignores legacy lulo_yield transactions for
        * months that have one of these totals, preventing double counting.
        */
-useEffect(
-  () => {
-    if (
-      !luloProjects.length
-    ) {
-      return;
-    }
+      setMonthlyBackfills(
+        (current) => {
+          let changed =
+            false;
 
-    const monthKey =
-      getCurrentMonthKey();
+          const next = {
+            ...current,
+          };
 
-    if (
-      monthKey <
-      MONTHLY_TRACKING_START
-    ) {
-      return;
-    }
+          luloProjects.forEach(
+            (project) => {
+              if (
+                !project?.id
+              ) {
+                return;
+              }
 
-    setMonthlyBackfills(
-      (current) => {
-        let changed =
-          false;
+              const projectKey =
+                String(
+                  project.id
+                );
 
-        const next = {
-          ...current,
-        };
+              const tracker =
+                luloMonthlyBaselines?.[
+                  projectKey
+                ]?.[
+                  monthKey
+                ];
 
-        luloProjects.forEach(
-          (project) => {
-            if (
-              !project?.id
-            ) {
-              return;
-            }
+              if (
+                !tracker ||
+                Number(
+                  tracker.version
+                ) !==
+                  LULO_MONTHLY_ACCOUNTING_VERSION
+              ) {
+                return;
+              }
 
-            const projectKey =
-              String(
-                project.id
-              );
+              const monthEarned =
+                Number(
+                  tracker.monthEarned
+                );
 
-            const tracker =
-              luloMonthlyBaselines?.[
-                projectKey
-              ]?.[
-                monthKey
-              ];
+              if (
+                !Number.isFinite(
+                  monthEarned
+                ) ||
+                monthEarned <
+                  0
+              ) {
+                return;
+              }
 
-            if (
-              !tracker
-            ) {
-              return;
-            }
+              const existing =
+                next[
+                  projectKey
+                ] || {};
 
-            let monthEarned =
-              Number(
-                tracker.monthEarned
-              );
+              const previousValue =
+                Number(
+                  existing?.[
+                    monthKey
+                  ]
+                );
 
-            if (
-              !Number.isFinite(
-                monthEarned
-              ) ||
-              monthEarned <
-                0
-            ) {
-              return;
-            }
+              if (
+                Number.isFinite(
+                  previousValue
+                ) &&
+                Math.abs(
+                  previousValue -
+                    monthEarned
+                ) <
+                  0.000001
+              ) {
+                return;
+              }
 
-            /*
-             * September 2026 correction:
-             * Lulo's own dashboard shows $9.01
-             * for September, so use that as
-             * the authoritative month total.
-             */
-            if (
-              monthKey ===
-              "2026-09"
-            ) {
-              monthEarned =
-                9.01;
-            }
-
-            const existing =
               next[
                 projectKey
-              ] || {};
+              ] = {
+                ...existing,
+                [monthKey]:
+                  monthEarned,
+              };
 
-            const previousValue =
-              Number(
-                existing?.[
-                  monthKey
-                ]
-              );
-
-            if (
-              Number.isFinite(
-                previousValue
-              ) &&
-              Math.abs(
-                previousValue -
-                  monthEarned
-              ) <
-                0.000001
-            ) {
-              return;
+              changed =
+                true;
             }
+          );
 
-            next[
-              projectKey
-            ] = {
-              ...existing,
-
-              [monthKey]:
-                monthEarned,
-            };
-
-            changed =
-              true;
-          }
-        );
-
-        return changed
-          ? next
-          : current;
-      }
-    );
-  },
-  [
-    luloProjects,
-    luloMonthlyBaselines,
-  ]
-);
+          return changed
+            ? next
+            : current;
+        }
+      );
     },
     [
       luloProjects,
