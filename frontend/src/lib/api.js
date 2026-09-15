@@ -9,7 +9,6 @@ import {
 } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
 import { applyApyTransactionAccruals } from "./projectDailyReturns";
-import { applyJupiterInfLoopSnapshot, getJupiterInfLoopSnapshot } from "./jupiterInfLoopSync";
 import { applyLuloYieldSnapshot, getLuloYieldSnapshot } from "./luloYieldSync";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
