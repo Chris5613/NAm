@@ -6352,7 +6352,7 @@ const summary =
         nonLuloAnnualYield +
         luloAnnualYield +
         365 +
-        1.4 * 365 +
+        1.2 * 365 +
         (
           Number(
             unetworkStats?.estimatedYearlyUsd
@@ -7383,7 +7383,7 @@ function SaladProjectCard({
   ] = useState(false);
 
   const dailyIncome =
-    1.2;
+    1.4;
 
   const monthlyIncome =
     dailyIncome *
