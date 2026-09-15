@@ -7260,9 +7260,9 @@ function UnetworkProjectCard({
               tabular-nums
             "
           >
-            {formatCurrency(
-              stats?.currentBalance
-            )}
+{formatCurrency(
+  stats?.monthUsd
+)}
           </div>
 
           <div
