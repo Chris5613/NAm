@@ -7058,7 +7058,19 @@ function ProjectCard({
         {/* TOP */}
 
         <div className="flex w-full items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
+          <div className="
+  flex
+  h-16
+  w-16
+  shrink-0
+  items-center
+  justify-center
+  overflow-hidden
+  rounded-2xl
+  border
+  border-border/40
+  bg-secondary
+">
             <ProjectLogoButton
               platform={
                 project.platform
@@ -7073,7 +7085,7 @@ function ProjectCard({
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-lg font-semibold text-foreground">
+                <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
                   {
                     project.platform
                   }
@@ -7242,8 +7254,20 @@ function UnetworkProjectCard({
       >
         {/* TOP */}
 
-        <div className="flex w-full items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="flex w-full items-start justify-between gap-3">
+                    <div className="
+  flex
+  h-16
+  w-16
+  shrink-0
+  items-center
+  justify-center
+  overflow-hidden
+  rounded-2xl
+  border
+  border-border/40
+  bg-secondary
+">
             <ProjectLogoButton
               platform="Unetwork"
               logo={
@@ -7256,7 +7280,7 @@ function UnetworkProjectCard({
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-lg font-semibold text-foreground">
+                <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
                   Unetwork
                 </h3>
 
@@ -7489,8 +7513,20 @@ function SaladProjectCard({
       >
         {/* TOP */}
 
-        <div className="flex w-full items-start justify-between gap-4">
-          <div className="flex min-w-0 items-center gap-3">
+        <div className="flex w-full items-start justify-between gap-3">
+                    <div className="
+  flex
+  h-16
+  w-16
+  shrink-0
+  items-center
+  justify-center
+  overflow-hidden
+  rounded-2xl
+  border
+  border-border/40
+  bg-secondary
+">
             <ProjectLogoButton
               platform="Salad"
               logo={
@@ -7503,7 +7539,7 @@ function SaladProjectCard({
 
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-lg font-semibold text-foreground">
+                <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
                   Salad
                 </h3>
 
@@ -7739,8 +7775,20 @@ return (
         text-left
       "
     >
-      <div className="flex w-full items-start justify-between gap-4">
-        <div className="flex min-w-0 items-center gap-3">
+      <div className="flex w-full items-start justify-between gap-3">
+                  <div className="
+  flex
+  h-16
+  w-16
+  shrink-0
+  items-center
+  justify-center
+  overflow-hidden
+  rounded-2xl
+  border
+  border-border/40
+  bg-secondary
+">
           <ProjectLogoButton
             platform="RollerCoin"
             logo={
@@ -7753,7 +7801,7 @@ return (
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-lg font-semibold text-foreground">
+              <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
                 RollerCoin
               </h3>
 
