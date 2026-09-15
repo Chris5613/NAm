@@ -2462,27 +2462,20 @@ export default function Dashboard() {
                     }
                   />
                 ) : (
-                  <AssetBreakdown
-                    key={`modal-${selectedCategory}`}
-                    category={
-                      selectedCategory
-                    }
-                    assets={
-                      assets
-                    }
-                    onUpdate={
-                      handleAssetUpdated
-                    }
-                    onDelete={
-                      handleAssetDeleted
-                    }
-                    defaultOpen
-                    dailyChange={
-                      dailyCategoryChanges?.[
-                        selectedCategory
-                      ] || 0
-                    }
-                  />
+<AssetBreakdown
+  key={`modal-${selectedCategory}`}
+  category={selectedCategory}
+  assets={assets}
+  onUpdate={handleAssetUpdated}
+  onDelete={handleAssetDeleted}
+  defaultOpen
+  hideSummary
+  dailyChange={
+    dailyCategoryChanges?.[
+      selectedCategory
+    ] || 0
+  }
+/>
                 )}
               </div>
             </div>
