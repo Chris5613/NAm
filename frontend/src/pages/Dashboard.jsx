@@ -1672,29 +1672,6 @@ export default function Dashboard() {
                 shadow-xl
               "
             >
-              <button
-                type="button"
-                onClick={
-                  handleSnapshot
-                }
-                className="
-                  flex
-                  w-full
-                  items-center
-                  gap-3
-                  rounded-md
-                  px-3
-                  py-2.5
-                  text-sm
-                  text-foreground
-                  transition-colors
-                  hover:bg-secondary
-                "
-              >
-                <Camera className="h-4 w-4" />
-
-                Take snapshot
-              </button>
 
               <button
                 type="button"
@@ -1732,59 +1709,6 @@ export default function Dashboard() {
                   : "Refresh prices"}
               </button>
 
-              <button
-                type="button"
-                onClick={
-                  exportAllLocalStorage
-                }
-                className="
-                  flex
-                  w-full
-                  items-center
-                  gap-3
-                  rounded-md
-                  px-3
-                  py-2.5
-                  text-sm
-                  text-foreground
-                  transition-colors
-                  hover:bg-secondary
-                "
-              >
-                <Download className="h-4 w-4" />
-
-                Export JSON
-              </button>
-
-              <label
-                className="
-                  flex
-                  w-full
-                  cursor-pointer
-                  items-center
-                  gap-3
-                  rounded-md
-                  px-3
-                  py-2.5
-                  text-sm
-                  text-foreground
-                  transition-colors
-                  hover:bg-secondary
-                "
-              >
-                <Upload className="h-4 w-4" />
-
-                Import JSON
-
-                <input
-                  type="file"
-                  accept=".json,application/json"
-                  onChange={
-                    importAllLocalStorage
-                  }
-                  className="hidden"
-                />
-              </label>
             </div>
           </details>
 
@@ -2239,18 +2163,18 @@ export default function Dashboard() {
 
       {detailsModalOpen &&
         selectedCategory && (
-          <div
-            className="
-              fixed
-              inset-0
-              z-[100]
-              flex
-              items-center
-              justify-center
-              bg-black/75
-              p-4
-              backdrop-blur-sm
-            "
+<div
+  className="
+    fixed
+    inset-0
+    z-40
+    flex
+    items-center
+    justify-center
+    bg-black/75
+    p-4
+    backdrop-blur-sm
+  "
             onMouseDown={(
               event
             ) => {
