@@ -6352,7 +6352,7 @@ const summary =
         nonLuloAnnualYield +
         luloAnnualYield +
         365 +
-        1.2 * 365 +
+        1.4 * 365 +
         (
           Number(
             unetworkStats?.estimatedYearlyUsd
