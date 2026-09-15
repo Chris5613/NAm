@@ -35,12 +35,13 @@ const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 
 
+const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
 const MONTHLY_TRACKING_START = "2026-09";
 const LULO_SEPTEMBER_2026_OPENING_EARNED = 7.76;
 const LULO_MONTHLY_ACCOUNTING_VERSION = 3;
 const RATEX_ACCOUNTING_VERSION = 2;
 const RATEX_LEGACY_INITIAL_QUANTITY = 606.27;
-const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
+
 
 function readObject(key) {
   try {
@@ -757,8 +758,10 @@ function getRollerCoinTrackerStats(
 
   let todayUsd = 0;
   let todayTrx = 0;
+
   let monthUsd = 0;
   let monthTrx = 0;
+
   let lifetimeUsd = 0;
   let lifetimeTrx = 0;
 
@@ -774,7 +777,8 @@ function getRollerCoinTrackerStats(
 
       const trx =
         Number(
-          entry?.trx ?? entry?.sol
+          entry?.trx ??
+            entry?.sol
         ) || 0;
 
       lifetimeUsd +=
@@ -784,7 +788,9 @@ function getRollerCoinTrackerStats(
         trx;
 
       if (
-        String(date).slice(
+        String(
+          date
+        ).slice(
           0,
           7
         ) ===
@@ -815,9 +821,36 @@ function getRollerCoinTrackerStats(
       tracker?.lastTrxPrice
     ) || 0;
 
+  /*
+   * Keep lifetime earned TRX separate from
+   * the current RollerCoin wallet balance.
+   */
+  const trackedLifetimeTrx =
+    lifetimeTrx;
+
   lifetimeTrx +=
     ROLLERCOIN_HISTORICAL_TRX;
 
+  /*
+   * Current balance is the amount of TRX
+   * currently sitting in RollerCoin.
+   */
+  const currentTrxBalance =
+    Number(
+      tracker?.currentTrxBalance
+    ) ||
+    ROLLERCOIN_CURRENT_TRX_BALANCE;
+
+  const currentBalanceUsd =
+    liveTrxPrice > 0
+      ? currentTrxBalance *
+        liveTrxPrice
+      : 0;
+
+  /*
+   * Current month and today's earnings can
+   * still use the live TRX price.
+   */
   if (
     liveTrxPrice > 0
   ) {
@@ -829,14 +862,14 @@ function getRollerCoinTrackerStats(
       monthTrx *
       liveTrxPrice;
 
+    /*
+     * This is the live USD value of all
+     * historically tracked earned TRX.
+     */
     lifetimeUsd =
       lifetimeTrx *
       liveTrxPrice;
   } else {
-    const trackedLifetimeTrx =
-      lifetimeTrx -
-      ROLLERCOIN_HISTORICAL_TRX;
-
     const referenceTrxPrice =
       trackedLifetimeTrx > 0
         ? lifetimeUsd /
@@ -851,13 +884,22 @@ function getRollerCoinTrackerStats(
   return {
     todayUsd,
     todayTrx,
+
     monthUsd,
     monthTrx,
+
     lifetimeUsd,
     lifetimeTrx,
+
+    currentTrxBalance,
+    currentBalanceUsd,
+
+    liveTrxPrice,
+
     lastSyncedAt:
       tracker?.lastSyncedAt ||
       null,
+
     transactionCount:
       rows.length,
   };
@@ -7707,9 +7749,9 @@ return (
             tabular-nums
           "
         >
-          {formatCurrency(
-            stats?.lifetimeUsd
-          )}
+{formatCurrency(
+  stats?.currentBalanceUsd
+)}
         </div>
 
         <div
