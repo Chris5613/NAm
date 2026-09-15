@@ -4166,31 +4166,72 @@ export default function YieldFarmingPage() {
       []
     );
 
-  const requestRollerCoinLatest =
-    useCallback(
-      () => {
-        window.postMessage(
-          {
-            source:
-              "rollercoin-app",
-            type:
-              "REQUEST_LATEST",
-          },
-          window.location.origin
-        );
+const requestRollerCoinLatest =
+  useCallback(
+    () => {
+      const from =
+        `${getCurrentMonthKey()}-01`;
 
-        window.postMessage(
-          {
-            source:
-              "rollercoin-app",
-            type:
-              "REQUEST_STATUS",
-          },
-          window.location.origin
-        );
-      },
-      []
-    );
+      const to =
+        getTodayKey();
+
+      /*
+       * Ask the extension for its latest cached state/status.
+       */
+      window.postMessage(
+        {
+          source:
+            "rollercoin-app",
+
+          type:
+            "REQUEST_LATEST",
+        },
+        window.location.origin
+      );
+
+      window.postMessage(
+        {
+          source:
+            "rollercoin-app",
+
+          type:
+            "REQUEST_STATUS",
+        },
+        window.location.origin
+      );
+
+      /*
+       * IMPORTANT:
+       *
+       * Also resync the FULL current month.
+       *
+       * REQUEST_LATEST can contain only the extension's
+       * most recent cached payload. If older days are
+       * missing from rollerCoinTracker.daily, simply
+       * requesting the latest payload will never restore
+       * them.
+       *
+       * This forces RollerCoin to return every earning
+       * day from the 1st of the current month through
+       * today.
+       */
+      window.postMessage(
+        {
+          source:
+            "rollercoin-app",
+
+          type:
+            "SYNC_RANGE",
+
+          from,
+
+          to,
+        },
+        window.location.origin
+      );
+    },
+    []
+  );;
 
   const syncRollerCoinRange =
     useCallback(
