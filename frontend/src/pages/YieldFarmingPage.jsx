@@ -45,6 +45,11 @@ const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
 
 const ROLLERCOIN_CURRENT_TRX_BALANCE = 406.8661;
 
+const ROLLERCOIN_SEPTEMBER_2026_BASELINE_TRX = 45.443264;
+
+const ROLLERCOIN_SEPTEMBER_2026_BASELINE_END =
+  "2026-09-14";
+
 
 function readObject(key) {
   try {
@@ -3089,18 +3094,21 @@ function buildProjectIncome(
   /*
    * ROLLERCOIN
    *
-   * For the CURRENT month:
-   *   Sum all TRX earned during the month first,
-   *   then value that total using the latest TRX price.
+   * September 1-14, 2026 has been manually verified
+   * from RollerCoin's earnings table:
    *
-   * This prevents September income from being stuck
-   * at old TRX prices that were saved when each day
-   * was originally imported.
+   * 45.443264 TRX
    *
-   * For PREVIOUS months:
-   *   Keep the historical stored USD amounts so
-   *   finalized months do not move when TRX moves.
+   * The extension has not consistently returned all
+   * historical September rows, so use that verified
+   * amount as the baseline.
+   *
+   * Any synced earnings AFTER September 14 are added
+   * on top of the baseline.
+   *
+   * For later months, use synced daily rows normally.
    */
+
   const currentMonthKey =
     getCurrentMonthKey();
 
@@ -3127,6 +3135,24 @@ function buildProjectIncome(
 
       if (
         !monthKey
+      ) {
+        return;
+      }
+
+      /*
+       * September 1-14 is already covered
+       * by the verified baseline below.
+       *
+       * Skip those rows so they cannot be
+       * double-counted.
+       */
+      if (
+        monthKey ===
+          "2026-09" &&
+        String(
+          date
+        ) <=
+          ROLLERCOIN_SEPTEMBER_2026_BASELINE_END
       ) {
         return;
       }
@@ -3167,6 +3193,28 @@ function buildProjectIncome(
     }
   );
 
+  /*
+   * Seed September with the verified
+   * Sept 1-14 earnings.
+   */
+  if (
+    !rollerCoinMonths[
+      "2026-09"
+    ]
+  ) {
+    rollerCoinMonths[
+      "2026-09"
+    ] = {
+      trx: 0,
+      storedUsd: 0,
+    };
+  }
+
+  rollerCoinMonths[
+    "2026-09"
+  ].trx +=
+    ROLLERCOIN_SEPTEMBER_2026_BASELINE_TRX;
+
   Object.entries(
     rollerCoinMonths
   ).forEach(
@@ -3184,6 +3232,12 @@ function buildProjectIncome(
           values?.storedUsd
         ) || 0;
 
+      /*
+       * Current month uses the latest TRX price.
+       *
+       * Older months stay fixed using their
+       * stored USD values.
+       */
       const amount =
         monthKey ===
           currentMonthKey &&
