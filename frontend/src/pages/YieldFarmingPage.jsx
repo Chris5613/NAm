@@ -7057,80 +7057,37 @@ function ProjectCard({
       >
         {/* TOP */}
 
-        <div className="flex w-full items-start justify-between gap-4">
-          <div className="
-  flex
-  h-16
-  w-16
-  shrink-0
-  items-center
-  justify-center
-  overflow-hidden
-  rounded-2xl
-  border
-  border-border/40
-  bg-secondary
-">
-            <ProjectLogoButton
-              platform={
-                project.platform
-              }
-              logo={
-                logo
-              }
-              onLogoChange={
-                onLogoChange
-              }
-            />
+<div className="flex w-full items-center justify-between gap-4">
+  <div className="flex min-w-0 flex-1 items-center gap-4">
+    <ProjectLogoButton
+      platform={project.platform}
+      logo={logo}
+      onLogoChange={onLogoChange}
+    />
 
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
-                  {
-                    project.platform
-                  }
-                </h3>
+    <div className="flex-1">
+      <div className="flex items-center gap-2">
+        <h3 className="whitespace-nowrap text-2xl font-semibold tracking-tight text-foreground">
+          {project.platform}
+        </h3>
 
-                {project.autoSynced && (
-                  <span
-                    className="
-                      inline-flex
-                      items-center
-                      gap-1
-                      rounded-full
-                      border
-                      border-emerald-500/25
-                      bg-emerald-500/10
-                      px-2
-                      py-0.5
-                      text-[10px]
-                      font-medium
-                      uppercase
-                      tracking-wide
-                      text-emerald-400
-                    "
-                  >
-                    <Wifi className="h-3 w-3" />
+        {project.autoSynced && (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+            <Wifi className="h-3 w-3" />
+            LIVE
+          </span>
+        )}
+      </div>
+    </div>
+  </div>
 
-                    LIVE
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <ChevronRight
-            className={`mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
-              collapsed
-                ? ""
-                : "rotate-90"
-            }`}
-            strokeWidth={
-              1.5
-            }
-          />
-        </div>
-
+  <ChevronRight
+    className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+      collapsed ? "" : "rotate-90"
+    }`}
+    strokeWidth={1.5}
+  />
+</div>
         {/* VALUE */}
 
         <div className="mt-auto pt-7">
@@ -7254,64 +7211,41 @@ function UnetworkProjectCard({
       >
         {/* TOP */}
 
-        <div className="flex w-full items-start justify-between gap-3">
-                    <div className="
-  flex
-  h-16
-  w-16
-  shrink-0
-  items-center
-  justify-center
-  overflow-hidden
-  rounded-2xl
-  border
-  border-border/40
-  bg-secondary
-">
-            <ProjectLogoButton
-              platform="Unetwork"
-              logo={
-                logo
-              }
-              onLogoChange={
-                onLogoChange
-              }
-            />
+<div className="flex w-full items-start justify-between gap-4">
+  <div className="flex min-w-0 items-center gap-4">
+    <ProjectLogoButton
+      platform="Unetwork"
+      logo={logo}
+      onLogoChange={onLogoChange}
+    />
 
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
-                  Unetwork
-                </h3>
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+          Unetwork
+        </h3>
 
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                    connected
-                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
-                      : "border-amber-500/25 bg-amber-500/10 text-amber-300"
-                  }`}
-                >
-                  <Wifi className="h-3 w-3" />
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+            connected
+              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+              : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+          }`}
+        >
+          <Wifi className="h-3 w-3" />
+          {connected ? "LIVE" : "OFFLINE"}
+        </span>
+      </div>
+    </div>
+  </div>
 
-                  {connected
-                    ? "LIVE"
-                    : "OFFLINE"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <ChevronRight
-            className={`mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
-              expanded
-                ? "rotate-90"
-                : ""
-            }`}
-            strokeWidth={
-              1.5
-            }
-          />
-        </div>
+  <ChevronRight
+    className={`mt-5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+      expanded ? "rotate-90" : ""
+    }`}
+    strokeWidth={1.5}
+  />
+</div>
 
         {/* VALUE */}
 
@@ -7513,64 +7447,41 @@ function SaladProjectCard({
       >
         {/* TOP */}
 
-        <div className="flex w-full items-start justify-between gap-3">
-                    <div className="
-  flex
-  h-16
-  w-16
-  shrink-0
-  items-center
-  justify-center
-  overflow-hidden
-  rounded-2xl
-  border
-  border-border/40
-  bg-secondary
-">
-            <ProjectLogoButton
-              platform="Salad"
-              logo={
-                logo
-              }
-              onLogoChange={
-                onLogoChange
-              }
-            />
+<div className="flex w-full items-start justify-between gap-4">
+  <div className="flex min-w-0 items-center gap-4">
+    <ProjectLogoButton
+      platform="Salad"
+      logo={logo}
+      onLogoChange={onLogoChange}
+    />
 
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
-                  Salad
-                </h3>
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+          Salad
+        </h3>
 
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                    connected
-                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
-                      : "border-amber-500/25 bg-amber-500/10 text-amber-300"
-                  }`}
-                >
-                  <Wifi className="h-3 w-3" />
+        <span
+          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+            connected
+              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+              : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+          }`}
+        >
+          <Wifi className="h-3 w-3" />
+          {connected ? "LIVE" : "OFFLINE"}
+        </span>
+      </div>
+    </div>
+  </div>
 
-                  {connected
-                    ? "LIVE"
-                    : "OFFLINE"}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <ChevronRight
-            className={`mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
-              expanded
-                ? "rotate-90"
-                : ""
-            }`}
-            strokeWidth={
-              1.5
-            }
-          />
-        </div>
+  <ChevronRight
+    className={`mt-5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+      expanded ? "rotate-90" : ""
+    }`}
+    strokeWidth={1.5}
+  />
+</div>
 
         {/* VALUE */}
 
@@ -7775,73 +7686,35 @@ return (
         text-left
       "
     >
-      <div className="flex w-full items-start justify-between gap-3">
-                  <div className="
-  flex
-  h-16
-  w-16
-  shrink-0
-  items-center
-  justify-center
-  overflow-hidden
-  rounded-2xl
-  border
-  border-border/40
-  bg-secondary
-">
-          <ProjectLogoButton
-            platform="RollerCoin"
-            logo={
-              logo
-            }
-            onLogoChange={
-              onLogoChange
-            }
-          />
+<div className="flex w-full items-start justify-between gap-4">
+  <div className="flex min-w-0 items-center gap-4">
+    <ProjectLogoButton
+      platform="RollerCoin"
+      logo={logo}
+      onLogoChange={onLogoChange}
+    />
 
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
-                RollerCoin
-              </h3>
+    <div className="min-w-0">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+          RollerCoin
+        </h3>
 
-              <span
-                className="
-                  inline-flex
-                  items-center
-                  gap-1
-                  rounded-full
-                  border
-                  border-emerald-500/25
-                  bg-emerald-500/10
-                  px-2
-                  py-0.5
-                  text-[10px]
-                  font-medium
-                  uppercase
-                  tracking-wide
-                  text-emerald-400
-                "
-              >
-                <Wifi className="h-3 w-3" />
-
-                LIVE
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <ChevronRight
-          className={`mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
-            expanded
-              ? "rotate-90"
-              : ""
-          }`}
-          strokeWidth={
-            1.5
-          }
-        />
+        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+          <Wifi className="h-3 w-3" />
+          LIVE
+        </span>
       </div>
+    </div>
+  </div>
+
+  <ChevronRight
+    className={`mt-5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+      expanded ? "rotate-90" : ""
+    }`}
+    strokeWidth={1.5}
+  />
+</div>
 
       <div className="mt-auto pt-7">
         <div
@@ -8013,7 +7886,25 @@ function ProjectLogoButton({
         }
         title={`Change ${platform} logo`}
         aria-label={`Change ${platform} logo`}
-        className="flex h-10 w-10 cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-border/60 bg-white/[0.04] text-xs font-bold tracking-tight transition hover:border-border hover:bg-white/[0.08]"
+        className="
+          flex
+          h-16
+          w-16
+          cursor-pointer
+          items-center
+          justify-center
+          overflow-hidden
+          rounded-2xl
+          border
+          border-border/60
+          bg-white/[0.04]
+          text-base
+          font-bold
+          tracking-tight
+          transition
+          hover:border-border
+          hover:bg-white/[0.08]
+        "
       >
         {logo ? (
           <img
@@ -8021,7 +7912,11 @@ function ProjectLogoButton({
               logo
             }
             alt={`${platform} logo`}
-            className="h-full w-full object-cover"
+            className="
+              h-full
+              w-full
+              object-cover
+            "
           />
         ) : (
           getInitials(
