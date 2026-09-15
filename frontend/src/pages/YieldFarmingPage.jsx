@@ -6635,8 +6635,8 @@ const summary =
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
-            {sortedProgramCards.map(
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+  {sortedProgramCards.map(
               (
                 item
               ) => {
@@ -7022,67 +7022,170 @@ function ProjectCard({
   onLogoChange,
 }) {
   const projections =
-    getProjectProjections(project);
+    getProjectProjections(
+      project
+    );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
+    <div
+      className="
+        overflow-hidden
+        rounded-2xl
+        border
+        border-border/60
+        bg-card/45
+        shadow-sm
+        transition-all
+        duration-200
+        hover:border-border
+        hover:bg-card/65
+      "
+    >
       <button
         type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
+        onClick={
+          onToggle
+        }
+        className="
+          flex
+          min-h-[190px]
+          w-full
+          flex-col
+          p-5
+          text-left
+        "
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <ProjectLogoButton
-            platform={project.platform}
-            logo={logo}
-            onLogoChange={onLogoChange}
-          />
+        {/* TOP */}
 
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-lg font-semibold">
-                {project.platform}
-              </h3>
+        <div className="flex w-full items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <ProjectLogoButton
+              platform={
+                project.platform
+              }
+              logo={
+                logo
+              }
+              onLogoChange={
+                onLogoChange
+              }
+            />
 
-              {project.autoSynced && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
-                  <Wifi className="h-3 w-3" />
-                  Live
-                </span>
-              )}
-            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-lg font-semibold text-foreground">
+                  {
+                    project.platform
+                  }
+                </h3>
 
-            <div className="mt-0.5 text-xs text-muted-foreground">
-              1 position
-              {project.autoSynced &&
-              project.lastSyncedAt
-                ? ` · synced ${formatSyncTime(
-                    project.lastSyncedAt
-                  )}`
-                : ""}
+                {project.autoSynced && (
+                  <span
+                    className="
+                      inline-flex
+                      items-center
+                      gap-1
+                      rounded-full
+                      border
+                      border-emerald-500/25
+                      bg-emerald-500/10
+                      px-2
+                      py-0.5
+                      text-[10px]
+                      font-medium
+                      uppercase
+                      tracking-wide
+                      text-emerald-400
+                    "
+                  >
+                    <Wifi className="h-3 w-3" />
+
+                    LIVE
+                  </span>
+                )}
+              </div>
             </div>
           </div>
+
+          <ChevronRight
+            className={`mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+              collapsed
+                ? ""
+                : "rotate-90"
+            }`}
+            strokeWidth={
+              1.5
+            }
+          />
         </div>
 
-        <div className="shrink-0 text-right">
-          <div className="text-2xl font-semibold tabular-nums">
+        {/* VALUE */}
+
+        <div className="mt-auto pt-7">
+          <div
+            className="
+              text-[30px]
+              font-semibold
+              leading-none
+              tracking-tight
+              text-foreground
+              tabular-nums
+            "
+          >
             {formatCurrency(
               project.totalBalance
             )}
           </div>
 
-<IncomeProjection
-  daily={projections.daily}
-  monthly={projections.monthly}
-  yearly={projections.yearly}
-/>
+          <div
+            className="
+              mt-4
+              flex
+              flex-wrap
+              items-center
+              gap-x-2
+              gap-y-1
+              text-sm
+              tabular-nums
+              text-muted-foreground
+            "
+          >
+            <span>
+              {formatCurrency(
+                projections.daily
+              )}
+              /day
+            </span>
+
+            <span>·</span>
+
+            <span>
+              {formatCurrency(
+                projections.monthly
+              )}
+              /month
+            </span>
+
+            <span>·</span>
+
+            <span>
+              {formatCurrency(
+                projections.yearly
+              )}
+              /year
+            </span>
+          </div>
         </div>
       </button>
 
       {!collapsed && (
         <ProjectPositionsSection
-          project={project}
-          onDeletePosition={onDeletePosition}
+          project={
+            project
+          }
+          onDeletePosition={
+            onDeletePosition
+          }
         />
       )}
     </div>
@@ -7106,7 +7209,20 @@ function UnetworkProjectCard({
   ] = useState(false);
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
+    <div
+      className="
+        overflow-hidden
+        rounded-2xl
+        border
+        border-border/60
+        bg-card/45
+        shadow-sm
+        transition-all
+        duration-200
+        hover:border-border
+        hover:bg-card/65
+      "
+    >
       <button
         type="button"
         onClick={() =>
@@ -7115,68 +7231,126 @@ function UnetworkProjectCard({
               !value
           )
         }
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
+        className="
+          flex
+          min-h-[190px]
+          w-full
+          flex-col
+          p-5
+          text-left
+        "
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <ProjectLogoButton
-            platform="Unetwork"
-            logo={
-              logo
-            }
-            onLogoChange={
-              onLogoChange
-            }
-          />
+        {/* TOP */}
 
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-lg font-semibold">
-                Unetwork
-              </h3>
+        <div className="flex w-full items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <ProjectLogoButton
+              platform="Unetwork"
+              logo={
+                logo
+              }
+              onLogoChange={
+                onLogoChange
+              }
+            />
 
-              <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                  connected
-                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
-                    : "border-amber-500/25 bg-amber-500/10 text-amber-300"
-                }`}
-              >
-                <Wifi className="h-3 w-3" />
-                {connected
-                  ? "LIVE"
-                  : "OFFLINE"}
-              </span>
-            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-lg font-semibold text-foreground">
+                  Unetwork
+                </h3>
 
-            <div className="mt-0.5 text-xs text-muted-foreground">
-              1 position
-              {tracker?.lastSyncedAt
-                ? ` · synced ${formatSyncTime(
-                    tracker.lastSyncedAt
-                  )}`
-                : ""}
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                    connected
+                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+                      : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                  }`}
+                >
+                  <Wifi className="h-3 w-3" />
+
+                  {connected
+                    ? "LIVE"
+                    : "OFFLINE"}
+                </span>
+              </div>
             </div>
           </div>
+
+          <ChevronRight
+            className={`mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+              expanded
+                ? "rotate-90"
+                : ""
+            }`}
+            strokeWidth={
+              1.5
+            }
+          />
         </div>
 
-        <div className="shrink-0 text-right">
-          <div className="text-2xl font-semibold tabular-nums">
+        {/* VALUE */}
+
+        <div className="mt-auto pt-7">
+          <div
+            className="
+              text-[30px]
+              font-semibold
+              leading-none
+              tracking-tight
+              text-foreground
+              tabular-nums
+            "
+          >
             {formatCurrency(
               stats?.currentBalance
             )}
           </div>
 
-          <IncomeProjection
-            daily={stats?.estimatedDailyUsd}
-            monthly={stats?.estimatedMonthlyUsd}
-            yearly={stats?.estimatedYearlyUsd}
-          />
+          <div
+            className="
+              mt-4
+              flex
+              flex-wrap
+              items-center
+              gap-x-2
+              gap-y-1
+              text-sm
+              tabular-nums
+              text-muted-foreground
+            "
+          >
+            <span>
+              {formatCurrency(
+                stats?.estimatedDailyUsd
+              )}
+              /day
+            </span>
+
+            <span>·</span>
+
+            <span>
+              {formatCurrency(
+                stats?.estimatedMonthlyUsd
+              )}
+              /month
+            </span>
+
+            <span>·</span>
+
+            <span>
+              {formatCurrency(
+                stats?.estimatedYearlyUsd
+              )}
+              /year
+            </span>
+          </div>
         </div>
       </button>
 
       {expanded && (
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 This month
@@ -7270,16 +7444,32 @@ function SaladProjectCard({
     setExpanded,
   ] = useState(false);
 
-  const dailyIncome = 1.2;
+  const dailyIncome =
+    1.2;
 
-const monthlyIncome =
-  dailyIncome * 30.4375;
+  const monthlyIncome =
+    dailyIncome *
+    30.4375;
 
-const yearlyIncome =
-  dailyIncome * 365;
+  const yearlyIncome =
+    dailyIncome *
+    365;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
+    <div
+      className="
+        overflow-hidden
+        rounded-2xl
+        border
+        border-border/60
+        bg-card/45
+        shadow-sm
+        transition-all
+        duration-200
+        hover:border-border
+        hover:bg-card/65
+      "
+    >
       <button
         type="button"
         onClick={() =>
@@ -7288,72 +7478,131 @@ const yearlyIncome =
               !value
           )
         }
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
+        className="
+          flex
+          min-h-[190px]
+          w-full
+          flex-col
+          p-5
+          text-left
+        "
       >
-        <div className="flex min-w-0 items-center gap-3">
-          <ProjectLogoButton
-            platform="Salad"
-            logo={
-              logo
-            }
-            onLogoChange={
-              onLogoChange
-            }
-          />
+        {/* TOP */}
 
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-lg font-semibold">
-                Salad
-              </h3>
+        <div className="flex w-full items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <ProjectLogoButton
+              platform="Salad"
+              logo={
+                logo
+              }
+              onLogoChange={
+                onLogoChange
+              }
+            />
 
-              <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                  connected
-                    ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
-                    : "border-amber-500/25 bg-amber-500/10 text-amber-300"
-                }`}
-              >
-                <Wifi className="h-3 w-3" />
-                {connected
-                  ? "LIVE"
-                  : "OFFLINE"}
-              </span>
-            </div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="truncate text-lg font-semibold text-foreground">
+                  Salad
+                </h3>
 
-            <div className="mt-0.5 text-xs text-muted-foreground">
-              1 position
-              {tracker?.lastSyncedAt
-                ? ` · synced ${formatSyncTime(
-                    tracker.lastSyncedAt
-                  )}`
-                : ""}
+                <span
+                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                    connected
+                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+                      : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                  }`}
+                >
+                  <Wifi className="h-3 w-3" />
+
+                  {connected
+                    ? "LIVE"
+                    : "OFFLINE"}
+                </span>
+              </div>
             </div>
           </div>
+
+          <ChevronRight
+            className={`mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+              expanded
+                ? "rotate-90"
+                : ""
+            }`}
+            strokeWidth={
+              1.5
+            }
+          />
         </div>
 
-        <div className="shrink-0 text-right">
-          <div className="text-2xl font-semibold tabular-nums">
+        {/* VALUE */}
+
+        <div className="mt-auto pt-7">
+          <div
+            className="
+              text-[30px]
+              font-semibold
+              leading-none
+              tracking-tight
+              text-foreground
+              tabular-nums
+            "
+          >
             {formatCurrency(
               stats?.currentBalance
             )}
           </div>
 
-          <IncomeProjection
-            daily={dailyIncome}
-            monthly={monthlyIncome}
-            yearly={yearlyIncome}
-          />
+          <div
+            className="
+              mt-4
+              flex
+              flex-wrap
+              items-center
+              gap-x-2
+              gap-y-1
+              text-sm
+              tabular-nums
+              text-muted-foreground
+            "
+          >
+            <span>
+              {formatCurrency(
+                dailyIncome
+              )}
+              /day
+            </span>
+
+            <span>·</span>
+
+            <span>
+              {formatCurrency(
+                monthlyIncome
+              )}
+              /month
+            </span>
+
+            <span>·</span>
+
+            <span>
+              {formatCurrency(
+                yearlyIncome
+              )}
+              /year
+            </span>
+          </div>
         </div>
       </button>
 
       {expanded && (
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 This month
               </div>
+
               <div className="mt-1 text-lg font-semibold tabular-nums">
                 {formatCurrency(
                   stats?.monthUsd
@@ -7365,6 +7614,7 @@ const yearlyIncome =
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 Available
               </div>
+
               <div className="mt-1 text-lg font-semibold tabular-nums">
                 {formatCurrency(
                   stats?.currentBalance
@@ -7376,6 +7626,7 @@ const yearlyIncome =
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 Lifetime earned
               </div>
+
               <div className="mt-1 text-lg font-semibold tabular-nums">
                 {formatCurrency(
                   stats?.lifetimeUsd
@@ -7387,6 +7638,7 @@ const yearlyIncome =
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
                 Withdrawn
               </div>
+
               <div className="mt-1 text-lg font-semibold tabular-nums">
                 {formatCurrency(
                   stats?.withdrawals
@@ -7455,18 +7707,39 @@ const monthlyIncome =
 const yearlyIncome =
   dailyIncome * 365;
 
-  return (
-    <div className="overflow-hidden rounded-2xl border border-border/60 bg-card/45 shadow-sm">
-      <button
-        type="button"
-        onClick={() =>
-          setExpanded(
-            (current) =>
-              !current
-          )
-        }
-        className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left transition hover:bg-white/[0.02]"
-      >
+return (
+  <div
+    className="
+      overflow-hidden
+      rounded-2xl
+      border
+      border-border/60
+      bg-card/45
+      shadow-sm
+      transition-all
+      duration-200
+      hover:border-border
+      hover:bg-card/65
+    "
+  >
+    <button
+      type="button"
+      onClick={() =>
+        setExpanded(
+          (current) =>
+            !current
+        )
+      }
+      className="
+        flex
+        min-h-[190px]
+        w-full
+        flex-col
+        p-5
+        text-left
+      "
+    >
+      <div className="flex w-full items-start justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
           <ProjectLogoButton
             platform="RollerCoin"
@@ -7480,143 +7753,111 @@ const yearlyIncome =
 
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="truncate text-lg font-semibold">
+              <h3 className="truncate text-lg font-semibold text-foreground">
                 RollerCoin
               </h3>
 
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+              <span
+                className="
+                  inline-flex
+                  items-center
+                  gap-1
+                  rounded-full
+                  border
+                  border-emerald-500/25
+                  bg-emerald-500/10
+                  px-2
+                  py-0.5
+                  text-[10px]
+                  font-medium
+                  uppercase
+                  tracking-wide
+                  text-emerald-400
+                "
+              >
                 <Wifi className="h-3 w-3" />
+
                 LIVE
               </span>
             </div>
-
-            <div className="mt-0.5 text-xs text-muted-foreground">
-              1 position
-              {tracker?.lastSyncedAt
-                ? ` · synced ${formatSyncTime(
-                    tracker.lastSyncedAt
-                  )}`
-                : ""}
-            </div>
           </div>
         </div>
 
-        <div className="shrink-0 text-right">
+        <ChevronRight
+          className={`mt-2 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+            expanded
+              ? "rotate-90"
+              : ""
+          }`}
+          strokeWidth={
+            1.5
+          }
+        />
+      </div>
 
-          <div className="shrink-0 text-right">
-            <div className="text-2xl font-semibold tabular-nums">
-              {formatCurrency(
-                stats?.lifetimeUsd
-              )}
-            </div>
-
-<IncomeProjection
-  daily={dailyIncome}
-  monthly={monthlyIncome}
-  yearly={yearlyIncome}
-/>
-          </div>
+      <div className="mt-auto pt-7">
+        <div
+          className="
+            text-[30px]
+            font-semibold
+            leading-none
+            tracking-tight
+            text-foreground
+            tabular-nums
+          "
+        >
+          {formatCurrency(
+            stats?.lifetimeUsd
+          )}
         </div>
-      </button>
 
-      {expanded && (
-        <div className="border-t border-border/40 px-5 pb-5 pt-4">
-          <div className="grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
-            <label className="space-y-1.5">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                From
-              </span>
+        <div
+          className="
+            mt-4
+            flex
+            flex-wrap
+            items-center
+            gap-x-2
+            gap-y-1
+            text-sm
+            tabular-nums
+            text-muted-foreground
+          "
+        >
+          <span>
+            {formatCurrency(
+              dailyIncome
+            )}
+            /day
+          </span>
 
-              <input
-                type="date"
-                value={
-                  from
-                }
-                onChange={(event) =>
-                  onFromChange(
-                    event.target.value
-                  )
-                }
-                className="h-10 w-full rounded-lg border border-border/60 bg-background/50 px-3 text-sm outline-none transition focus:border-orange-400/60"
-              />
-            </label>
+          <span>·</span>
 
-            <label className="space-y-1.5">
-              <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-                To
-              </span>
+          <span>
+            {formatCurrency(
+              monthlyIncome
+            )}
+            /month
+          </span>
 
-              <input
-                type="date"
-                value={
-                  to
-                }
-                max={
-                  getTodayKey()
-                }
-                onChange={(event) =>
-                  onToChange(
-                    event.target.value
-                  )
-                }
-                className="h-10 w-full rounded-lg border border-border/60 bg-background/50 px-3 text-sm outline-none transition focus:border-orange-400/60"
-              />
-            </label>
+          <span>·</span>
 
-            <div className="flex items-end">
-              <Button
-                type="button"
-                onClick={
-                  onSync
-                }
-                disabled={
-                  syncing
-                }
-                className="h-10 min-w-32"
-              >
-                {syncing
-                  ? "Syncing…"
-                  : "Sync earnings"}
-              </Button>
-            </div>
-
-            <div className="flex items-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={
-                  onRefresh
-                }
-                className="h-10"
-              >
-                Refresh
-              </Button>
-            </div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[11px] text-muted-foreground">
-            <span>
-              {message ||
-                (connected
-                  ? authenticated
-                    ? rollerCoinOpen
-                      ? "Ready to sync. Re-syncing the same dates replaces those dates instead of double-counting."
-                      : "Auth is saved. Open RollerCoin in a tab before starting a new date-range sync."
-                    : "Open RollerCoin once so the extension can capture your auth token."
-                  : "Reload the updated extension, then refresh this page.")}
-            </span>
-
-            {tracker?.lastRange?.from &&
-              tracker?.lastRange?.to && (
-                <span className="tabular-nums">
-                  Last range {tracker.lastRange.from} → {tracker.lastRange.to}
-                </span>
-              )}
-          </div>
+          <span>
+            {formatCurrency(
+              yearlyIncome
+            )}
+            /year
+          </span>
         </div>
-      )}
-    </div>
-  );
+      </div>
+    </button>
+
+    {/* KEEP YOUR EXISTING:
+        {expanded && (...)}
+        SECTION HERE EXACTLY AS IT IS
+    */}
+  </div>
+);
 }
 
 function ProjectLogoButton({
