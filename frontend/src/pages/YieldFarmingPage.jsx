@@ -2913,27 +2913,13 @@ function buildProjectIncome(
   }
 
 /*
- * Verified against the Lulo dashboard:
- * September 2026 earned income = $9.01.
- *
- * Add it ONCE after all Lulo projects have
- * been processed so it cannot be double-counted.
- */
-addEarning(
-  "2026-09",
-  "Lulo",
-  9.01
-);
-
-/*
  * LULO
  *
- * For September 2026, Lulo's own dashboard is the
- * authoritative source and reports $9.01 earned
- * for the month.
+ * September 2026 is handled separately using
+ * the verified Lulo dashboard total of $9.01.
  *
- * Other months continue using the normal tracked
- * backfill / transaction accounting.
+ * Other months continue using the normal
+ * transaction/backfill accounting.
  */
 (
   luloProjects ||
@@ -2990,10 +2976,6 @@ addEarning(
               transaction.created_at
           );
 
-        /*
-         * September 2026 is handled
-         * separately below.
-         */
         if (
           monthKey ===
           "2026-09"
@@ -3024,10 +3006,6 @@ addEarning(
         monthKey,
         amount,
       ]) => {
-        /*
-         * Ignore the stale September
-         * backfill value.
-         */
         if (
           monthKey ===
           "2026-09"
@@ -3046,11 +3024,8 @@ addEarning(
 );
 
 /*
- * Verified against Lulo:
- * September 2026 income = $9.01.
- *
- * Add it once so it cannot be
- * double-counted.
+ * September 2026 verified Lulo total.
+ * Add exactly once.
  */
 addEarning(
   "2026-09",
@@ -3084,6 +3059,31 @@ Object.values(
   }
 );
 
+/*
+ * LOOPSCALE
+ */
+Object.values(
+  loopscaleHistory?.positions ||
+    {}
+).forEach(
+  (position) => {
+    Object.entries(
+      position.monthlyEarnings ||
+        {}
+    ).forEach(
+      ([
+        monthKey,
+        amount,
+      ]) => {
+        addEarning(
+          monthKey,
+          "Loopscale",
+          amount
+        );
+      }
+    );
+  }
+);
 
   const saladDaily =
     Object.entries(
