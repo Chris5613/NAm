@@ -9,7 +9,6 @@ import {
 } from "./external-apis";
 import { localStorage as storage } from "./localStorage";
 import { applyApyTransactionAccruals } from "./projectDailyReturns";
-import { applyInfYieldSnapshot, getInfYieldSnapshot } from "./infYieldSync";
 import { applyJupiterInfLoopSnapshot, getJupiterInfLoopSnapshot } from "./jupiterInfLoopSync";
 import { applyLuloYieldSnapshot, getLuloYieldSnapshot } from "./luloYieldSync";
 
@@ -295,15 +294,6 @@ export const projectsApi = {
   accrueApyTransactions: async (now = new Date()) => {
     const projects = normalizeItems(storage.getProjects());
     let accrued = applyApyTransactionAccruals(projects, now);
-
-    if (accrued.some((project) => project.yield_tracking === "sanctum_inf")) {
-      try {
-        const snapshot = await getInfYieldSnapshot();
-        accrued = applyInfYieldSnapshot(accrued, snapshot, now);
-      } catch (error) {
-        console.warn("INF yield sync failed:", error);
-      }
-    }
 
     accrued = await Promise.all(accrued.map(async (project) => {
       if (project.yield_tracking !== "jupiter_inf_loop") return project;

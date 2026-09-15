@@ -2,7 +2,6 @@ import {
   useState,
   useEffect,
   useCallback,
-  useMemo,
 } from "react";
 
 import {
@@ -41,6 +40,7 @@ import {
   ArrowUpRight,
   Download,
   Upload,
+  X,
 } from "lucide-react";
 
 /* =========================================================
@@ -105,7 +105,7 @@ const CATEGORY_CONFIG = {
 };
 
 /* =========================================================
-   EXPORT / IMPORT
+   EXPORT
 ========================================================= */
 
 const exportAllLocalStorage = () => {
@@ -116,10 +116,13 @@ const exportAllLocalStorage = () => {
     i < localStorage.length;
     i++
   ) {
-    const key = localStorage.key(i);
+    const key =
+      localStorage.key(i);
 
     backup[key] =
-      localStorage.getItem(key);
+      localStorage.getItem(
+        key
+      );
   }
 
   const blob = new Blob(
@@ -136,19 +139,30 @@ const exportAllLocalStorage = () => {
   );
 
   const url =
-    URL.createObjectURL(blob);
+    URL.createObjectURL(
+      blob
+    );
 
   const a =
-    document.createElement("a");
+    document.createElement(
+      "a"
+    );
 
   a.href = url;
+
   a.download =
     "dashboard-backup.json";
 
   a.click();
 
-  URL.revokeObjectURL(url);
+  URL.revokeObjectURL(
+    url
+  );
 };
+
+/* =========================================================
+   IMPORT
+========================================================= */
 
 const importAllLocalStorage = (
   event
@@ -194,7 +208,9 @@ const importAllLocalStorage = (
     }
   };
 
-  reader.readAsText(file);
+  reader.readAsText(
+    file
+  );
 };
 
 /* =========================================================
@@ -209,8 +225,11 @@ function getPstDateKey(
     {
       timeZone:
         "America/Los_Angeles",
+
       year: "numeric",
+
       month: "2-digit",
+
       day: "2-digit",
     }
   ).format(date);
@@ -224,7 +243,9 @@ function getMonthKey(
     {
       timeZone:
         "America/Los_Angeles",
+
       year: "numeric",
+
       month: "2-digit",
     }
   ).format(date);
@@ -238,7 +259,9 @@ function getMonthLabel(
     {
       timeZone:
         "America/Los_Angeles",
+
       month: "short",
+
       year: "numeric",
     }
   ).format(date);
@@ -248,14 +271,21 @@ function getMonthLabel(
    CURRENCY FORMATTER
 ========================================================= */
 
-function formatCurrency(value) {
+function formatCurrency(
+  value
+) {
   return new Intl.NumberFormat(
     "en-US",
     {
       style: "currency",
+
       currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+
+      minimumFractionDigits:
+        2,
+
+      maximumFractionDigits:
+        2,
     }
   ).format(
     Number(value) || 0
@@ -263,7 +293,7 @@ function formatCurrency(value) {
 }
 
 /* =========================================================
-   DAILY CATEGORY CHANGES
+   CATEGORY DAILY CHANGES
 ========================================================= */
 
 function getCategoryDailyChanges(
@@ -286,67 +316,84 @@ function getCategoryDailyChanges(
 
   if (
     !saved ||
-    saved.dateKey !== todayKey
+    saved.dateKey !==
+      todayKey
   ) {
     const baseline = {
       stocks:
-        breakdown?.stocks || 0,
+        breakdown?.stocks ||
+        0,
 
       crypto:
-        breakdown?.crypto || 0,
+        breakdown?.crypto ||
+        0,
 
       cash:
-        breakdown?.cash || 0,
+        breakdown?.cash ||
+        0,
 
       other:
-        breakdown?.other || 0,
+        breakdown?.other ||
+        0,
 
       debts:
-        breakdown?.debts || 0,
+        breakdown?.debts ||
+        0,
     };
 
     localStorage.setItem(
       DAILY_CATEGORY_BASELINE_KEY,
+
       JSON.stringify({
         dateKey: todayKey,
+
         baseline,
       })
     );
 
     return {
       stocks: 0,
+
       crypto: 0,
+
       cash: 0,
+
       other: 0,
+
       debts: 0,
     };
   }
 
   return {
     stocks:
-      (breakdown?.stocks || 0) -
-      (saved.baseline?.stocks ||
-        0),
+      (breakdown?.stocks ||
+        0) -
+      (saved.baseline
+        ?.stocks || 0),
 
     crypto:
-      (breakdown?.crypto || 0) -
-      (saved.baseline?.crypto ||
-        0),
+      (breakdown?.crypto ||
+        0) -
+      (saved.baseline
+        ?.crypto || 0),
 
     cash:
-      (breakdown?.cash || 0) -
+      (breakdown?.cash ||
+        0) -
       (saved.baseline?.cash ||
         0),
 
     other:
-      (breakdown?.other || 0) -
-      (saved.baseline?.other ||
-        0),
+      (breakdown?.other ||
+        0) -
+      (saved.baseline
+        ?.other || 0),
 
     debts:
-      (breakdown?.debts || 0) -
-      (saved.baseline?.debts ||
-        0),
+      (breakdown?.debts ||
+        0) -
+      (saved.baseline
+        ?.debts || 0),
   };
 }
 
@@ -368,8 +415,11 @@ function getDailyNetWorthChange(
   if (value <= 0) {
     return {
       baseline: 0,
+
       change: 0,
+
       percentChange: 0,
+
       dateKey: todayKey,
     };
   }
@@ -396,16 +446,21 @@ function getDailyNetWorthChange(
   ) {
     localStorage.setItem(
       DAILY_BASELINE_KEY,
+
       JSON.stringify({
         dateKey: todayKey,
+
         baseline: value,
       })
     );
 
     return {
       baseline: value,
+
       change: 0,
+
       percentChange: 0,
+
       dateKey: todayKey,
     };
   }
@@ -420,20 +475,28 @@ function getDailyNetWorthChange(
 
   const percentChange =
     baseline !== 0
-      ? (change / baseline) *
+      ? (change /
+          baseline) *
         100
       : 0;
 
   return {
     baseline,
+
     change,
+
     percentChange,
+
     dateKey: todayKey,
   };
 }
 
 /* =========================================================
    MONTHLY HISTORY
+
+   This preserves your monthly behavior:
+   - current month updates the same point
+   - when the month changes, a new month point is created
 ========================================================= */
 
 function getMonthlyNetWorthHistory(
@@ -464,16 +527,8 @@ function getMonthlyNetWorthHistory(
 
   let history =
     Array.isArray(saved)
-      ? saved
-          .filter(
-            (item) =>
-              item &&
-              typeof item.monthKey ===
-                "string" &&
-              item.monthKey >=
-                monthKey
-          )
-          .map((item) => ({
+      ? saved.map(
+          (item) => ({
             monthKey:
               item.monthKey,
 
@@ -488,8 +543,11 @@ function getMonthlyNetWorthHistory(
                 item.value
               ) || 0,
 
-            live: false,
-          }))
+            live:
+              item.monthKey ===
+              monthKey,
+          })
+        )
       : [];
 
   const currentIndex =
@@ -518,20 +576,41 @@ function getMonthlyNetWorthHistory(
     };
   } else {
     history = [
+      ...history.map(
+        (item) => ({
+          ...item,
+
+          live: false,
+        })
+      ),
+
       {
         monthKey,
+
         month:
           monthLabel,
+
         value,
+
         live: true,
       },
-
-      ...history,
     ];
   }
 
+  history.sort(
+    (a, b) =>
+      String(
+        a.monthKey
+      ).localeCompare(
+        String(
+          b.monthKey
+        )
+      )
+  );
+
   localStorage.setItem(
     MONTHLY_NET_WORTH_HISTORY_KEY,
+
     JSON.stringify(
       history
     )
@@ -550,10 +629,14 @@ function calculateNetWorth(
 ) {
   const breakdown = {
     stocks: 0,
+
     crypto:
       cryptoTotal,
+
     cash: 0,
+
     other: 0,
+
     debts: 0,
   };
 
@@ -601,7 +684,9 @@ function calculateNetWorth(
 
   return {
     total_net_worth,
+
     breakdown,
+
     asset_count:
       assets.length,
   };
@@ -628,6 +713,7 @@ function AllocationBar({
     maxValue > 0
       ? Math.max(
           4,
+
           (Math.abs(
             value
           ) /
@@ -644,7 +730,15 @@ function AllocationBar({
       />
 
       <div className="min-w-0 flex-1">
-        <div className="mb-1.5 flex items-center justify-between gap-3">
+        <div
+          className="
+            mb-1.5
+            flex
+            items-center
+            justify-between
+            gap-3
+          "
+        >
           <span className="text-sm text-slate-100">
             {
               config.shortLabel
@@ -658,7 +752,14 @@ function AllocationBar({
           </span>
         </div>
 
-        <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+        <div
+          className="
+            h-2
+            overflow-hidden
+            rounded-full
+            bg-slate-800
+          "
+        >
           <div
             className={`h-full rounded-full ${config.bar}`}
             style={{
@@ -668,84 +769,6 @@ function AllocationBar({
         </div>
       </div>
     </div>
-  );
-}
-
-/* =========================================================
-   SUMMARY CARD
-========================================================= */
-
-function SummaryCard({
-  category,
-  value,
-  onClick,
-}) {
-  const config =
-    CATEGORY_CONFIG[
-      category
-    ];
-
-  const Icon =
-    config.icon;
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="
-        group
-        flex
-        min-h-[126px]
-        flex-col
-        justify-between
-        rounded-xl
-        border
-        border-slate-700/80
-        bg-[#111a21]
-        p-5
-        text-left
-        transition
-        hover:border-slate-500
-        hover:bg-[#162129]
-      "
-    >
-      <div className="flex items-start justify-between">
-        <Icon
-          className={`h-7 w-7 ${config.color}`}
-          strokeWidth={1.8}
-        />
-
-        <ChevronRight
-          className="
-            h-5
-            w-5
-            text-slate-400
-            transition
-            group-hover:translate-x-0.5
-            group-hover:text-white
-          "
-        />
-      </div>
-
-      <div>
-        <p className="text-[15px] text-slate-100">
-          {config.label}
-        </p>
-
-        <p className="mt-1 text-[22px] font-semibold tracking-tight text-white">
-          {category ===
-          "debts"
-            ? "−"
-            : ""}
-
-          {formatCurrency(
-            Math.abs(
-              value
-            )
-          )}
-        </p>
-      </div>
-    </button>
   );
 }
 
@@ -770,7 +793,9 @@ function HoldingRow({
   return (
     <button
       type="button"
-      onClick={onClick}
+      onClick={
+        onClick
+      }
       className="
         group
         flex
@@ -783,7 +808,9 @@ function HoldingRow({
         py-4
         text-left
         transition
-        hover:bg-white/[0.025]
+        hover:bg-white/[0.035]
+        focus:outline-none
+        focus-visible:bg-white/[0.05]
       "
     >
       <div className="flex w-11 justify-center">
@@ -795,7 +822,9 @@ function HoldingRow({
 
       <div className="min-w-0 flex-1">
         <p className="font-medium text-white">
-          {config.label}
+          {
+            config.label
+          }
         </p>
 
         <p className="mt-0.5 text-sm text-slate-400">
@@ -904,8 +933,18 @@ export default function Dashboard() {
     setHoldingSearch,
   ] = useState("");
 
+  const [
+    detailsModalOpen,
+    setDetailsModalOpen,
+  ] = useState(false);
+
+  const [
+    selectedCategory,
+    setSelectedCategory,
+  ] = useState(null);
+
   /* =======================================================
-     SAVE LIVE HISTORY
+     LIVE HISTORY STORAGE
   ======================================================= */
 
   useEffect(() => {
@@ -928,7 +967,7 @@ export default function Dashboard() {
   }, [liveHistory]);
 
   /* =======================================================
-     FETCH DASHBOARD DATA
+     FETCH DATA
   ======================================================= */
 
   const fetchData =
@@ -1024,9 +1063,12 @@ export default function Dashboard() {
             "Failed to load data"
           );
         } finally {
-          setLoading(false);
+          setLoading(
+            false
+          );
         }
       },
+
       []
     );
 
@@ -1038,6 +1080,7 @@ export default function Dashboard() {
         () => {
           fetchData();
         },
+
         10 *
           60 *
           1000
@@ -1048,6 +1091,47 @@ export default function Dashboard() {
         interval
       );
   }, [fetchData]);
+
+  /* =======================================================
+     MODAL ESC KEY
+  ======================================================= */
+
+  useEffect(() => {
+    if (
+      !detailsModalOpen
+    ) {
+      return;
+    }
+
+    const handleKeyDown = (
+      event
+    ) => {
+      if (
+        event.key ===
+        "Escape"
+      ) {
+        setDetailsModalOpen(
+          false
+        );
+      }
+    };
+
+    window.addEventListener(
+      "keydown",
+
+      handleKeyDown
+    );
+
+    return () => {
+      window.removeEventListener(
+        "keydown",
+
+        handleKeyDown
+      );
+    };
+  }, [
+    detailsModalOpen,
+  ]);
 
   /* =======================================================
      SNAPSHOT
@@ -1061,9 +1145,15 @@ export default function Dashboard() {
         const historyRes =
           await netWorthApi.getHistory();
 
-        setHistory(
-          historyRes.data
-        );
+        if (
+          Array.isArray(
+            historyRes?.data
+          )
+        ) {
+          setHistory(
+            historyRes.data
+          );
+        }
 
         toast.success(
           "Snapshot saved"
@@ -1112,7 +1202,8 @@ export default function Dashboard() {
           await fetchData();
 
           toast.success(
-            result?.updatedCount >
+            result
+              ?.updatedCount >
               0
               ? `Updated ${result.updatedCount} asset prices`
               : "Prices are already up to date"
@@ -1133,6 +1224,7 @@ export default function Dashboard() {
           );
         }
       },
+
       [fetchData]
     );
 
@@ -1143,187 +1235,26 @@ export default function Dashboard() {
     () => fetchData();
 
   /* =======================================================
-     SORTED SECTIONS
+     OPEN / CLOSE HOLDING MODAL
   ======================================================= */
 
-  const sortedAllSections =
-    useMemo(() => {
-      const stocksTotal =
-        (
-          assets || []
-        )
-          .filter(
-            (asset) =>
-              asset.category ===
-              "stocks"
-          )
-          .reduce(
-            (
-              sum,
-              asset
-            ) =>
-              sum +
-              (Number(
-                asset.quantity
-              ) || 0) *
-                (Number(
-                  asset.current_price
-                ) || 0),
-            0
-          );
-
-      const cashTotal =
-        (
-          assets || []
-        )
-          .filter(
-            (asset) =>
-              asset.category ===
-              "cash"
-          )
-          .reduce(
-            (
-              sum,
-              asset
-            ) =>
-              sum +
-              (asset.manual_value !=
-              null
-                ? Number(
-                    asset.manual_value
-                  ) || 0
-                : (Number(
-                    asset.quantity
-                  ) || 0) *
-                  (Number(
-                    asset.current_price
-                  ) ||
-                    0)),
-            0
-          );
-
-      const otherTotal =
-        (
-          assets || []
-        )
-          .filter(
-            (asset) =>
-              asset.category ===
-              "other"
-          )
-          .reduce(
-            (
-              sum,
-              asset
-            ) =>
-              sum +
-              (asset.manual_value !=
-              null
-                ? Number(
-                    asset.manual_value
-                  ) || 0
-                : (Number(
-                    asset.quantity
-                  ) || 0) *
-                  (Number(
-                    asset.current_price
-                  ) ||
-                    0)),
-            0
-          );
-
-      const debtsTotal =
-        (
-          assets || []
-        )
-          .filter(
-            (asset) =>
-              asset.category ===
-              "debts"
-          )
-          .reduce(
-            (
-              sum,
-              asset
-            ) =>
-              sum +
-              (asset.manual_value !=
-              null
-                ? Number(
-                    asset.manual_value
-                  ) || 0
-                : (Number(
-                    asset.quantity
-                  ) || 0) *
-                  (Number(
-                    asset.current_price
-                  ) ||
-                    0)),
-            0
-          );
-
-      const cryptoTotal =
-        netWorth
-          ?.breakdown
-          ?.crypto || 0;
-
-      return [
-        {
-          kind:
-            "stocks",
-          total:
-            stocksTotal,
-        },
-
-        {
-          kind:
-            "crypto",
-          total:
-            cryptoTotal,
-        },
-
-        {
-          kind:
-            "cash",
-          total:
-            cashTotal,
-        },
-
-        {
-          kind:
-            "other",
-          total:
-            otherTotal,
-        },
-
-        {
-          kind:
-            "debts",
-          total:
-            debtsTotal,
-        },
-      ].sort(
-        (
-          a,
-          b
-        ) =>
-          Math.abs(
-            b.total
-          ) -
-          Math.abs(
-            a.total
-          )
+  const openCategoryModal =
+    (category) => {
+      setSelectedCategory(
+        category
       );
-    }, [
-      assets,
-      netWorth,
-    ]);
 
-  /* Keeps the existing all-section ordering logic
-     available for future use. */
-  void sortedAllSections;
-  void history;
-  void lastUpdated;
+      setDetailsModalOpen(
+        true
+      );
+    };
+
+  const closeCategoryModal =
+    () => {
+      setDetailsModalOpen(
+        false
+      );
+    };
 
   /* =======================================================
      LOADING
@@ -1354,27 +1285,37 @@ export default function Dashboard() {
   const breakdown =
     netWorth?.breakdown || {
       stocks: 0,
+
       crypto: 0,
+
       cash: 0,
+
       other: 0,
+
       debts: 0,
     };
 
   const totalNetWorth =
-    netWorth?.total_net_worth ||
+    netWorth
+      ?.total_net_worth ||
     0;
 
-  const categories = [
-    "stocks",
-    "crypto",
-    "cash",
-    "other",
-    "debts",
-  ];
+  const allocationCategories =
+    [
+      "stocks",
+
+      "crypto",
+
+      "cash",
+
+      "other",
+
+      "debts",
+    ];
 
   const maxAllocation =
     Math.max(
-      ...categories.map(
+      ...allocationCategories.map(
         (category) =>
           Math.abs(
             breakdown[
@@ -1382,6 +1323,7 @@ export default function Dashboard() {
             ] || 0
           )
       ),
+
       1
     );
 
@@ -1542,6 +1484,9 @@ export default function Dashboard() {
 
   const todayPositive =
     todayChange >= 0;
+
+  const historyHasMultipleMonths =
+    history.length > 1;
 
   /* =======================================================
      UI
@@ -1795,7 +1740,7 @@ export default function Dashboard() {
           xl:grid-cols-[1.58fr_1fr]
         "
       >
-        {/* NET WORTH HERO */}
+        {/* TOTAL NET WORTH */}
 
         <div
           className="
@@ -1866,7 +1811,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          {/* HISTORY VISUAL */}
+          {/* HISTORY AREA */}
 
           <div
             className="
@@ -1906,31 +1851,48 @@ export default function Dashboard() {
                 text-center
               "
             >
-              <p className="font-medium text-slate-100">
-                Your history
-                starts here
-              </p>
+              {historyHasMultipleMonths ? (
+                <>
+                  <p className="font-medium text-slate-100">
+                    Net worth history
+                  </p>
 
-              <p className="mt-2 text-sm text-slate-400">
-                Take snapshots to
-                track your
-                progress
-              </p>
+                  <p className="mt-2 text-sm text-slate-400">
+                    {
+                      history.length
+                    }{" "}
+                    monthly points
+                    tracked
+                  </p>
 
-              <button
-                type="button"
-                onClick={
-                  handleSnapshot
-                }
-                className="
-                  mt-4
-                  text-sm
-                  text-teal-400
-                  hover:text-teal-300
-                "
-              >
-                Take snapshot
-              </button>
+                  <p className="mt-4 text-xs text-slate-500">
+                    A new point is
+                    added
+                    automatically
+                    each month
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="font-medium text-slate-100">
+                    Your history
+                    starts here
+                  </p>
+
+                  <p className="mt-2 text-sm text-slate-400">
+                    Your current
+                    month is being
+                    tracked
+                  </p>
+
+                  <p className="mt-4 text-xs text-slate-500">
+                    The next month
+                    automatically
+                    creates a new
+                    point
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -1996,42 +1958,6 @@ export default function Dashboard() {
       </section>
 
       {/* =================================================
-          CATEGORY SUMMARY CARDS
-      ================================================= */}
-
-      <section
-        className="
-          grid
-          gap-4
-          sm:grid-cols-2
-          lg:grid-cols-5
-        "
-      >
-        {categories.map(
-          (category) => (
-            <SummaryCard
-              key={
-                category
-              }
-              category={
-                category
-              }
-              value={
-                breakdown[
-                  category
-                ] || 0
-              }
-              onClick={() =>
-                setActiveTab(
-                  category
-                )
-              }
-            />
-          )
-        )}
-      </section>
-
-      {/* =================================================
           YOUR HOLDINGS
       ================================================= */}
 
@@ -2068,7 +1994,7 @@ export default function Dashboard() {
               sm:flex-row
             "
           >
-            {/* CATEGORY FILTER */}
+            {/* FILTER */}
 
             <div className="relative">
               <select
@@ -2189,7 +2115,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* ROWS */}
+        {/* HOLDING ROWS */}
 
         <div>
           {filteredHoldingRows.map(
@@ -2200,7 +2126,7 @@ export default function Dashboard() {
                 }
                 {...row}
                 onClick={() =>
-                  setActiveTab(
+                  openCategoryModal(
                     row.category
                   )
                 }
@@ -2229,74 +2155,260 @@ export default function Dashboard() {
       </section>
 
       {/* =================================================
-          CATEGORY DETAILS
+          HOLDING DETAILS MODAL
       ================================================= */}
 
-      {activeTab !==
-        "all" && (
-        <section className="pt-2">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-white">
-              {
-                CATEGORY_CONFIG[
-                  activeTab
-                ]?.label
-              }{" "}
-              details
-            </h2>
-
-            <button
-              type="button"
-              onClick={() =>
-                setActiveTab(
-                  "all"
-                )
+      {detailsModalOpen &&
+        selectedCategory && (
+          <div
+            className="
+              fixed
+              inset-0
+              z-[100]
+              flex
+              items-center
+              justify-center
+              bg-black/75
+              p-4
+              backdrop-blur-sm
+            "
+            onMouseDown={(
+              event
+            ) => {
+              if (
+                event.target ===
+                event.currentTarget
+              ) {
+                closeCategoryModal();
               }
+            }}
+          >
+            <div
               className="
-                text-sm
-                text-slate-400
-                transition
-                hover:text-white
+                flex
+                max-h-[88vh]
+                w-full
+                max-w-5xl
+                flex-col
+                overflow-hidden
+                rounded-2xl
+                border
+                border-slate-700
+                bg-[#0f181f]
+                shadow-2xl
               "
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="holding-details-title"
             >
-              Close
-            </button>
-          </div>
+              {/* MODAL HEADER */}
 
-          {activeTab ===
-          "crypto" ? (
-            <CryptoBreakdown
-              defaultOpen
-              dailyChange={
-                dailyCategoryChanges
-                  ?.crypto ||
-                0
-              }
-            />
-          ) : (
-            <AssetBreakdown
-              category={
-                activeTab
-              }
-              assets={
-                assets
-              }
-              onUpdate={
-                handleAssetUpdated
-              }
-              onDelete={
-                handleAssetDeleted
-              }
-              defaultOpen
-              dailyChange={
-                dailyCategoryChanges?.[
-                  activeTab
-                ] || 0
-              }
-            />
-          )}
-        </section>
-      )}
+              <div
+                className="
+                  flex
+                  shrink-0
+                  items-center
+                  justify-between
+                  border-b
+                  border-slate-700/80
+                  px-6
+                  py-5
+                "
+              >
+                <div className="flex items-center gap-4">
+                  {(() => {
+                    const Icon =
+                      CATEGORY_CONFIG[
+                        selectedCategory
+                      ].icon;
+
+                    return (
+                      <div
+                        className="
+                          flex
+                          h-11
+                          w-11
+                          items-center
+                          justify-center
+                          rounded-xl
+                          bg-white/[0.04]
+                        "
+                      >
+                        <Icon
+                          className={`h-6 w-6 ${
+                            CATEGORY_CONFIG[
+                              selectedCategory
+                            ].color
+                          }`}
+                          strokeWidth={
+                            1.8
+                          }
+                        />
+                      </div>
+                    );
+                  })()}
+
+                  <div>
+                    <h2
+                      id="holding-details-title"
+                      className="
+                        text-xl
+                        font-semibold
+                        text-white
+                      "
+                    >
+                      {
+                        CATEGORY_CONFIG[
+                          selectedCategory
+                        ].label
+                      }
+                    </h2>
+
+                    <p className="mt-1 text-sm text-slate-400">
+                      {selectedCategory ===
+                      "crypto"
+                        ? "Projects and Bitcoin"
+                        : selectedCategory ===
+                            "other"
+                          ? `${assetCounts.other} ${
+                              assetCounts.other ===
+                              1
+                                ? "asset"
+                                : "assets"
+                            }`
+                          : `${
+                              assetCounts[
+                                selectedCategory
+                              ] ||
+                              0
+                            } ${
+                              assetCounts[
+                                selectedCategory
+                              ] ===
+                              1
+                                ? "account"
+                                : "accounts"
+                            }`}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <p className="hidden text-xl font-semibold text-white sm:block">
+                    {selectedCategory ===
+                    "debts"
+                      ? "−"
+                      : ""}
+
+                    {formatCurrency(
+                      Math.abs(
+                        breakdown[
+                          selectedCategory
+                        ] || 0
+                      )
+                    )}
+                  </p>
+
+                  <button
+                    type="button"
+                    onClick={
+                      closeCategoryModal
+                    }
+                    className="
+                      flex
+                      h-10
+                      w-10
+                      items-center
+                      justify-center
+                      rounded-lg
+                      text-slate-400
+                      transition
+                      hover:bg-white/[0.06]
+                      hover:text-white
+                    "
+                    aria-label="Close details"
+                  >
+                    <X
+                      className="h-5 w-5"
+                      strokeWidth={
+                        1.8
+                      }
+                    />
+                  </button>
+                </div>
+              </div>
+
+              {/* MOBILE TOTAL */}
+
+              <div className="border-b border-slate-700/80 px-6 py-4 sm:hidden">
+                <p className="text-xs uppercase tracking-wide text-slate-500">
+                  Total
+                </p>
+
+                <p className="mt-1 text-2xl font-semibold text-white">
+                  {selectedCategory ===
+                  "debts"
+                    ? "−"
+                    : ""}
+
+                  {formatCurrency(
+                    Math.abs(
+                      breakdown[
+                        selectedCategory
+                      ] || 0
+                    )
+                  )}
+                </p>
+              </div>
+
+              {/* MODAL CONTENT */}
+
+              <div
+                className="
+                  min-h-0
+                  flex-1
+                  overflow-y-auto
+                  p-6
+                "
+              >
+                {selectedCategory ===
+                "crypto" ? (
+                  <CryptoBreakdown
+                    key="modal-crypto"
+                    defaultOpen
+                    dailyChange={
+                      dailyCategoryChanges
+                        ?.crypto ||
+                      0
+                    }
+                  />
+                ) : (
+                  <AssetBreakdown
+                    key={`modal-${selectedCategory}`}
+                    category={
+                      selectedCategory
+                    }
+                    assets={
+                      assets
+                    }
+                    onUpdate={
+                      handleAssetUpdated
+                    }
+                    onDelete={
+                      handleAssetDeleted
+                    }
+                    defaultOpen
+                    dailyChange={
+                      dailyCategoryChanges?.[
+                        selectedCategory
+                      ] || 0
+                    }
+                  />
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
       {/* =================================================
           ADD ASSET DIALOG
@@ -2313,15 +2425,26 @@ export default function Dashboard() {
           handleAssetCreated
         }
         defaultCategory={
-          activeTab ===
+          selectedCategory ===
             "other" ||
-          activeTab ===
+          selectedCategory ===
             "debts"
-            ? activeTab
+            ? selectedCategory
             : "other"
         }
         allowStocks
       />
+
+      {/* These values stay active because they are part
+          of your original tracking behavior. */}
+
+      <span className="hidden">
+        {String(
+          Boolean(
+            lastUpdated
+          )
+        )}
+      </span>
     </div>
   );
 }
