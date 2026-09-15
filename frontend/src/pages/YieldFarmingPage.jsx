@@ -3717,6 +3717,75 @@ export default function YieldFarmingPage() {
     ]
   );
 
+  useEffect(() => {
+  let cancelled = false;
+
+  const refreshRollerCoinPrice =
+    async () => {
+      try {
+        const price =
+          Number(
+            await fetchLiveTrxPrice()
+          ) || 0;
+
+        if (
+          cancelled ||
+          !(price > 0)
+        ) {
+          return;
+        }
+
+        setRollerCoinTracker(
+          (current) => {
+            const previousPrice =
+              Number(
+                current?.lastTrxPrice
+              ) || 0;
+
+            if (
+              Math.abs(
+                previousPrice -
+                  price
+              ) <
+              0.00000001
+            ) {
+              return current;
+            }
+
+            return {
+              ...current,
+              lastTrxPrice:
+                price,
+            };
+          }
+        );
+      } catch (
+        error
+      ) {
+        console.error(
+          "Could not refresh RollerCoin TRX price:",
+          error
+        );
+      }
+    };
+
+  refreshRollerCoinPrice();
+
+  const timer =
+    window.setInterval(
+      refreshRollerCoinPrice,
+      60_000
+    );
+
+  return () => {
+    cancelled = true;
+
+    window.clearInterval(
+      timer
+    );
+  };
+}, []);
+
   useEffect(
     () => {
       saveProjectLogos(
