@@ -3001,16 +3001,6 @@ function buildProjectIncome(
 );
 
 /*
- * September 2026 verified Lulo total.
- * Add exactly once.
- */
-addEarning(
-  "2026-09",
-  "Lulo",
-  9.01
-);
-
-/*
  * RATEX
  */
 Object.values(
