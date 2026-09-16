@@ -36,8 +36,8 @@ const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 
 
 const MONTHLY_TRACKING_START = "2026-09";
-const LULO_SEPTEMBER_2026_OPENING_EARNED = 8.16;
-const LULO_MONTHLY_ACCOUNTING_VERSION = 4;
+const LULO_SEPTEMBER_2026_OPENING_EARNED = 9.05;
+const LULO_MONTHLY_ACCOUNTING_VERSION = 5;
 const RATEX_ACCOUNTING_VERSION = 2;
 const RATEX_LEGACY_INITIAL_QUANTITY = 606.27;
 
@@ -2912,15 +2912,6 @@ function buildProjectIncome(
     );
   }
 
-/*
- * LULO
- *
- * September 2026 is handled separately using
- * the verified Lulo dashboard total of $9.01.
- *
- * Other months continue using the normal
- * transaction/backfill accounting.
- */
 (
   luloProjects ||
   []
@@ -2977,13 +2968,6 @@ function buildProjectIncome(
           );
 
         if (
-          monthKey ===
-          "2026-09"
-        ) {
-          return;
-        }
-
-        if (
           authoritativeMonths.has(
             monthKey
           )
@@ -3006,13 +2990,6 @@ function buildProjectIncome(
         monthKey,
         amount,
       ]) => {
-        if (
-          monthKey ===
-          "2026-09"
-        ) {
-          return;
-        }
-
         addEarning(
           monthKey,
           "Lulo",
