@@ -756,34 +756,91 @@ function getUnetworkTrackerStats(
       );
   }
 
-  const currentDay =
-    Math.max(
-      1,
-      Number(
-        getTodayKey().slice(
-          8,
-          10
-        )
-      ) || 1
-    );
-
   /*
-   * Assumption requested for Unetwork projections:
-   * $1.00 earned per day.
+   * Unetwork projection:
    *
-   * This affects Estimated Monthly Income and
-   * Estimated Yearly Income only. Actual monthly
-   * Project Income still comes from the tracker.
+   * Use the most recent COMPLETED day's actual
+   * allocation earnings instead of a hard-coded
+   * $1.00/day estimate.
+   *
+   * Today's partial earnings are deliberately
+   * ignored because the day is still in progress.
+   *
+   * If no completed-day earning exists yet,
+   * fall back to $1.00/day so the card still has
+   * a useful projection.
    */
-  const estimatedDailyUsd =
-    1;
+  const todayKey =
+    getTodayKey();
 
-  const estimatedYearlyUsd =
-    365;
+  const completedDailyEntries =
+    Object.entries(
+      tracker?.daily || {}
+    )
+      .map(
+        ([
+          date,
+          entry,
+        ]) => ({
+          date:
+            String(
+              date
+            ).slice(
+              0,
+              10
+            ),
+
+          usd:
+            typeof entry ===
+            "number"
+              ? Number(
+                  entry
+                ) || 0
+              : Number(
+                  entry?.usd
+                ) || 0,
+        })
+      )
+      .filter(
+        (entry) =>
+          /^\d{4}-\d{2}-\d{2}$/.test(
+            entry.date
+          ) &&
+          entry.date <
+            todayKey &&
+          Number.isFinite(
+            entry.usd
+          ) &&
+          entry.usd >=
+            0
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          b.date.localeCompare(
+            a.date
+          )
+      );
+
+  const latestCompletedDay =
+    completedDailyEntries[
+      0
+    ] || null;
+
+  const estimatedDailyUsd =
+    latestCompletedDay
+      ? latestCompletedDay.usd
+      : 1;
 
   const estimatedMonthlyUsd =
-    estimatedYearlyUsd /
-    12;
+    estimatedDailyUsd *
+    30.4375;
+
+  const estimatedYearlyUsd =
+    estimatedDailyUsd *
+    365;
 
   return {
     currentBalance:
@@ -805,6 +862,15 @@ function getUnetworkTrackerStats(
     estimatedMonthlyUsd,
 
     estimatedYearlyUsd,
+
+    projectionSource:
+      latestCompletedDay
+        ? "latest_completed_day"
+        : "fallback",
+
+    projectionDate:
+      latestCompletedDay?.date ||
+      null,
 
     lastSyncedAt:
       tracker?.lastSyncedAt ||
