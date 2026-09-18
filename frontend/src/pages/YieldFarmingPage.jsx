@@ -233,6 +233,27 @@ function loadSaladTracker() {
         "object"
         ? parsed.daily
         : {},
+    earningSnapshots:
+      Array.isArray(
+        parsed.earningSnapshots
+      )
+        ? parsed.earningSnapshots
+            .filter(
+              (entry) =>
+                entry &&
+                Number.isFinite(
+                  Number(
+                    entry.lifetimeBalance
+                  )
+                ) &&
+                !Number.isNaN(
+                  new Date(
+                    entry.syncedAt
+                  ).getTime()
+                )
+            )
+            .slice(-2880)
+        : [],
   };
 }
 
@@ -287,15 +308,10 @@ function getSaladTrackerStats(
     );
 
   /*
-   * If Salad gives us dated earnings for this month,
-   * those rows are authoritative.
-   *
-   * If it does NOT give us dated earnings, do not try
-   * to reconstruct earnings by assuming every balance
-   * decrease was a withdrawal.
-   *
-   * In that case the live Salad balance is used as the
-   * current month's income.
+   * Actual Project Income stays based on Salad's
+   * dated earnings when available. If Salad does
+   * not provide dated rows, keep using the current
+   * live balance for this month's earned amount.
    */
   const monthUsd =
     currentMonthDailyEntries.length >
@@ -314,9 +330,162 @@ function getSaladTrackerStats(
       ) || 1
     );
 
-  const estimatedDailyUsd =
+  /*
+   * Projection rate:
+   *
+   * Use the newest lifetime-balance reading and
+   * compare it with the saved reading closest to
+   * one hour earlier.
+   *
+   * We accept a 45-90 minute window and normalize
+   * the change back to an hourly rate. This keeps
+   * a delayed browser/extension sync from making
+   * the estimate artificially high or low.
+   *
+   * lifetimeBalance is used instead of the
+   * withdrawable/current balance so a withdrawal
+   * does not look like negative earnings.
+   */
+  const earningSnapshots =
+    (
+      Array.isArray(
+        tracker?.earningSnapshots
+      )
+        ? tracker.earningSnapshots
+        : []
+    )
+      .map(
+        (entry) => ({
+          syncedAt:
+            entry?.syncedAt ||
+            null,
+          timestamp:
+            new Date(
+              entry?.syncedAt
+            ).getTime(),
+          lifetimeBalance:
+            Number(
+              entry?.lifetimeBalance
+            ),
+        })
+      )
+      .filter(
+        (entry) =>
+          Number.isFinite(
+            entry.lifetimeBalance
+          ) &&
+          Number.isFinite(
+            entry.timestamp
+          )
+      )
+      .sort(
+        (
+          a,
+          b
+        ) =>
+          a.timestamp -
+          b.timestamp
+      );
+
+  let estimatedHourlyUsd =
+    null;
+
+  let projectionWindowMinutes =
+    null;
+
+  if (
+    earningSnapshots.length >=
+    2
+  ) {
+    const latest =
+      earningSnapshots[
+        earningSnapshots.length -
+          1
+      ];
+
+    const targetTimestamp =
+      latest.timestamp -
+      60 * 60 * 1000;
+
+    const candidates =
+      earningSnapshots.filter(
+        (entry) => {
+          const ageMinutes =
+            (
+              latest.timestamp -
+              entry.timestamp
+            ) /
+            60000;
+
+          return (
+            ageMinutes >= 45 &&
+            ageMinutes <= 90
+          );
+        }
+      );
+
+    if (
+      candidates.length
+    ) {
+      const comparison =
+        candidates.reduce(
+          (
+            closest,
+            entry
+          ) =>
+            Math.abs(
+              entry.timestamp -
+                targetTimestamp
+            ) <
+            Math.abs(
+              closest.timestamp -
+                targetTimestamp
+            )
+              ? entry
+              : closest
+        );
+
+      const elapsedHours =
+        (
+          latest.timestamp -
+          comparison.timestamp
+        ) /
+        3600000;
+
+      const earnedDelta =
+        latest.lifetimeBalance -
+        comparison.lifetimeBalance;
+
+      if (
+        elapsedHours > 0 &&
+        earnedDelta >= 0
+      ) {
+        estimatedHourlyUsd =
+          earnedDelta /
+          elapsedHours;
+
+        projectionWindowMinutes =
+          elapsedHours *
+          60;
+      }
+    }
+  }
+
+  /*
+   * Until we have roughly one hour of saved sync
+   * history, fall back to the existing month-to-date
+   * daily average so the card never drops to $0.
+   */
+  const fallbackDailyUsd =
     monthUsd /
     currentDay;
+
+  const estimatedDailyUsd =
+    estimatedHourlyUsd !==
+      null
+      ? estimatedHourlyUsd *
+        24
+      : fallbackDailyUsd;
 
   return {
     currentBalance,
@@ -325,12 +494,14 @@ function getSaladTrackerStats(
 
     monthUsd,
 
-    /*
-     * Salad currently does not provide a reliable
-     * explicit withdrawal event in this sync payload.
-     * Do not infer one from balance differences.
-     */
     withdrawals: 0,
+
+    estimatedHourlyUsd:
+      estimatedHourlyUsd !==
+      null
+        ? estimatedHourlyUsd
+        : estimatedDailyUsd /
+          24,
 
     estimatedDailyUsd,
 
@@ -342,12 +513,19 @@ function getSaladTrackerStats(
       estimatedDailyUsd *
       365,
 
+    projectionSource:
+      estimatedHourlyUsd !==
+      null
+        ? "recent_hour"
+        : "month_average",
+
+    projectionWindowMinutes,
+
     lastSyncedAt:
       tracker?.lastSyncedAt ||
       null,
   };
 }
-
 
 function loadUnetworkTracker() {
   const parsed =
@@ -5788,6 +5966,88 @@ const importSaladPayload =
               );
           }
 
+          /*
+           * Save lifetime-balance readings so the
+           * projection can use the most recent
+           * approximately-one-hour earning change.
+           *
+           * Keep up to 48 hours of minute-level
+           * readings. Repeated timestamps are replaced
+           * instead of duplicated.
+           */
+          const syncedTimestamp =
+            new Date(
+              syncedAt
+            ).getTime();
+
+          const cutoffTimestamp =
+            Number.isFinite(
+              syncedTimestamp
+            )
+              ? syncedTimestamp -
+                48 *
+                  60 *
+                  60 *
+                  1000
+              : Date.now() -
+                48 *
+                  60 *
+                  60 *
+                  1000;
+
+          const earningSnapshots =
+            (
+              Array.isArray(
+                current?.earningSnapshots
+              )
+                ? current.earningSnapshots
+                : []
+            )
+              .filter(
+                (entry) => {
+                  const timestamp =
+                    new Date(
+                      entry?.syncedAt
+                    ).getTime();
+
+                  return (
+                    Number.isFinite(
+                      timestamp
+                    ) &&
+                    timestamp >=
+                      cutoffTimestamp
+                  );
+                }
+              )
+              .filter(
+                (entry) =>
+                  entry?.syncedAt !==
+                  syncedAt
+              );
+
+          earningSnapshots.push({
+            syncedAt,
+            lifetimeBalance:
+              Number(
+                lifetimeBalance.toFixed(
+                  8
+                )
+              ),
+          });
+
+          earningSnapshots.sort(
+            (
+              a,
+              b
+            ) =>
+              new Date(
+                a.syncedAt
+              ).getTime() -
+              new Date(
+                b.syncedAt
+              ).getTime()
+          );
+
           return {
             ...current,
 
@@ -5827,6 +6087,11 @@ const importSaladPayload =
             monthlyEarnings,
 
             daily,
+
+            earningSnapshots:
+              earningSnapshots.slice(
+                -2880
+              ),
           };
         }
       );
@@ -7004,6 +7269,7 @@ const importSaladPayload =
           );
         }
 
+        requestRollerCoinLatest();
         requestSaladLatest();
         requestUnetworkLatest();
         requestKryptexLatest();
@@ -7020,6 +7286,7 @@ const importSaladPayload =
       },
       [
         applyProjectData,
+        requestRollerCoinLatest,
         requestSaladLatest,
         requestUnetworkLatest,
         requestKryptexLatest,

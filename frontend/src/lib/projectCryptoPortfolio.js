@@ -841,13 +841,21 @@ function createPortfolio(
       "salad",
     ]);
 
-  const projectEntries = (
-    Array.isArray(projects)
-      ? projects
-      : []
-  )
-    .filter((project) => {
-      const projectName = String(
+const projectEntries = (
+  Array.isArray(projects)
+    ? projects
+    : []
+)
+  .filter((project) => {
+    if (
+      project?.inactive === true ||
+      project?.is_inactive === true
+    ) {
+      return false;
+    }
+
+    const platform =
+      String(
         project?.platform ||
         project?.name ||
         ""
@@ -855,33 +863,55 @@ function createPortfolio(
         .trim()
         .toLowerCase();
 
-      const trackingType = String(
-        project?.yield_tracking ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
-
-      return (
-        project?.inactive !== true &&
-        project?.is_inactive !== true &&
-        !excludedProjects.has(
-          projectName
-        ) &&
-        trackingType !== "kryptex"
-      );
-    })
-    .map(toProjectEntry)
-    .filter(
-      (entry) =>
-        !externalNames.has(
-          String(
-            entry?.platform || ""
-          )
-            .trim()
-            .toLowerCase()
+    if (
+      platform === "ratex"
+    ) {
+      const status =
+        String(
+          project?.status || ""
         )
-    );
+          .trim()
+          .toLowerCase();
+
+      if (
+        status === "matured" ||
+        status === "completed" ||
+        status === "closed"
+      ) {
+        return false;
+      }
+
+      const maturityValue =
+        project?.maturity ||
+        project?.maturity_date ||
+        project?.maturityDate ||
+        null;
+
+      if (
+        maturityValue
+      ) {
+        const maturity =
+          new Date(
+            maturityValue
+          );
+
+        if (
+          !Number.isNaN(
+            maturity.getTime()
+          ) &&
+          maturity.getTime() <=
+            Date.now()
+        ) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  })
+  .map(
+    toProjectEntry
+  );
 
   projectEntries.push(
     ...externalEntries
