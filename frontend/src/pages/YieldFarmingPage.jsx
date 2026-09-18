@@ -3616,6 +3616,8 @@ Object.values(
 
 
 function KryptexProjectCard({
+  collapsed,
+  onToggle,
   logo,
   onLogoChange,
 }) {
@@ -3631,15 +3633,34 @@ function KryptexProjectCard({
         border-border/60
         bg-card/45
         shadow-sm
+        transition-all
+        duration-200
+        hover:border-border
+        hover:bg-card/65
       "
     >
-      <div className="p-5">
-        <div className="flex items-center justify-between gap-4">
+      <button
+        type="button"
+        onClick={
+          onToggle
+        }
+        className="
+          flex
+          min-h-[190px]
+          w-full
+          flex-col
+          p-5
+          text-left
+        "
+      >
+        {/* TOP */}
+
+        <div className="flex w-full items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-4">
             <ProjectLogoButton
+              platform="Kryptex"
               logo={logo}
-              label="Kryptex"
-              onChange={
+              onLogoChange={
                 onLogoChange
               }
             />
@@ -3650,68 +3671,158 @@ function KryptexProjectCard({
                   Kryptex
                 </h3>
 
-                <span className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-300">
-                  Live
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                  <Wifi className="h-3 w-3" />
+
+                  LIVE
                 </span>
               </div>
+            </div>
+          </div>
 
-              <p className="mt-1 text-xs text-muted-foreground">
+          <ChevronRight
+            className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+              collapsed
+                ? ""
+                : "rotate-90"
+            }`}
+            strokeWidth={1.5}
+          />
+        </div>
+
+        {/* VALUE */}
+
+        <div className="mt-auto pt-7">
+          <div
+            className="
+              text-[30px]
+              font-semibold
+              leading-none
+              tracking-tight
+              text-foreground
+              tabular-nums
+            "
+          >
+            {formatCurrency(
+              stats.currentBalanceUsd
+            )}
+          </div>
+
+          <div
+            className="
+              mt-4
+              flex
+              flex-wrap
+              items-center
+              gap-x-2
+              gap-y-1
+              text-sm
+              tabular-nums
+              text-muted-foreground
+            "
+          >
+            <span>
+              {formatCurrency(
+                stats.dailyUsd
+              )}
+              /day
+            </span>
+
+            <span>·</span>
+
+            <span>
+              {formatCurrency(
+                stats.monthlyUsd
+              )}
+              /month
+            </span>
+
+            <span>·</span>
+
+            <span>
+              {formatCurrency(
+                stats.yearlyUsd
+              )}
+              /year
+            </span>
+          </div>
+        </div>
+      </button>
+
+      {!collapsed && (
+        <div className="border-t border-border/50 px-5 py-5">
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Current Balance
+              </p>
+
+              <p className="mt-1 font-semibold tabular-nums">
+                {formatCurrency(
+                  stats.currentBalanceUsd
+                )}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Opening Balance
+              </p>
+
+              <p className="mt-1 font-semibold tabular-nums">
+                {formatCurrency(
+                  stats.openingBalanceUsd
+                )}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Earned Since Baseline
+              </p>
+
+              <p className="mt-1 font-semibold tabular-nums">
+                {formatCurrency(
+                  stats.earnedSinceBaseline
+                )}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Tracking Since
+              </p>
+
+              <p className="mt-1 font-semibold">
+                Sep 18, 2026
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Mining Type
+              </p>
+
+              <p className="mt-1 font-semibold">
                 CPU Mining
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Daily Rate
+              </p>
+
+              <p className="mt-1 font-semibold tabular-nums">
+                {formatCurrency(
+                  stats.dailyUsd
+                )}
+                /day
               </p>
             </div>
           </div>
         </div>
-
-        <div className="mt-5">
-          <div className="text-3xl font-semibold tracking-tight tabular-nums">
-{formatCurrency(
-  stats.currentBalanceUsd
-)}
-          </div>
-
-          <p className="mt-1 text-xs text-muted-foreground">
-            Estimated earned since Sep 18
-          </p>
-        </div>
-
-        <div className="mt-5 grid grid-cols-3 gap-3 border-t border-border/40 pt-4">
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Daily
-            </div>
-
-            <div className="mt-1 text-sm font-semibold tabular-nums">
-              {formatCurrency(
-                stats.dailyUsd
-              )}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Monthly
-            </div>
-
-            <div className="mt-1 text-sm font-semibold tabular-nums">
-              {formatCurrency(
-                stats.monthlyUsd
-              )}
-            </div>
-          </div>
-
-          <div>
-            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-              Yearly
-            </div>
-
-            <div className="mt-1 text-sm font-semibold tabular-nums">
-              {formatCurrency(
-                stats.yearlyUsd
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
     </div>
   );
 }
