@@ -33,6 +33,7 @@ const LOOPSCALE_HISTORY_KEY = "yield_loopscale_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
+const KRYPTEX_TRACKER_KEY = "project_income_kryptex_tracker_v1";
 
 
 const MONTHLY_TRACKING_START = "2026-09";
@@ -49,8 +50,6 @@ const ROLLERCOIN_SEPTEMBER_2026_BASELINE_TRX = 45.443264;
 
 const ROLLERCOIN_SEPTEMBER_2026_BASELINE_END =
   "2026-09-14";
-
-const KRYPTEX_DAILY_USD = 0.30;
 
 const KRYPTEX_START_DATE =
   "2026-09-18";
@@ -2860,9 +2859,101 @@ function updateRatexHistoryFromSnapshot(
   return next;
 }
 
-function getKryptexStats() {
+function loadKryptexTracker() {
+  const parsed =
+    readObject(
+      KRYPTEX_TRACKER_KEY
+    );
+
+  const monthlyEarnings =
+    parsed.monthlyEarnings &&
+    typeof parsed.monthlyEarnings ===
+      "object"
+      ? parsed.monthlyEarnings
+      : {
+          "2026-09":
+            KRYPTEX_OPENING_BALANCE_USD,
+        };
+
+  return {
+    initialized:
+      Boolean(
+        parsed.initialized
+      ),
+
+    currentBalance:
+      Number(
+        parsed.currentBalance
+      ) ||
+      KRYPTEX_OPENING_BALANCE_USD,
+
+    lastBalance:
+      Number(
+        parsed.lastBalance
+      ) ||
+      KRYPTEX_OPENING_BALANCE_USD,
+
+    openingBalanceUsd:
+      KRYPTEX_OPENING_BALANCE_USD,
+
+    lifetimeEarnedUsd:
+      Number(
+        parsed.lifetimeEarnedUsd
+      ) ||
+      KRYPTEX_OPENING_BALANCE_USD,
+
+    profitabilityUsdDay:
+      Number(
+        parsed.profitabilityUsdDay
+      ) || 0,
+
+    withdrawableUsd:
+      Number(
+        parsed.withdrawableUsd
+      ) || 0,
+
+    monthlyEarnings,
+
+    lastSyncedAt:
+      parsed.lastSyncedAt ||
+      null,
+
+    reachable:
+      Boolean(
+        parsed.reachable
+      ),
+
+    miners:
+      Array.isArray(
+        parsed.miners
+      )
+        ? parsed.miners
+        : [],
+  };
+}
+
+function saveKryptexTracker(
+  value
+) {
+  saveObject(
+    KRYPTEX_TRACKER_KEY,
+    value
+  );
+}
+
+function getKryptexStats(
+  tracker
+) {
+  const currentBalanceUsd =
+    Number(
+      tracker?.currentBalance
+    ) ||
+    KRYPTEX_OPENING_BALANCE_USD;
+
   const dailyUsd =
-    KRYPTEX_DAILY_USD;
+    Number(
+      tracker?.profitabilityUsdDay
+    ) || 0;
 
   const monthlyUsd =
     dailyUsd *
@@ -2872,58 +2963,54 @@ function getKryptexStats() {
     dailyUsd *
     365;
 
-  const startDate =
-    new Date(
-      `${KRYPTEX_START_DATE}T00:00:00`
-    );
+  const currentMonth =
+    getCurrentMonthKey();
 
-  const today =
-    new Date();
+  const monthUsd =
+    Number(
+      tracker?.monthlyEarnings?.[
+        currentMonth
+      ]
+    ) || 0;
 
-  /*
-   * The $16.47 balance is the opening
-   * Kryptex amount as of Sep 18.
-   *
-   * Do NOT add another $0.30 for Sep 18,
-   * because that earning is already included
-   * in the opening balance.
-   */
-  const daysAfterBaseline =
-    Math.max(
-      0,
-      Math.floor(
-        (
-          today.getTime() -
-          startDate.getTime()
-        ) /
-          86400000
-      )
-    );
-
-  const earnedSinceBaseline =
-    daysAfterBaseline *
-    dailyUsd;
-
-  const currentBalanceUsd =
-    KRYPTEX_OPENING_BALANCE_USD +
-    earnedSinceBaseline;
+  const lifetimeUsd =
+    Number(
+      tracker?.lifetimeEarnedUsd
+    ) ||
+    KRYPTEX_OPENING_BALANCE_USD;
 
   return {
-    dailyUsd,
-
-    monthlyUsd,
-
-    yearlyUsd,
-
+    currentBalanceUsd,
     openingBalanceUsd:
       KRYPTEX_OPENING_BALANCE_USD,
-
-    earnedSinceBaseline,
-
-    currentBalanceUsd,
-
-    lifetimeUsd:
-      currentBalanceUsd,
+    earnedSinceBaseline:
+      Math.max(
+        0,
+        lifetimeUsd -
+          KRYPTEX_OPENING_BALANCE_USD
+      ),
+    lifetimeUsd,
+    monthUsd,
+    dailyUsd,
+    monthlyUsd,
+    yearlyUsd,
+    withdrawableUsd:
+      Number(
+        tracker?.withdrawableUsd
+      ) || 0,
+    lastSyncedAt:
+      tracker?.lastSyncedAt ||
+      null,
+    reachable:
+      Boolean(
+        tracker?.reachable
+      ),
+    miners:
+      Array.isArray(
+        tracker?.miners
+      )
+        ? tracker.miners
+        : [],
   };
 }
 
@@ -2934,7 +3021,8 @@ function buildProjectIncome(
   saladTracker,
   monthlyBackfills,
   rollerCoinTracker,
-  unetworkTracker
+  unetworkTracker,
+  kryptexTracker
 ) {
   const monthMap =
     new Map();
@@ -3420,143 +3508,40 @@ Object.values(
 /*
  * KRYPTEX
  *
- * Opening balance:
- * Sep 18, 2026 = $16.47
+ * The extension supplies the live balance and
+ * profitability. The dashboard records only
+ * positive balance changes as new earnings.
  *
- * That opening balance is also the
- * September Project Income baseline.
- *
- * Earnings after Sep 18 accrue at
- * $0.30 per day.
+ * September 2026 starts with the requested
+ * $16.47 opening baseline.
  */
 {
-  const dailyUsd =
-    KRYPTEX_DAILY_USD;
+  const monthlyEarnings =
+    kryptexTracker?.monthlyEarnings &&
+    typeof kryptexTracker.monthlyEarnings ===
+      "object"
+      ? kryptexTracker.monthlyEarnings
+      : {
+          "2026-09":
+            KRYPTEX_OPENING_BALANCE_USD,
+        };
 
-  const openingBalance =
-    KRYPTEX_OPENING_BALANCE_USD;
-
-  const start =
-    new Date(
-      `${KRYPTEX_START_DATE}T00:00:00`
-    );
-
-  const today =
-    new Date();
-
-  let cursor =
-    new Date(
-      start.getFullYear(),
-      start.getMonth(),
-      1
-    );
-
-  const currentMonthStart =
-    new Date(
-      today.getFullYear(),
-      today.getMonth(),
-      1
-    );
-
-  while (
-    cursor <=
-    currentMonthStart
-  ) {
-    const year =
-      cursor.getFullYear();
-
-    const month =
-      cursor.getMonth();
-
-    const monthKey =
-      `${year}-${String(
-        month + 1
-      ).padStart(
-        2,
-        "0"
-      )}`;
-
-    const openingMonthKey =
-      KRYPTEX_START_DATE.slice(
-        0,
-        7
-      );
-
-    const isOpeningMonth =
-      monthKey ===
-      openingMonthKey;
-
-    const isCurrentMonth =
-      year ===
-        today.getFullYear() &&
-      month ===
-        today.getMonth();
-
-    let amount = 0;
-
-    if (
-      isOpeningMonth
-    ) {
-      /*
-       * Sep 18 baseline is already $16.47.
-       *
-       * Only count mining days AFTER Sep 18.
-       */
-      const daysAfterBaseline =
-        isCurrentMonth
-          ? Math.max(
-              0,
-              today.getDate() -
-                start.getDate()
-            )
-          : Math.max(
-              0,
-              new Date(
-                year,
-                month + 1,
-                0
-              ).getDate() -
-                start.getDate()
-            );
-
-      amount =
-        openingBalance +
-        (
-          daysAfterBaseline *
-          dailyUsd
-        );
-    } else {
-      /*
-       * Future full months:
-       * $0.30 × days elapsed in month.
-       */
-      const lastDay =
-        isCurrentMonth
-          ? today.getDate()
-          : new Date(
-              year,
-              month + 1,
-              0
-            ).getDate();
-
-      amount =
-        lastDay *
-        dailyUsd;
-    }
-
-    addEarning(
+  Object.entries(
+    monthlyEarnings
+  ).forEach(
+    ([
       monthKey,
-      "Kryptex",
-      amount
-    );
-
-    cursor =
-      new Date(
-        year,
-        month + 1,
-        1
+      amount,
+    ]) => {
+      addEarning(
+        monthKey,
+        "Kryptex",
+        Number(
+          amount
+        ) || 0
       );
-  }
+    }
+  );
 }
 
   return Array.from(
@@ -3618,11 +3603,19 @@ Object.values(
 function KryptexProjectCard({
   collapsed,
   onToggle,
+  tracker,
+  connected,
+  stats,
+  message,
+  onRefresh,
   logo,
   onLogoChange,
 }) {
-  const stats =
-    getKryptexStats();
+  const isLive =
+    Boolean(
+      connected &&
+      stats?.reachable
+    );
 
   return (
     <div
@@ -3653,8 +3646,6 @@ function KryptexProjectCard({
           text-left
         "
       >
-        {/* TOP */}
-
         <div className="flex w-full items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-4">
             <ProjectLogoButton
@@ -3671,10 +3662,17 @@ function KryptexProjectCard({
                   Kryptex
                 </h3>
 
-                <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
+                <span
+                  className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+                    isLive
+                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+                      : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                  }`}
+                >
                   <Wifi className="h-3 w-3" />
-
-                  LIVE
+                  {isLive
+                    ? "LIVE"
+                    : "OFFLINE"}
                 </span>
               </div>
             </div>
@@ -3690,40 +3688,17 @@ function KryptexProjectCard({
           />
         </div>
 
-        {/* VALUE */}
-
         <div className="mt-auto pt-7">
-          <div
-            className="
-              text-[30px]
-              font-semibold
-              leading-none
-              tracking-tight
-              text-foreground
-              tabular-nums
-            "
-          >
+          <div className="text-[30px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
             {formatCurrency(
-              stats.currentBalanceUsd
+              stats?.currentBalanceUsd
             )}
           </div>
 
-          <div
-            className="
-              mt-4
-              flex
-              flex-wrap
-              items-center
-              gap-x-2
-              gap-y-1
-              text-sm
-              tabular-nums
-              text-muted-foreground
-            "
-          >
+          <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm tabular-nums text-muted-foreground">
             <span>
               {formatCurrency(
-                stats.dailyUsd
+                stats?.dailyUsd
               )}
               /day
             </span>
@@ -3732,7 +3707,7 @@ function KryptexProjectCard({
 
             <span>
               {formatCurrency(
-                stats.monthlyUsd
+                stats?.monthlyUsd
               )}
               /month
             </span>
@@ -3741,7 +3716,7 @@ function KryptexProjectCard({
 
             <span>
               {formatCurrency(
-                stats.yearlyUsd
+                stats?.yearlyUsd
               )}
               /year
             </span>
@@ -3756,70 +3731,87 @@ function KryptexProjectCard({
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Current Balance
               </p>
-
               <p className="mt-1 font-semibold tabular-nums">
                 {formatCurrency(
-                  stats.currentBalanceUsd
+                  stats?.currentBalanceUsd
                 )}
               </p>
             </div>
 
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Opening Balance
+                This Month
               </p>
-
               <p className="mt-1 font-semibold tabular-nums">
                 {formatCurrency(
-                  stats.openingBalanceUsd
+                  stats?.monthUsd
                 )}
               </p>
             </div>
 
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Earned Since Baseline
+                Lifetime Earned
               </p>
-
               <p className="mt-1 font-semibold tabular-nums">
                 {formatCurrency(
-                  stats.earnedSinceBaseline
+                  stats?.lifetimeUsd
                 )}
               </p>
             </div>
 
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Tracking Since
+                Withdrawable
               </p>
-
-              <p className="mt-1 font-semibold">
-                Sep 18, 2026
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Mining Type
-              </p>
-
-              <p className="mt-1 font-semibold">
-                CPU Mining
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs uppercase tracking-wide text-muted-foreground">
-                Daily Rate
-              </p>
-
               <p className="mt-1 font-semibold tabular-nums">
                 {formatCurrency(
-                  stats.dailyUsd
+                  stats?.withdrawableUsd
+                )}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Live Profitability
+              </p>
+              <p className="mt-1 font-semibold tabular-nums">
+                {formatCurrency(
+                  stats?.dailyUsd
                 )}
                 /day
               </p>
             </div>
+
+            <div>
+              <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                Last Synced
+              </p>
+              <p className="mt-1 font-semibold">
+                {formatSyncTime(
+                  stats?.lastSyncedAt
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-border/40 pt-4">
+            <p className="text-xs text-muted-foreground">
+              {message ||
+                (isLive
+                  ? "Kryptex extension connected. Balance and mining profitability update automatically."
+                  : "Start Kryptex Desktop and make sure the Kryptex extension is enabled.")}
+            </p>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={
+                onRefresh
+              }
+            >
+              Refresh
+            </Button>
           </div>
         </div>
       )}
@@ -4075,6 +4067,23 @@ export default function YieldFarmingPage() {
   ] = useState(
     ""
   );
+
+  const [
+    kryptexTracker,
+    setKryptexTracker,
+  ] = useState(
+    loadKryptexTracker
+  );
+
+  const [
+    kryptexConnected,
+    setKryptexConnected,
+  ] = useState(false);
+
+  const [
+    kryptexMessage,
+    setKryptexMessage,
+  ] = useState("");
 
   const [
     unetworkTracker,
@@ -4344,6 +4353,17 @@ export default function YieldFarmingPage() {
     },
     [
       saladTracker,
+    ]
+  );
+
+  useEffect(
+    () => {
+      saveKryptexTracker(
+        kryptexTracker
+      );
+    },
+    [
+      kryptexTracker,
     ]
   );
 
@@ -6010,6 +6030,301 @@ const importSaladPayload =
   );
 
 
+  const importKryptexPayload =
+    useCallback(
+      (payload) => {
+        const status =
+          payload?.status ||
+          {};
+
+        const currentBalance =
+          Number(
+            status?.balance_usd
+          );
+
+        if (
+          !Number.isFinite(
+            currentBalance
+          ) ||
+          currentBalance < 0
+        ) {
+          setKryptexMessage(
+            "Kryptex returned an invalid balance."
+          );
+          return;
+        }
+
+        const syncedAt =
+          payload?.synced_at ||
+          new Date().toISOString();
+
+        const profitabilityUsdDay =
+          Number(
+            status?.profitability_usd_day
+          ) || 0;
+
+        const withdrawableUsd =
+          Number(
+            status?.withdrawable_usd
+          ) || 0;
+
+        const miners =
+          Array.isArray(
+            status?.miners
+          )
+            ? status.miners
+            : [];
+
+        setKryptexTracker(
+          (current) => {
+            const previousBalance =
+              Number(
+                current?.lastBalance
+              );
+
+            const baselineBalance =
+              Number.isFinite(
+                previousBalance
+              )
+                ? previousBalance
+                : KRYPTEX_OPENING_BALANCE_USD;
+
+            const positiveDelta =
+              Math.max(
+                0,
+                currentBalance -
+                  baselineBalance
+              );
+
+            const monthKey =
+              getCurrentMonthKey();
+
+            const monthlyEarnings = {
+              ...(
+                current?.monthlyEarnings ||
+                {
+                  "2026-09":
+                    KRYPTEX_OPENING_BALANCE_USD,
+                }
+              ),
+            };
+
+            const existingMonth =
+              Number(
+                monthlyEarnings[
+                  monthKey
+                ]
+              ) ||
+              (
+                monthKey ===
+                  "2026-09"
+                  ? KRYPTEX_OPENING_BALANCE_USD
+                  : 0
+              );
+
+            monthlyEarnings[
+              monthKey
+            ] =
+              Number(
+                (
+                  existingMonth +
+                  positiveDelta
+                ).toFixed(
+                  6
+                )
+              );
+
+            const lifetimeEarnedUsd =
+              (
+                Number(
+                  current?.lifetimeEarnedUsd
+                ) ||
+                KRYPTEX_OPENING_BALANCE_USD
+              ) +
+              positiveDelta;
+
+            return {
+              ...current,
+              initialized: true,
+              currentBalance,
+              lastBalance:
+                currentBalance,
+              openingBalanceUsd:
+                KRYPTEX_OPENING_BALANCE_USD,
+              lifetimeEarnedUsd:
+                Number(
+                  lifetimeEarnedUsd.toFixed(
+                    6
+                  )
+                ),
+              profitabilityUsdDay,
+              withdrawableUsd,
+              monthlyEarnings,
+              lastSyncedAt:
+                syncedAt,
+              reachable:
+                payload?.reachable !==
+                false,
+              miners,
+            };
+          }
+        );
+
+        setKryptexConnected(
+          true
+        );
+
+        setKryptexMessage(
+          "Kryptex synced."
+        );
+      },
+      []
+    );
+
+  const requestKryptexLatest =
+    useCallback(
+      () => {
+        window.postMessage(
+          {
+            source:
+              "kryptex-tracker-app",
+            type:
+              "REQUEST_LATEST",
+          },
+          window.location.origin
+        );
+      },
+      []
+    );
+
+  useEffect(
+    () => {
+      const handleMessage =
+        (event) => {
+          if (
+            event.origin !==
+              window.location.origin ||
+            event.source !==
+              window
+          ) {
+            return;
+          }
+
+          const data =
+            event.data;
+
+          if (
+            data?.source !==
+            "kryptex-tracker-ext"
+          ) {
+            return;
+          }
+
+          if (
+            data.type ===
+            "READY"
+          ) {
+            setKryptexConnected(
+              true
+            );
+
+            requestKryptexLatest();
+            return;
+          }
+
+          if (
+            data.type ===
+            "KRYPTEX_PUSH"
+          ) {
+            setKryptexConnected(
+              true
+            );
+
+            if (
+              data.payload
+            ) {
+              importKryptexPayload(
+                data.payload
+              );
+            }
+
+            return;
+          }
+
+          if (
+            data.type ===
+            "KRYPTEX_STATUS"
+          ) {
+            setKryptexConnected(
+              true
+            );
+
+            setKryptexTracker(
+              (current) => ({
+                ...current,
+                reachable: false,
+              })
+            );
+
+            setKryptexMessage(
+              "Kryptex Desktop is not reachable right now. Showing the last synced values."
+            );
+          }
+        };
+
+      window.addEventListener(
+        "message",
+        handleMessage
+      );
+
+      const firstRequest =
+        window.setTimeout(
+          requestKryptexLatest,
+          500
+        );
+
+      const secondRequest =
+        window.setTimeout(
+          requestKryptexLatest,
+          1500
+        );
+
+      const handleFocus =
+        () =>
+          requestKryptexLatest();
+
+      window.addEventListener(
+        "focus",
+        handleFocus
+      );
+
+      return () => {
+        window.removeEventListener(
+          "message",
+          handleMessage
+        );
+
+        window.removeEventListener(
+          "focus",
+          handleFocus
+        );
+
+        window.clearTimeout(
+          firstRequest
+        );
+
+        window.clearTimeout(
+          secondRequest
+        );
+      };
+    },
+    [
+      importKryptexPayload,
+      requestKryptexLatest,
+    ]
+  );
+
+
   const importUnetworkPayload =
     useCallback(
       (
@@ -6691,6 +7006,7 @@ const importSaladPayload =
 
         requestSaladLatest();
         requestUnetworkLatest();
+        requestKryptexLatest();
 
         if (
           errors.length
@@ -6706,6 +7022,7 @@ const importSaladPayload =
         applyProjectData,
         requestSaladLatest,
         requestUnetworkLatest,
+        requestKryptexLatest,
       ]
     );
 
@@ -6762,12 +7079,16 @@ const importSaladPayload =
       ]
     );
 
-    const kryptexStats =
-  useMemo(
-    () =>
-      getKryptexStats(),
-    []
-  );
+  const kryptexStats =
+    useMemo(
+      () =>
+        getKryptexStats(
+          kryptexTracker
+        ),
+      [
+        kryptexTracker,
+      ]
+    );
 
   const projectCards =
     useMemo(
@@ -6892,7 +7213,7 @@ const importSaladPayload =
 
   amount:
     Number(
-      kryptexStats?.lifetimeUsd
+      kryptexStats?.currentBalanceUsd
     ) || 0,
 },
         ];
@@ -6976,7 +7297,8 @@ const importSaladPayload =
           saladTracker,
           monthlyBackfills,
           rollerCoinTracker,
-          unetworkTracker
+          unetworkTracker,
+          kryptexTracker
         ),
       [
         luloProjects,
@@ -6986,6 +7308,7 @@ const importSaladPayload =
         monthlyBackfills,
         rollerCoinTracker,
         unetworkTracker,
+        kryptexTracker,
       ]
     );
 
@@ -7410,6 +7733,21 @@ if (
         toggleProject(
           "kryptex-project"
         )
+      }
+      tracker={
+        kryptexTracker
+      }
+      connected={
+        kryptexConnected
+      }
+      stats={
+        kryptexStats
+      }
+      message={
+        kryptexMessage
+      }
+      onRefresh={
+        requestKryptexLatest
       }
       logo={
         projectLogos[
