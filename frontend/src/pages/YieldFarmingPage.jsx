@@ -7117,14 +7117,6 @@ const summary =
         )}
       </section>
 
-      {completedRatexPositions.length >
-        0 && (
-        <CompletedPositionsSection
-          positions={
-            completedRatexPositions
-          }
-        />
-      )}
 
       <ProjectIncomeSection
         months={
@@ -7149,7 +7141,20 @@ const summary =
           projectLogos
         }
       />
+
+            {completedRatexPositions.length >
+        0 && (
+        <CompletedPositionsSection
+          positions={
+            completedRatexPositions
+          }
+        />
+      )}
+
+      
     </div>
+
+
   );
 }
 
