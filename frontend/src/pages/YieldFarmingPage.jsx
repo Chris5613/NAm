@@ -7392,7 +7392,7 @@ const summary =
                 item
               ) => {
 
-                if (
+if (
   item.type ===
   "kryptex"
 ) {
@@ -7400,6 +7400,16 @@ const summary =
     <KryptexProjectCard
       key={
         item.key
+      }
+      collapsed={
+        !expandedProjects.has(
+          "kryptex-project"
+        )
+      }
+      onToggle={() =>
+        toggleProject(
+          "kryptex-project"
+        )
       }
       logo={
         projectLogos[
