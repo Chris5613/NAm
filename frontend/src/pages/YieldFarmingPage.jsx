@@ -44,8 +44,6 @@ const RATEX_LEGACY_INITIAL_QUANTITY = 606.27;
 
 const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
 
-const ROLLERCOIN_CURRENT_TRX_BALANCE = 406.8661;
-
 const ROLLERCOIN_SEPTEMBER_2026_BASELINE_TRX = 45.443264;
 
 const ROLLERCOIN_SEPTEMBER_2026_BASELINE_END =
@@ -911,6 +909,25 @@ function loadRollerCoinTracker() {
       Number(
         parsed.lastTrxPrice ?? parsed.lastSolPrice
       ) || 0,
+
+    currentTrxBalance:
+      Number.isFinite(
+        Number(
+          parsed.currentTrxBalance
+        )
+      )
+        ? Number(
+            parsed.currentTrxBalance
+          )
+        : 0,
+
+    balanceSyncedAt:
+      parsed.balanceSyncedAt ||
+      null,
+
+    balanceSource:
+      parsed.balanceSource ||
+      null,
   };
 }
 
@@ -1094,11 +1111,19 @@ function getRollerCoinTrackerStats(
    * Current balance is the amount of TRX
    * currently sitting in RollerCoin.
    */
-  const currentTrxBalance =
+  const storedCurrentTrxBalance =
     Number(
       tracker?.currentTrxBalance
-    ) ||
-    ROLLERCOIN_CURRENT_TRX_BALANCE;
+    );
+
+  const currentTrxBalance =
+    Number.isFinite(
+      storedCurrentTrxBalance
+    ) &&
+    storedCurrentTrxBalance >=
+      0
+      ? storedCurrentTrxBalance
+      : 0;
 
   const currentBalanceUsd =
     liveTrxPrice > 0
@@ -4719,15 +4744,28 @@ export default function YieldFarmingPage() {
             ? payload.rows
             : [];
 
+        const incomingBalanceTrx =
+          Number(
+            payload?.current_balance_trx
+          );
+
+        const hasLiveBalance =
+          Number.isFinite(
+            incomingBalanceTrx
+          ) &&
+          incomingBalanceTrx >=
+            0;
+
         if (
-          !rows.length
+          !rows.length &&
+          !hasLiveBalance
         ) {
           setRollerCoinSyncing(
             false
           );
 
           setRollerCoinMessage(
-            "RollerCoin returned no earnings for that date range."
+            "RollerCoin returned no earnings or live TRX balance."
           );
 
           return;
@@ -4856,14 +4894,69 @@ export default function YieldFarmingPage() {
               }
             );
 
+            /*
+             * Current wallet balance now comes directly from
+             * the RollerCoin extension's DOM scraper.
+             *
+             * If a particular sync cannot see the balance,
+             * preserve the last successfully scraped balance
+             * instead of inventing or hard-coding a value.
+             */
+            const previousBalance =
+              Number(
+                current?.currentTrxBalance
+              );
+
+            const currentTrxBalance =
+              hasLiveBalance
+                ? incomingBalanceTrx
+                : (
+                    Number.isFinite(
+                      previousBalance
+                    )
+                      ? previousBalance
+                      : 0
+                  );
+
             return {
               ...current,
+
               daily:
                 nextDaily,
+
+              currentTrxBalance,
+
+              balanceSyncedAt:
+                payload?.balance_synced_at ||
+                (
+                  hasLiveBalance
+                    ? (
+                        payload?.synced_at ||
+                        payload?.syncedAt ||
+                        new Date().toISOString()
+                      )
+                    : (
+                        current?.balanceSyncedAt ||
+                        null
+                      )
+                ),
+
+              balanceSource:
+                payload?.balance_source ||
+                (
+                  hasLiveBalance
+                    ? "extension"
+                    : (
+                        current?.balanceSource ||
+                        null
+                      )
+                ),
+
               lastSyncedAt:
                 payload?.synced_at ||
                 payload?.syncedAt ||
                 new Date().toISOString(),
+
               lastRange: {
                 from:
                   payload?.from ||
@@ -4872,6 +4965,7 @@ export default function YieldFarmingPage() {
                   payload?.to ||
                   null,
               },
+
               lastTrxPrice:
                 priceToUse,
             };
