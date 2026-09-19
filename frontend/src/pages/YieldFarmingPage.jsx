@@ -7887,21 +7887,97 @@ const summary =
             0
           );
 
-      const annualYield =
-        nonLuloAnnualYield +
-        luloAnnualYield +
-        365 +
-        1.2 * 365 +
-        (
-          Number(
-            unetworkStats?.estimatedYearlyUsd
-          ) || 0
-        ) +
-        (
-          Number(
-            kryptexStats?.yearlyUsd
-          ) || 0
+      /*
+       * Sum the exact projections used by the active cards.
+       * This keeps the headline Monthly / Yearly Income in
+       * sync with what the user can actually see below.
+       */
+      const projectProjectionTotals =
+        projectCards.reduce(
+          (
+            totals,
+            project
+          ) => {
+            const projections =
+              getProjectProjections(
+                project
+              );
+
+            return {
+              monthly:
+                totals.monthly +
+                (
+                  Number(
+                    projections?.monthly
+                  ) || 0
+                ),
+
+              yearly:
+                totals.yearly +
+                (
+                  Number(
+                    projections?.yearly
+                  ) || 0
+                ),
+            };
+          },
+          {
+            monthly: 0,
+            yearly: 0,
+          }
         );
+
+      const rollerCoinMonthlyIncome =
+        1 *
+        30.4375;
+
+      const rollerCoinYearlyIncome =
+        1 *
+        365;
+
+      const saladMonthlyIncome =
+        Number(
+          saladStats?.estimatedMonthlyUsd
+        ) || 0;
+
+      const saladYearlyIncome =
+        Number(
+          saladStats?.estimatedYearlyUsd
+        ) || 0;
+
+      const unetworkMonthlyIncome =
+        Number(
+          unetworkStats?.estimatedMonthlyUsd
+        ) || 0;
+
+      const unetworkYearlyIncome =
+        Number(
+          unetworkStats?.estimatedYearlyUsd
+        ) || 0;
+
+      const kryptexMonthlyIncome =
+        Number(
+          kryptexStats?.monthlyUsd
+        ) || 0;
+
+      const kryptexYearlyIncome =
+        Number(
+          kryptexStats?.yearlyUsd
+        ) || 0;
+
+      const monthlyYield =
+        projectProjectionTotals.monthly +
+        rollerCoinMonthlyIncome +
+        saladMonthlyIncome +
+        unetworkMonthlyIncome +
+        kryptexMonthlyIncome;
+
+      const annualYield =
+        projectProjectionTotals.yearly +
+        rollerCoinYearlyIncome +
+        saladYearlyIncome +
+        unetworkYearlyIncome +
+        kryptexYearlyIncome;
 
       const weightedApy =
         apyEligibleBalance > 0
@@ -7964,6 +8040,7 @@ const summary =
       return {
         portfolioBalance,
         weightedApy,
+        monthlyYield,
         annualYield,
 
         activePositions:
@@ -8143,7 +8220,7 @@ const summary =
           <Metric
             label="Estimated Monthly Income"
             value={formatCurrency(
-              summary.annualYield / 12
+              summary.monthlyYield
             )}
             icon={
               CalendarDays
@@ -9025,16 +9102,32 @@ function SaladProjectCard({
     setExpanded,
   ] = useState(false);
 
+  /*
+   * Use the tracker projection directly so the Salad card
+   * and the page-level income summary always agree.
+   */
   const dailyIncome =
-    1.4;
+    Number(
+      stats?.estimatedDailyUsd
+    ) || 0;
 
   const monthlyIncome =
-    dailyIncome *
-    30.4375;
+    Number(
+      stats?.estimatedMonthlyUsd
+    ) ||
+    (
+      dailyIncome *
+      30.4375
+    );
 
   const yearlyIncome =
-    dailyIncome *
-    365;
+    Number(
+      stats?.estimatedYearlyUsd
+    ) ||
+    (
+      dailyIncome *
+      365
+    );
 
   return (
     <div
