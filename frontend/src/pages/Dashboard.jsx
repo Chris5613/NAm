@@ -1038,10 +1038,76 @@ export default function Dashboard() {
             storage.getCryptoCache?.() ||
             {};
 
-          const cryptoTotal =
+          /*
+           * Project Income is the source of truth for the
+           * active-project portfolio balance.
+           *
+           * cryptoCache.total can contain stale project
+           * values, so rebuild Crypto from:
+           *
+           *   Project Income Portfolio + Bitcoin
+           */
+          const projectIncomeSummary =
+            storage.get?.(
+              "project_income_portfolio_summary_v1"
+            ) || null;
+
+          const projectIncomeBalance =
+            Number(
+              projectIncomeSummary
+                ?.portfolioBalance
+            );
+
+          const bitcoinBalance =
+            Number(
+              cryptoCache
+                ?.projectPortfolio
+                ?.bitcoin
+                ?.value ??
+              cryptoCache
+                ?.projectPortfolio
+                ?.bitcoin
+                ?.balance
+            ) || 0;
+
+          const cachedCryptoTotal =
             Number(
               cryptoCache.total
             ) || 0;
+
+          const cryptoTotal =
+            Number.isFinite(
+              projectIncomeBalance
+            )
+              ? (
+                  projectIncomeBalance +
+                  bitcoinBalance
+                )
+              : cachedCryptoTotal;
+
+          /*
+           * Repair the shared crypto cache too so every
+           * Net Worth surface reads the same total.
+           */
+          if (
+            Number.isFinite(
+              projectIncomeBalance
+            ) &&
+            Math.abs(
+              cachedCryptoTotal -
+                cryptoTotal
+            ) > 0.005
+          ) {
+            storage.setCryptoCache?.({
+              ...cryptoCache,
+
+              total:
+                cryptoTotal,
+
+              updated_at:
+                new Date().toISOString(),
+            });
+          }
 
           const calculatedNetWorth =
             calculateNetWorth(
@@ -1132,6 +1198,25 @@ export default function Dashboard() {
   useEffect(() => {
     fetchData();
 
+    const refreshFromProjectIncome =
+      () => {
+        fetchData();
+      };
+
+    /*
+     * Keep the parent Net Worth Crypto total synchronized
+     * with the Project Income balance and Bitcoin cache.
+     */
+    window.addEventListener(
+      "project-income-portfolio-balance-updated",
+      refreshFromProjectIncome
+    );
+
+    window.addEventListener(
+      "project-crypto-updated",
+      refreshFromProjectIncome
+    );
+
     const interval =
       setInterval(
         () => {
@@ -1143,10 +1228,21 @@ export default function Dashboard() {
           1000
       );
 
-    return () =>
+    return () => {
       clearInterval(
         interval
       );
+
+      window.removeEventListener(
+        "project-income-portfolio-balance-updated",
+        refreshFromProjectIncome
+      );
+
+      window.removeEventListener(
+        "project-crypto-updated",
+        refreshFromProjectIncome
+      );
+    };
   }, [
     fetchData,
   ]);
