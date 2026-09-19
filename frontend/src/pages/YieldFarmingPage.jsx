@@ -7785,7 +7785,36 @@ const importSaladPayload =
 const summary =
   useMemo(
     () => {
+      /*
+       * Portfolio Balance should equal the sum of the
+       * active project cards currently shown on this page.
+       *
+       * allAssets only includes the asset-backed project
+       * cards, so it was leaving out RollerCoin, Salad,
+       * Unetwork, and Kryptex.
+       */
       const portfolioBalance =
+        sortedProgramCards.reduce(
+          (
+            sum,
+            item
+          ) =>
+            sum +
+            (
+              Number(
+                item?.amount
+              ) || 0
+            ),
+          0
+        );
+
+      /*
+       * Keep Weighted APY based on the positions that
+       * actually expose an APY. Otherwise adding the
+       * mining/compute balances to Portfolio Balance would
+       * artificially lower the displayed Weighted APY.
+       */
+      const apyEligibleBalance =
         allAssets.reduce(
           (
             sum,
@@ -7872,7 +7901,7 @@ const summary =
         );
 
       const weightedApy =
-        portfolioBalance > 0
+        apyEligibleBalance > 0
           ? allAssets.reduce(
               (
                 sum,
@@ -7891,7 +7920,7 @@ const summary =
                   ),
               0
             ) /
-            portfolioBalance
+            apyEligibleBalance
           : 0;
 
       const totalEarned =
@@ -7935,19 +7964,7 @@ const summary =
         annualYield,
 
         activePositions:
-          projectCards.length +
-          1 +
-          (
-            saladTracker?.initialized
-              ? 1
-              : 0
-          ) +
-          (
-            unetworkTracker?.initialized
-              ? 1
-              : 0
-          ) +
-          1,
+          sortedProgramCards.length,
 
         totalEarned,
       };
@@ -7955,6 +7972,7 @@ const summary =
     [
       allAssets,
       projectCards,
+      sortedProgramCards,
       rollerCoinStats,
       saladStats,
       saladTracker,
