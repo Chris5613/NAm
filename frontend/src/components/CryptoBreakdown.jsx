@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   getStoredProjectCryptoPortfolio,
@@ -38,40 +38,43 @@ function formatAmount(value, digits = 8) {
   );
 }
 
-function Logo({ entry }) {
-  if (entry?.logo) {
-    return (
-      <img
-        src={entry.logo}
-        alt=""
-        className="h-9 w-9 rounded-xl object-cover"
-      />
-    );
-  }
+function ProjectPortfolioEntry({
+  summary,
+}) {
+  const activePositions =
+    Number(
+      summary?.activePositions
+    ) || 0;
 
-  return (
-    <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/50 bg-secondary text-xs font-semibold text-muted-foreground">
-      {(entry?.platform || "?")
-        .slice(0, 2)
-        .toUpperCase()}
-    </div>
-  );
-}
-
-function ProjectEntry({ entry }) {
   return (
     <Card className="border-border/50 bg-card/70">
       <CardContent className="flex items-center justify-between gap-4 p-4">
         <div className="flex min-w-0 items-center gap-3">
-          <Logo entry={entry} />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-border/50 bg-secondary">
+            <Wallet className="h-4 w-4 text-foreground" />
+          </div>
 
-          <p className="truncate font-semibold text-foreground">
-            {entry.platform}
-          </p>
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-foreground">
+              Project Income Portfolio
+            </p>
+
+            <p className="text-xs text-muted-foreground">
+              {activePositions > 0
+                ? `${activePositions} active ${
+                    activePositions === 1
+                      ? "project"
+                      : "projects"
+                  }`
+                : "Active project balances"}
+            </p>
+          </div>
         </div>
 
         <p className="shrink-0 font-mono text-lg font-semibold text-foreground">
-          {formatCurrency(entry.balance)}
+          {formatCurrency(
+            summary?.projectBalance
+          )}
         </p>
       </CardContent>
     </Card>
@@ -168,18 +171,6 @@ export default function CryptoBreakdown({
     };
   }, []);
 
-  const entries = useMemo(
-    () =>
-      [
-        ...(portfolio?.projectEntries || []),
-      ].sort(
-        (a, b) =>
-          (Number(b.balance) || 0) -
-          (Number(a.balance) || 0)
-      ),
-    [portfolio]
-  );
-
   const summary =
     portfolio?.summary || {};
 
@@ -188,6 +179,11 @@ export default function CryptoBreakdown({
 
   const positive =
     Number(dailyChange) >= 0;
+
+  const hasProjectPortfolio =
+    Number(
+      summary?.projectBalance
+    ) > 0;
 
   const handleRefresh = async (event) => {
     event.stopPropagation();
@@ -288,18 +284,17 @@ export default function CryptoBreakdown({
 
       {cryptoOpen && (
         <div className="ml-6 space-y-2">
-          {entries.map((entry) => (
-            <ProjectEntry
-              key={entry.id}
-              entry={entry}
+          {hasProjectPortfolio && (
+            <ProjectPortfolioEntry
+              summary={summary}
             />
-          ))}
+          )}
 
           <BitcoinEntry
             bitcoin={bitcoin}
           />
 
-          {entries.length === 0 &&
+          {!hasProjectPortfolio &&
             !bitcoin?.wallets?.length && (
               <Card className="border-border/40 bg-card/70">
                 <CardContent className="p-5 text-sm text-muted-foreground">
