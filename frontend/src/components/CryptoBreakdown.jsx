@@ -6,6 +6,10 @@ import {
 } from "@/lib/projectCryptoPortfolio";
 
 import {
+  remoteStorage,
+} from "@/lib/serverStore";
+
+import {
   Card,
   CardContent,
 } from "@/components/ui/card";
@@ -19,6 +23,34 @@ import {
   RefreshCw,
   Wallet,
 } from "lucide-react";
+
+const PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY =
+  "project_income_portfolio_summary_v1";
+
+function getProjectIncomePortfolioSummary() {
+  try {
+    const raw =
+      remoteStorage.getItem(
+        PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY
+      );
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed =
+      JSON.parse(raw);
+
+    return (
+      parsed &&
+      typeof parsed === "object"
+    )
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
 
 function formatCurrency(value) {
   return new Intl.NumberFormat("en-US", {
@@ -39,11 +71,12 @@ function formatAmount(value, digits = 8) {
 }
 
 function ProjectPortfolioEntry({
-  summary,
+  balance,
+  activePositions = 0,
 }) {
-  const activePositions =
+  const positionCount =
     Number(
-      summary?.activePositions
+      activePositions
     ) || 0;
 
   return (
@@ -60,9 +93,9 @@ function ProjectPortfolioEntry({
             </p>
 
             <p className="text-xs text-muted-foreground">
-              {activePositions > 0
-                ? `${activePositions} active ${
-                    activePositions === 1
+              {positionCount > 0
+                ? `${positionCount} active ${
+                    positionCount === 1
                       ? "project"
                       : "projects"
                   }`
@@ -73,7 +106,7 @@ function ProjectPortfolioEntry({
 
         <p className="shrink-0 font-mono text-lg font-semibold text-foreground">
           {formatCurrency(
-            summary?.projectBalance
+            balance
           )}
         </p>
       </CardContent>
@@ -129,6 +162,44 @@ export default function CryptoBreakdown({
   const [refreshing, setRefreshing] =
     useState(false);
 
+  const [
+    projectIncomeSummary,
+    setProjectIncomeSummary,
+  ] =
+    useState(() =>
+      getProjectIncomePortfolioSummary()
+    );
+
+  useEffect(() => {
+    const handlePortfolioBalance =
+      (event) => {
+        const next =
+          event?.detail ||
+          getProjectIncomePortfolioSummary();
+
+        if (
+          next &&
+          typeof next === "object"
+        ) {
+          setProjectIncomeSummary(
+            next
+          );
+        }
+      };
+
+    window.addEventListener(
+      "project-income-portfolio-balance-updated",
+      handlePortfolioBalance
+    );
+
+    return () => {
+      window.removeEventListener(
+        "project-income-portfolio-balance-updated",
+        handlePortfolioBalance
+      );
+    };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -177,13 +248,53 @@ export default function CryptoBreakdown({
   const bitcoin =
     portfolio?.bitcoin || {};
 
+  const projectIncomeBalance =
+    Number(
+      projectIncomeSummary
+        ?.portfolioBalance
+    );
+
+  const displayedProjectBalance =
+    Number.isFinite(
+      projectIncomeBalance
+    )
+      ? projectIncomeBalance
+      : (
+          Number(
+            summary?.projectBalance
+          ) || 0
+        );
+
+  const displayedActivePositions =
+    Number.isFinite(
+      Number(
+        projectIncomeSummary
+          ?.activePositions
+      )
+    )
+      ? Number(
+          projectIncomeSummary
+            ?.activePositions
+        )
+      : (
+          Number(
+            summary?.activePositions
+          ) || 0
+        );
+
+  const displayedCryptoTotal =
+    displayedProjectBalance +
+    (
+      Number(
+        bitcoin?.value
+      ) || 0
+    );
+
   const positive =
     Number(dailyChange) >= 0;
 
   const hasProjectPortfolio =
-    Number(
-      summary?.projectBalance
-    ) > 0;
+    displayedProjectBalance > 0;
 
   const handleRefresh = async (event) => {
     event.stopPropagation();
@@ -257,7 +368,7 @@ export default function CryptoBreakdown({
               <div className="min-w-[130px] text-right">
                 <p className="font-mono text-lg font-bold text-foreground">
                   {formatCurrency(
-                    summary.cryptoTotal
+                    displayedCryptoTotal
                   )}
                 </p>
 
@@ -286,7 +397,12 @@ export default function CryptoBreakdown({
         <div className="ml-6 space-y-2">
           {hasProjectPortfolio && (
             <ProjectPortfolioEntry
-              summary={summary}
+              balance={
+                displayedProjectBalance
+              }
+              activePositions={
+                displayedActivePositions
+              }
             />
           )}
 

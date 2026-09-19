@@ -35,6 +35,9 @@ const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 const KRYPTEX_TRACKER_KEY = "project_income_kryptex_tracker_v1";
 
+const PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY =
+  "project_income_portfolio_summary_v1";
+
 
 const MONTHLY_TRACKING_START = "2026-09";
 const LULO_SEPTEMBER_2026_OPENING_EARNED = 9.05;
@@ -7979,6 +7982,51 @@ const summary =
       unetworkStats,
       unetworkTracker,
       kryptexStats,
+    ]
+  );
+
+  /*
+   * Make the Project Income page the source of truth for
+   * the active project portfolio balance used by Net Worth.
+   *
+   * This prevents the Crypto tab from independently
+   * rebuilding the balance and drifting away from the
+   * number shown at the top of this page.
+   */
+  useEffect(
+    () => {
+      const next = {
+        portfolioBalance:
+          Number(
+            summary?.portfolioBalance
+          ) || 0,
+
+        activePositions:
+          Number(
+            summary?.activePositions
+          ) || 0,
+
+        updatedAt:
+          new Date().toISOString(),
+      };
+
+      remoteStorage.setItem(
+        PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY,
+        JSON.stringify(next)
+      );
+
+      window.dispatchEvent(
+        new CustomEvent(
+          "project-income-portfolio-balance-updated",
+          {
+            detail: next,
+          }
+        )
+      );
+    },
+    [
+      summary?.portfolioBalance,
+      summary?.activePositions,
     ]
   );
 

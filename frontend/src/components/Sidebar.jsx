@@ -21,7 +21,7 @@ const NAV_ITEMS = [
   },
   {
     path: "/yield-farming",
-    label: "Project Income",
+    label: "Passive Income",
     icon: CalendarDays,
   },
   {
