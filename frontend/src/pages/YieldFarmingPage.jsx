@@ -34,6 +34,7 @@ const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 const KRYPTEX_TRACKER_KEY = "project_income_kryptex_tracker_v1";
+const PROJECT_PAYBACK_KEY = "yield_project_payback_v1";
 
 const PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY =
   "project_income_portfolio_summary_v1";
@@ -82,6 +83,81 @@ function saveObject(key, value) {
     key,
     JSON.stringify(value)
   );
+}
+
+function loadProjectPayback() {
+  return readObject(
+    PROJECT_PAYBACK_KEY
+  );
+}
+
+function saveProjectPayback(value) {
+  saveObject(
+    PROJECT_PAYBACK_KEY,
+    value
+  );
+}
+
+function getPaybackStats(
+  earned,
+  dailyIncome,
+  totalSpent
+) {
+  const spent =
+    Math.max(
+      0,
+      Number(totalSpent) || 0
+    );
+
+  if (spent <= 0) {
+    return {
+      configured: false,
+      spent: 0,
+      earned:
+        Number(earned) || 0,
+      pnl: null,
+      remaining: null,
+      daysToProfit: null,
+    };
+  }
+
+  const earnedAmount =
+    Number(earned) || 0;
+
+  const daily =
+    Math.max(
+      0,
+      Number(dailyIncome) || 0
+    );
+
+  const pnl =
+    earnedAmount -
+    spent;
+
+  const remaining =
+    Math.max(
+      0,
+      spent -
+        earnedAmount
+    );
+
+  return {
+    configured: true,
+    spent,
+    earned:
+      earnedAmount,
+    pnl,
+    remaining,
+    daysToProfit:
+      remaining <= 0
+        ? 0
+        : daily > 0
+          ? Math.ceil(
+              remaining /
+                daily
+            )
+          : null,
+  };
 }
 
 function loadProjectLogos() {
@@ -3882,6 +3958,8 @@ function KryptexProjectCard({
   onRefresh,
   logo,
   onLogoChange,
+  totalSpent,
+  onTotalSpentChange,
 }) {
   const isLive =
     Boolean(
@@ -3961,10 +4039,24 @@ function KryptexProjectCard({
         </div>
 
         <div className="mt-auto pt-7">
-          <div className="text-[30px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
-            {formatCurrency(
-              stats?.currentBalanceUsd
-            )}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="text-[30px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
+              {formatCurrency(
+                stats?.currentBalanceUsd
+              )}
+            </div>
+
+            <ProjectPaybackStatus
+              earned={
+                stats?.lifetimeUsd
+              }
+              dailyIncome={
+                stats?.dailyUsd
+              }
+              totalSpent={
+                totalSpent
+              }
+            />
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm tabular-nums text-muted-foreground">
@@ -3998,6 +4090,23 @@ function KryptexProjectCard({
 
       {!collapsed && (
         <div className="border-t border-border/50 px-5 py-5">
+          <div className="mb-5">
+            <ProjectPaybackEditor
+              value={
+                totalSpent
+              }
+              onChange={
+                onTotalSpentChange
+              }
+              earned={
+                stats?.lifetimeUsd
+              }
+              dailyIncome={
+                stats?.dailyUsd
+              }
+            />
+          </div>
+
           <div className="grid gap-5 sm:grid-cols-2">
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
@@ -4279,6 +4388,13 @@ export default function YieldFarmingPage() {
     setManualPositions,
   ] = useState(
     loadPositions
+  );
+
+  const [
+    projectPayback,
+    setProjectPayback,
+  ] = useState(
+    loadProjectPayback
   );
 
   const [
@@ -7887,21 +8003,97 @@ const summary =
             0
           );
 
-      const annualYield =
-        nonLuloAnnualYield +
-        luloAnnualYield +
-        365 +
-        1.2 * 365 +
-        (
-          Number(
-            unetworkStats?.estimatedYearlyUsd
-          ) || 0
-        ) +
-        (
-          Number(
-            kryptexStats?.yearlyUsd
-          ) || 0
+      /*
+       * Sum the exact projections used by the active cards.
+       * This keeps the headline Monthly / Yearly Income in
+       * sync with what the user can actually see below.
+       */
+      const projectProjectionTotals =
+        projectCards.reduce(
+          (
+            totals,
+            project
+          ) => {
+            const projections =
+              getProjectProjections(
+                project
+              );
+
+            return {
+              monthly:
+                totals.monthly +
+                (
+                  Number(
+                    projections?.monthly
+                  ) || 0
+                ),
+
+              yearly:
+                totals.yearly +
+                (
+                  Number(
+                    projections?.yearly
+                  ) || 0
+                ),
+            };
+          },
+          {
+            monthly: 0,
+            yearly: 0,
+          }
         );
+
+      const rollerCoinMonthlyIncome =
+        1 *
+        30.4375;
+
+      const rollerCoinYearlyIncome =
+        1 *
+        365;
+
+      const saladMonthlyIncome =
+        Number(
+          saladStats?.estimatedMonthlyUsd
+        ) || 0;
+
+      const saladYearlyIncome =
+        Number(
+          saladStats?.estimatedYearlyUsd
+        ) || 0;
+
+      const unetworkMonthlyIncome =
+        Number(
+          unetworkStats?.estimatedMonthlyUsd
+        ) || 0;
+
+      const unetworkYearlyIncome =
+        Number(
+          unetworkStats?.estimatedYearlyUsd
+        ) || 0;
+
+      const kryptexMonthlyIncome =
+        Number(
+          kryptexStats?.monthlyUsd
+        ) || 0;
+
+      const kryptexYearlyIncome =
+        Number(
+          kryptexStats?.yearlyUsd
+        ) || 0;
+
+      const monthlyYield =
+        projectProjectionTotals.monthly +
+        rollerCoinMonthlyIncome +
+        saladMonthlyIncome +
+        unetworkMonthlyIncome +
+        kryptexMonthlyIncome;
+
+      const annualYield =
+        projectProjectionTotals.yearly +
+        rollerCoinYearlyIncome +
+        saladYearlyIncome +
+        unetworkYearlyIncome +
+        kryptexYearlyIncome;
 
       const weightedApy =
         apyEligibleBalance > 0
@@ -7964,6 +8156,7 @@ const summary =
       return {
         portfolioBalance,
         weightedApy,
+        monthlyYield,
         annualYield,
 
         activePositions:
@@ -8093,6 +8286,47 @@ const summary =
     );
   }
 
+  function setProjectTotalSpent(
+    projectId,
+    value
+  ) {
+    const totalSpent =
+      Math.max(
+        0,
+        Number(value) || 0
+      );
+
+    setProjectPayback(
+      (current) => {
+        const next = {
+          ...current,
+        };
+
+        if (
+          totalSpent > 0
+        ) {
+          next[
+            projectId
+          ] = {
+            totalSpent,
+            updatedAt:
+              new Date().toISOString(),
+          };
+        } else {
+          delete next[
+            projectId
+          ];
+        }
+
+        saveProjectPayback(
+          next
+        );
+
+        return next;
+      }
+    );
+  }
+
   return (
     <div
       className="space-y-8"
@@ -8143,7 +8377,7 @@ const summary =
           <Metric
             label="Estimated Monthly Income"
             value={formatCurrency(
-              summary.annualYield / 12
+              summary.monthlyYield
             )}
             icon={
               CalendarDays
@@ -8255,6 +8489,21 @@ if (
           dataUrl
         )
       }
+      totalSpent={
+        Number(
+          projectPayback?.[
+            "kryptex-project"
+          ]?.totalSpent
+        ) || 0
+      }
+      onTotalSpentChange={(
+        value
+      ) =>
+        setProjectTotalSpent(
+          "kryptex-project",
+          value
+        )
+      }
     />
   );
 }
@@ -8297,6 +8546,21 @@ if (
                         setProjectLogo(
                           project.id,
                           dataUrl
+                        )
+                      }
+                      totalSpent={
+                        Number(
+                          projectPayback?.[
+                            project.id
+                          ]?.totalSpent
+                        ) || 0
+                      }
+                      onTotalSpentChange={(
+                        value
+                      ) =>
+                        setProjectTotalSpent(
+                          project.id,
+                          value
                         )
                       }
                     />
@@ -8364,6 +8628,21 @@ if (
                           dataUrl
                         )
                       }
+                      totalSpent={
+                        Number(
+                          projectPayback?.[
+                            "rollercoin-project"
+                          ]?.totalSpent
+                        ) || 0
+                      }
+                      onTotalSpentChange={(
+                        value
+                      ) =>
+                        setProjectTotalSpent(
+                          "rollercoin-project",
+                          value
+                        )
+                      }
                     />
                   );
                 }
@@ -8408,6 +8687,21 @@ if (
                           dataUrl
                         )
                       }
+                      totalSpent={
+                        Number(
+                          projectPayback?.[
+                            "salad-project"
+                          ]?.totalSpent
+                        ) || 0
+                      }
+                      onTotalSpentChange={(
+                        value
+                      ) =>
+                        setProjectTotalSpent(
+                          "salad-project",
+                          value
+                        )
+                      }
                     />
                   );
                 }
@@ -8446,6 +8740,21 @@ if (
                       setProjectLogo(
                         "unetwork-project",
                         dataUrl
+                      )
+                    }
+                    totalSpent={
+                      Number(
+                        projectPayback?.[
+                          "unetwork-project"
+                        ]?.totalSpent
+                      ) || 0
+                    }
+                    onTotalSpentChange={(
+                      value
+                    ) =>
+                      setProjectTotalSpent(
+                        "unetwork-project",
+                        value
                       )
                     }
                   />
@@ -8636,6 +8945,177 @@ function getProjectProjections(project) {
   };
 }
 
+function ProjectPaybackStatus({
+  earned,
+  dailyIncome,
+  totalSpent,
+}) {
+  const stats =
+    getPaybackStats(
+      earned,
+      dailyIncome,
+      totalSpent
+    );
+
+  if (
+    !stats.configured
+  ) {
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex rounded-full border border-border/60 bg-white/[0.04] px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+          P/L —
+        </span>
+        <span className="text-[11px] text-muted-foreground">
+          Add spent to track break-even
+        </span>
+      </div>
+    );
+  }
+
+  const profitable =
+    stats.pnl >= 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span
+        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold tabular-nums ${
+          profitable
+            ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+            : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+        }`}
+        title={`Lifetime earned ${formatCurrency(
+          stats.earned
+        )} minus total spent ${formatCurrency(
+          stats.spent
+        )}`}
+      >
+        P/L {stats.pnl >= 0 ? "+" : ""}{formatCurrency(
+          stats.pnl
+        )}
+      </span>
+
+      <span
+        className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium tabular-nums ${
+          profitable
+            ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-400"
+            : "border-border/60 bg-white/[0.03] text-muted-foreground"
+        }`}
+      >
+        {profitable
+          ? "In profit"
+          : stats.daysToProfit !== null
+            ? `${stats.daysToProfit}d to profit`
+            : "Break-even unavailable"}
+      </span>
+    </div>
+  );
+}
+
+function ProjectPaybackEditor({
+  value,
+  onChange,
+  earned,
+  dailyIncome,
+}) {
+  const [
+    draft,
+    setDraft,
+  ] = useState(
+    value > 0
+      ? String(value)
+      : ""
+  );
+
+  useEffect(
+    () => {
+      setDraft(
+        value > 0
+          ? String(value)
+          : ""
+      );
+    },
+    [
+      value,
+    ]
+  );
+
+  const stats =
+    getPaybackStats(
+      earned,
+      dailyIncome,
+      value
+    );
+
+  function commit() {
+    onChange(
+      Math.max(
+        0,
+        Number(draft) || 0
+      )
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+            Total spent
+          </div>
+          <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
+            Enter everything you have spent on this project. Update it whenever you buy more. P/L uses lifetime earnings, and the break-even estimate uses the current daily income.
+          </p>
+
+          {stats.configured && (
+            <div className="mt-2 text-[11px] tabular-nums text-muted-foreground">
+              Earned {formatCurrency(
+                stats.earned
+              )} · Remaining {formatCurrency(
+                stats.remaining
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="relative w-36 shrink-0">
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+            $
+          </span>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            inputMode="decimal"
+            value={draft}
+            onChange={(
+              event
+            ) =>
+              setDraft(
+                event.target.value
+              )
+            }
+            onBlur={
+              commit
+            }
+            onKeyDown={(
+              event
+            ) => {
+              if (
+                event.key ===
+                "Enter"
+              ) {
+                event.currentTarget.blur();
+              }
+            }}
+            placeholder="0.00"
+            className="h-9 w-full rounded-lg border border-border/60 bg-background/60 pl-7 pr-3 text-right text-sm font-medium tabular-nums outline-none transition focus:border-emerald-500/40 focus:ring-2 focus:ring-emerald-500/10"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ProjectCard({
   project,
   collapsed,
@@ -8643,11 +9123,19 @@ function ProjectCard({
   onDeletePosition,
   logo,
   onLogoChange,
+  totalSpent,
+  onTotalSpentChange,
 }) {
   const projections =
     getProjectProjections(
       project
     );
+
+  const isLulo =
+    String(
+      project?.platform || ""
+    ).toLowerCase() ===
+    "lulo";
 
   return (
     <div
@@ -8714,18 +9202,34 @@ function ProjectCard({
         {/* VALUE */}
 
         <div className="mt-auto pt-7">
-          <div
-            className="
-              text-[30px]
-              font-semibold
-              leading-none
-              tracking-tight
-              text-foreground
-              tabular-nums
-            "
-          >
-            {formatCurrency(
-              project.totalBalance
+          <div className="flex flex-wrap items-end gap-3">
+            <div
+              className="
+                text-[30px]
+                font-semibold
+                leading-none
+                tracking-tight
+                text-foreground
+                tabular-nums
+              "
+            >
+              {formatCurrency(
+                project.totalBalance
+              )}
+            </div>
+
+            {!isLulo && (
+              <ProjectPaybackStatus
+                earned={
+                  project.earned
+                }
+                dailyIncome={
+                  projections.daily
+                }
+                totalSpent={
+                  totalSpent
+                }
+              />
             )}
           </div>
 
@@ -8771,14 +9275,35 @@ function ProjectCard({
       </button>
 
       {!collapsed && (
-        <ProjectPositionsSection
-          project={
-            project
-          }
-          onDeletePosition={
-            onDeletePosition
-          }
-        />
+        <>
+          {!isLulo && (
+            <div className="border-t border-border/40 px-5 py-4">
+              <ProjectPaybackEditor
+                value={
+                  totalSpent
+                }
+                onChange={
+                  onTotalSpentChange
+                }
+                earned={
+                  project.earned
+                }
+                dailyIncome={
+                  projections.daily
+                }
+              />
+            </div>
+          )}
+
+          <ProjectPositionsSection
+            project={
+              project
+            }
+            onDeletePosition={
+              onDeletePosition
+            }
+          />
+        </>
       )}
     </div>
   );
@@ -8794,6 +9319,8 @@ function UnetworkProjectCard({
   onRefresh,
   logo,
   onLogoChange,
+  totalSpent,
+  onTotalSpentChange,
 }) {
   const [
     expanded,
@@ -8873,19 +9400,33 @@ function UnetworkProjectCard({
         {/* VALUE */}
 
         <div className="mt-auto pt-7">
-          <div
-            className="
-              text-[30px]
-              font-semibold
-              leading-none
-              tracking-tight
-              text-foreground
-              tabular-nums
-            "
-          >
+          <div className="flex flex-wrap items-end gap-3">
+            <div
+              className="
+                text-[30px]
+                font-semibold
+                leading-none
+                tracking-tight
+                text-foreground
+                tabular-nums
+              "
+            >
 {formatCurrency(
   stats?.monthUsd
 )}
+            </div>
+
+            <ProjectPaybackStatus
+              earned={
+                stats?.lifetimeUsd
+              }
+              dailyIncome={
+                stats?.estimatedDailyUsd
+              }
+              totalSpent={
+                totalSpent
+              }
+            />
           </div>
 
           <div
@@ -8931,6 +9472,23 @@ function UnetworkProjectCard({
 
       {expanded && (
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
+          <div className="mb-4">
+            <ProjectPaybackEditor
+              value={
+                totalSpent
+              }
+              onChange={
+                onTotalSpentChange
+              }
+              earned={
+                stats?.lifetimeUsd
+              }
+              dailyIncome={
+                stats?.estimatedDailyUsd
+              }
+            />
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -9019,22 +9577,40 @@ function SaladProjectCard({
   onRefresh,
   logo,
   onLogoChange,
+  totalSpent,
+  onTotalSpentChange,
 }) {
   const [
     expanded,
     setExpanded,
   ] = useState(false);
 
+  /*
+   * Use the tracker projection directly so the Salad card
+   * and the page-level income summary always agree.
+   */
   const dailyIncome =
-    1.4;
+    Number(
+      stats?.estimatedDailyUsd
+    ) || 0;
 
   const monthlyIncome =
-    dailyIncome *
-    30.4375;
+    Number(
+      stats?.estimatedMonthlyUsd
+    ) ||
+    (
+      dailyIncome *
+      30.4375
+    );
 
   const yearlyIncome =
-    dailyIncome *
-    365;
+    Number(
+      stats?.estimatedYearlyUsd
+    ) ||
+    (
+      dailyIncome *
+      365
+    );
 
   return (
     <div
@@ -9109,19 +9685,33 @@ function SaladProjectCard({
         {/* VALUE */}
 
         <div className="mt-auto pt-7">
-          <div
-            className="
-              text-[30px]
-              font-semibold
-              leading-none
-              tracking-tight
-              text-foreground
-              tabular-nums
-            "
-          >
-            {formatCurrency(
-              stats?.currentBalance
-            )}
+          <div className="flex flex-wrap items-end gap-3">
+            <div
+              className="
+                text-[30px]
+                font-semibold
+                leading-none
+                tracking-tight
+                text-foreground
+                tabular-nums
+              "
+            >
+              {formatCurrency(
+                stats?.currentBalance
+              )}
+            </div>
+
+            <ProjectPaybackStatus
+              earned={
+                stats?.lifetimeUsd
+              }
+              dailyIncome={
+                dailyIncome
+              }
+              totalSpent={
+                totalSpent
+              }
+            />
           </div>
 
           <div
@@ -9167,6 +9757,23 @@ function SaladProjectCard({
 
       {expanded && (
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
+          <div className="mb-4">
+            <ProjectPaybackEditor
+              value={
+                totalSpent
+              }
+              onChange={
+                onTotalSpentChange
+              }
+              earned={
+                stats?.lifetimeUsd
+              }
+              dailyIncome={
+                dailyIncome
+              }
+            />
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -9262,6 +9869,8 @@ function RollerCoinProjectCard({
   onRefresh,
   logo,
   onLogoChange,
+  totalSpent,
+  onTotalSpentChange,
 }) {
   const [
     expanded,
@@ -9340,19 +9949,33 @@ return (
 </div>
 
       <div className="mt-auto pt-7">
-        <div
-          className="
-            text-[30px]
-            font-semibold
-            leading-none
-            tracking-tight
-            text-foreground
-            tabular-nums
-          "
-        >
+        <div className="flex flex-wrap items-end gap-3">
+          <div
+            className="
+              text-[30px]
+              font-semibold
+              leading-none
+              tracking-tight
+              text-foreground
+              tabular-nums
+            "
+          >
 {formatCurrency(
   stats?.currentBalanceUsd
 )}
+          </div>
+
+          <ProjectPaybackStatus
+            earned={
+              stats?.lifetimeUsd
+            }
+            dailyIncome={
+              dailyIncome
+            }
+            totalSpent={
+              totalSpent
+            }
+          />
         </div>
 
         <div
@@ -9396,10 +10019,24 @@ return (
       </div>
     </button>
 
-    {/* KEEP YOUR EXISTING:
-        {expanded && (...)}
-        SECTION HERE EXACTLY AS IT IS
-    */}
+    {expanded && (
+      <div className="border-t border-border/40 px-5 py-4">
+        <ProjectPaybackEditor
+          value={
+            totalSpent
+          }
+          onChange={
+            onTotalSpentChange
+          }
+          earned={
+            stats?.lifetimeUsd
+          }
+          dailyIncome={
+            dailyIncome
+          }
+        />
+      </div>
+    )}
   </div>
 );
 }
