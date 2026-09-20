@@ -8989,7 +8989,7 @@ function ProjectPaybackStatus({
           stats.spent
         )}`}
       >
-        P/L {stats.pnl >= 0 ? "+" : ""}{formatCurrency(
+        {stats.pnl >= 0 ? "+" : ""}{formatCurrency(
           stats.pnl
         )}
       </span>
