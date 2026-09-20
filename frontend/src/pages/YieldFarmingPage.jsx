@@ -9131,11 +9131,19 @@ function ProjectCard({
       project
     );
 
-  const isLulo =
+  const normalizedPlatform =
     String(
       project?.platform || ""
-    ).toLowerCase() ===
+    ).toLowerCase();
+
+  const isLulo =
+    normalizedPlatform ===
     "lulo";
+
+  const hidePayback =
+    isLulo ||
+    normalizedPlatform ===
+      "loopscale";
 
   return (
     <div
@@ -9218,7 +9226,7 @@ function ProjectCard({
               )}
             </div>
 
-            {!isLulo && (
+            {!hidePayback && (
               <ProjectPaybackStatus
                 earned={
                   project.earned
@@ -9276,7 +9284,7 @@ function ProjectCard({
 
       {!collapsed && (
         <>
-          {!isLulo && (
+          {!hidePayback && (
             <div className="border-t border-border/40 px-5 py-4">
               <ProjectPaybackEditor
                 value={
