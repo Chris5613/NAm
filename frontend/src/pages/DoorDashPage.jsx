@@ -707,6 +707,48 @@ export default function DoorDashPage() {
         </Button>
       </div>
 
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <Metric
+          icon={
+            CircleDollarSign
+          }
+          label="Net This Month"
+          value={money(
+            monthNet
+          )}
+          detail={`Gross ${money(monthGross)} · Expenses ${money(monthExpenses)}`}
+        />
+
+        <Metric
+          icon={
+            TrendingUp
+          }
+          label={`${selectedYear} Net`}
+          value={money(
+            yearNet
+          )}
+          detail={`All-time net ${money(allTimeNet)}`}
+        />
+
+        <Metric
+          icon={Clock3}
+          label="Net / Hour"
+          value={money(
+            hourly
+          )}
+          detail={`${hours.toFixed(1)} hours this month`}
+        />
+
+        <Metric
+          icon={Car}
+          label="Net / Delivery"
+          value={money(
+            perDelivery
+          )}
+          detail={`${deliveries} deliveries this month`}
+        />
+      </div>
+
       {/* Gamble-page style month selector */}
       <Card className="border-border/60">
         <CardContent className="space-y-5 p-6">
@@ -870,62 +912,6 @@ export default function DoorDashPage() {
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Metric
-          icon={
-            CircleDollarSign
-          }
-          label="Net This Month"
-          value={money(
-            monthNet
-          )}
-          detail={`Gross ${money(monthGross)} · Expenses ${money(monthExpenses)}`}
-        />
-
-        <Metric
-          icon={
-            TrendingUp
-          }
-          label={`${selectedYear} Net`}
-          value={money(
-            yearNet
-          )}
-          detail={`All-time net ${money(allTimeNet)}`}
-        />
-
-        <Metric
-          icon={Clock3}
-          label="Net / Hour"
-          value={money(
-            hourly
-          )}
-          detail={`${hours.toFixed(1)} hours this month`}
-        />
-
-        <Metric
-          icon={Car}
-          label="Net / Delivery"
-          value={money(
-            perDelivery
-          )}
-          detail={`${deliveries} deliveries this month`}
-        />
-      </div>
-
-      <Card className="border-border/60">
-        <CardContent className="p-6">
-          <h2 className="text-lg font-semibold">
-            Daily Net Earnings
-          </h2>
-
-          <p className="mt-1 text-sm text-muted-foreground">
-            {monthLabel(
-              selectedMonth
-            )}
-          </p>
         </CardContent>
       </Card>
 
