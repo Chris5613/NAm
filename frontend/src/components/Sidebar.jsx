@@ -11,6 +11,7 @@ import {
   Download,
   LogOut,
   UserRound,
+  Bike,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -23,6 +24,11 @@ const NAV_ITEMS = [
     path: "/yield-farming",
     label: "Passive Income",
     icon: CalendarDays,
+  },
+  {
+    path: "/doordash",
+    label: "DoorDash",
+    icon: Bike,
   },
   {
     path: "/spending",

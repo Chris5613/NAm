@@ -15,6 +15,7 @@ import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import { Toaster } from "@/components/ui/sonner";
 import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
 import SpendingPage from "@/pages/SpendingPage";
+import DoorDashPage from "@/pages/DoorDashPage";
 import {
   AuthProvider,
   useAuth,
@@ -100,6 +101,11 @@ function App() {
                   <YieldFarmingPage />
                 }
               />
+
+              <Route
+  path="/doordash"
+  element={<DoorDashPage />}
+/>
 
               <Route
                 path="/spending"
