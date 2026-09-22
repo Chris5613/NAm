@@ -6,6 +6,7 @@ import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
   CircleDollarSign,
   BadgeDollarSign,
@@ -35,6 +36,7 @@ const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 const KRYPTEX_TRACKER_KEY = "project_income_kryptex_tracker_v1";
 const PROJECT_PAYBACK_KEY = "yield_project_payback_v1";
+const PROJECT_EXPENSES_KEY = "project_income_monthly_expenses_v1";
 
 const PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY =
   "project_income_portfolio_summary_v1";
@@ -94,6 +96,19 @@ function loadProjectPayback() {
 function saveProjectPayback(value) {
   saveObject(
     PROJECT_PAYBACK_KEY,
+    value
+  );
+}
+
+function loadProjectExpenses() {
+  return readObject(
+    PROJECT_EXPENSES_KEY
+  );
+}
+
+function saveProjectExpenses(value) {
+  saveObject(
+    PROJECT_EXPENSES_KEY,
     value
   );
 }
@@ -4395,6 +4410,13 @@ export default function YieldFarmingPage() {
     setProjectPayback,
   ] = useState(
     loadProjectPayback
+  );
+
+  const [
+    projectExpenses,
+    setProjectExpenses,
+  ] = useState(
+    loadProjectExpenses
   );
 
   const [
@@ -8770,6 +8792,49 @@ if (
         months={
           projectIncome
         }
+        expenses={
+          projectExpenses
+        }
+        onExpenseChange={(
+          monthKey,
+          amount
+        ) => {
+          setProjectExpenses(
+            (current) => {
+              const next = {
+                ...current,
+              };
+
+              const normalizedAmount =
+                Math.max(
+                  0,
+                  Number(
+                    amount
+                  ) || 0
+                );
+
+              if (
+                normalizedAmount >
+                0
+              ) {
+                next[
+                  monthKey
+                ] =
+                  normalizedAmount;
+              } else {
+                delete next[
+                  monthKey
+                ];
+              }
+
+              saveProjectExpenses(
+                next
+              );
+
+              return next;
+            }
+          );
+        }}
         selectedMonthKey={
           selectedMonthKey
         }
@@ -8989,7 +9054,7 @@ function ProjectPaybackStatus({
           stats.spent
         )}`}
       >
-        {stats.pnl >= 0 ? "+" : ""}{formatCurrency(
+        P/L {stats.pnl >= 0 ? "+" : ""}{formatCurrency(
           stats.pnl
         )}
       </span>
@@ -10533,6 +10598,8 @@ function CompletedPositionsSection({
 
 function ProjectIncomeSection({
   months,
+  expenses,
+  onExpenseChange,
   selectedMonthKey,
   onSelectMonth,
   selectedYear,
@@ -10604,27 +10671,46 @@ function ProjectIncomeSection({
 
   const chartMonths =
     yearMonths.map(
-      (monthKey) =>
-        monthMap.get(
-          monthKey
-        ) || {
-          monthKey,
-          total: 0,
-          platforms: [],
-          locked:
-            monthKey <
-            currentMonthKey,
-        }
+      (monthKey) => {
+        const incomeMonth =
+          monthMap.get(
+            monthKey
+          ) || {
+            monthKey,
+            total: 0,
+            platforms: [],
+            locked:
+              monthKey <
+              currentMonthKey,
+          };
+
+        return {
+          ...incomeMonth,
+          expense:
+            Math.max(
+              0,
+              Number(
+                expenses?.[
+                  monthKey
+                ]
+              ) || 0
+            ),
+        };
+      }
     );
 
   const maxAmount =
     Math.max(
       1,
-      ...chartMonths.map(
-        (month) =>
+      ...chartMonths.flatMap(
+        (month) => [
           Number(
             month.total
-          ) || 0
+          ) || 0,
+          Number(
+            month.expense
+          ) || 0,
+        ]
       )
     );
 
@@ -10647,6 +10733,21 @@ function ProjectIncomeSection({
         (
           Number(
             month.total
+          ) || 0
+        ),
+      0
+    );
+
+  const yearlyExpenses =
+    chartMonths.reduce(
+      (
+        total,
+        month
+      ) =>
+        total +
+        (
+          Number(
+            month.expense
           ) || 0
         ),
       0
@@ -10746,6 +10847,12 @@ function ProjectIncomeSection({
                 yearlyTotal
               )}
             </div>
+
+            <div className="mt-1 text-xs font-medium tabular-nums text-rose-400">
+              Expenses {formatCurrency(
+                yearlyExpenses
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -10765,12 +10872,29 @@ function ProjectIncomeSection({
                     month.total
                   ) || 0;
 
-                const height =
+                const expense =
+                  Number(
+                    month.expense
+                  ) || 0;
+
+                const incomeHeight =
                   amount > 0
                     ? Math.max(
                         12,
                         (
                           amount /
+                          maxAmount
+                        ) *
+                          100
+                      )
+                    : 3;
+
+                const expenseHeight =
+                  expense > 0
+                    ? Math.max(
+                        12,
+                        (
+                          expense /
                           maxAmount
                         ) *
                           100
@@ -10790,19 +10914,27 @@ function ProjectIncomeSection({
                     }
                     className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                   >
-                    <div className="mb-2 flex min-h-6 items-center gap-1 whitespace-nowrap text-[11px] font-semibold tabular-nums text-foreground md:text-xs">
-                      {formatCurrency(
-                        amount
-                      )}
+                    <div className="mb-2 flex min-h-9 flex-col items-center justify-end gap-0.5 whitespace-nowrap text-[10px] font-semibold tabular-nums md:text-[11px]">
+                      <div className="flex items-center gap-1 text-emerald-400">
+                        {formatCurrency(
+                          amount
+                        )}
 
-                      {month.locked && (
-                        <Lock className="h-2.5 w-2.5 text-muted-foreground" />
-                      )}
+                        {month.locked && (
+                          <Lock className="h-2.5 w-2.5 text-muted-foreground" />
+                        )}
+                      </div>
+
+                      <div className="text-rose-400">
+                        {formatCurrency(
+                          expense
+                        )}
+                      </div>
                     </div>
 
-                    <div className="flex h-36 w-full items-end justify-center">
+                    <div className="flex h-36 w-full items-end justify-center gap-1">
                       <div
-                        className={`w-full max-w-14 rounded-t-md transition-all duration-200 ${
+                        className={`w-[44%] max-w-7 rounded-t-md transition-all duration-200 ${
                           amount >
                           0
                             ? month.locked
@@ -10812,8 +10944,26 @@ function ProjectIncomeSection({
                         }`}
                         style={{
                           height:
-                            `${height}%`,
+                            `${incomeHeight}%`,
                         }}
+                        title={`Income: ${formatCurrency(
+                          amount
+                        )}`}
+                      />
+
+                      <div
+                        className={`w-[44%] max-w-7 rounded-t-md transition-all duration-200 ${
+                          expense > 0
+                            ? "bg-rose-500/75 group-hover:bg-rose-500"
+                            : "bg-rose-500/10 group-hover:bg-rose-500/20"
+                        }`}
+                        style={{
+                          height:
+                            `${expenseHeight}%`,
+                        }}
+                        title={`Expenses: ${formatCurrency(
+                          expense
+                        )}`}
                       />
                     </div>
 
@@ -10835,6 +10985,14 @@ function ProjectIncomeSection({
           month={
             selectedMonth
           }
+          expense={
+            Number(
+              selectedMonth.expense
+            ) || 0
+          }
+          onExpenseChange={
+            onExpenseChange
+          }
           projectLogos={
             projectLogos
           }
@@ -10851,6 +11009,8 @@ function ProjectIncomeSection({
 
 function ProjectIncomeModal({
   month,
+  expense,
+  onExpenseChange,
   projectLogos,
   onClose,
 }) {
@@ -10858,6 +11018,33 @@ function ProjectIncomeModal({
     Number(
       month.total
     ) || 0;
+
+  const [
+    expenseInput,
+    setExpenseInput,
+  ] = useState(
+    String(
+      Number(
+        expense
+      ) || ""
+    )
+  );
+
+  useEffect(
+    () => {
+      setExpenseInput(
+        String(
+          Number(
+            expense
+          ) || ""
+        )
+      );
+    },
+    [
+      expense,
+      month.monthKey,
+    ]
+  );
 
   useEffect(
     () => {
@@ -10961,6 +11148,96 @@ function ProjectIncomeModal({
         </div>
 
         <div className="p-5">
+          <div className="mb-5 rounded-xl border border-rose-500/20 bg-rose-500/[0.05] p-4">
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <div className="text-sm font-medium">
+                  Monthly expenses
+                </div>
+
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Add costs for this month, such as equipment, fees, electricity, or other project expenses.
+                </div>
+              </div>
+
+              <div className="w-full sm:w-40">
+                <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                  Expense total
+                </label>
+
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={
+                    expenseInput
+                  }
+                  placeholder="0.00"
+                  onChange={(
+                    event
+                  ) =>
+                    setExpenseInput(
+                      event.target.value
+                    )
+                  }
+                  onBlur={() =>
+                    onExpenseChange(
+                      month.monthKey,
+                      expenseInput
+                    )
+                  }
+                  onKeyDown={(
+                    event
+                  ) => {
+                    if (
+                      event.key ===
+                      "Enter"
+                    ) {
+                      event.preventDefault();
+
+                      onExpenseChange(
+                        month.monthKey,
+                        expenseInput
+                      );
+
+                      event.currentTarget.blur();
+                    }
+                  }}
+                  className="text-right tabular-nums"
+                />
+              </div>
+            </div>
+
+            <div className="mt-3 flex items-center justify-between border-t border-rose-500/15 pt-3 text-xs">
+              <span className="text-muted-foreground">
+                Net project income
+              </span>
+
+              <span
+                className={`font-semibold tabular-nums ${
+                  total -
+                    (
+                      Number(
+                        expenseInput
+                      ) || 0
+                    ) >=
+                  0
+                    ? "text-emerald-400"
+                    : "text-rose-400"
+                }`}
+              >
+                {formatCurrency(
+                  total -
+                    (
+                      Number(
+                        expenseInput
+                      ) || 0
+                    )
+                )}
+              </span>
+            </div>
+          </div>
+
           {month.platforms.length ===
           0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">
