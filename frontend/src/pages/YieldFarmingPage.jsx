@@ -10914,57 +10914,59 @@ function ProjectIncomeSection({
                     }
                     className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                   >
-                    <div className="mb-2 flex min-h-9 flex-col items-center justify-end gap-0.5 whitespace-nowrap text-[10px] font-semibold tabular-nums md:text-[11px]">
-                      <div className="flex items-center gap-1 text-emerald-400">
-                        {formatCurrency(
-                          amount
-                        )}
+                    <div className="flex h-44 w-full items-end justify-center gap-2 md:gap-3">
+                      <div className="flex h-full w-[44%] max-w-10 flex-col items-center justify-end">
+                        <div className="mb-2 flex min-h-8 items-end gap-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-emerald-400 md:text-[11px]">
+                          {formatCurrency(
+                            amount
+                          )}
 
-                        {month.locked && (
-                          <Lock className="h-2.5 w-2.5 text-muted-foreground" />
-                        )}
+                          {month.locked && (
+                            <Lock className="h-2.5 w-2.5 text-muted-foreground" />
+                          )}
+                        </div>
+
+                        <div
+                          className={`w-full rounded-t-md transition-all duration-200 ${
+                            amount >
+                            0
+                              ? month.locked
+                                ? "bg-emerald-400/45 group-hover:bg-emerald-400/65"
+                                : "bg-emerald-400/75 group-hover:bg-emerald-400"
+                              : "bg-white/[0.06] group-hover:bg-white/[0.10]"
+                          }`}
+                          style={{
+                            height:
+                              `${incomeHeight}%`,
+                          }}
+                          title={`Income: ${formatCurrency(
+                            amount
+                          )}`}
+                        />
                       </div>
 
-                      <div className="text-rose-400">
-                        {formatCurrency(
-                          expense
-                        )}
+                      <div className="flex h-full w-[44%] max-w-10 flex-col items-center justify-end">
+                        <div className="mb-2 min-h-8 whitespace-nowrap text-[10px] font-semibold tabular-nums text-rose-400 md:text-[11px]">
+                          {formatCurrency(
+                            expense
+                          )}
+                        </div>
+
+                        <div
+                          className={`w-full rounded-t-md transition-all duration-200 ${
+                            expense > 0
+                              ? "bg-rose-500/75 group-hover:bg-rose-500"
+                              : "bg-rose-500/10 group-hover:bg-rose-500/20"
+                          }`}
+                          style={{
+                            height:
+                              `${expenseHeight}%`,
+                          }}
+                          title={`Expenses: ${formatCurrency(
+                            expense
+                          )}`}
+                        />
                       </div>
-                    </div>
-
-                    <div className="flex h-36 w-full items-end justify-center gap-1">
-                      <div
-                        className={`w-[44%] max-w-7 rounded-t-md transition-all duration-200 ${
-                          amount >
-                          0
-                            ? month.locked
-                              ? "bg-emerald-400/45 group-hover:bg-emerald-400/65"
-                              : "bg-emerald-400/75 group-hover:bg-emerald-400"
-                            : "bg-white/[0.06] group-hover:bg-white/[0.10]"
-                        }`}
-                        style={{
-                          height:
-                            `${incomeHeight}%`,
-                        }}
-                        title={`Income: ${formatCurrency(
-                          amount
-                        )}`}
-                      />
-
-                      <div
-                        className={`w-[44%] max-w-7 rounded-t-md transition-all duration-200 ${
-                          expense > 0
-                            ? "bg-rose-500/75 group-hover:bg-rose-500"
-                            : "bg-rose-500/10 group-hover:bg-rose-500/20"
-                        }`}
-                        style={{
-                          height:
-                            `${expenseHeight}%`,
-                        }}
-                        title={`Expenses: ${formatCurrency(
-                          expense
-                        )}`}
-                      />
                     </div>
 
                     <div className="mt-3 text-[11px] font-medium text-muted-foreground transition group-hover:text-foreground md:text-xs">
