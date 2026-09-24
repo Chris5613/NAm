@@ -26,11 +26,6 @@ const NAV_ITEMS = [
     icon: CalendarDays,
   },
   {
-    path: "/doordash",
-    label: "DoorDash",
-    icon: Bike,
-  },
-  {
     path: "/spending",
     label: "Spending",
     icon: CreditCard,
