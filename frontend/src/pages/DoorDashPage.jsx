@@ -1,4 +1,4 @@
-mport { useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -66,6 +66,40 @@ function money(value) {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   }).format(Number(value) || 0);
+}
+
+function EarningsBarLabel({ x, y, width, value }) {
+  if (!(Number(value) > 0)) return null;
+
+  return (
+    <text
+      x={Number(x) + Number(width) / 2}
+      y={Number(y) - 10}
+      textAnchor="middle"
+      fill="#34d399"
+      fontSize="12"
+      fontWeight="700"
+    >
+      {money(value)}
+    </text>
+  );
+}
+
+function ExpenseBarLabel({ x, y, width, value }) {
+  if (!(Number(value) > 0)) return null;
+
+  return (
+    <text
+      x={Number(x) + Number(width) / 2}
+      y={Number(y) - 10}
+      textAnchor="middle"
+      fill="#ef4444"
+      fontSize="12"
+      fontWeight="700"
+    >
+      {money(value)}
+    </text>
+  );
 }
 
 function prettyDate(value) {
@@ -389,7 +423,7 @@ export default function DoorDashPage() {
                   data={chartData}
                   barGap={6}
                   margin={{
-                    top: 28,
+                    top: 40,
                     right: 12,
                     left: 0,
                     bottom: 0,
@@ -444,16 +478,7 @@ export default function DoorDashPage() {
                   >
                     <LabelList
                       dataKey="Earnings"
-                      position="top"
-                      offset={8}
-                      formatter={(value) =>
-                        Number(value) > 0
-                          ? money(value)
-                          : ""
-                      }
-                      fill="#34d399"
-                      fontSize={11}
-                      fontWeight={600}
+                      content={<EarningsBarLabel />}
                     />
                   </Bar>
 
@@ -466,16 +491,7 @@ export default function DoorDashPage() {
                   >
                     <LabelList
                       dataKey="Expenses"
-                      position="top"
-                      offset={8}
-                      formatter={(value) =>
-                        Number(value) > 0
-                          ? money(value)
-                          : ""
-                      }
-                      fill="#ef4444"
-                      fontSize={11}
-                      fontWeight={600}
+                      content={<ExpenseBarLabel />}
                     />
                   </Bar>
                 </BarChart>
