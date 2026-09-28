@@ -178,6 +178,35 @@ export default function DoorDashPage() {
     return totals;
   }, [monthEntries]);
 
+  const recentEarnings = useMemo(() => {
+    const grouped = {};
+
+    monthEntries.forEach((entry) => {
+      const date = entry.date;
+
+      if (!grouped[date]) {
+        grouped[date] = {
+          date,
+          earnings: 0,
+          expenses: 0,
+          hours: 0,
+          deliveries: 0,
+          ids: [],
+        };
+      }
+
+      grouped[date].earnings += getEarnings(entry);
+      grouped[date].expenses += getExpenses(entry);
+      grouped[date].hours += Number(entry?.hours) || 0;
+      grouped[date].deliveries += Number(entry?.deliveries) || 0;
+      grouped[date].ids.push(entry.id);
+    });
+
+    return Object.values(grouped).sort(
+      (a, b) => String(b.date).localeCompare(String(a.date))
+    );
+  }, [monthEntries]);
+
   const chartData = useMemo(() => {
     const byDay = {};
 
@@ -250,6 +279,18 @@ export default function DoorDashPage() {
     });
   }
 
+  function removeRecentDay(ids) {
+    if (!window.confirm("Delete all delivery earnings for this day?")) return;
+
+    const idSet = new Set(ids);
+
+    setEntries((current) => {
+      const next = current.filter((entry) => !idSet.has(entry.id));
+      saveEntries(next);
+      return next;
+    });
+  }
+
   return (
     <div className="space-y-7" data-testid="doordash-page">
       <div className="flex flex-wrap items-end justify-between gap-4">
@@ -267,7 +308,7 @@ export default function DoorDashPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           icon={WalletCards}
           label="This Month"
@@ -280,9 +321,7 @@ export default function DoorDashPage() {
           value={money(hourlyRate)}
           detail={`${monthHours.toFixed(1)} hours`}
         />
-      </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
         <Card className="border-border/60">
           <CardContent className="p-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -355,7 +394,22 @@ export default function DoorDashPage() {
                     tick={{ fontSize: 11 }}
                     tickFormatter={(value) => `$${value}`}
                   />
-                  <Tooltip formatter={(value, name) => [money(value), name]} />
+                  <Tooltip
+                    cursor={false}
+                    formatter={(value, name) => [money(value), name]}
+                    contentStyle={{
+                      background: "#111827",
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      borderRadius: "12px",
+                      boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
+                    }}
+                    labelStyle={{
+                      color: "#94a3b8",
+                    }}
+                    itemStyle={{
+                      color: "#f8fafc",
+                    }}
+                  />
                   <Legend />
                   <Bar
                     dataKey="Earnings"
@@ -390,29 +444,28 @@ export default function DoorDashPage() {
             </div>
           </div>
 
-          {monthEntries.length ? (
+          {recentEarnings.length ? (
             <div className="divide-y divide-border/50">
-              {monthEntries.map((entry) => {
-                const earnings = getEarnings(entry);
-                const expenses = getExpenses(entry);
-                const net = getNet(entry);
+              {recentEarnings.map((day) => {
+                const net = day.earnings - day.expenses;
 
                 return (
-                  <div key={entry.id} className="flex flex-wrap items-center gap-4 px-6 py-4">
+                  <div key={day.date} className="flex flex-wrap items-center gap-4 px-6 py-4">
                     <div className="min-w-[150px] flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">{getApp(entry)}</span>
-                        <span className="text-xs text-muted-foreground">{prettyDate(entry.date)}</span>
+                        <span className="text-sm font-medium">Delivery Earnings</span>
+                        <span className="text-xs text-muted-foreground">{prettyDate(day.date)}</span>
                       </div>
+
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {Number(entry.deliveries) || 0} deliveries
-                        {Number(entry.hours) > 0 ? ` · ${Number(entry.hours).toFixed(1)} hrs` : ""}
+                        {day.deliveries} deliveries
+                        {day.hours > 0 ? ` · ${day.hours.toFixed(1)} hrs` : ""}
                       </div>
                     </div>
 
                     <div className="text-right text-xs text-muted-foreground">
-                      <div>Earned {money(earnings)}</div>
-                      <div>Expenses {money(expenses)}</div>
+                      <div>Earned {money(day.earnings)}</div>
+                      <div>Expenses {money(day.expenses)}</div>
                     </div>
 
                     <div className="min-w-[105px] text-right">
@@ -425,9 +478,9 @@ export default function DoorDashPage() {
 
                     <button
                       type="button"
-                      onClick={() => removeEntry(entry.id)}
+                      onClick={() => removeRecentDay(day.ids)}
                       className="text-muted-foreground transition hover:text-rose-400"
-                      title="Delete entry"
+                      title="Delete this day's entries"
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
