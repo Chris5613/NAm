@@ -381,7 +381,7 @@ export default function DoorDashPage() {
             </div>
           </div>
 
-          <div className="mt-6 h-[380px]">
+          <div className="mt-6 h-[450px]">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
