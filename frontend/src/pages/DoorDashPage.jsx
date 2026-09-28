@@ -23,10 +23,10 @@ import {
   WalletCards,
 } from "lucide-react";
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
   Legend,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -381,13 +381,14 @@ export default function DoorDashPage() {
             </div>
           </div>
 
-          <div className="mt-6 h-[260px]">
+          <div className="mt-6 h-[380px]">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart
+                <BarChart
                   data={chartData}
+                  barGap={6}
                   margin={{
-                    top: 10,
+                    top: 16,
                     right: 12,
                     left: 0,
                     bottom: 0,
@@ -433,38 +434,22 @@ export default function DoorDashPage() {
 
                   <Legend />
 
-                  <Line
-                    type="monotone"
+                  <Bar
                     dataKey="Earnings"
                     name="Delivery Earnings"
-                    stroke="#34d399"
-                    strokeWidth={3}
-                    dot={{
-                      r: 4,
-                      fill: "#34d399",
-                      strokeWidth: 0,
-                    }}
-                    activeDot={{
-                      r: 6,
-                    }}
+                    fill="#34d399"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={46}
                   />
 
-                  <Line
-                    type="monotone"
+                  <Bar
                     dataKey="Expenses"
                     name="Expenses"
-                    stroke="#ef4444"
-                    strokeWidth={2.5}
-                    dot={{
-                      r: 3.5,
-                      fill: "#ef4444",
-                      strokeWidth: 0,
-                    }}
-                    activeDot={{
-                      r: 5,
-                    }}
+                    fill="#ef4444"
+                    radius={[6, 6, 0, 0]}
+                    maxBarSize={46}
                   />
-                </LineChart>
+                </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
