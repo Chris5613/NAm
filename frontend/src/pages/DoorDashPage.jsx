@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+mport { useMemo, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,6 +26,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  LabelList,
   Legend,
   ResponsiveContainer,
   Tooltip,
@@ -381,14 +382,14 @@ export default function DoorDashPage() {
             </div>
           </div>
 
-          <div className="mt-6 h-[450px]">
+          <div className="mt-6 h-[380px]">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={chartData}
                   barGap={6}
                   margin={{
-                    top: 16,
+                    top: 28,
                     right: 12,
                     left: 0,
                     bottom: 0,
@@ -440,7 +441,21 @@ export default function DoorDashPage() {
                     fill="#34d399"
                     radius={[6, 6, 0, 0]}
                     maxBarSize={46}
-                  />
+                  >
+                    <LabelList
+                      dataKey="Earnings"
+                      position="top"
+                      offset={8}
+                      formatter={(value) =>
+                        Number(value) > 0
+                          ? money(value)
+                          : ""
+                      }
+                      fill="#34d399"
+                      fontSize={11}
+                      fontWeight={600}
+                    />
+                  </Bar>
 
                   <Bar
                     dataKey="Expenses"
@@ -448,7 +463,21 @@ export default function DoorDashPage() {
                     fill="#ef4444"
                     radius={[6, 6, 0, 0]}
                     maxBarSize={46}
-                  />
+                  >
+                    <LabelList
+                      dataKey="Expenses"
+                      position="top"
+                      offset={8}
+                      formatter={(value) =>
+                        Number(value) > 0
+                          ? money(value)
+                          : ""
+                      }
+                      fill="#ef4444"
+                      fontSize={11}
+                      fontWeight={600}
+                    />
+                  </Bar>
                 </BarChart>
               </ResponsiveContainer>
             ) : (
