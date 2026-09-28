@@ -23,10 +23,10 @@ import {
   WalletCards,
 } from "lucide-react";
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Legend,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -384,9 +384,28 @@ export default function DoorDashPage() {
           <div className="mt-6 h-[260px]">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData} barGap={4}>
-                  <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                <LineChart
+                  data={chartData}
+                  margin={{
+                    top: 10,
+                    right: 12,
+                    left: 0,
+                    bottom: 0,
+                  }}
+                >
+                  <CartesianGrid
+                    vertical={false}
+                    strokeDasharray="3 3"
+                    opacity={0.15}
+                  />
+
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fontSize: 11 }}
+                  />
+
                   <YAxis
                     axisLine={false}
                     tickLine={false}
@@ -394,6 +413,7 @@ export default function DoorDashPage() {
                     tick={{ fontSize: 11 }}
                     tickFormatter={(value) => `$${value}`}
                   />
+
                   <Tooltip
                     cursor={false}
                     formatter={(value, name) => [money(value), name]}
@@ -410,20 +430,41 @@ export default function DoorDashPage() {
                       color: "#f8fafc",
                     }}
                   />
+
                   <Legend />
-                  <Bar
+
+                  <Line
+                    type="monotone"
                     dataKey="Earnings"
                     name="Delivery Earnings"
-                    fill="#34d399"
-                    radius={[5, 5, 0, 0]}
+                    stroke="#34d399"
+                    strokeWidth={3}
+                    dot={{
+                      r: 4,
+                      fill: "#34d399",
+                      strokeWidth: 0,
+                    }}
+                    activeDot={{
+                      r: 6,
+                    }}
                   />
-                  <Bar
+
+                  <Line
+                    type="monotone"
                     dataKey="Expenses"
                     name="Expenses"
-                    fill="#ef4444"
-                    radius={[5, 5, 0, 0]}
+                    stroke="#ef4444"
+                    strokeWidth={2.5}
+                    dot={{
+                      r: 3.5,
+                      fill: "#ef4444",
+                      strokeWidth: 0,
+                    }}
+                    activeDot={{
+                      r: 5,
+                    }}
                   />
-                </BarChart>
+                </LineChart>
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
