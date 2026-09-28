@@ -20,6 +20,7 @@ const NAV_ITEMS = [
     label: "Net Worth",
     icon: TrendingUp,
   },
+  
   {
     path: "/yield-farming",
     label: "Passive Income",
@@ -29,6 +30,11 @@ const NAV_ITEMS = [
     path: "/spending",
     label: "Spending",
     icon: CreditCard,
+  },
+    {
+    path: "/doordash",
+    label: "DoorDash",
+    icon: Bike,
   },
 ];
 
