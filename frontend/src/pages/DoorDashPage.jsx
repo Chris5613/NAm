@@ -187,18 +187,12 @@ export default function DoorDashPage() {
         byDay[date] = {
           date,
           label: prettyDate(date),
-          DoorDash: 0,
-          UberEats: 0,
+          Earnings: 0,
           Expenses: 0,
         };
       }
 
-      if (getApp(entry) === "Uber Eats") {
-        byDay[date].UberEats += getEarnings(entry);
-      } else {
-        byDay[date].DoorDash += getEarnings(entry);
-      }
-
+      byDay[date].Earnings += getEarnings(entry);
       byDay[date].Expenses += getExpenses(entry);
     });
 
@@ -363,9 +357,18 @@ export default function DoorDashPage() {
                   />
                   <Tooltip formatter={(value, name) => [money(value), name]} />
                   <Legend />
-                  <Bar dataKey="DoorDash" name="DoorDash" fill="#ef4444" radius={[5, 5, 0, 0]} />
-                  <Bar dataKey="UberEats" name="Uber Eats" fill="#22c55e" radius={[5, 5, 0, 0]} />
-                  <Bar dataKey="Expenses" name="Expenses" fill="#f97316" radius={[5, 5, 0, 0]} />
+                  <Bar
+                    dataKey="Earnings"
+                    name="Delivery Earnings"
+                    fill="#34d399"
+                    radius={[5, 5, 0, 0]}
+                  />
+                  <Bar
+                    dataKey="Expenses"
+                    name="Expenses"
+                    fill="#ef4444"
+                    radius={[5, 5, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -469,7 +472,14 @@ export default function DoorDashPage() {
               <Input
                 type="date"
                 value={form.date}
+                max={todayKey()}
+                onClick={(event) => {
+                  if (typeof event.currentTarget.showPicker === "function") {
+                    event.currentTarget.showPicker();
+                  }
+                }}
                 onChange={(event) => updateForm("date", event.target.value)}
+                className="cursor-pointer"
               />
             </div>
 
