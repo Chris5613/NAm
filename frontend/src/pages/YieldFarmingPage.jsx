@@ -401,15 +401,28 @@ function getSaladTrackerStats(
 
   /*
    * Actual Project Income stays based on Salad's
-   * dated earnings when available. If Salad does
-   * not provide dated rows, keep using the current
-   * live balance for this month's earned amount.
+   * dated earnings when available.
+   *
+   * IMPORTANT: when a new month starts, do NOT use
+   * the full available Salad balance as that month's
+   * income. That balance can contain money earned in
+   * prior months.
+   *
+   * If no dated rows exist for the current month,
+   * use the tracked current-month earnings bucket.
    */
   const monthUsd =
     currentMonthDailyEntries.length >
     0
       ? exactMonthUsd
-      : currentBalance;
+      : Math.max(
+          0,
+          Number(
+            tracker?.monthlyEarnings?.[
+              currentMonth
+            ]
+          ) || 0
+        );
 
   const currentDay =
     Math.max(
@@ -3590,42 +3603,83 @@ Object.values(
         {}
     );
 
-  if (
-    saladDaily.length
-  ) {
-    saladDaily.forEach(
-      ([
-        date,
-        amount,
-      ]) => {
-        addEarning(
-          getMonthKey(
-            date
-          ),
-          "Salad",
+  const saladDailyMonths =
+    new Set();
+
+  saladDaily.forEach(
+    ([
+      date,
+      amount,
+    ]) => {
+      const monthKey =
+        getMonthKey(
+          date
+        );
+
+      if (
+        !monthKey
+      ) {
+        return;
+      }
+
+      saladDailyMonths.add(
+        monthKey
+      );
+
+      addEarning(
+        monthKey,
+        "Salad",
+        Number(
+          amount
+        ) || 0
+      );
+    }
+  );
+
+  /*
+   * For months that have no dated Salad rows,
+   * fall back to the tracked monthly bucket.
+   * This is especially important at the start
+   * of a new month, when the prior available
+   * balance must NOT be counted again.
+   */
+  Object.entries(
+    saladTracker?.monthlyEarnings ||
+      {}
+  ).forEach(
+    ([
+      monthKey,
+      amount,
+    ]) => {
+      if (
+        saladDailyMonths.has(
+          monthKey
+        )
+      ) {
+        return;
+      }
+
+      const value =
+        Math.max(
+          0,
           Number(
             amount
           ) || 0
         );
+
+      if (
+        value <= 0
+      ) {
+        return;
       }
-    );
-  } else {
-    Object.entries(
-      saladTracker?.monthlyEarnings ||
-        {}
-    ).forEach(
-      ([
+
+      addEarning(
         monthKey,
-        amount,
-      ]) => {
-        addEarning(
-          monthKey,
-          "Salad",
-          amount
-        );
-      }
-    );
-  }
+        "Salad",
+        value
+      );
+    }
+  );
 
   /*
    * ROLLERCOIN
@@ -6238,33 +6292,81 @@ const importSaladPayload =
 
           /*
            * If Salad provides NO dated earnings,
-           * do not try to reconstruct this month's
-           * income from lifetime-balance changes.
+           * track only NEW earnings for the current
+           * month instead of copying the entire
+           * available balance into a new month.
            *
-           * Instead, use the live Salad balance as
-           * the current month's earned amount.
+           * On the first sync of a new month, the
+           * existing balance becomes the baseline
+           * and that month starts at $0.00.
            *
-           * Example:
-           * Available balance = $3.72
-           * No explicit withdrawal history
-           *
-           * This month = $3.72
-           * Available = $3.72
-           * Withdrawn = $0.00
+           * On later syncs in the same month, only
+           * positive balance increases are added.
            */
           if (
             !Object.keys(
               incomingDaily
             ).length
           ) {
-            monthlyEarnings[
-              monthKey
-            ] =
+            const previousBalance =
               Number(
-                currentBalance.toFixed(
-                  6
-                )
+                current?.lastBalance
               );
+
+            const previousSyncMonth =
+              String(
+                current?.lastSyncedAt ||
+                  ""
+              ).slice(
+                0,
+                7
+              );
+
+            const existingMonthEarnings =
+              Math.max(
+                0,
+                Number(
+                  monthlyEarnings[
+                    monthKey
+                  ]
+                ) || 0
+              );
+
+            if (
+              previousSyncMonth ===
+                monthKey &&
+              Number.isFinite(
+                previousBalance
+              )
+            ) {
+              const positiveDelta =
+                Math.max(
+                  0,
+                  currentBalance -
+                    previousBalance
+                );
+
+              monthlyEarnings[
+                monthKey
+              ] =
+                Number(
+                  (
+                    existingMonthEarnings +
+                    positiveDelta
+                  ).toFixed(
+                    6
+                  )
+                );
+            } else if (
+              !Object.prototype.hasOwnProperty.call(
+                monthlyEarnings,
+                monthKey
+              )
+            ) {
+              monthlyEarnings[
+                monthKey
+              ] = 0;
+            }
           }
 
           /*
@@ -9485,7 +9587,7 @@ function UnetworkProjectCard({
               "
             >
 {formatCurrency(
-  stats?.monthUsd
+  stats?.currentBalance
 )}
             </div>
 
@@ -10914,59 +11016,57 @@ function ProjectIncomeSection({
                     }
                     className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                   >
-                    <div className="flex h-44 w-full items-end justify-center gap-2 md:gap-3">
-                      <div className="flex h-full w-[44%] max-w-10 flex-col items-center justify-end">
-                        <div className="mb-2 flex min-h-8 items-end gap-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-emerald-400 md:text-[11px]">
-                          {formatCurrency(
-                            amount
-                          )}
+                    <div className="mb-2 flex min-h-9 flex-col items-center justify-end gap-0.5 whitespace-nowrap text-[10px] font-semibold tabular-nums md:text-[11px]">
+                      <div className="flex items-center gap-1 text-emerald-400">
+                        {formatCurrency(
+                          amount
+                        )}
 
-                          {month.locked && (
-                            <Lock className="h-2.5 w-2.5 text-muted-foreground" />
-                          )}
-                        </div>
-
-                        <div
-                          className={`w-full rounded-t-md transition-all duration-200 ${
-                            amount >
-                            0
-                              ? month.locked
-                                ? "bg-emerald-400/45 group-hover:bg-emerald-400/65"
-                                : "bg-emerald-400/75 group-hover:bg-emerald-400"
-                              : "bg-white/[0.06] group-hover:bg-white/[0.10]"
-                          }`}
-                          style={{
-                            height:
-                              `${incomeHeight}%`,
-                          }}
-                          title={`Income: ${formatCurrency(
-                            amount
-                          )}`}
-                        />
+                        {month.locked && (
+                          <Lock className="h-2.5 w-2.5 text-muted-foreground" />
+                        )}
                       </div>
 
-                      <div className="flex h-full w-[44%] max-w-10 flex-col items-center justify-end">
-                        <div className="mb-2 min-h-8 whitespace-nowrap text-[10px] font-semibold tabular-nums text-rose-400 md:text-[11px]">
-                          {formatCurrency(
-                            expense
-                          )}
-                        </div>
-
-                        <div
-                          className={`w-full rounded-t-md transition-all duration-200 ${
-                            expense > 0
-                              ? "bg-rose-500/75 group-hover:bg-rose-500"
-                              : "bg-rose-500/10 group-hover:bg-rose-500/20"
-                          }`}
-                          style={{
-                            height:
-                              `${expenseHeight}%`,
-                          }}
-                          title={`Expenses: ${formatCurrency(
-                            expense
-                          )}`}
-                        />
+                      <div className="text-rose-400">
+                        {formatCurrency(
+                          expense
+                        )}
                       </div>
+                    </div>
+
+                    <div className="flex h-36 w-full items-end justify-center gap-1">
+                      <div
+                        className={`w-[44%] max-w-7 rounded-t-md transition-all duration-200 ${
+                          amount >
+                          0
+                            ? month.locked
+                              ? "bg-emerald-400/45 group-hover:bg-emerald-400/65"
+                              : "bg-emerald-400/75 group-hover:bg-emerald-400"
+                            : "bg-white/[0.06] group-hover:bg-white/[0.10]"
+                        }`}
+                        style={{
+                          height:
+                            `${incomeHeight}%`,
+                        }}
+                        title={`Income: ${formatCurrency(
+                          amount
+                        )}`}
+                      />
+
+                      <div
+                        className={`w-[44%] max-w-7 rounded-t-md transition-all duration-200 ${
+                          expense > 0
+                            ? "bg-rose-500/75 group-hover:bg-rose-500"
+                            : "bg-rose-500/10 group-hover:bg-rose-500/20"
+                        }`}
+                        style={{
+                          height:
+                            `${expenseHeight}%`,
+                        }}
+                        title={`Expenses: ${formatCurrency(
+                          expense
+                        )}`}
+                      />
                     </div>
 
                     <div className="mt-3 text-[11px] font-medium text-muted-foreground transition group-hover:text-foreground md:text-xs">
