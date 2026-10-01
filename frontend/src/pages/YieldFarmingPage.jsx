@@ -303,6 +303,19 @@ function loadSaladTracker() {
       Number(
         parsed.lastLifetimeBalance
       ) || 0,
+    monthBaselineMonth:
+      parsed.monthBaselineMonth ||
+      null,
+    monthBaselineLifetimeBalance:
+      Number.isFinite(
+        Number(
+          parsed.monthBaselineLifetimeBalance
+        )
+      )
+        ? Number(
+            parsed.monthBaselineLifetimeBalance
+          )
+        : null,
     lastSyncedAt:
       parsed.lastSyncedAt ||
       null,
@@ -400,29 +413,22 @@ function getSaladTrackerStats(
     );
 
   /*
-   * Actual Project Income stays based on Salad's
-   * dated earnings when available.
+   * Current-month Salad income must NEVER be the
+   * available balance. The balance can carry money
+   * from prior months.
    *
-   * IMPORTANT: when a new month starts, do NOT use
-   * the full available Salad balance as that month's
-   * income. That balance can contain money earned in
-   * prior months.
-   *
-   * If no dated rows exist for the current month,
-   * use the tracked current-month earnings bucket.
+   * Use the month-specific earnings bucket that is
+   * built from Salad's lifetime-balance delta.
    */
   const monthUsd =
-    currentMonthDailyEntries.length >
-    0
-      ? exactMonthUsd
-      : Math.max(
-          0,
-          Number(
-            tracker?.monthlyEarnings?.[
-              currentMonth
-            ]
-          ) || 0
-        );
+    Math.max(
+      0,
+      Number(
+        tracker?.monthlyEarnings?.[
+          currentMonth
+        ]
+      ) || 0
+    );
 
   const currentDay =
     Math.max(
@@ -3606,6 +3612,9 @@ Object.values(
   const saladDailyMonths =
     new Set();
 
+  const saladCurrentMonth =
+    getCurrentMonthKey();
+
   saladDaily.forEach(
     ([
       date,
@@ -3617,7 +3626,9 @@ Object.values(
         );
 
       if (
-        !monthKey
+        !monthKey ||
+        monthKey ===
+          saladCurrentMonth
       ) {
         return;
       }
@@ -6291,82 +6302,71 @@ const importSaladPayload =
             getCurrentMonthKey();
 
           /*
-           * If Salad provides NO dated earnings,
-           * track only NEW earnings for the current
-           * month instead of copying the entire
-           * available balance into a new month.
+           * MONTHLY SALAD ACCOUNTING
            *
-           * On the first sync of a new month, the
-           * existing balance becomes the baseline
-           * and that month starts at $0.00.
+           * Use lifetimeBalance instead of available
+           * balance or extension daily rows.
            *
-           * On later syncs in the same month, only
-           * positive balance increases are added.
+           * On the first sync of a new month, save
+           * the current lifetime total as that month's
+           * opening baseline and start the month at $0.
+           *
+           * After that:
+           * current month income =
+           * lifetimeBalance - opening lifetime baseline
+           *
+           * Because lifetimeBalance does not fall when
+           * money is withdrawn, withdrawals cannot make
+           * the monthly earnings negative or reset them.
            */
+          const previousBaselineMonth =
+            current?.monthBaselineMonth ||
+            null;
+
+          const previousBaselineLifetime =
+            Number(
+              current?.monthBaselineLifetimeBalance
+            );
+
+          let monthBaselineMonth =
+            previousBaselineMonth;
+
+          let monthBaselineLifetimeBalance =
+            Number.isFinite(
+              previousBaselineLifetime
+            )
+              ? previousBaselineLifetime
+              : null;
+
           if (
-            !Object.keys(
-              incomingDaily
-            ).length
+            previousBaselineMonth !==
+              monthKey ||
+            !Number.isFinite(
+              monthBaselineLifetimeBalance
+            )
           ) {
-            const previousBalance =
+            monthBaselineMonth =
+              monthKey;
+
+            monthBaselineLifetimeBalance =
+              lifetimeBalance;
+
+            monthlyEarnings[
+              monthKey
+            ] = 0;
+          } else {
+            monthlyEarnings[
+              monthKey
+            ] =
               Number(
-                current?.lastBalance
-              );
-
-            const previousSyncMonth =
-              String(
-                current?.lastSyncedAt ||
-                  ""
-              ).slice(
-                0,
-                7
-              );
-
-            const existingMonthEarnings =
-              Math.max(
-                0,
-                Number(
-                  monthlyEarnings[
-                    monthKey
-                  ]
-                ) || 0
-              );
-
-            if (
-              previousSyncMonth ===
-                monthKey &&
-              Number.isFinite(
-                previousBalance
-              )
-            ) {
-              const positiveDelta =
                 Math.max(
                   0,
-                  currentBalance -
-                    previousBalance
-                );
-
-              monthlyEarnings[
-                monthKey
-              ] =
-                Number(
-                  (
-                    existingMonthEarnings +
-                    positiveDelta
-                  ).toFixed(
-                    6
-                  )
-                );
-            } else if (
-              !Object.prototype.hasOwnProperty.call(
-                monthlyEarnings,
-                monthKey
-              )
-            ) {
-              monthlyEarnings[
-                monthKey
-              ] = 0;
-            }
+                  lifetimeBalance -
+                    monthBaselineLifetimeBalance
+                ).toFixed(
+                  6
+                )
+              );
           }
 
           /*
@@ -6470,6 +6470,10 @@ const importSaladPayload =
 
             lastLifetimeBalance:
               lifetimeBalance,
+
+            monthBaselineMonth,
+
+            monthBaselineLifetimeBalance,
 
             lastSyncedAt:
               syncedAt,
