@@ -898,6 +898,268 @@ function HoldingRow({
 }
 
 /* =========================================================
+   MONTHLY NET WORTH MINI CHART
+========================================================= */
+
+function MonthlyNetWorthMiniChart({
+  history = [],
+}) {
+  const points =
+    Array.isArray(history)
+      ? history
+          .filter(
+            (item) =>
+              item &&
+              Number.isFinite(
+                Number(
+                  item.value
+                )
+              )
+          )
+          .slice(-6)
+      : [];
+
+  if (!points.length) {
+    return (
+      <div className="flex h-[145px] items-center justify-center text-xs text-muted-foreground">
+        Waiting for monthly history…
+      </div>
+    );
+  }
+
+  const width = 360;
+  const height = 145;
+  const padX = 24;
+  const padTop = 24;
+  const padBottom = 28;
+
+  const values =
+    points.map(
+      (item) =>
+        Number(
+          item.value
+        ) || 0
+    );
+
+  const minValue =
+    Math.min(
+      ...values
+    );
+
+  const maxValue =
+    Math.max(
+      ...values
+    );
+
+  const range =
+    Math.max(
+      1,
+      maxValue -
+        minValue
+    );
+
+  const chartPoints =
+    points.map(
+      (
+        item,
+        index
+      ) => {
+        const x =
+          points.length ===
+          1
+            ? width / 2
+            : padX +
+              (
+                index /
+                (
+                  points.length -
+                  1
+                )
+              ) *
+                (
+                  width -
+                  padX * 2
+                );
+
+        const usableHeight =
+          height -
+          padTop -
+          padBottom;
+
+        const normalized =
+          (
+            (
+              Number(
+                item.value
+              ) || 0
+            ) -
+            minValue
+          ) /
+          range;
+
+        const y =
+          maxValue ===
+          minValue
+            ? padTop +
+              usableHeight /
+                2
+            : padTop +
+              (
+                1 -
+                normalized
+              ) *
+                usableHeight;
+
+        return {
+          ...item,
+          x,
+          y,
+        };
+      }
+    );
+
+  const polylinePoints =
+    chartPoints
+      .map(
+        (point) =>
+          `${point.x},${point.y}`
+      )
+      .join(" ");
+
+  return (
+    <div className="w-full">
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-[145px] w-full overflow-visible"
+        role="img"
+        aria-label="Monthly net worth history"
+      >
+        <line
+          x1={padX}
+          y1={
+            height -
+            padBottom
+          }
+          x2={
+            width -
+            padX
+          }
+          y2={
+            height -
+            padBottom
+          }
+          stroke="currentColor"
+          className="text-border/50"
+          strokeWidth="1"
+        />
+
+        {chartPoints.length >
+          1 && (
+          <polyline
+            points={
+              polylinePoints
+            }
+            fill="none"
+            stroke="#22d3ee"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        )}
+
+        {chartPoints.map(
+          (point) => (
+            <g
+              key={
+                point.monthKey
+              }
+            >
+              {point.live && (
+                <circle
+                  cx={
+                    point.x
+                  }
+                  cy={
+                    point.y
+                  }
+                  r="9"
+                  fill="rgba(34, 211, 238, 0.15)"
+                  stroke="#22d3ee"
+                  strokeWidth="1"
+                />
+              )}
+
+              <circle
+                cx={
+                  point.x
+                }
+                cy={
+                  point.y
+                }
+                r={
+                  point.live
+                    ? 5
+                    : 4
+                }
+                fill="#22d3ee"
+              />
+
+              <text
+                x={
+                  point.x
+                }
+                y={
+                  Math.max(
+                    12,
+                    point.y -
+                      12
+                  )
+                }
+                textAnchor="middle"
+                fill="currentColor"
+                className="text-foreground"
+                fontSize="10"
+                fontWeight={
+                  point.live
+                    ? "700"
+                    : "500"
+                }
+              >
+                {formatCurrency(
+                  point.value
+                )}
+              </text>
+
+              <text
+                x={
+                  point.x
+                }
+                y={
+                  height - 8
+                }
+                textAnchor="middle"
+                fill="currentColor"
+                className="text-muted-foreground"
+                fontSize="10"
+              >
+                {
+                  String(
+                    point.month ||
+                      point.monthKey
+                  ).split(
+                    " "
+                  )[0]
+                }
+              </text>
+            </g>
+          )
+        )}
+      </svg>
+    </div>
+  );
+}
+
+/* =========================================================
    DASHBOARD
 ========================================================= */
 
@@ -1922,7 +2184,7 @@ export default function Dashboard() {
             </span>
           </div>
 
-          {/* MONTHLY HISTORY STATUS */}
+          {/* MONTHLY HISTORY CHART */}
 
           <div
             className="
@@ -1935,51 +2197,46 @@ export default function Dashboard() {
               border-l
               border-dashed
               border-border
-              lg:block
+              lg:flex
+              lg:flex-col
             "
           >
-            <div
-              className="
-                absolute
-                left-0
-                top-[57%]
-                h-3
-                w-3
-                -translate-x-1/2
-                rounded-full
-                bg-cyan-400
-              "
-            />
+            <div className="flex flex-1 flex-col justify-center px-6 py-4">
+              <div className="mb-1 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-foreground">
+                    Net worth history
+                  </p>
 
-            <div
-              className="
-                flex
-                h-full
-                flex-col
-                items-center
-                justify-center
-                px-8
-                text-center
-              "
-            >
-              <p className="font-medium text-foreground">
-                {currentMonth
-                  ? currentMonth.month
-                  : "Net worth history"}
-              </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {history.length ===
+                    1
+                      ? "1 monthly point tracked"
+                      : `${history.length} monthly points tracked`}
+                  </p>
+                </div>
 
-              <p className="mt-2 text-sm text-muted-foreground">
-                {history.length ===
-                1
-                  ? "Your first monthly point is being tracked"
-                  : `${history.length} monthly points tracked`}
-              </p>
+                {currentMonth && (
+                  <div className="text-right">
+                    <p className="text-xs text-muted-foreground">
+                      Current
+                    </p>
 
-              <p className="mt-4 text-xs text-muted-foreground">
-                A new position is
-                created automatically
-                when the next month
-                begins
+                    <p className="mt-1 text-sm font-semibold text-cyan-400">
+                      {currentMonth.month}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <MonthlyNetWorthMiniChart
+                history={
+                  history
+                }
+              />
+
+              <p className="mt-1 text-center text-[10px] text-muted-foreground">
+                The current month updates live until the next month begins.
               </p>
             </div>
           </div>
