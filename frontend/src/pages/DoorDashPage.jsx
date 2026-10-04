@@ -203,7 +203,7 @@ export default function DoorDashPage() {
   const monthNet = monthEntries.reduce((sum, entry) => sum + getNet(entry), 0);
   const monthHours = monthEntries.reduce((sum, entry) => sum + (Number(entry?.hours) || 0), 0);
   const monthDeliveries = monthEntries.reduce((sum, entry) => sum + (Number(entry?.deliveries) || 0), 0);
-  const hourlyRate = monthHours > 0 ? monthNet / monthHours : 0;
+const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
 
   const appTotals = useMemo(() => {
     const totals = { DoorDash: 0, "Uber Eats": 0 };
