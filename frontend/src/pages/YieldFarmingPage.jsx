@@ -655,6 +655,16 @@ function loadUnetworkTracker() {
         parsed.currentBalance
       ) || 0,
 
+    availableBalance:
+      Number(
+        parsed.availableBalance
+      ) || 0,
+
+    pendingBalance:
+      Number(
+        parsed.pendingBalance
+      ) || 0,
+
     lastBalance:
       Number(
         parsed.lastBalance
@@ -957,6 +967,16 @@ function getUnetworkTrackerStats(
     currentBalance:
       Number(
         tracker?.currentBalance
+      ) || 0,
+
+    availableBalance:
+      Number(
+        tracker?.availableBalance
+      ) || 0,
+
+    pendingBalance:
+      Number(
+        tracker?.pendingBalance
       ) || 0,
 
     monthUsd,
@@ -7020,7 +7040,7 @@ const importSaladPayload =
               payload?.balanceUsd
           );
 
-        const currentBalance =
+        const availableBalance =
           Number.isFinite(
             explicitUsd
           )
@@ -7033,6 +7053,55 @@ const importSaladPayload =
                     1_000_000
                   : NaN
               );
+
+        /*
+         * Count both available and pending Unetwork rewards.
+         * The extension may send pending in USD or micros,
+         * depending on which endpoint/version it is using.
+         */
+        const pendingRawMicros =
+          Number(
+            payload?.pending_balance_micros ??
+              payload?.pendingBalanceMicros ??
+              payload?.pending_micros ??
+              payload?.pendingMicros
+          );
+
+        const pendingExplicitUsd =
+          Number(
+            payload?.pending_balance_usd ??
+              payload?.pendingBalanceUsd ??
+              payload?.pending_usd ??
+              payload?.pendingUsd
+          );
+
+        const pendingBalance =
+          Number.isFinite(
+            pendingExplicitUsd
+          )
+            ? Math.max(
+                0,
+                pendingExplicitUsd
+              )
+            : (
+                Number.isFinite(
+                  pendingRawMicros
+                )
+                  ? Math.max(
+                      0,
+                      pendingRawMicros /
+                        1_000_000
+                    )
+                  : 0
+              );
+
+        const currentBalance =
+          Number.isFinite(
+            availableBalance
+          )
+            ? availableBalance +
+              pendingBalance
+            : NaN;
 
         if (
           !Number.isFinite(
@@ -7333,6 +7402,15 @@ const importSaladPayload =
               openingMonthRowsBaselineUsd,
 
               currentBalance,
+
+              availableBalance:
+                Number.isFinite(
+                  availableBalance
+                )
+                  ? availableBalance
+                  : 0,
+
+              pendingBalance,
 
               lastBalance:
                 currentBalance,
@@ -9683,7 +9761,7 @@ function UnetworkProjectCard({
 
             <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
               <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                Available
+                Available + pending
               </div>
 
               <div className="mt-1 text-lg font-semibold tabular-nums">

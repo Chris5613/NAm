@@ -33,7 +33,7 @@ const NAV_ITEMS = [
   },
     {
     path: "/doordash",
-    label: "DoorDash",
+    label: "Delivery",
     icon: Bike,
   },
 ];
