@@ -953,11 +953,11 @@ function MonthlyNetWorthMiniChart({
     );
   }
 
-  const width = 360;
-  const height = 145;
-  const padX = 24;
-  const padTop = 24;
-  const padBottom = 28;
+  const width = 520;
+  const height = 205;
+  const padX = 34;
+  const padTop = 30;
+  const padBottom = 32;
 
   const values =
     points.map(
@@ -1056,7 +1056,7 @@ function MonthlyNetWorthMiniChart({
     <div className="w-full">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="h-[145px] w-full overflow-visible"
+        className="h-[205px] w-full overflow-visible"
         role="img"
         aria-label="Monthly net worth history"
       >
@@ -2164,7 +2164,7 @@ export default function Dashboard() {
         <div
           className="
             relative
-            min-h-[305px]
+            min-h-[380px]
             overflow-hidden
             rounded-lg
             border
@@ -2239,7 +2239,7 @@ export default function Dashboard() {
               right-0
               top-7
               hidden
-              w-[45%]
+              w-[54%]
               border-l
               border-dashed
               border-border
@@ -2247,7 +2247,7 @@ export default function Dashboard() {
               lg:flex-col
             "
           >
-            <div className="flex flex-1 flex-col justify-center px-6 py-4">
+            <div className="flex flex-1 flex-col justify-center px-7 py-5">
               <div className="mb-1 flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-foreground">
