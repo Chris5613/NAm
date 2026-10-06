@@ -68,40 +68,6 @@ function money(value) {
   }).format(Number(value) || 0);
 }
 
-function EarningsBarLabel({ x, y, width, value }) {
-  if (!(Number(value) > 0)) return null;
-
-  return (
-    <text
-      x={Number(x) + Number(width) / 2}
-      y={Number(y) - 10}
-      textAnchor="middle"
-      fill="#34d399"
-      fontSize="12"
-      fontWeight="700"
-    >
-      {money(value)}
-    </text>
-  );
-}
-
-function ExpenseBarLabel({ x, y, width, value }) {
-  if (!(Number(value) > 0)) return null;
-
-  return (
-    <text
-      x={Number(x) + Number(width) / 2}
-      y={Number(y) - 10}
-      textAnchor="middle"
-      fill="#ef4444"
-      fontSize="12"
-      fontWeight="700"
-    >
-      {money(value)}
-    </text>
-  );
-}
-
 function prettyDate(value) {
   return new Date(`${value}T12:00:00`).toLocaleDateString("en-US", {
     month: "short",
@@ -201,9 +167,12 @@ export default function DoorDashPage() {
   const monthGross = monthEntries.reduce((sum, entry) => sum + getEarnings(entry), 0);
   const monthExpenses = monthEntries.reduce((sum, entry) => sum + getExpenses(entry), 0);
   const monthNet = monthEntries.reduce((sum, entry) => sum + getNet(entry), 0);
+  const allTimeGross = entries.reduce((sum, entry) => sum + getEarnings(entry), 0);
+  const allTimeExpenses = entries.reduce((sum, entry) => sum + getExpenses(entry), 0);
+  const allTimeNet = entries.reduce((sum, entry) => sum + getNet(entry), 0);
   const monthHours = monthEntries.reduce((sum, entry) => sum + (Number(entry?.hours) || 0), 0);
   const monthDeliveries = monthEntries.reduce((sum, entry) => sum + (Number(entry?.deliveries) || 0), 0);
-const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
+  const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
 
   const appTotals = useMemo(() => {
     const totals = { DoorDash: 0, "Uber Eats": 0 };
@@ -343,7 +312,14 @@ const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        <Metric
+          icon={WalletCards}
+          label="All Time"
+          value={money(allTimeNet)}
+          detail={`Gross ${money(allTimeGross)} · Expenses ${money(allTimeExpenses)}`}
+        />
+
         <Metric
           icon={WalletCards}
           label="This Month"
@@ -423,7 +399,7 @@ const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
                   data={chartData}
                   barGap={6}
                   margin={{
-                    top: 40,
+                    top: 28,
                     right: 12,
                     left: 0,
                     bottom: 0,
@@ -478,7 +454,16 @@ const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
                   >
                     <LabelList
                       dataKey="Earnings"
-                      content={<EarningsBarLabel />}
+                      position="top"
+                      offset={8}
+                      formatter={(value) =>
+                        Number(value) > 0
+                          ? money(value)
+                          : ""
+                      }
+                      fill="#34d399"
+                      fontSize={11}
+                      fontWeight={600}
                     />
                   </Bar>
 
@@ -491,7 +476,16 @@ const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
                   >
                     <LabelList
                       dataKey="Expenses"
-                      content={<ExpenseBarLabel />}
+                      position="top"
+                      offset={8}
+                      formatter={(value) =>
+                        Number(value) > 0
+                          ? money(value)
+                          : ""
+                      }
+                      fill="#ef4444"
+                      fontSize={11}
+                      fontWeight={600}
                     />
                   </Bar>
                 </BarChart>
