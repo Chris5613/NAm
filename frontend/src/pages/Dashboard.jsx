@@ -2155,7 +2155,7 @@ export default function Dashboard() {
       <section
         className="
           grid
-          gap-4
+          gap-2
           xl:grid-cols-[minmax(0,1fr)_300px]
         "
       >
@@ -2297,9 +2297,7 @@ export default function Dashboard() {
             border-border/40
             bg-card
             p-5
-            xl:sticky
-            xl:top-5
-            xl:self-start
+            xl:self-stretch
           "
         >
           <h2 className="text-lg font-semibold text-foreground">
