@@ -816,6 +816,7 @@ function HoldingRow({
   category,
   value,
   subtitle,
+  dailyChange = 0,
   onClick,
 }) {
   const config =
@@ -870,18 +871,43 @@ function HoldingRow({
         </p>
       </div>
 
-      <p className="text-lg font-medium text-foreground">
-        {category ===
-        "debts"
-          ? "−"
-          : ""}
+      <div className="shrink-0 text-right">
+        <p className="text-lg font-medium text-foreground">
+          {category ===
+          "debts"
+            ? "−"
+            : ""}
 
-        {formatCurrency(
-          Math.abs(
-            value
-          )
-        )}
-      </p>
+          {formatCurrency(
+            Math.abs(
+              value
+            )
+          )}
+        </p>
+
+        <p
+          className={`mt-1 text-xs font-medium tabular-nums ${
+            dailyChange > 0
+              ? "text-emerald-400"
+              : dailyChange < 0
+                ? "text-rose-400"
+                : "text-muted-foreground"
+          }`}
+        >
+          {dailyChange > 0
+            ? "+"
+            : dailyChange < 0
+              ? "−"
+              : ""}
+
+          {formatCurrency(
+            Math.abs(
+              dailyChange
+            )
+          )}{" "}
+          today
+        </p>
+      </div>
 
       <ChevronRight
         className="
@@ -1808,6 +1834,10 @@ export default function Dashboard() {
           ? "account"
           : "accounts"
       }`,
+
+      dailyChange:
+        dailyCategoryChanges
+          ?.stocks || 0,
     },
 
     {
@@ -1819,6 +1849,10 @@ export default function Dashboard() {
 
       subtitle:
         "Projects and Bitcoin",
+
+      dailyChange:
+        dailyCategoryChanges
+          ?.crypto || 0,
     },
 
     {
@@ -1836,6 +1870,10 @@ export default function Dashboard() {
           ? "account"
           : "accounts"
       }`,
+
+      dailyChange:
+        dailyCategoryChanges
+          ?.cash || 0,
     },
 
     {
@@ -1853,6 +1891,10 @@ export default function Dashboard() {
           ? "asset"
           : "assets"
       }`,
+
+      dailyChange:
+        dailyCategoryChanges
+          ?.other || 0,
     },
 
     {
@@ -1870,6 +1912,10 @@ export default function Dashboard() {
           ? "account"
           : "accounts"
       }`,
+
+      dailyChange:
+        dailyCategoryChanges
+          ?.debts || 0,
     },
   ];
 
