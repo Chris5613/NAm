@@ -953,11 +953,11 @@ function MonthlyNetWorthMiniChart({
     );
   }
 
-  const width = 520;
-  const height = 205;
-  const padX = 34;
-  const padTop = 30;
-  const padBottom = 32;
+  const width = 720;
+  const height = 245;
+  const padX = 42;
+  const padTop = 34;
+  const padBottom = 34;
 
   const values =
     points.map(
@@ -1056,7 +1056,7 @@ function MonthlyNetWorthMiniChart({
     <div className="w-full">
       <svg
         viewBox={`0 0 ${width} ${height}`}
-        className="h-[205px] w-full overflow-visible"
+        className="h-[245px] w-full overflow-visible"
         role="img"
         aria-label="Monthly net worth history"
       >
@@ -2156,7 +2156,7 @@ export default function Dashboard() {
         className="
           grid
           gap-4
-          xl:grid-cols-[1.58fr_1fr]
+          xl:grid-cols-[minmax(0,1fr)_300px]
         "
       >
         {/* TOTAL NET WORTH */}
@@ -2164,7 +2164,7 @@ export default function Dashboard() {
         <div
           className="
             relative
-            min-h-[380px]
+            min-h-[420px]
             overflow-hidden
             rounded-lg
             border
@@ -2239,7 +2239,7 @@ export default function Dashboard() {
               right-0
               top-7
               hidden
-              w-[54%]
+              w-[64%]
               border-l
               border-dashed
               border-border
@@ -2290,20 +2290,23 @@ export default function Dashboard() {
 
         {/* ALLOCATION */}
 
-        <div
+        <aside
           className="
             rounded-lg
             border
             border-border/40
             bg-card
-            p-6
+            p-5
+            xl:sticky
+            xl:top-5
+            xl:self-start
           "
         >
-          <h2 className="text-xl font-semibold text-foreground">
+          <h2 className="text-lg font-semibold text-foreground">
             Asset allocation
           </h2>
 
-          <div className="mt-6 space-y-5">
+          <div className="mt-5 space-y-5">
             {[
               "stocks",
 
@@ -2348,7 +2351,7 @@ export default function Dashboard() {
               />
             </div>
           </div>
-        </div>
+        </aside>
       </section>
 
       {/* =================================================
