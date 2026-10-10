@@ -12,7 +12,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Bike,
   Car,
   ChevronLeft,
   ChevronRight,
@@ -35,7 +34,7 @@ import {
 } from "recharts";
 
 const STORAGE_KEY = "doordash_earnings_v1";
-const APPS = ["DoorDash", "Uber Eats"];
+const APPS = ["Uber Eats"];
 
 function readEntries() {
   try {
@@ -110,7 +109,7 @@ function getNet(entry) {
 }
 
 function getApp(entry) {
-  const app = String(entry?.app || entry?.platform || "DoorDash").trim();
+  const app = String(entry?.app || entry?.platform || "Uber Eats").trim();
   return app === "Uber Eats" ? "Uber Eats" : "DoorDash";
 }
 
@@ -134,7 +133,7 @@ export default function DoorDashPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [form, setForm] = useState({
-    app: "DoorDash",
+    app: "Uber Eats",
     date: todayKey(),
     earnings: "",
     expenses: "",
@@ -174,13 +173,13 @@ export default function DoorDashPage() {
   const monthDeliveries = monthEntries.reduce((sum, entry) => sum + (Number(entry?.deliveries) || 0), 0);
   const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
 
-  const appTotals = useMemo(() => {
-    const totals = { DoorDash: 0, "Uber Eats": 0 };
-    monthEntries.forEach((entry) => {
-      totals[getApp(entry)] += getNet(entry);
-    });
-    return totals;
-  }, [monthEntries]);
+  const uberMonthNet = useMemo(
+    () =>
+      monthEntries
+        .filter((entry) => getApp(entry) === "Uber Eats")
+        .reduce((sum, entry) => sum + getNet(entry), 0),
+    [monthEntries]
+  );
 
   const recentEarnings = useMemo(() => {
     const grouped = {};
@@ -263,7 +262,7 @@ export default function DoorDashPage() {
 
     setSelectedMonth(form.date.slice(0, 7));
     setForm((current) => ({
-      app: current.app,
+      app: "Uber Eats",
       date: current.date,
       earnings: "",
       expenses: "",
@@ -299,7 +298,7 @@ export default function DoorDashPage() {
     <div className="space-y-7" data-testid="doordash-page">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-sm font-medium text-muted-foreground">DoorDash + Uber Eats</p>
+          <p className="text-sm font-medium text-muted-foreground">Uber Eats</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">Delivery Earnings</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Simple tracking for earnings, expenses, hours, and deliveries.
@@ -312,7 +311,7 @@ export default function DoorDashPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           icon={WalletCards}
           label="All Time"
@@ -336,21 +335,10 @@ export default function DoorDashPage() {
         <Card className="border-border/60">
           <CardContent className="p-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Bike className="h-4 w-4" />
-              DoorDash
-            </div>
-            <div className="mt-3 text-2xl font-semibold">{money(appTotals.DoorDash)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Net this month</div>
-          </CardContent>
-        </Card>
-
-        <Card className="border-border/60">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Car className="h-4 w-4" />
               Uber Eats
             </div>
-            <div className="mt-3 text-2xl font-semibold">{money(appTotals["Uber Eats"])}</div>
+            <div className="mt-3 text-2xl font-semibold">{money(uberMonthNet)}</div>
             <div className="mt-1 text-xs text-muted-foreground">Net this month</div>
           </CardContent>
         </Card>
@@ -565,26 +553,10 @@ export default function DoorDashPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Add delivery earnings</DialogTitle>
-            <DialogDescription>Add one DoorDash or Uber Eats work session.</DialogDescription>
+            <DialogDescription>Add an Uber Eats work session.</DialogDescription>
           </DialogHeader>
 
           <form className="space-y-4" onSubmit={addEntry}>
-            <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted-foreground">App</label>
-              <div className="grid grid-cols-2 gap-2">
-                {APPS.map((app) => (
-                  <Button
-                    key={app}
-                    type="button"
-                    variant={form.app === app ? "default" : "outline"}
-                    onClick={() => updateForm("app", app)}
-                  >
-                    {app}
-                  </Button>
-                ))}
-              </div>
-            </div>
-
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Date</label>
               <Input
