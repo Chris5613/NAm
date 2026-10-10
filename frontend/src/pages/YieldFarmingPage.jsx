@@ -8118,19 +8118,49 @@ const summary =
        * cards, so it was leaving out RollerCoin, Salad,
        * Unetwork, and Kryptex.
        */
-      const portfolioBalance =
-        sortedProgramCards.reduce(
+      /*
+       * Build Portfolio Balance directly from CURRENT balances.
+       *
+       * RollerCoin MUST use currentBalanceUsd here. Lifetime earned
+       * is only for Total Earned and must not remain in the portfolio
+       * after a withdrawal.
+       */
+      const assetProjectBalance =
+        projectCards.reduce(
           (
             sum,
-            item
+            project
           ) =>
             sum +
             (
               Number(
-                item?.amount
+                project?.totalBalance
               ) || 0
             ),
           0
+        );
+
+      const portfolioBalance =
+        assetProjectBalance +
+        (
+          Number(
+            rollerCoinStats?.currentBalanceUsd
+          ) || 0
+        ) +
+        (
+          Number(
+            saladStats?.currentBalance
+          ) || 0
+        ) +
+        (
+          Number(
+            unetworkStats?.currentBalance
+          ) || 0
+        ) +
+        (
+          Number(
+            kryptexStats?.currentBalanceUsd
+          ) || 0
         );
 
       /*
