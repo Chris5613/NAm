@@ -7927,7 +7927,7 @@ const importSaladPayload =
 
             amount:
               Number(
-                rollerCoinStats?.lifetimeUsd
+                rollerCoinStats?.currentBalanceUsd
               ) || 0,
           },
 
@@ -8610,7 +8610,7 @@ const summary =
           }
           trxBalance={
             Number(
-              rollerCoinStats?.lifetimeUsd
+              rollerCoinStats?.currentBalanceUsd
             ) || 0
           }
         />
