@@ -2249,18 +2249,6 @@ export default function Dashboard() {
           >
             <div className="flex flex-1 flex-col justify-center px-7 py-5">
               <div className="mb-1 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-foreground">
-                    Net worth history
-                  </p>
-
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {history.length ===
-                    1
-                      ? "1 monthly point tracked"
-                      : `${history.length} monthly points tracked`}
-                  </p>
-                </div>
 
                 {currentMonth && (
                   <div className="text-right">
@@ -2280,10 +2268,6 @@ export default function Dashboard() {
                   history
                 }
               />
-
-              <p className="mt-1 text-center text-[10px] text-muted-foreground">
-                The current month updates live until the next month begins.
-              </p>
             </div>
           </div>
         </div>
