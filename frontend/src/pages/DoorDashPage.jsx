@@ -181,7 +181,7 @@ export default function DoorDashPage() {
   const appTotals = useMemo(() => {
     const totals = { DoorDash: 0, "Uber Eats": 0, Instacart: 0 };
     monthEntries.forEach((entry) => {
-      totals[getApp(entry)] += getNet(entry);
+      totals[getApp(entry)] += getEarnings(entry);
     });
     return totals;
   }, [monthEntries]);
@@ -385,7 +385,7 @@ export default function DoorDashPage() {
               DoorDash
             </div>
             <div className="mt-3 text-2xl font-semibold">{money(appTotals.DoorDash)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Net this month</div>
+            <div className="mt-1 text-xs text-muted-foreground">Earned this month</div>
           </CardContent>
         </Card>
 
@@ -396,7 +396,7 @@ export default function DoorDashPage() {
               Uber Eats
             </div>
             <div className="mt-3 text-2xl font-semibold">{money(appTotals["Uber Eats"])}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Net this month</div>
+            <div className="mt-1 text-xs text-muted-foreground">Earned this month</div>
           </CardContent>
         </Card>
 
@@ -407,7 +407,7 @@ export default function DoorDashPage() {
               Instacart
             </div>
             <div className="mt-3 text-2xl font-semibold">{money(appTotals.Instacart)}</div>
-            <div className="mt-1 text-xs text-muted-foreground">Net this month</div>
+            <div className="mt-1 text-xs text-muted-foreground">Earned this month</div>
           </CardContent>
         </Card>
       </div>
