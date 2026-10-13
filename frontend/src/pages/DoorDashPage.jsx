@@ -185,14 +185,15 @@ export default function DoorDashPage() {
     return totals;
   }, [monthEntries]);
 
-  const recentEarnings = useMemo(() => {
-    const grouped = {};
+  const recentWeeks = useMemo(() => {
+    const days = {};
 
-    monthEntries.forEach((entry) => {
-      const date = entry.date;
+    entries.forEach((entry) => {
+      const date = String(entry?.date || "").slice(0, 10);
+      if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) return;
 
-      if (!grouped[date]) {
-        grouped[date] = {
+      if (!days[date]) {
+        days[date] = {
           date,
           earnings: 0,
           expenses: 0,
@@ -202,17 +203,43 @@ export default function DoorDashPage() {
         };
       }
 
-      grouped[date].earnings += getEarnings(entry);
-      grouped[date].expenses += getExpenses(entry);
-      grouped[date].hours += Number(entry?.hours) || 0;
-      grouped[date].deliveries += Number(entry?.deliveries) || 0;
-      grouped[date].ids.push(entry.id);
+      days[date].earnings += getEarnings(entry);
+      days[date].expenses += getExpenses(entry);
+      days[date].hours += Number(entry?.hours) || 0;
+      days[date].deliveries += Number(entry?.deliveries) || 0;
+      days[date].ids.push(entry.id);
     });
 
-    return Object.values(grouped).sort(
-      (a, b) => String(b.date).localeCompare(String(a.date))
-    );
-  }, [monthEntries]);
+    const customWeeks = [
+      { key: "2026-10-12", start: "2026-10-12", end: "2026-10-19", label: "Oct 12 – 19" },
+      { key: "2026-10-05", start: "2026-10-05", end: "2026-10-11", label: "Oct 5 – 11" },
+      { key: "2026-09-28", start: "2026-09-28", end: "2026-10-04", label: "Sep 28 – Oct 4" },
+      { key: "2026-09-21", start: "2026-09-21", end: "2026-09-27", label: "Sep 21 – 27" },
+    ];
+
+    return customWeeks
+      .map((week) => {
+        const weekDays = Object.values(days)
+          .filter((day) => day.date >= week.start && day.date <= week.end)
+          .sort((a, b) => String(b.date).localeCompare(String(a.date)));
+
+        const earnings = weekDays.reduce((sum, day) => sum + day.earnings, 0);
+        const expenses = weekDays.reduce((sum, day) => sum + day.expenses, 0);
+        const hours = weekDays.reduce((sum, day) => sum + day.hours, 0);
+        const deliveries = weekDays.reduce((sum, day) => sum + day.deliveries, 0);
+
+        return {
+          ...week,
+          days: weekDays,
+          earnings,
+          expenses,
+          net: earnings - expenses,
+          hours,
+          deliveries,
+        };
+      })
+      .filter((week) => week.days.length > 0);
+  }, [entries]);
 
   const chartData = useMemo(() => {
     const byDay = {};
@@ -519,57 +546,84 @@ export default function DoorDashPage() {
             <ReceiptText className="h-5 w-5" />
             <div>
               <h2 className="font-semibold">Recent Earnings</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">{monthLabel(selectedMonth)}</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">Grouped by week</p>
             </div>
           </div>
 
-          {recentEarnings.length ? (
-            <div className="divide-y divide-border/50">
-              {recentEarnings.map((day) => {
-                const net = day.earnings - day.expenses;
-
-                return (
-                  <div key={day.date} className="flex flex-wrap items-center gap-4 px-6 py-4">
-                    <div className="min-w-[150px] flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium">Delivery Earnings</span>
-                        <span className="text-xs text-muted-foreground">{prettyDate(day.date)}</span>
-                      </div>
-
+          {recentWeeks.length ? (
+            <div className="divide-y divide-border/60">
+              {recentWeeks.map((week) => (
+                <div key={week.key}>
+                  <div className="flex flex-wrap items-center gap-4 bg-muted/20 px-6 py-4">
+                    <div className="min-w-[180px] flex-1">
+                      <div className="text-sm font-semibold">{week.label}</div>
                       <div className="mt-1 text-xs text-muted-foreground">
-                        {day.deliveries} deliveries
-                        {day.hours > 0 ? ` · ${day.hours.toFixed(1)} hrs` : ""}
+                        {week.deliveries} deliveries
+                        {week.hours > 0 ? ` · ${week.hours.toFixed(1)} hrs` : ""}
                       </div>
                     </div>
 
                     <div className="text-right text-xs text-muted-foreground">
-                      <div>Earned {money(day.earnings)}</div>
-                      <div>Expenses {money(day.expenses)}</div>
+                      <div>Gross {money(week.earnings)}</div>
+                      <div>Expenses {money(week.expenses)}</div>
                     </div>
 
-                    <div className="min-w-[105px] text-right">
-                      <div className={`font-semibold ${net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {net >= 0 ? "+" : ""}
-                        {money(net)}
+                    <div className="min-w-[110px] text-right">
+                      <div className={`font-semibold ${week.net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                        {week.net >= 0 ? "+" : ""}
+                        {money(week.net)}
                       </div>
-                      <div className="mt-1 text-xs text-muted-foreground">net</div>
+                      <div className="mt-1 text-xs text-muted-foreground">weekly net</div>
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={() => removeRecentDay(day.ids)}
-                      className="text-muted-foreground transition hover:text-rose-400"
-                      title="Delete this day's entries"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
                   </div>
-                );
-              })}
+
+                  <div className="divide-y divide-border/40">
+                    {week.days.map((day) => {
+                      const net = day.earnings - day.expenses;
+
+                      return (
+                        <div key={day.date} className="flex flex-wrap items-center gap-4 px-6 py-3 pl-10">
+                          <div className="min-w-[150px] flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-medium">{prettyDate(day.date)}</span>
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              {day.deliveries} deliveries
+                              {day.hours > 0 ? ` · ${day.hours.toFixed(1)} hrs` : ""}
+                            </div>
+                          </div>
+
+                          <div className="text-right text-xs text-muted-foreground">
+                            <div>Earned {money(day.earnings)}</div>
+                            <div>Expenses {money(day.expenses)}</div>
+                          </div>
+
+                          <div className="min-w-[105px] text-right">
+                            <div className={`font-semibold ${net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                              {net >= 0 ? "+" : ""}
+                              {money(net)}
+                            </div>
+                            <div className="mt-1 text-xs text-muted-foreground">net</div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => removeRecentDay(day.ids)}
+                            className="text-muted-foreground transition hover:text-rose-400"
+                            title="Delete this day's entries"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div className="px-6 py-12 text-center text-sm text-muted-foreground">
-              Nothing logged for this month yet.
+              Nothing logged for these weeks yet.
             </div>
           )}
         </CardContent>
