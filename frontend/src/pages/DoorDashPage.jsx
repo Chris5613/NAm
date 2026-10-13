@@ -135,6 +135,7 @@ function Metric({ icon: Icon, label, value, detail }) {
 export default function DoorDashPage() {
   const [entries, setEntries] = useState(readEntries);
   const [addOpen, setAddOpen] = useState(false);
+  const [expandedWeeks, setExpandedWeeks] = useState(() => new Set());
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [form, setForm] = useState({
     app: "Uber Eats",
@@ -321,6 +322,20 @@ export default function DoorDashPage() {
     setEntries((current) => {
       const next = current.filter((entry) => !idSet.has(entry.id));
       saveEntries(next);
+      return next;
+    });
+  }
+
+  function toggleWeek(weekKey) {
+    setExpandedWeeks((current) => {
+      const next = new Set(current);
+
+      if (next.has(weekKey)) {
+        next.delete(weekKey);
+      } else {
+        next.add(weekKey);
+      }
+
       return next;
     });
   }
@@ -552,74 +567,92 @@ export default function DoorDashPage() {
 
           {recentWeeks.length ? (
             <div className="divide-y divide-border/60">
-              {recentWeeks.map((week) => (
-                <div key={week.key}>
-                  <div className="flex flex-wrap items-center gap-4 bg-muted/20 px-6 py-4">
-                    <div className="min-w-[180px] flex-1">
-                      <div className="text-sm font-semibold">{week.label}</div>
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {week.deliveries} deliveries
-                        {week.hours > 0 ? ` · ${week.hours.toFixed(1)} hrs` : ""}
-                      </div>
-                    </div>
+              {recentWeeks.map((week) => {
+                const isExpanded = expandedWeeks.has(week.key);
 
-                    <div className="text-right text-xs text-muted-foreground">
-                      <div>Gross {money(week.earnings)}</div>
-                      <div>Expenses {money(week.expenses)}</div>
-                    </div>
-
-                    <div className="min-w-[110px] text-right">
-                      <div className={`font-semibold ${week.net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                        {week.net >= 0 ? "+" : ""}
-                        {money(week.net)}
-                      </div>
-                      <div className="mt-1 text-xs text-muted-foreground">weekly net</div>
-                    </div>
-                  </div>
-
-                  <div className="divide-y divide-border/40">
-                    {week.days.map((day) => {
-                      const net = day.earnings - day.expenses;
-
-                      return (
-                        <div key={day.date} className="flex flex-wrap items-center gap-4 px-6 py-3 pl-10">
-                          <div className="min-w-[150px] flex-1">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-medium">{prettyDate(day.date)}</span>
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">
-                              {day.deliveries} deliveries
-                              {day.hours > 0 ? ` · ${day.hours.toFixed(1)} hrs` : ""}
-                            </div>
+                return (
+                  <div key={week.key}>
+                    <button
+                      type="button"
+                      onClick={() => toggleWeek(week.key)}
+                      className="flex w-full flex-wrap items-center gap-4 bg-muted/20 px-6 py-4 text-left transition hover:bg-muted/30"
+                      aria-expanded={isExpanded}
+                    >
+                      <div className="flex min-w-[180px] flex-1 items-center gap-3">
+                        <ChevronRight
+                          className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
+                            isExpanded ? "rotate-90" : ""
+                          }`}
+                        />
+                        <div>
+                          <div className="text-sm font-semibold">{week.label}</div>
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            {week.deliveries} deliveries
+                            {week.hours > 0 ? ` · ${week.hours.toFixed(1)} hrs` : ""}
                           </div>
-
-                          <div className="text-right text-xs text-muted-foreground">
-                            <div>Earned {money(day.earnings)}</div>
-                            <div>Expenses {money(day.expenses)}</div>
-                          </div>
-
-                          <div className="min-w-[105px] text-right">
-                            <div className={`font-semibold ${net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                              {net >= 0 ? "+" : ""}
-                              {money(net)}
-                            </div>
-                            <div className="mt-1 text-xs text-muted-foreground">net</div>
-                          </div>
-
-                          <button
-                            type="button"
-                            onClick={() => removeRecentDay(day.ids)}
-                            className="text-muted-foreground transition hover:text-rose-400"
-                            title="Delete this day's entries"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
                         </div>
-                      );
-                    })}
+                      </div>
+
+                      <div className="text-right text-xs text-muted-foreground">
+                        <div>Gross {money(week.earnings)}</div>
+                        <div>Expenses {money(week.expenses)}</div>
+                      </div>
+
+                      <div className="min-w-[110px] text-right">
+                        <div className={`font-semibold ${week.net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                          {week.net >= 0 ? "+" : ""}
+                          {money(week.net)}
+                        </div>
+                        <div className="mt-1 text-xs text-muted-foreground">weekly net</div>
+                      </div>
+                    </button>
+
+                    {isExpanded && (
+                      <div className="divide-y divide-border/40">
+                        {week.days.map((day) => {
+                          const net = day.earnings - day.expenses;
+
+                          return (
+                            <div key={day.date} className="flex flex-wrap items-center gap-4 px-6 py-3 pl-10">
+                              <div className="min-w-[150px] flex-1">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium">{prettyDate(day.date)}</span>
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">
+                                  {day.deliveries} deliveries
+                                  {day.hours > 0 ? ` · ${day.hours.toFixed(1)} hrs` : ""}
+                                </div>
+                              </div>
+
+                              <div className="text-right text-xs text-muted-foreground">
+                                <div>Earned {money(day.earnings)}</div>
+                                <div>Expenses {money(day.expenses)}</div>
+                              </div>
+
+                              <div className="min-w-[105px] text-right">
+                                <div className={`font-semibold ${net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                                  {net >= 0 ? "+" : ""}
+                                  {money(net)}
+                                </div>
+                                <div className="mt-1 text-xs text-muted-foreground">net</div>
+                              </div>
+
+                              <button
+                                type="button"
+                                onClick={() => removeRecentDay(day.ids)}
+                                className="text-muted-foreground transition hover:text-rose-400"
+                                title="Delete this day's entries"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : (
             <div className="px-6 py-12 text-center text-sm text-muted-foreground">
