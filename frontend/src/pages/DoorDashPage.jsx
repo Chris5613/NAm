@@ -90,6 +90,33 @@ function shiftMonth(monthKey, delta) {
   return `${next.getFullYear()}-${String(next.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function addDaysKey(dateKey, days) {
+  const [year, month, day] = String(dateKey).split("-").map(Number);
+  const date = new Date(year, month - 1, day + days, 12, 0, 0);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getWeekStartKey(dateKey = todayKey()) {
+  const [year, month, day] = String(dateKey).split("-").map(Number);
+  const date = new Date(year, month - 1, day, 12, 0, 0);
+  const dayOfWeek = date.getDay();
+  const daysSinceMonday = (dayOfWeek + 6) % 7;
+  return addDaysKey(dateKey, -daysSinceMonday);
+}
+
+function weekRangeLabel(startKey) {
+  const endKey = addDaysKey(startKey, 6);
+  const start = new Date(`${startKey}T12:00:00`);
+  const end = new Date(`${endKey}T12:00:00`);
+  const sameMonth = start.getMonth() === end.getMonth();
+
+  if (sameMonth) {
+    return `${start.toLocaleDateString("en-US", { month: "short" })} ${start.getDate()} – ${end.getDate()}`;
+  }
+
+  return `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+}
+
 function getEarnings(entry) {
   if (Number.isFinite(Number(entry?.earnings))) return Number(entry.earnings);
   if (Number.isFinite(Number(entry?.gross))) return Number(entry.gross);
@@ -138,6 +165,7 @@ export default function DoorDashPage() {
   const [expandedWeeks, setExpandedWeeks] = useState(() => new Set());
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [chartView, setChartView] = useState("monthly");
+  const [selectedWeekStart, setSelectedWeekStart] = useState(() => getWeekStartKey());
   const [form, setForm] = useState({
     app: "Uber Eats",
     date: todayKey(),
@@ -158,6 +186,20 @@ export default function DoorDashPage() {
     setSelectedMonth((current) => {
       const next = shiftMonth(current, 1);
       return next > currentMonth ? current : next;
+    });
+  }
+
+  const currentWeekStart = getWeekStartKey();
+  const canGoNextWeek = selectedWeekStart < currentWeekStart;
+
+  function goToPreviousWeek() {
+    setSelectedWeekStart((current) => addDaysKey(current, -7));
+  }
+
+  function goToNextWeek() {
+    setSelectedWeekStart((current) => {
+      const next = addDaysKey(current, 7);
+      return next > currentWeekStart ? current : next;
     });
   }
 
@@ -264,18 +306,37 @@ export default function DoorDashPage() {
     return Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
   }, [monthEntries]);
 
-  const weeklyChartData = useMemo(
-    () =>
-      [...recentWeeks]
-        .sort((a, b) => String(a.start).localeCompare(String(b.start)))
-        .map((week) => ({
-          date: week.start,
-          label: week.label,
-          Earnings: week.earnings,
-          Expenses: week.expenses,
-        })),
-    [recentWeeks]
-  );
+  const weeklyChartData = useMemo(() => {
+    const byDay = {};
+
+    entries.forEach((entry) => {
+      const date = String(entry?.date || "").slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+
+      if (!byDay[date]) {
+        byDay[date] = { Earnings: 0, Expenses: 0 };
+      }
+
+      byDay[date].Earnings += getEarnings(entry);
+      byDay[date].Expenses += getExpenses(entry);
+    });
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const date = addDaysKey(selectedWeekStart, index);
+      const totals = byDay[date] || { Earnings: 0, Expenses: 0 };
+
+      return {
+        date,
+        label: new Date(`${date}T12:00:00`).toLocaleDateString("en-US", {
+          weekday: "short",
+          month: "short",
+          day: "numeric",
+        }),
+        Earnings: totals.Earnings,
+        Expenses: totals.Expenses,
+      };
+    });
+  }, [entries, selectedWeekStart]);
 
   const chartData = chartView === "weekly" ? weeklyChartData : monthlyChartData;
 
@@ -437,7 +498,7 @@ export default function DoorDashPage() {
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {chartView === "weekly"
-                  ? "Earnings and expenses grouped by week"
+                  ? weekRangeLabel(selectedWeekStart)
                   : monthLabel(selectedMonth)}
               </p>
             </div>
@@ -484,6 +545,35 @@ export default function DoorDashPage() {
                     size="icon"
                     onClick={goToNextMonth}
                     disabled={!canGoNextMonth}
+                    className="h-10 w-10 rounded-none border-l border-border/60"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {chartView === "weekly" && (
+                <div className="flex items-center overflow-hidden rounded-lg border border-border/60 bg-background/60">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={goToPreviousWeek}
+                    className="h-10 w-10 rounded-none border-r border-border/60"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <div className="min-w-[150px] px-4 text-center text-sm font-medium">
+                    {weekRangeLabel(selectedWeekStart)}
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={goToNextWeek}
+                    disabled={!canGoNextWeek}
                     className="h-10 w-10 rounded-none border-l border-border/60"
                   >
                     <ChevronRight className="h-4 w-4" />
@@ -593,9 +683,7 @@ export default function DoorDashPage() {
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
-                {chartView === "weekly"
-                  ? "No delivery earnings logged for these weeks yet."
-                  : "No delivery earnings logged for this month yet."}
+                No delivery earnings logged for this month yet.
               </div>
             )}
           </div>
