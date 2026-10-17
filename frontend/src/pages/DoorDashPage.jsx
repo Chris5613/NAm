@@ -16,7 +16,6 @@ import {
   Car,
   ChevronLeft,
   ChevronRight,
-  Clock3,
   Plus,
   ReceiptText,
   ShoppingCart,
@@ -171,8 +170,6 @@ export default function DoorDashPage() {
     date: todayKey(),
     earnings: "",
     expenses: "",
-    hours: "",
-    deliveries: "",
   });
 
   const currentMonth = currentMonthKey();
@@ -217,9 +214,6 @@ export default function DoorDashPage() {
   const allTimeGross = entries.reduce((sum, entry) => sum + getEarnings(entry), 0);
   const allTimeExpenses = entries.reduce((sum, entry) => sum + getExpenses(entry), 0);
   const allTimeNet = entries.reduce((sum, entry) => sum + getNet(entry), 0);
-  const monthHours = monthEntries.reduce((sum, entry) => sum + (Number(entry?.hours) || 0), 0);
-  const monthDeliveries = monthEntries.reduce((sum, entry) => sum + (Number(entry?.deliveries) || 0), 0);
-  const hourlyRate = monthHours > 0 ? monthGross / monthHours : 0;
 
   const appTotals = useMemo(() => {
     const totals = { DoorDash: 0, "Uber Eats": 0, Instacart: 0 };
@@ -241,16 +235,12 @@ export default function DoorDashPage() {
           date,
           earnings: 0,
           expenses: 0,
-          hours: 0,
-          deliveries: 0,
           ids: [],
         };
       }
 
       days[date].earnings += getEarnings(entry);
       days[date].expenses += getExpenses(entry);
-      days[date].hours += Number(entry?.hours) || 0;
-      days[date].deliveries += Number(entry?.deliveries) || 0;
       days[date].ids.push(entry.id);
     });
 
@@ -269,8 +259,6 @@ export default function DoorDashPage() {
 
         const earnings = weekDays.reduce((sum, day) => sum + day.earnings, 0);
         const expenses = weekDays.reduce((sum, day) => sum + day.expenses, 0);
-        const hours = weekDays.reduce((sum, day) => sum + day.hours, 0);
-        const deliveries = weekDays.reduce((sum, day) => sum + day.deliveries, 0);
 
         return {
           ...week,
@@ -278,8 +266,6 @@ export default function DoorDashPage() {
           earnings,
           expenses,
           net: earnings - expenses,
-          hours,
-          deliveries,
         };
       })
       .filter((week) => week.days.length > 0);
@@ -358,8 +344,6 @@ export default function DoorDashPage() {
       date: form.date,
       earnings: formEarnings,
       expenses: formExpenses,
-      hours: Math.max(0, Number(form.hours) || 0),
-      deliveries: Math.max(0, Math.round(Number(form.deliveries) || 0)),
       createdAt: new Date().toISOString(),
     };
 
@@ -375,8 +359,6 @@ export default function DoorDashPage() {
       date: current.date,
       earnings: "",
       expenses: "",
-      hours: "",
-      deliveries: "",
     }));
     setAddOpen(false);
   }
@@ -424,7 +406,7 @@ export default function DoorDashPage() {
           <p className="text-sm font-medium text-muted-foreground">DoorDash + Uber Eats + Instacart</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight">Delivery Earnings</h1>
           <p className="mt-2 text-sm text-muted-foreground">
-            Simple tracking for earnings, expenses, hours, and deliveries.
+            Simple tracking for earnings and expenses.
           </p>
         </div>
 
@@ -434,7 +416,7 @@ export default function DoorDashPage() {
         </Button>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <Metric
           icon={WalletCards}
           label="All Time"
@@ -448,13 +430,6 @@ export default function DoorDashPage() {
           value={money(monthNet)}
           detail={`Gross ${money(monthGross)} · Expenses ${money(monthExpenses)}`}
         />
-        <Metric
-          icon={Clock3}
-          label="Per Hour"
-          value={money(hourlyRate)}
-          detail={`${monthHours.toFixed(1)} hours`}
-        />
-
         <Card className="border-border/60">
           <CardContent className="p-5">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -721,10 +696,6 @@ export default function DoorDashPage() {
                         />
                         <div>
                           <div className="text-sm font-semibold">{week.label}</div>
-                          <div className="mt-1 text-xs text-muted-foreground">
-                            {week.deliveries} deliveries
-                            {week.hours > 0 ? ` · ${week.hours.toFixed(1)} hrs` : ""}
-                          </div>
                         </div>
                       </div>
 
@@ -752,10 +723,6 @@ export default function DoorDashPage() {
                               <div className="min-w-[150px] flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium">{prettyDate(day.date)}</span>
-                                </div>
-                                <div className="mt-1 text-xs text-muted-foreground">
-                                  {day.deliveries} deliveries
-                                  {day.hours > 0 ? ` · ${day.hours.toFixed(1)} hrs` : ""}
                                 </div>
                               </div>
 
@@ -859,32 +826,6 @@ export default function DoorDashPage() {
                 value={form.expenses}
                 onChange={(event) => updateForm("expenses", event.target.value)}
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Hours</label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.1"
-                  placeholder="0.0"
-                  value={form.hours}
-                  onChange={(event) => updateForm("hours", event.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="mb-1.5 block text-xs font-medium text-muted-foreground">Deliveries</label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="1"
-                  placeholder="0"
-                  value={form.deliveries}
-                  onChange={(event) => updateForm("deliveries", event.target.value)}
-                />
-              </div>
             </div>
 
             <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
