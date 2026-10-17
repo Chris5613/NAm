@@ -137,6 +137,7 @@ export default function DoorDashPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [expandedWeeks, setExpandedWeeks] = useState(() => new Set());
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
+  const [chartView, setChartView] = useState("monthly");
   const [form, setForm] = useState({
     app: "Uber Eats",
     date: todayKey(),
@@ -242,7 +243,7 @@ export default function DoorDashPage() {
       .filter((week) => week.days.length > 0);
   }, [entries]);
 
-  const chartData = useMemo(() => {
+  const monthlyChartData = useMemo(() => {
     const byDay = {};
 
     monthEntries.forEach((entry) => {
@@ -262,6 +263,21 @@ export default function DoorDashPage() {
 
     return Object.values(byDay).sort((a, b) => a.date.localeCompare(b.date));
   }, [monthEntries]);
+
+  const weeklyChartData = useMemo(
+    () =>
+      [...recentWeeks]
+        .sort((a, b) => String(a.start).localeCompare(String(b.start)))
+        .map((week) => ({
+          date: week.start,
+          label: week.label,
+          Earnings: week.earnings,
+          Expenses: week.expenses,
+        })),
+    [recentWeeks]
+  );
+
+  const chartData = chartView === "weekly" ? weeklyChartData : monthlyChartData;
 
   const formEarnings = Math.max(0, Number(form.earnings) || 0);
   const formExpenses = Math.max(0, Number(form.expenses) || 0);
@@ -416,35 +432,64 @@ export default function DoorDashPage() {
         <CardContent className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Monthly Activity</h2>
-              <p className="mt-1 text-sm text-muted-foreground">{monthLabel(selectedMonth)}</p>
+              <h2 className="text-lg font-semibold">
+                {chartView === "weekly" ? "Weekly Activity" : "Monthly Activity"}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {chartView === "weekly"
+                  ? "Earnings and expenses grouped by week"
+                  : monthLabel(selectedMonth)}
+              </p>
             </div>
 
-            <div className="flex items-center overflow-hidden rounded-lg border border-border/60 bg-background/60">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={goToPreviousMonth}
-                className="h-10 w-10 rounded-none border-r border-border/60"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-
-              <div className="min-w-[140px] px-4 text-center text-sm font-medium">
-                {monthLabel(selectedMonth)}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center overflow-hidden rounded-lg border border-border/60 bg-background/60">
+                <Button
+                  type="button"
+                  variant={chartView === "monthly" ? "secondary" : "ghost"}
+                  onClick={() => setChartView("monthly")}
+                  className="h-10 rounded-none border-r border-border/60 px-4"
+                >
+                  Monthly
+                </Button>
+                <Button
+                  type="button"
+                  variant={chartView === "weekly" ? "secondary" : "ghost"}
+                  onClick={() => setChartView("weekly")}
+                  className="h-10 rounded-none px-4"
+                >
+                  Weekly
+                </Button>
               </div>
 
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={goToNextMonth}
-                disabled={!canGoNextMonth}
-                className="h-10 w-10 rounded-none border-l border-border/60"
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
+              {chartView === "monthly" && (
+                <div className="flex items-center overflow-hidden rounded-lg border border-border/60 bg-background/60">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={goToPreviousMonth}
+                    className="h-10 w-10 rounded-none border-r border-border/60"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+
+                  <div className="min-w-[140px] px-4 text-center text-sm font-medium">
+                    {monthLabel(selectedMonth)}
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={goToNextMonth}
+                    disabled={!canGoNextMonth}
+                    className="h-10 w-10 rounded-none border-l border-border/60"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -548,7 +593,9 @@ export default function DoorDashPage() {
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
-                No delivery earnings logged for this month yet.
+                {chartView === "weekly"
+                  ? "No delivery earnings logged for these weeks yet."
+                  : "No delivery earnings logged for this month yet."}
               </div>
             )}
           </div>
