@@ -163,7 +163,7 @@ export default function DoorDashPage() {
   const [addOpen, setAddOpen] = useState(false);
   const [expandedWeeks, setExpandedWeeks] = useState(() => new Set());
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
-  const [chartView, setChartView] = useState("monthly");
+  const [chartView, setChartView] = useState("weekly");
   const [selectedWeekStart, setSelectedWeekStart] = useState(() => getWeekStartKey());
   const [form, setForm] = useState({
     app: "Uber Eats",
