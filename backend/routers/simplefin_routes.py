@@ -245,6 +245,47 @@ def looks_like_credit_card(
     )
 
 
+def get_simplefin_account_balance(
+    account: dict[str, Any],
+    *,
+    is_debt: bool,
+) -> float | None:
+    """
+    Choose the appropriate SimpleFIN balance for the account.
+
+    Credit cards/debts prefer the posted/current balance because
+    available-balance can represent available credit and may be 0.
+    Cash accounts continue to prefer available-balance.
+
+    Missing or invalid balance values return None so an existing
+    synced debt balance is not accidentally overwritten with $0.
+    """
+    keys = (
+        (
+            "balance",
+            "current-balance",
+            "available-balance",
+        )
+        if is_debt
+        else (
+            "available-balance",
+            "balance",
+            "current-balance",
+        )
+    )
+
+    for key in keys:
+        value = account.get(key)
+        if value is None or value == "":
+            continue
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            continue
+
+    return None
+
+
 def normalize_transaction_date(
     value: Any,
 ) -> str | None:
@@ -807,21 +848,16 @@ def save_simplefin_payload(
             or "SimpleFIN account"
         )
 
-        balance = account.get(
-            "available-balance",
-            account.get(
-                "balance",
-                account.get(
-                    "current-balance"
-                ),
-            ),
-        )
-
         is_debt = (
             looks_like_credit_card(
                 account_type,
                 account_name,
             )
+        )
+
+        balance = get_simplefin_account_balance(
+            account,
+            is_debt=is_debt,
         )
 
         account_key = (
@@ -879,12 +915,10 @@ def save_simplefin_payload(
         asset.quantity = 1
         asset.current_price = 0
 
-        asset.manual_value = abs(
-            float(
-                balance
-                or 0
+        if balance is not None:
+            asset.manual_value = abs(
+                float(balance)
             )
-        )
 
         asset.data = {
             **(
@@ -1461,33 +1495,48 @@ async def sync_simplefin(
                 f"simplefin-{account_id}"
             )
 
+            account_name = (
+                account.get(
+                    "name"
+                )
+                or connection.label
+                or (
+                    "SimpleFIN "
+                    "account"
+                )
+            )
+
+            account_type = (
+                account.get(
+                    "type"
+                )
+                or account.get(
+                    "subtype"
+                )
+                or ""
+            )
+
+            is_debt = (
+                looks_like_credit_card(
+                    account_type,
+                    account_name,
+                )
+            )
+
+            balance = (
+                get_simplefin_account_balance(
+                    account,
+                    is_debt=is_debt,
+                )
+            )
+
             account_row = (
                 SpendingAccount(
                     id=account_key,
                     user_id=user.id,
-                    name=(
-                        account.get(
-                            "name"
-                        )
-                        or connection.label
-                        or (
-                            "SimpleFIN "
-                            "account"
-                        )
-                    ),
-                    type=(
-                        account.get(
-                            "type"
-                        )
-                    ),
-                    current_balance=(
-                        account.get(
-                            "available-balance",
-                            account.get(
-                                "balance"
-                            ),
-                        )
-                    ),
+                    name=account_name,
+                    type=account_type,
+                    current_balance=balance,
                     provider_account_id=(
                         account_key
                     ),
