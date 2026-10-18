@@ -55,18 +55,16 @@ const timeLabel = (date) => new Intl.DateTimeFormat("en-US", { hour: "numeric", 
 const simplefinHourLock = (date = new Date()) => {
   const nextHour = nextHourOf(date);
   const currentHour = hourKeyOf(date);
+
   return {
-    isLocked: localStorage.getItem(SIMPLEFIN_REQUEST_HOUR_KEY) === currentHour,
+    isLocked: false,
     currentHour,
     nextHourLabel: timeLabel(nextHour),
   };
 };
+
 const reserveSimplefinHour = () => {
-  const lock = simplefinHourLock();
-  if (lock.isLocked) {
-    throw new Error(`SimpleFIN was already requested this hour. Your next sync is at ${lock.nextHourLabel}.`);
-  }
-  localStorage.setItem(SIMPLEFIN_REQUEST_HOUR_KEY, lock.currentHour);
+  return;
 };
 const money = (amount, fallback = "$0") =>
   amount === null || amount === undefined || Number.isNaN(Number(amount))
