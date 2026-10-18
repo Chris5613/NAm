@@ -355,48 +355,98 @@ export default function SpendingPage() {
     }
   }, []);
 
-  const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
-    const existing = (await assetsApi.getAll()).data || [];
-    const existingByProviderId = new Map(existing.map((asset) => [asset.provider_account_id || asset.providerAccountId, asset]));
-    for (const account of serverAccounts) {
-      if (!account.providerAccountId || account.currentBalance === null || account.currentBalance === undefined) continue;
-      const type = String(account.type || "").toLowerCase();
-      const name = String(account.name || "").toLowerCase();
-      const classifiedCategory = account.classification?.category;
-      const isDebt = classifiedCategory === "debts" || (
-        !classifiedCategory && (
-          type.includes("credit") ||
+const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
+  const existing = (await assetsApi.getAll()).data || [];
+
+  const existingByProviderId = new Map(
+    existing.map((asset) => [
+      asset.provider_account_id || asset.providerAccountId,
+      asset,
+    ])
+  );
+
+  for (const account of serverAccounts) {
+    if (
+      !account.providerAccountId ||
+      account.currentBalance === null ||
+      account.currentBalance === undefined
+    ) {
+      continue;
+    }
+
+    const type = String(account.type || "").toLowerCase();
+    const name = String(account.name || "").toLowerCase();
+    const classifiedCategory = account.classification?.category;
+
+    const isDebt =
+      classifiedCategory === "debts" ||
+      (!classifiedCategory &&
+        (type.includes("credit") ||
           type.includes("card") ||
           name.includes("sapphire") ||
           name.includes("freedom") ||
           name.includes("slate") ||
           name.includes("credit") ||
-          name.includes("card")
-        )
+          name.includes("card")));
+
+    const current = existingByProviderId.get(
+      account.providerAccountId
+    );
+
+    const nameMatch = existing.find(
+      (asset) =>
+        !asset.provider_account_id &&
+        String(asset.name || "")
+          .trim()
+          .toLowerCase() ===
+          String(account.name || "")
+            .trim()
+            .toLowerCase() &&
+        asset.category ===
+          (isDebt ? "debts" : "cash")
+    );
+
+    const matchedAsset = current || nameMatch;
+
+    const incomingBalance = Math.abs(
+      Number(account.currentBalance) || 0
+    );
+
+    const existingBalance = Math.abs(
+      Number(matchedAsset?.manual_value) || 0
+    );
+
+    const safeBalance =
+      isDebt &&
+      incomingBalance === 0 &&
+      existingBalance > 0
+        ? existingBalance
+        : incomingBalance;
+
+    const payload = {
+      id: `simplefin-asset-${account.providerAccountId}`,
+      name: account.name,
+      category: isDebt ? "debts" : "cash",
+      symbol: null,
+      quantity: 1,
+      current_price: 0,
+      manual_value: safeBalance,
+      provider_account_id:
+        account.providerAccountId,
+      provider: "simplefin",
+      synced_at: new Date().toISOString(),
+    };
+
+    if (matchedAsset) {
+      await assetsApi.update(
+        matchedAsset.id,
+        payload
       );
-      const payload = {
-        id: `simplefin-asset-${account.providerAccountId}`,
-        name: account.name,
-        category: isDebt ? "debts" : "cash",
-        symbol: null,
-        quantity: 1,
-        current_price: 0,
-        manual_value: Math.abs(Number(account.currentBalance) || 0),
-        provider_account_id: account.providerAccountId,
-        provider: "simplefin",
-        synced_at: new Date().toISOString(),
-      };
-      const current = existingByProviderId.get(account.providerAccountId);
-      const nameMatch = existing.find(
-        (asset) =>
-          !asset.provider_account_id &&
-          String(asset.name || "").trim().toLowerCase() === String(account.name || "").trim().toLowerCase() &&
-          asset.category === payload.category
-      );
-      if (current || nameMatch) await assetsApi.update((current || nameMatch).id, payload);
-      else await assetsApi.create(payload);
+    } else {
+      await assetsApi.create(payload);
     }
-  }, []);
+  }
+}, []);
 
   const sync = useCallback(async (itemId) => {
     const lock = simplefinHourLock();
