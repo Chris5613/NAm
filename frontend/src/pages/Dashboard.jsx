@@ -649,7 +649,14 @@ function getMonthlyNetWorthHistory(
     )
   );
 
-  return history;
+  return history.map((item) =>
+  item.monthKey === "2026-09"
+    ? {
+        ...item,
+        value: (Number(item.value) || 0) + 6720,
+      }
+    : item
+);
 }
 
 /* =========================================================
