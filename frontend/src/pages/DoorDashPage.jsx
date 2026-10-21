@@ -443,7 +443,7 @@ export default function DoorDashPage() {
               <ReceiptText className="h-4 w-4 text-muted-foreground" />
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-3">
+            <div className="mt-4 grid grid-cols-4 gap-3">
               <div className="rounded-lg border border-border/50 bg-muted/15 p-3.5">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Bike className="h-3.5 w-3.5" />
