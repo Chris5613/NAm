@@ -1,3 +1,5 @@
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, BarChart, Bar } from "recharts";
+import { spendingApi } from "@/lib/apiClient";
 import {
   useState,
   useEffect,
@@ -1201,6 +1203,18 @@ export default function Dashboard() {
     assets,
     setAssets,
   ] = useState([]);
+  const [chartRange, setChartRange] = useState("1M");
+  const [cashMonth, setCashMonth] = useState(() => new Date().toISOString().slice(0,7));
+  const [bankAccounts, setBankAccounts] = useState([]);
+  const [bankTransactions, setBankTransactions] = useState([]);
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([spendingApi.accounts(), spendingApi.transactions()]).then(([accounts, transactions]) => {
+      if (mounted) { setBankAccounts(Array.isArray(accounts) ? accounts : []); setBankTransactions(Array.isArray(transactions) ? transactions : []); }
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
 
   const [
     netWorth,
@@ -1988,442 +2002,43 @@ export default function Dashboard() {
      UI
   ======================================================= */
 
+  const now = new Date();
+  const rangeDays = { "1W": 7, "1M": 30, "3M": 90, YTD: Math.ceil((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1 };
+  const cutoff = new Date(now.getTime() - (rangeDays[chartRange] || 36500) * 86400000);
+  const livePoints = (liveHistory || []).map(p => ({ date: new Date(p.timestamp), value: Number(p.value) })).filter(p => Number.isFinite(p.date.getTime()) && Number.isFinite(p.value));
+  const monthPoints = (history || []).map(p => ({ date: new Date((p.monthKey || "") + "-01T12:00:00"), value: Number(p.value) })).filter(p => Number.isFinite(p.date.getTime()) && Number.isFinite(p.value));
+  const combined = [...monthPoints, ...livePoints].filter(p => chartRange === "ALL" || p.date >= cutoff).sort((a,b) => a.date-b.date);
+  const netChart = combined.map(p => ({ label: p.date.toLocaleDateString("en-US", {month:"short",day:"numeric"}), value:p.value }));
+  const [cashYear, cashMonthNum] = cashMonth.split("-").map(Number);
+  const days = new Date(cashYear, cashMonthNum, 0).getDate();
+  const cashDays = Array.from({length:days}, (_,i) => ({day:String(i+1),income:0,expenses:0}));
+  bankTransactions.filter(t => t.date?.startsWith(cashMonth)).forEach(t => {
+    const day = Number(t.date.slice(-2));
+    if (day < 1 || day > days) return;
+    const amount = Math.abs(Number(t.amount || 0));
+    if (t.category === "Income") cashDays[day-1].income += amount;
+    else if (!["Transfers","Payments"].includes(t.category)) cashDays[day-1].expenses += amount;
+  });
+  const incomeTotal = cashDays.reduce((sum,d) => sum+d.income,0);
+  const expenseTotal = cashDays.reduce((sum,d) => sum+d.expenses,0);
+  const card = "rounded-2xl border border-border/50 bg-card p-5 md:p-6";
+  const monthTitle = new Date(cashYear,cashMonthNum-1,1).toLocaleDateString("en-US",{month:"long",year:"numeric"});
   return (
-    <div
-      className="
-        mx-auto
-        w-full
-        max-w-[1600px]
-        space-y-5
-        pb-10
-      "
-      data-testid="dashboard"
-    >
-      {/* =================================================
-          HEADER
-      ================================================= */}
-
-      <header
-        className="
-          flex
-          flex-col
-          justify-between
-          gap-5
-          xl:flex-row
-          xl:items-start
-        "
-      >
-        <div>
-          <h1
-            className="
-              text-[38px]
-              font-semibold
-              leading-none
-              tracking-[-0.03em]
-              text-foreground
-            "
-            data-testid="page-title"
-          >
-            Net Worth
-          </h1>
-
-          <p className="mt-2 text-lg text-muted-foreground">
-            Your wealth at a
-            glance
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* ACTIONS */}
-
-          <details className="group relative">
-            <summary
-              className="
-                flex
-                h-12
-                cursor-pointer
-                list-none
-                items-center
-                gap-3
-                rounded-lg
-                border
-                border-border/60
-                bg-card
-                px-5
-                text-sm
-                font-medium
-                text-foreground
-                transition-colors
-                hover:bg-secondary
-              "
-            >
-              Actions
-
-              <ChevronDown
-                className="h-4 w-4 text-muted-foreground"
-                strokeWidth={
-                  1.8
-                }
-              />
-            </summary>
-
-            <div
-              className="
-                absolute
-                right-0
-                z-50
-                mt-2
-                w-52
-                overflow-hidden
-                rounded-lg
-                border
-                border-border/60
-                bg-card
-                p-1.5
-                shadow-xl
-              "
-            >
-
-              <button
-                type="button"
-                onClick={
-                  handleRefreshPrices
-                }
-                disabled={
-                  refreshingPrices
-                }
-                className="
-                  flex
-                  w-full
-                  items-center
-                  gap-3
-                  rounded-md
-                  px-3
-                  py-2.5
-                  text-sm
-                  text-foreground
-                  transition-colors
-                  hover:bg-secondary
-                  disabled:opacity-50
-                "
-              >
-                <RefreshCw
-                  className={`h-4 w-4 ${
-                    refreshingPrices
-                      ? "animate-spin"
-                      : ""
-                  }`}
-                />
-
-                {refreshingPrices
-                  ? "Refreshing..."
-                  : "Refresh prices"}
-              </button>
-
-            </div>
-          </details>
-
-          {/* ADD ASSET */}
-
-          <Button
-            onClick={() =>
-              setAddDialogOpen(
-                true
-              )
-            }
-            data-testid="add-asset-btn"
-            className="
-              h-12
-              rounded-lg
-              bg-white
-              px-5
-              text-[15px]
-              font-semibold
-              text-black
-              hover:bg-neutral-200
-            "
-          >
-            <Plus
-              className="mr-2 h-5 w-5"
-              strokeWidth={
-                2
-              }
-            />
-
-            Add asset
-          </Button>
-        </div>
+    <div className="mx-auto w-full max-w-[1600px] space-y-5 pb-10" data-testid="dashboard">
+      <header className="flex flex-wrap items-center justify-between gap-4">
+        <div><h1 className="text-3xl font-semibold tracking-tight" data-testid="page-title">Financial overview</h1><p className="mt-1 text-sm text-muted-foreground">Your wealth, accounts and cash flow at a glance.</p></div>
+        <div className="flex gap-2"><Button variant="outline" onClick={handleRefreshPrices} disabled={refreshingPrices}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button onClick={() => setAddDialogOpen(true)}><Plus className="mr-2 h-4 w-4"/>Add asset</Button></div>
       </header>
-
-      {/* =================================================
-          HERO + ALLOCATION
-      ================================================= */}
-
-      <section
-        className="
-          grid
-          gap-2
-          xl:grid-cols-[minmax(0,1fr)_300px]
-        "
-      >
-        {/* TOTAL NET WORTH */}
-
-        <div
-          className="
-            relative
-            min-h-[420px]
-            overflow-hidden
-            rounded-lg
-            border
-            border-border/40
-            bg-card
-            p-6
-          "
-        >
-          <p className="text-lg text-muted-foreground">
-            Total net worth
-          </p>
-
-          <p
-            className="
-              mt-3
-              text-[62px]
-              font-semibold
-              leading-none
-              tracking-[-0.04em]
-              text-foreground
-            "
-          >
-            {formatCurrency(
-              totalNetWorth
-            )}
-          </p>
-
-          <div
-            className={`
-              mt-6
-              flex
-              items-center
-              gap-2
-              text-xl
-              font-medium
-
-              ${
-                todayPositive
-                  ? "text-emerald-400"
-                  : "text-rose-400"
-              }
-            `}
-          >
-            <ArrowUpRight
-              className={`h-6 w-6 ${
-                todayPositive
-                  ? ""
-                  : "rotate-90"
-              }`}
-            />
-
-            <span>
-              {todayPositive
-                ? "+"
-                : "−"}
-
-              {formatCurrency(
-                Math.abs(
-                  todayChange
-                )
-              )}{" "}
-              today
-            </span>
-          </div>
-
-          {/* MONTHLY HISTORY CHART */}
-
-          <div
-            className="
-              absolute
-              bottom-0
-              right-0
-              top-7
-              hidden
-              w-[64%]
-              border-l
-              border-dashed
-              border-border
-              lg:flex
-              lg:flex-col
-            "
-          >
-            <div className="flex flex-1 flex-col justify-center px-7 py-5">
-              <div className="mb-1 flex items-center justify-between gap-3">
-
-                {currentMonth && (
-                  <div className="text-right">
-                    <p className="text-xs text-muted-foreground">
-                      Current
-                    </p>
-
-                    <p className="mt-1 text-sm font-semibold text-cyan-400">
-                      {currentMonth.month}
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <MonthlyNetWorthMiniChart
-                history={
-                  history
-                }
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* ALLOCATION */}
-
-        <aside
-          className="
-            rounded-lg
-            border
-            border-border/40
-            bg-card
-            p-5
-            xl:self-stretch
-          "
-        >
-          <h2 className="text-lg font-semibold text-foreground">
-            Asset allocation
-          </h2>
-
-          <div className="mt-5 space-y-5">
-            {[
-              "stocks",
-
-              "crypto",
-
-              "cash",
-
-              "other",
-            ].map(
-              (
-                category
-              ) => (
-                <AllocationBar
-                  key={
-                    category
-                  }
-                  category={
-                    category
-                  }
-                  value={
-                    breakdown[
-                      category
-                    ] || 0
-                  }
-                  maxValue={
-                    maxAllocation
-                  }
-                />
-              )
-            )}
-
-            <div className="border-t border-border/40 pt-5">
-              <AllocationBar
-                category="debts"
-                value={
-                  breakdown.debts ||
-                  0
-                }
-                maxValue={
-                  maxAllocation
-                }
-              />
-            </div>
-          </div>
-        </aside>
+      <section className={card}>
+        <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Net Worth</h2><p className="mt-2 text-4xl font-semibold tracking-tight">{formatCurrency(totalNetWorth)}</p><p className={`mt-2 text-sm ${todayPositive ? "text-emerald-400" : "text-rose-400"}`}>{todayPositive?"+":"−"}{formatCurrency(Math.abs(todayChange))} today</p></div>
+          <div className="flex rounded-lg border border-border/60 p-1">{["1W","1M","3M","YTD","ALL"].map(r => <button key={r} type="button" onClick={() => setChartRange(r)} className={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${chartRange===r?"bg-secondary text-foreground":"text-muted-foreground hover:text-foreground"}`}>{r}</button>)}</div></div>
+        <div className="mt-6 h-[270px] w-full">{netChart.length > 1 ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={netChart}><defs><linearGradient id="dashboardNetFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="#ffffff10" vertical={false}/><XAxis dataKey="label" tick={{fill:"#94a3b8",fontSize:11}} minTickGap={30}/><YAxis tick={{fill:"#94a3b8",fontSize:11}} width={65} tickFormatter={v=>"$"+Math.round(v/1000)+"k"} domain={["auto","auto"]}/><Tooltip formatter={v=>formatCurrency(v)} contentStyle={{background:"#101419",border:"1px solid #30363d",borderRadius:10}}/><Area dataKey="value" type="monotone" stroke="#3b82f6" fill="url(#dashboardNetFill)" strokeWidth={3} dot={false}/></AreaChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">Not enough historical data for {chartRange}. Your net worth history will appear as snapshots are recorded.</div>}</div>
       </section>
-
-      {/* =================================================
-          HOLDINGS
-      ================================================= */}
-
-      <section
-        className="
-          overflow-hidden
-          rounded-lg
-          border
-          border-border/40
-          bg-card
-        "
-      >
-        <div
-          className="
-            flex
-            flex-col
-            gap-4
-            px-6
-            py-5
-            md:flex-row
-            md:items-center
-            md:justify-between
-          "
-        >
-          <h2 className="text-xl font-semibold text-foreground">
-            Your holdings
-          </h2>
-
-          <div
-            className="
-              flex
-              flex-col
-              gap-3
-              sm:flex-row
-            "
-          >
-          </div>
-        </div>
-
-        {/* ROWS */}
-
-        <div>
-          {filteredHoldingRows.map(
-            (
-              row
-            ) => (
-              <HoldingRow
-                key={
-                  row.category
-                }
-                {...row}
-                onClick={() =>
-                  openCategoryModal(
-                    row.category
-                  )
-                }
-              />
-            )
-          )}
-
-          {filteredHoldingRows.length ===
-            0 && (
-            <div
-              className="
-                border-t
-                border-border/40
-                px-6
-                py-10
-                text-center
-                text-sm
-                text-muted-foreground
-              "
-            >
-              No matching
-              assets.
-            </div>
-          )}
-        </div>
-      </section>
-
+      <div className="grid gap-5 xl:grid-cols-2">
+        <section className={card}><div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Accounts</h2><span className="text-xs text-muted-foreground">{bankAccounts.length} connected</span></div><p className="text-xs text-muted-foreground">Connected account balances</p><p className="mt-1 text-2xl font-semibold">{formatCurrency(bankAccounts.reduce((sum,a)=>sum+Number(a.balance||0),0))}</p><div className="mt-5 divide-y divide-border/40">{bankAccounts.length ? bankAccounts.map((a,i)=><div key={a.id||i} className="flex items-center justify-between gap-3 py-3"><div className="flex min-w-0 items-center gap-3"><WalletCards className="h-5 w-5 shrink-0 text-blue-400"/><span className="truncate text-sm">{a.name||a.displayName||a.institution||"Account"}</span></div><span className="shrink-0 text-sm font-medium tabular-nums">{formatCurrency(a.balance)}</span></div>):<p className="py-6 text-sm text-muted-foreground">No connected accounts yet. Connect accounts from the Spending page.</p>}</div></section>
+        <div className="space-y-5"><section className={card}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Cash Flow</h2><input type="month" value={cashMonth} onChange={e=>setCashMonth(e.target.value)} className="rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground"/></div><p className="mt-1 text-xs text-muted-foreground">{monthTitle}</p><div className="mt-5 grid grid-cols-3 gap-3"><div><p className="text-xs text-muted-foreground">Income</p><p className="mt-1 text-xl font-semibold text-emerald-400">{formatCurrency(incomeTotal)}</p></div><div><p className="text-xs text-muted-foreground">Expenses</p><p className="mt-1 text-xl font-semibold">{formatCurrency(expenseTotal)}</p></div><div><p className="text-xs text-muted-foreground">Net Cash Flow</p><p className={`mt-1 text-xl font-semibold ${incomeTotal-expenseTotal>=0?"text-emerald-400":"text-rose-400"}`}>{formatCurrency(incomeTotal-expenseTotal)}</p></div></div><div className="mt-5 h-[160px]"><ResponsiveContainer width="100%" height="100%"><BarChart data={cashDays} barGap={1}><XAxis dataKey="day" tick={{fill:"#94a3b8",fontSize:10}} minTickGap={18}/><YAxis tick={{fill:"#94a3b8",fontSize:10}} width={45} tickFormatter={v=>"$"+v}/><Tooltip contentStyle={{background:"#101419",border:"1px solid #30363d",borderRadius:10}} formatter={v=>formatCurrency(v)}/><Bar dataKey="income" name="Income" fill="#34d399" radius={[2,2,0,0]}/><Bar dataKey="expenses" name="Expenses" fill="#f472b6" radius={[2,2,0,0]}/></BarChart></ResponsiveContainer></div><div className="mt-2 flex gap-5 text-xs text-muted-foreground"><span>🟢 Income</span><span>● Expenses</span></div></section>
+        <section className={card}><h2 className="text-lg font-semibold">Asset Allocation</h2><div className="mt-5 space-y-4">{["stocks","crypto","cash","other","debts"].map(category=><button type="button" key={category} onClick={()=>openCategoryModal(category)} className="block w-full text-left"><AllocationBar category={category} value={breakdown[category]||0} maxValue={maxAllocation}/></button>)}</div></section></div>
+      </div>
       {/* =================================================
           DETAILS MODAL
       ================================================= */}
