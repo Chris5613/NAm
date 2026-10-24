@@ -60,23 +60,26 @@ const MONTHLY_NET_WORTH_HISTORY_KEY =
 
 const LIVE_HISTORY_MAX_POINTS = 200;
 
-// User-provided historical month-end net worth, January 2024 through February 2025.
+// User-confirmed historical monthly net worth, January 2025 through May 2026.
 // Chart-only records: never overwrite current holdings, balances, or saved snapshots.
 const IMPORTED_NET_WORTH_HISTORY = [
-  { date: "2024-01-01T12:00:00", value: 10782.51 },
-  { date: "2024-02-01T12:00:00", value: 10693.68 },
-  { date: "2024-03-01T12:00:00", value: 9528.58 },
-  { date: "2024-04-01T12:00:00", value: 8632.42 },
-  { date: "2024-05-01T12:00:00", value: 10896.34 },
-  { date: "2024-06-01T12:00:00", value: 8972.98 },
-  { date: "2024-07-01T12:00:00", value: 11405.74 },
-  { date: "2024-08-01T12:00:00", value: 12575.42 },
-  { date: "2024-09-01T12:00:00", value: 11304.91 },
-  { date: "2024-10-01T12:00:00", value: 13220.50 },
-  { date: "2024-11-01T12:00:00", value: 12834.66 },
-  { date: "2024-12-01T12:00:00", value: 13600.00 },
-  { date: "2025-01-01T12:00:00", value: 16027.94 },
-  { date: "2025-02-01T12:00:00", value: 17568.45 },
+  { date: "2025-01-01T12:00:00", value: 10782.51 },
+  { date: "2025-02-01T12:00:00", value: 10693.68 },
+  { date: "2025-03-01T12:00:00", value: 9528.58 },
+  { date: "2025-04-01T12:00:00", value: 8632.42 },
+  { date: "2025-05-01T12:00:00", value: 10896.34 },
+  { date: "2025-06-01T12:00:00", value: 8972.98 },
+  { date: "2025-07-01T12:00:00", value: 11405.74 },
+  { date: "2025-08-01T12:00:00", value: 12575.42 },
+  { date: "2025-09-01T12:00:00", value: 11304.91 },
+  { date: "2025-10-01T12:00:00", value: 13220.50 },
+  { date: "2025-11-01T12:00:00", value: 12834.66 },
+  { date: "2025-12-01T12:00:00", value: 11257.05 },
+  { date: "2026-01-01T12:00:00", value: 13684.99 },
+  { date: "2026-02-01T12:00:00", value: 15225.50 },
+  { date: "2026-03-01T12:00:00", value: 16233.31 },
+  { date: "2026-04-01T12:00:00", value: 17271.75 },
+  { date: "2026-05-01T12:00:00", value: 17491.19 },
 ];
 
 /* =========================================================
@@ -2015,7 +2018,7 @@ export default function Dashboard() {
   const now = new Date();
   const rangeDays = { "1W": 7, "1M": 30, "3M": 90, YTD: Math.ceil((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1 };
   const cutoff = new Date(now.getTime() - (rangeDays[chartRange] || 36500) * 86400000);
-  // Imported 2024–2025 month-end values are user-provided history.
+  // Imported 2025–2026 monthly values are user-confirmed history.
   // Ignore duplicate snapshots for those months rather than replacing them.
   // Outside that known history, preserve genuine numeric zeros and discard
   // missing/invalid values (Number(null) and Number("") both become zero).
