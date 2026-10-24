@@ -54,11 +54,11 @@ export default function Sidebar() {
           z-40
           flex
           h-screen
-          w-[244px]
+          w-[204px]
           flex-col
           border-r
           border-slate-800/80
-          bg-[#0c141a]
+          bg-[#0c1116]
         "
         data-testid="sidebar"
       >
@@ -66,14 +66,14 @@ export default function Sidebar() {
             LOGO / BRAND
         ========================================= */}
 
-        <div className="flex h-[82px] items-center gap-3 px-7">
+        <div className="flex h-[68px] items-center gap-3 px-5">
           <div className="flex items-end gap-[4px]">
             <span className="h-3 w-1 rounded-full bg-teal-400" />
             <span className="h-5 w-1 rounded-full bg-teal-400" />
             <span className="h-7 w-1 rounded-full bg-teal-400" />
           </div>
 
-          <span className="text-[24px] font-semibold tracking-[-0.02em] text-white">
+          <span className="text-[21px] font-semibold tracking-[-0.02em] text-white">
             Wealth
           </span>
         </div>
@@ -83,7 +83,7 @@ export default function Sidebar() {
         ========================================= */}
 
         <nav
-          className="space-y-2 px-4"
+          className="space-y-1 px-3"
           data-testid="sidebar-nav"
         >
           {NAV_ITEMS.map((item) => {
@@ -100,12 +100,12 @@ export default function Sidebar() {
                 className={({ isActive }) =>
                   `
                   flex
-                  h-[52px]
+                  h-[43px]
                   items-center
-                  gap-4
+                  gap-3
                   rounded-lg
-                  px-4
-                  text-[16px]
+                  px-3
+                  text-[14px]
                   font-medium
                   transition-all
                   duration-200
@@ -129,7 +129,7 @@ export default function Sidebar() {
                 }
               >
                 <Icon
-                  className="h-5 w-5 shrink-0"
+                  className="h-[18px] w-[18px] shrink-0"
                   strokeWidth={1.7}
                 />
 
@@ -149,9 +149,9 @@ export default function Sidebar() {
             USER SECTION
         ========================================= */}
 
-        <div className="px-5 pb-6">
+        <div className="px-3 pb-4">
           {user && (
-            <div className="mb-5 flex items-center gap-4 px-2">
+            <div className="mb-3 flex items-center gap-3 px-2">
               <UserRound
                 className="h-5 w-5 shrink-0 text-slate-300"
                 strokeWidth={1.6}
@@ -171,7 +171,7 @@ export default function Sidebar() {
 
           {/* Divider */}
 
-          <div className="border-t border-slate-800/90 pt-4">
+          <div className="border-t border-slate-800/90 pt-3">
             {/* IMPORT DATA */}
 
             <button
@@ -181,11 +181,11 @@ export default function Sidebar() {
                 flex
                 w-full
                 items-center
-                gap-4
+                gap-3
                 rounded-lg
                 px-3
-                py-3
-                text-[15px]
+                py-2.5
+                text-[13px]
                 font-medium
                 text-slate-300
                 transition-all
@@ -195,7 +195,7 @@ export default function Sidebar() {
               "
             >
               <Download
-                className="h-5 w-5 shrink-0"
+                className="h-[18px] w-[18px] shrink-0"
                 strokeWidth={1.6}
               />
 
@@ -212,11 +212,11 @@ export default function Sidebar() {
                 flex
                 w-full
                 items-center
-                gap-4
+                gap-3
                 rounded-lg
                 px-3
-                py-3
-                text-[15px]
+                py-2.5
+                text-[13px]
                 font-medium
                 text-slate-300
                 transition-all
@@ -226,7 +226,7 @@ export default function Sidebar() {
               "
             >
               <LogOut
-                className="h-5 w-5 shrink-0"
+                className="h-[18px] w-[18px] shrink-0"
                 strokeWidth={1.6}
               />
 
