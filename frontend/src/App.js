@@ -64,8 +64,8 @@ function App() {
       <BrowserRouter>
         <Sidebar />
 
-        <main className="min-h-screen pl-[244px]">
-          <div className="w-full px-8 py-7">
+        <main className="nam-main min-h-screen pl-[244px]">
+          <div className="nam-content mx-auto w-full max-w-[1680px] px-7 py-6">
             <Routes>
               <Route
                 path="/"
