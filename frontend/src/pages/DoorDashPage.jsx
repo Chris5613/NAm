@@ -147,7 +147,7 @@ function getApp(entry) {
 
 function Metric({ icon: Icon, label, value, detail }) {
   return (
-    <Card className="rounded-[13px] border-border/60 bg-card/70">
+    <Card className="flex min-h-[122px] flex-col justify-center rounded-[15px] border-[#25272c] bg-[#101114]">
       <CardContent className="px-3.5 py-3">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Icon className="h-4 w-4" />
@@ -434,7 +434,7 @@ const customWeeks = Array.from(
         </Button>
       </div>
 
-      <div className="grid gap-[13px] lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]">
+      <div className="grid gap-[14px] md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]">
         <Metric
           icon={WalletCards}
           label="All Time"
@@ -449,7 +449,7 @@ const customWeeks = Array.from(
           detail={`Gross ${money(monthGross)} · Expenses ${money(monthExpenses)}`}
         />
 
-        <Card className="rounded-[13px] border-border/60 lg:col-span-2 xl:col-span-1">
+        <Card className="rounded-[15px] border-[#25272c] bg-[#101114] md:col-span-2 xl:col-span-1">
           <CardContent className="px-3.5 py-3">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -496,11 +496,12 @@ const customWeeks = Array.from(
         </Card>
       </div>
 
-      <Card className="rounded-[13px] border-border/60">
-        <CardContent className="p-4">
+      <div className="grid items-start gap-[14px] xl:grid-cols-[minmax(0,1.9fr)_minmax(345px,1fr)]">
+      <Card className="min-w-0 overflow-hidden rounded-[15px] border-[#25272c] bg-[#101114]">
+        <CardContent className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-[16px] font-semibold">
+              <h2 className="text-[15px] font-semibold">
                 {chartView === "weekly" ? "Weekly Activity" : "Monthly Activity"}
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
@@ -590,7 +591,7 @@ const customWeeks = Array.from(
             </div>
           </div>
 
-          <div className="mt-3 h-[clamp(185px,23vh,230px)]">
+          <div className="mt-4 h-[clamp(230px,30vh,300px)]">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
@@ -606,7 +607,7 @@ const customWeeks = Array.from(
                   <CartesianGrid
                     vertical={false}
                     strokeDasharray="3 3"
-                    opacity={0.15}
+                    opacity={0.1}
                   />
 
                   <XAxis
@@ -646,7 +647,7 @@ const customWeeks = Array.from(
                   <Bar
                     dataKey="Earnings"
                     name="Delivery Earnings"
-                    fill="#34d399"
+                    fill="#35c99c"
                     radius={[6, 6, 0, 0]}
                     maxBarSize={46}
                   >
@@ -659,7 +660,7 @@ const customWeeks = Array.from(
                           ? money(value)
                           : ""
                       }
-                      fill="#34d399"
+                      fill="#35c99c"
                       fontSize={11}
                       fontWeight={600}
                     />
@@ -668,7 +669,7 @@ const customWeeks = Array.from(
                   <Bar
                     dataKey="Expenses"
                     name="Expenses"
-                    fill="#ef4444"
+                    fill="#e65765"
                     radius={[6, 6, 0, 0]}
                     maxBarSize={46}
                   >
@@ -681,7 +682,7 @@ const customWeeks = Array.from(
                           ? money(value)
                           : ""
                       }
-                      fill="#ef4444"
+                      fill="#e65765"
                       fontSize={11}
                       fontWeight={600}
                     />
@@ -697,9 +698,9 @@ const customWeeks = Array.from(
         </CardContent>
       </Card>
 
-      <Card className="rounded-[13px] border-border/60">
+      <Card className="min-w-0 overflow-hidden rounded-[15px] border-[#25272c] bg-[#101114]">
         <CardContent className="p-0">
-          <div className="flex items-center gap-2 border-b border-border/60 px-4 py-3.5">
+          <div className="flex items-center gap-2 border-b border-[#25272c] px-4 py-4">
             <ReceiptText className="h-5 w-5" />
             <div>
               <h2 className="font-semibold">Recent Earnings</h2>
@@ -708,7 +709,7 @@ const customWeeks = Array.from(
           </div>
 
           {recentWeeks.length ? (
-            <div className="divide-y divide-border/60">
+            <div className="max-h-[360px] divide-y divide-[#25272c] overflow-y-auto [scrollbar-width:thin]">
               {recentWeeks.map((week) => {
                 const isExpanded = expandedWeeks.has(week.key);
 
@@ -717,17 +718,17 @@ const customWeeks = Array.from(
                     <button
                       type="button"
                       onClick={() => toggleWeek(week.key)}
-                      className="flex w-full flex-wrap items-center gap-3 bg-muted/20 px-4 py-3 text-left transition hover:bg-muted/30"
+                      className="flex w-full flex-wrap items-center gap-2.5 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.035]"
                       aria-expanded={isExpanded}
                     >
-                      <div className="flex min-w-[150px] flex-1 items-center gap-2">
+                      <div className="flex min-w-[125px] flex-1 items-center gap-2">
                         <ChevronRight
                           className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
                             isExpanded ? "rotate-90" : ""
                           }`}
                         />
                         <div>
-                          <div className="text-sm font-semibold">{week.label}</div>
+                          <div className="text-[12px] font-semibold">{week.label}</div>
                         </div>
                       </div>
 
@@ -736,12 +737,12 @@ const customWeeks = Array.from(
                         <div>Expenses {money(week.expenses)}</div>
                       </div>
 
-                      <div className="min-w-[100px] text-right">
+                      <div className="min-w-[88px] text-right">
                         <div className={`font-semibold ${week.net >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                           {week.net >= 0 ? "+" : ""}
                           {money(week.net)}
                         </div>
-                        <div className="mt-1 text-xs text-muted-foreground">weekly net</div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">weekly net</div>
                       </div>
                     </button>
 
@@ -795,6 +796,8 @@ const customWeeks = Array.from(
           )}
         </CardContent>
       </Card>
+
+      </div>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md">
