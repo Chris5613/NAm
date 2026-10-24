@@ -43,27 +43,11 @@
   ::selection { background: rgba(75,130,230,.35); color: white; }
 }
 
-@layer components {
-  /* Only structural defaults. Tailwind utilities remain the authority for size and spacing. */
-  .nam-main { min-width: 0; background: hsl(var(--background)); }
-  .nam-content { min-width: 0; min-height: 100vh; }
-  .nam-content > * { min-width: 0; }
-  .nam-content :where(input, select, textarea) { max-width: 100%; }
-  .nam-content :where(table) { font-variant-numeric: tabular-nums; }
-  .nam-content :where(.recharts-responsive-container) { min-width: 0; }
-  .nam-content :where(.overflow-x-auto) { scrollbar-width: thin; }
-
-  /* Dashboard-specific styling; no global card/button sizing overrides. */
-  /* Dashboard card color, border, radius, and padding are controlled by JSX
-     Tailwind utilities; do not override them from the global stylesheet. */
-  .nam-dashboard .nam-net-worth .recharts-cartesian-grid line {
-    stroke: rgba(255,255,255,.055);
-  }
-  .nam-dashboard .nam-cash-flow input[type="month"] { color-scheme: dark; }
-}
+/* Component appearance and layout live in JSX Tailwind classes.
+   Keep this stylesheet limited to theme tokens, browser defaults and accessibility. */
 
 @media (prefers-reduced-motion: reduce) {
-  .nam-content *, .nam-content *::before, .nam-content *::after {
+  *, *::before, *::after {
     scroll-behavior: auto !important;
     transition-duration: .01ms !important;
     animation-duration: .01ms !important;
