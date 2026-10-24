@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -99,14 +99,17 @@ function getTransactionIcon(category) {
   return category === "Food & drink" ? Utensils : category === "Shopping" ? ShoppingBag : ArrowDownRight;
 }
 
-// Running spend total per day index for one month.
-function cumulativeByDay(items, key, length) {
+const isIncome = (item) => item.category === "Income";
+const isExpense = (item) => !["Income", "Transfers", "Payments"].includes(item.category);
+
+// Running total per day index for one month.
+function cumulativeByDay(items, key, length, predicate = isExpense) {
   const totals = new Map();
   items
-    .filter((item) => item.date?.startsWith(key))
+    .filter((item) => item.date?.startsWith(key) && predicate(item))
     .forEach((item) => {
       const day = Number(item.date.slice(-2));
-      totals.set(day, (totals.get(day) || 0) + Number(item.amount || 0));
+      totals.set(day, (totals.get(day) || 0) + Math.abs(Number(item.amount || 0)));
     });
   let running = 0;
   return Array.from({ length }, (_, index) => {
@@ -258,8 +261,10 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
     [rangeTransactions, selectedCategory]
   );
 
-  const totalSpent = useMemo(() => rangeTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0), [rangeTransactions]);
-  const yearTotal = useMemo(() => yearTransactions.reduce((sum, item) => sum + Number(item.amount || 0), 0), [yearTransactions]);
+  const totalSpent = useMemo(() => rangeTransactions.filter(isExpense).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [rangeTransactions]);
+  const totalIncome = useMemo(() => rangeTransactions.filter(isIncome).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [rangeTransactions]);
+  const netCashFlow = totalIncome - totalSpent;
+  const yearTotal = useMemo(() => yearTransactions.filter(isExpense).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [yearTransactions]);
 
   const monthTiles = useMemo(() => {
     const totals = new Map();
@@ -838,7 +843,7 @@ const unhideTransaction = async (id) => {
                     tickFormatter={(value) => (value >= 1000 ? `$${(value / 1000).toFixed(1)}k` : `$${value}`)}
                   />
                   <Tooltip
-                    formatter={(value, name) => [money(value), name === "previous" ? "Last month" : "Spent"]}
+                    formatter={(value, name) => [money(value), name === "previous" ? "Last month" : name === "income" ? "Income" : "Spent"]}
                     labelFormatter={(label) => (range === "ytd" ? label : `Day ${label}`)}
                     contentStyle={{ background: "#19191c", border: "1px solid #3f3f46", borderRadius: 6 }}
                   />
@@ -853,6 +858,7 @@ const unhideTransaction = async (id) => {
                     dot={{ r: 3, fill: "#93c5fd", stroke: "#1d4ed8", strokeWidth: 1 }}
                     activeDot={{ r: 6, fill: "#bfdbfe", stroke: "#18181b", strokeWidth: 2 }}
                   />
+                  <Line type="monotone" dataKey="income" stroke="#34d399" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
