@@ -2040,8 +2040,16 @@ export default function Dashboard() {
     .filter(p => p && !isImportedMonth(p));
   const importedPoints = IMPORTED_NET_WORTH_HISTORY.map(p => toHistoryPoint(p.date, p.value)).filter(Boolean);
   const currentPoint = toHistoryPoint(now, totalNetWorth);
+  // A previously persisted May 9, 2026 zero snapshot is not a verified
+  // portfolio valuation. Hide that exact point on the chart only; leave all
+  // underlying server-backed history and other legitimate zero values intact.
+  const isUnverifiedMay9Zero = point =>
+    point.value === 0 &&
+    point.date.getFullYear() === 2026 &&
+    point.date.getMonth() === 4 &&
+    point.date.getDate() === 9;
   const combined = [...importedPoints, ...monthPoints, ...livePoints, ...(currentPoint ? [currentPoint] : [])]
-    .filter(p => chartRange === "ALL" || p.date >= cutoff)
+    .filter(p => !isUnverifiedMay9Zero(p) && (chartRange === "ALL" || p.date >= cutoff))
     .sort((a,b) => a.date-b.date);
   const netChart = combined.map(p => ({ label: p.date.toLocaleDateString("en-US", {month:"short",day:"numeric"}), value:p.value }));
   const [cashYear, cashMonthNum] = cashMonth.split("-").map(Number);
