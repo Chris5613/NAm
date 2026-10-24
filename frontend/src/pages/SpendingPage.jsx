@@ -743,12 +743,6 @@ const unhideTransaction = async (id) => {
           <a href="#spending-budget" title="Budget settings" aria-label="Budget settings" className="flex h-11 w-11 items-center justify-center rounded-full bg-[#2a2b2e] text-white hover:bg-[#3b3c40]"><Settings2 className="h-5 w-5"/></a>
         </div>
       </header>
-      <nav aria-label="Spending sections" className="flex flex-wrap items-center gap-2 pb-1">
-        {[["Overview","spending-overview"],["Breakdown","spending-categories"],["Budget","spending-budget"],["Recurring","spending-upcoming"],["Transactions","spending-transactions"],["Reports","spending-reports"]].map(([label,id],index) => (
-          <a key={id} href={"#"+id} className={"rounded-full border px-[17px] py-2.5 text-[12px] font-medium transition-colors hover:bg-[#25262a] hover:text-white "+(index===0 ? "border-[#292a2e] bg-[#1c1d21] text-white" : "border-[#25262a] bg-[#0d0e10] text-[#8b8e96]")}>{label}</a>
-        ))}
-      </nav>
-
       <div className="mx-auto grid max-w-[1310px] items-start gap-[18px] xl:grid-cols-[minmax(0,2.2fr)_minmax(310px,0.95fr)]">
         <div className="min-w-0 space-y-4">
           <section id="spending-overview" className="overflow-hidden rounded-[18px] border border-[#222428] bg-[#111214]">

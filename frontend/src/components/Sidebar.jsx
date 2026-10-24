@@ -1,18 +1,15 @@
 import { useState } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink } from "react-router-dom";
 import ImportDataDialog from "@/components/ImportDataDialog";
 import { useAuth } from "@/lib/AuthContext";
-import { Home, CreditCard, ChartPie, Wallet, CalendarDays, ReceiptText, Repeat2, TrendingUp, Bike, Download, LogOut, BarChart3 } from "lucide-react";
+import { Home, CreditCard, CalendarDays, TrendingUp, Bike, Download, LogOut } from "lucide-react";
 
 const mainLinks = [{ to: "/", label: "Home", Icon: Home }, { to: "/spending", label: "Spending", Icon: CreditCard }];
 const financeLinks = [{ to: "/investments", label: "Investments", Icon: TrendingUp }, { to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/doordash", label: "Delivery", Icon: Bike }];
-const spendingLinks = [{ id: "spending-overview", label: "Overview", Icon: Home }, { id: "spending-categories", label: "Breakdown", Icon: ChartPie }, { id: "spending-budget", label: "Budget", Icon: Wallet }, { id: "spending-transactions", label: "Transactions", Icon: ReceiptText }, { id: "spending-upcoming", label: "Recurring", Icon: Repeat2 }, { id: "spending-reports", label: "Reports", Icon: BarChart3 }];
 
 export default function Sidebar() {
   const [importOpen, setImportOpen] = useState(false);
   const { user, logout } = useAuth();
-  const { pathname } = useLocation();
-  const isSpending = pathname === "/spending";
   const linkStyle = ({ isActive }) => "flex h-9 items-center gap-3 rounded-md px-3 text-[13px] transition-colors " + (isActive ? "bg-[#1c1d20] font-medium text-white" : "text-[#999da6] hover:bg-white/[0.05] hover:text-white");
   const renderNavLink = ({to,label,Icon}) => <NavLink key={to} end={to === "/"} to={to} className={linkStyle} data-testid={"nav-" + (label === "Home" ? "net-worth" : label.toLowerCase().replace(/\s+/g,"-"))}><Icon className="h-4 w-4 shrink-0" strokeWidth={1.65}/>{label}</NavLink>;
   return <>
@@ -24,7 +21,6 @@ export default function Sidebar() {
       </div>
       <nav data-testid="sidebar-nav" className="min-h-0 flex-1 overflow-y-auto px-3 pb-4 [scrollbar-width:thin]">
         <div className="space-y-0.5">{mainLinks.map(renderNavLink)}</div>
-        {isSpending && <div className="mt-1 space-y-0.5">{spendingLinks.map(({id,label,Icon}) => <a key={id} href={"#"+id} className="flex h-[34px] items-center gap-3 rounded-md px-3 text-[12px] text-[#92969f] hover:bg-white/[0.055] hover:text-white"><Icon className="h-[15px] w-[15px] shrink-0" strokeWidth={1.6}/>{label}</a>)}</div>}
         <div className="my-4 border-t border-white/[0.08]"/>
         <div className="space-y-0.5">{financeLinks.map(renderNavLink)}</div>
       </nav>
