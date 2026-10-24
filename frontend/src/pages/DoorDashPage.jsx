@@ -246,13 +246,29 @@ export default function DoorDashPage() {
       days[date].ids.push(entry.id);
     });
 
-    const customWeeks = [
-      { key: "2026-10-12", start: "2026-10-12", end: "2026-10-19", label: "Oct 12 – 19" },
-      { key: "2026-10-05", start: "2026-10-05", end: "2026-10-11", label: "Oct 5 – 11" },
-      { key: "2026-09-28", start: "2026-09-28", end: "2026-10-04", label: "Sep 28 – Oct 4" },
-      { key: "2026-09-21", start: "2026-09-21", end: "2026-09-27", label: "Sep 21 – 27" },
-    ];
+const currentWeekStart = getWeekStartKey();
 
+const customWeeks = Array.from(
+  { length: 8 },
+  (_, index) => {
+    const start = addDaysKey(
+      currentWeekStart,
+      index * -7
+    );
+
+    const end = addDaysKey(
+      start,
+      6
+    );
+
+    return {
+      key: start,
+      start,
+      end,
+      label: weekRangeLabel(start),
+    };
+  }
+);
     return customWeeks
       .map((week) => {
         const weekDays = Object.values(days)
