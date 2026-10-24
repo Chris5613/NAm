@@ -1,4 +1,4 @@
-import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid, BarChart, Bar } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from "recharts";
 import { spendingApi } from "@/lib/apiClient";
 import {
   useState,
@@ -2042,27 +2042,147 @@ export default function Dashboard() {
   });
   const incomeTotal = cashDays.reduce((sum,d) => sum+d.income,0);
   const expenseTotal = cashDays.reduce((sum,d) => sum+d.expenses,0);
-  const card = "min-w-0 rounded-2xl border border-border/60 bg-card p-4 md:p-5 shadow-sm";
-  const monthTitle = new Date(cashYear,cashMonthNum-1,1).toLocaleDateString("en-US",{month:"long",year:"numeric"});
+  const card = "min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm";
+  const monthTitle = new Date(cashYear, cashMonthNum - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  const bankTotal = bankAccounts.reduce((sum, account) => sum + Number(account.currentBalance ?? 0), 0);
+  const netCashFlow = incomeTotal - expenseTotal;
+  const chartTooltipStyle = { background: "#17191d", border: "1px solid #30343b", borderRadius: 10, color: "#f1f5f9", fontSize: 12 };
+
   return (
-    <div className="nam-dashboard mx-auto w-full max-w-[1360px] space-y-4 pb-6" data-testid="dashboard">
-      <header className="flex flex-wrap items-center justify-between gap-3 py-1">
-        <div><h1 className="text-xl font-semibold tracking-tight" data-testid="page-title">Financial overview</h1><p className="mt-1 text-sm text-muted-foreground">Your wealth, accounts and cash flow at a glance.</p></div>
-        <div className="flex gap-2"><Button variant="outline" onClick={handleRefreshPrices} disabled={refreshingPrices}><RefreshCw className="mr-2 h-4 w-4" />Refresh</Button><Button onClick={() => setAddDialogOpen(true)}><Plus className="mr-2 h-4 w-4"/>Add asset</Button></div>
-      </header>
-      <div className="space-y-4">
-        <section className={`${card} nam-net-worth`}>
-        <div className="flex flex-wrap items-start justify-between gap-4"><div><h2 className="text-lg font-semibold">Net Worth</h2><p className="mt-0.5 text-2xl font-semibold tracking-tight">{formatCurrency(totalNetWorth)}</p><p className={`mt-2 text-sm ${todayPositive ? "text-emerald-400" : "text-rose-400"}`}>{todayPositive?"+":"−"}{formatCurrency(Math.abs(todayChange))} today</p></div>
-          <div className="flex rounded-lg border border-border/60 p-1">{["1W","1M","3M","YTD","ALL"].map(r => <button key={r} type="button" onClick={() => setChartRange(r)} className={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${chartRange===r?"bg-secondary text-foreground":"text-muted-foreground hover:text-foreground"}`}>{r}</button>)}</div></div>
-        <div className="mt-4 h-[clamp(175px,26vh,245px)] w-full">{netChart.length > 0 ? <ResponsiveContainer width="100%" height="100%"><AreaChart data={netChart}><defs><linearGradient id="dashboardNetFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="100%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke="#ffffff10" vertical={false}/><XAxis dataKey="label" tick={{fill:"#94a3b8",fontSize:11}} minTickGap={30}/><YAxis tick={{fill:"#94a3b8",fontSize:11}} width={65} tickFormatter={v=>"$"+Math.round(v/1000)+"k"} domain={["auto","auto"]}/><Tooltip formatter={v=>formatCurrency(v)} contentStyle={{background:"#101419",border:"1px solid #30363d",borderRadius:10}}/><Area dataKey="value" type="monotone" stroke="#3b82f6" fill="url(#dashboardNetFill)" strokeWidth={3} dot={netChart.length < 3 ? {r:4,fill:"#3b82f6"} : false}/></AreaChart></ResponsiveContainer> : <div className="flex h-full items-center justify-center text-sm text-muted-foreground">No net worth history recorded for this period yet.</div>}</div>
-      </section>
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-          <section className={`${card} nam-accounts`}><div className="mb-2 flex items-center justify-between"><h2 className="text-lg font-semibold">Accounts</h2><span className="text-xs text-muted-foreground">{bankAccounts.length} connected</span></div><p className="text-xs text-muted-foreground">Connected account balances</p><p className="mt-1 text-2xl font-semibold tabular-nums">{formatCurrency(bankAccounts.reduce((sum,a)=>sum+Number(a.currentBalance ?? 0),0))}</p><div className="mt-3 divide-y divide-border/40">{bankAccounts.length ? bankAccounts.map((a,i)=><div key={a.id||i} className="flex items-center justify-between gap-3 py-2"><div className="flex min-w-0 items-center gap-3"><WalletCards className="h-5 w-5 shrink-0 text-blue-400"/><span className="truncate text-sm">{a.name||a.displayName||a.institution||"Account"}</span></div><span className="shrink-0 text-sm font-medium tabular-nums">{a.currentBalance == null ? "Balance unavailable" : formatCurrency(a.currentBalance)}</span></div>):<p className="py-6 text-sm text-muted-foreground">No connected accounts yet. Connect accounts from the Spending page.</p>}</div></section>
-          <div className="min-w-0 space-y-4">
-            <section className={`${card} nam-cash-flow`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Cash Flow</h2><input type="month" value={cashMonth} onChange={e=>setCashMonth(e.target.value)} className="rounded-md border border-border/60 bg-background px-2 py-1 text-xs text-foreground"/></div><p className="mt-1 text-xs text-muted-foreground">{monthTitle}</p><div className="mt-4 grid grid-cols-3 gap-3"><div><p className="text-xs text-muted-foreground">Income</p><p className="mt-1 text-xl font-semibold text-emerald-400">{formatCurrency(incomeTotal)}</p></div><div><p className="text-xs text-muted-foreground">Expenses</p><p className="mt-1 text-xl font-semibold">{formatCurrency(expenseTotal)}</p></div><div><p className="text-xs text-muted-foreground">Net Cash Flow</p><p className={`mt-1 text-xl font-semibold ${incomeTotal-expenseTotal>=0?"text-emerald-400":"text-rose-400"}`}>{formatCurrency(incomeTotal-expenseTotal)}</p></div></div><div className="mt-3 h-[clamp(125px,17vh,165px)]"><ResponsiveContainer width="100%" height="100%"><BarChart data={cashDays} barGap={1}><XAxis dataKey="day" tick={{fill:"#94a3b8",fontSize:10}} minTickGap={18}/><YAxis tick={{fill:"#94a3b8",fontSize:10}} width={45} tickFormatter={v=>"$"+v}/><Tooltip contentStyle={{background:"#101419",border:"1px solid #30363d",borderRadius:10}} formatter={v=>formatCurrency(v)}/><Bar dataKey="income" name="Income" fill="#34d399" radius={[2,2,0,0]}/><Bar dataKey="expenses" name="Expenses" fill="#f472b6" radius={[2,2,0,0]}/></BarChart></ResponsiveContainer></div><div className="mt-1 flex gap-5 text-xs text-muted-foreground"><span>🟢 Income</span><span>● Expenses</span></div></section>
-            <section className={`${card} nam-allocation`}><h2 className="text-lg font-semibold">Asset Allocation</h2><div className="mt-3 space-y-2">{["stocks","crypto","cash","other","debts"].map(category=><button type="button" key={category} onClick={()=>openCategoryModal(category)} className="block w-full text-left"><AllocationBar category={category} value={breakdown[category]||0} maxValue={maxAllocation}/></button>)}</div></section>
-          </div>
+    <div className="mx-auto w-full max-w-[1440px] space-y-5 pb-8" data-testid="dashboard">
+      <header className="flex flex-wrap items-center justify-between gap-4 pb-1">
+        <div className="min-w-0">
+          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Overview</p>
+          <h1 className="text-[22px] font-semibold leading-tight tracking-tight" data-testid="page-title">Financial overview</h1>
+          <p className="mt-1 text-xs text-muted-foreground">Your wealth, accounts and cash flow at a glance.</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" variant="outline" onClick={handleRefreshPrices} disabled={refreshingPrices} className="h-9 border-border/60 bg-card px-3 text-xs">
+            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />Refresh
+          </Button>
+          <Button size="sm" onClick={() => setAddDialogOpen(true)} className="h-9 px-3 text-xs">
+            <Plus className="mr-1.5 h-3.5 w-3.5" />Add asset
+          </Button>
+        </div>
+      </header>
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.85fr)_minmax(320px,1fr)]">
+        <section className={card} aria-label="Net worth">
+          <div className="flex items-center justify-between border-b border-border/40 px-5 py-3.5">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Net worth</h2>
+            <span className="text-[10px] text-muted-foreground">Portfolio value</span>
+          </div>
+          <div className="px-5 pt-4">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <p className="text-[clamp(26px,2.5vw,35px)] font-semibold leading-none tracking-tight tabular-nums">{formatCurrency(totalNetWorth)}</p>
+              <span className={`text-xs font-medium tabular-nums ${todayPositive ? "text-emerald-400" : "text-rose-400"}`}>
+                {todayPositive ? "+" : "−"}{formatCurrency(Math.abs(todayChange))} today
+              </span>
+            </div>
+            <div className="mt-4 h-[clamp(175px,25vh,245px)] w-full">
+              {netChart.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={netChart} margin={{ top: 8, right: 2, bottom: 0, left: 2 }}>
+                    <defs>
+                      <linearGradient id="dashboardNetFill" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#38a5df" stopOpacity={0.23} />
+                        <stop offset="100%" stopColor="#38a5df" stopOpacity={0.015} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={30} dy={8} />
+                    <YAxis hide domain={["auto", "auto"]} />
+                    <Tooltip formatter={value => formatCurrency(value)} contentStyle={chartTooltipStyle} />
+                    <Area dataKey="value" type="monotone" stroke="#38a5df" fill="url(#dashboardNetFill)" strokeWidth={2} dot={netChart.length < 3 ? { r: 3, fill: "#38a5df" } : false} activeDot={{ r: 4 }} />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">No net worth history recorded for this period yet.</div>
+              )}
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 px-5 py-3">
+            <span className="text-[11px] text-muted-foreground">Net worth history</span>
+            <div className="flex items-center gap-0.5 rounded-lg bg-background/70 p-0.5" aria-label="Net worth time range">
+              {["1W", "1M", "3M", "YTD", "ALL"].map(range => (
+                <button key={range} type="button" onClick={() => setChartRange(range)}
+                  aria-pressed={chartRange === range}
+                  className={`min-w-9 rounded-md px-2.5 py-1.5 text-[10px] font-medium transition-colors ${chartRange === range ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60 hover:text-foreground"}`}>
+                  {range}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className={card} aria-label="Connected accounts">
+          <div className="flex items-center justify-between border-b border-border/40 px-5 py-3.5">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Accounts</h2>
+            <span className="text-[10px] text-muted-foreground">{bankAccounts.length} connected</span>
+          </div>
+          <div className="px-5 pt-4">
+            <p className="text-[11px] text-muted-foreground">Connected account balances</p>
+            <p className="mt-1 text-[26px] font-semibold leading-tight tracking-tight tabular-nums">{formatCurrency(bankTotal)}</p>
+            <div className="mt-3 divide-y divide-border/35">
+              {bankAccounts.length ? bankAccounts.map((account, index) => (
+                <div key={account.id || index} className="flex min-w-0 items-center justify-between gap-3 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <WalletCards className="h-4 w-4 shrink-0 text-sky-400/80" />
+                    <span className="truncate text-xs">{account.name || account.displayName || account.institution || "Account"}</span>
+                  </div>
+                  <span className="shrink-0 text-xs font-medium tabular-nums">
+                    {account.currentBalance == null ? "Unavailable" : formatCurrency(account.currentBalance)}
+                  </span>
+                </div>
+              )) : <p className="py-5 text-xs text-muted-foreground">No connected accounts yet. Connect accounts from the Spending page.</p>}
+            </div>
+          </div>
+        </section>
+
+        <section className={card} aria-label="Cash flow">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-5 py-3.5">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Cash flow</h2>
+            <input type="month" aria-label="Cash flow month" value={cashMonth} onChange={event => setCashMonth(event.target.value)}
+              className="max-w-full rounded-md border border-border/60 bg-background px-2 py-1 text-[11px] text-foreground" />
+          </div>
+          <div className="px-5 pb-4 pt-3">
+            <p className="text-[11px] text-muted-foreground">{monthTitle}</p>
+            <div className="mt-3 grid grid-cols-3 gap-3">
+              <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Income</p><p className="mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums text-emerald-400">{formatCurrency(incomeTotal)}</p></div>
+              <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Expenses</p><p className="mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums">{formatCurrency(expenseTotal)}</p></div>
+              <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{formatCurrency(netCashFlow)}</p></div>
+            </div>
+            <div className="mt-3 h-[155px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={cashDays} barGap={1} margin={{ top: 6, right: 0, bottom: 0, left: -10 }}>
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={18} />
+                  <YAxis tickLine={false} axisLine={false} tick={{ fill: "#78828d", fontSize: 10 }} width={48} tickFormatter={value => "$" + value} />
+                  <Tooltip contentStyle={chartTooltipStyle} formatter={value => formatCurrency(value)} />
+                  <Bar dataKey="income" name="Income" fill="#36b990" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="expenses" name="Expenses" fill="#d97a9b" radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="mt-2 flex items-center gap-5 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#36b990]" />Income</span>
+              <span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-[#d97a9b]" />Expenses</span>
+            </div>
+          </div>
+        </section>
+
+        <section className={card} aria-label="Asset allocation">
+          <div className="border-b border-border/40 px-5 py-3.5">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Asset allocation</h2>
+          </div>
+          <div className="space-y-3 px-5 py-4">
+            {["stocks", "crypto", "cash", "other", "debts"].map(category => (
+              <button key={category} type="button" onClick={() => openCategoryModal(category)}
+                className="block w-full rounded-md px-1 py-1 text-left transition-colors hover:bg-secondary/40"
+                aria-label={`View ${category} allocation details`}>
+                <AllocationBar category={category} value={breakdown[category] || 0} maxValue={maxAllocation} />
+              </button>
+            ))}
+          </div>
+        </section>
       </div>
       {/* =================================================
           DETAILS MODAL
