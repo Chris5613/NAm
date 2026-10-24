@@ -751,7 +751,7 @@ const customWeeks = Array.from(
                           const net = day.earnings - day.expenses;
 
                           return (
-                            <div key={day.date} className="flex flex-wrap items-center gap-4 px-6 py-3 pl-10">
+                            <div key={day.date} className="flex flex-wrap items-center gap-4 pr-6 py-3 pl-10">
                               <div className="min-w-[150px] flex-1">
                                 <div className="flex items-center gap-2">
                                   <span className="text-sm font-medium">{prettyDate(day.date)}</span>

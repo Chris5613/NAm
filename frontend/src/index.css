@@ -33,12 +33,10 @@
     --radius: .75rem;
   }
 
-  *, *::before, *::after { box-sizing: border-box; @apply border-border; }
+  *, *::before, *::after { @apply border-border; }
   html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
   body { @apply bg-background text-foreground; min-width: 320px; font-family: 'Manrope', sans-serif; line-height: 1.5; }
   h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', sans-serif; letter-spacing: -.025em; }
-  button, input, select, textarea { font: inherit; }
-  button:disabled { cursor: not-allowed; }
   :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
   ::selection { background: rgba(75,130,230,.35); color: white; }
 }

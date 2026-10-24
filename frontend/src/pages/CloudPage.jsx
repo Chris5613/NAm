@@ -1563,7 +1563,7 @@ const chartSegments = useMemo(() => {
   return (
 <div className="min-h-[calc(100vh-4rem)] bg-background text-foreground p-0">
     <Card className="w-full rounded-none border-0 bg-card shadow-none">
-      <CardContent className="p-8 pb-4 pt-2 space-y-6">
+      <CardContent className="px-8 pb-4 pt-2 space-y-6">
           <div className="flex justify-center">
             <div className="inline-flex rounded-md border border-border/40 bg-secondary/30 p-1">
               {VIEWS.map((option) => (
@@ -1661,7 +1661,7 @@ const chartSegments = useMemo(() => {
           >
             <X className="h-4 w-4" />
           </button>
-          <div className="flex items-center justify-between border-b border-border/40 px-5 py-4 pr-14 text-left">
+          <div className="flex items-center justify-between border-b border-border/40 pl-5 py-4 pr-14 text-left">
             <div>
               <h2 className="text-xl font-black uppercase leading-none tracking-tight text-foreground">
                 Bet Slip

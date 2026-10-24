@@ -61,7 +61,9 @@
     "start:frontend": "craco start",
     "start:backend": "python -m uvicorn backend.server:app --app-dir .. --host 127.0.0.1 --port 8001 --reload",
     "build": "craco build",
-    "test": "craco test"
+    "test": "craco test",
+    "check:styles": "node scripts/check-style-conflicts.cjs",
+    "prebuild": "npm run check:styles"
   },
   "browserslist": {
     "production": [
