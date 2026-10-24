@@ -54,20 +54,12 @@
   .nam-content :where(.overflow-x-auto) { scrollbar-width: thin; }
 
   /* Dashboard-specific styling; no global card/button sizing overrides. */
-  .nam-dashboard { --dashboard-line: hsl(var(--border) / .7); }
-  .nam-dashboard :is(.nam-net-worth, .nam-accounts, .nam-cash-flow, .nam-allocation) {
-    border-color: var(--dashboard-line);
-    background-color: hsl(var(--card));
-  }
-  .nam-dashboard .nam-net-worth {
-    background-image: linear-gradient(180deg, rgba(255,255,255,.014), transparent);
-  }
+  /* Dashboard card color, border, radius, and padding are controlled by JSX
+     Tailwind utilities; do not override them from the global stylesheet. */
   .nam-dashboard .nam-net-worth .recharts-cartesian-grid line {
     stroke: rgba(255,255,255,.055);
   }
   .nam-dashboard .nam-cash-flow input[type="month"] { color-scheme: dark; }
-  .nam-dashboard .nam-cash-flow .grid > div { min-width: 0; }
-  .nam-dashboard .nam-allocation button:hover { background: rgba(255,255,255,.035); }
 }
 
 @media (prefers-reduced-motion: reduce) {
