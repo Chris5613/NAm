@@ -54,9 +54,11 @@ function spacing(token) {
 }
 for (const file of files.filter(file => /\.(jsx|js|tsx|ts)$/.test(file))) {
   const source = fs.readFileSync(file, "utf8");
-  const literalPattern = /(["'])(?:\\.|(?!\1)[\s\S])*?\1/g;
-  for (const literal of source.matchAll(literalPattern)) {
-    const value = literal[0].slice(1, -1);
+  // Inspect only individual static JSX className values. The old string
+  // scanner crossed JSX boundaries and reported unrelated classes as conflicts.
+  const staticClassPattern = /\bclassName\s*=\s*(?:"([^"]*)"|'([^']*)'|\{\s*"([^"]*)"\s*\}|\{\s*'([^']*)'\s*\})/g;
+  for (const literal of source.matchAll(staticClassPattern)) {
+    const value = literal[1] ?? literal[2] ?? literal[3] ?? literal[4];
     const utilities = value.split(/\s+/).map(spacing).filter(Boolean);
     for (let i = 0; i < utilities.length; i++) {
       for (let j = i + 1; j < utilities.length; j++) {
