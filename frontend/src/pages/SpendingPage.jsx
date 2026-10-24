@@ -128,7 +128,7 @@ function TransactionRow({ item, color, categories, showDate, onRecategorize, onH
 
   return (
     <div className="flex items-center gap-3 px-5 py-3">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: `${color}22`, color }}>
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: `${color}22`, color }}>
         <Icon className="h-4 w-4" />
       </div>
       <div className="min-w-0 flex-1">
@@ -732,21 +732,21 @@ const unhideTransaction = async (id) => {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1510px] space-y-5 pb-10" data-testid="spending-page">
-      <header className="flex min-h-[60px] flex-wrap items-center justify-between gap-4 pb-1">
-        <h1 className="text-[26px] font-medium tracking-tight">Spending</h1>
-        <div className="flex items-center gap-2.5">
-          <button type="button" title="Sync accounts" aria-label="Sync accounts" disabled={isSyncing || syncLock.isLocked} onClick={() => sync()} className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground hover:text-white disabled:opacity-50"><RefreshCw className={"h-4 w-4 " + (isSyncing ? "animate-spin" : "")}/></button>
-          <button type="button" title="Connect SimpleFIN" aria-label="Connect SimpleFIN" disabled={isLinking} onClick={linkAccount} className="flex h-10 w-10 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground hover:text-white disabled:opacity-50"><Link2 className="h-4 w-4"/></button>
-          <div title={user?.username || "Account"} className="ml-1 flex h-11 w-11 items-center justify-center rounded-full border-2 border-violet-400 text-xs font-semibold text-white">{String(user?.username || "U").slice(0,2).toUpperCase()}</div>
-          <button type="button" onClick={() => setTransactionDialogOpen(true)} title="Add expense" aria-label="Add expense" className="flex h-11 w-11 items-center justify-center rounded-full bg-[#3b3c40] text-white hover:bg-[#4a4b50]"><Plus className="h-5 w-5"/></button>
-          <a href="#spending-budget" title="Budget settings" aria-label="Budget settings" className="flex h-11 w-11 items-center justify-center rounded-full bg-[#2a2b2e] text-white hover:bg-[#3b3c40]"><Settings2 className="h-5 w-5"/></a>
+    <div className="mx-auto w-full max-w-[1510px] space-y-3 pb-7" data-testid="spending-page">
+      <header className="flex min-h-[48px] flex-wrap items-center justify-between gap-3 pb-0.5">
+        <h1 className="text-[22px] font-medium tracking-tight">Spending</h1>
+        <div className="flex items-center gap-2">
+          <button type="button" title="Sync accounts" aria-label="Sync accounts" disabled={isSyncing || syncLock.isLocked} onClick={() => sync()} className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground hover:text-white disabled:opacity-50"><RefreshCw className={"h-4 w-4 " + (isSyncing ? "animate-spin" : "")}/></button>
+          <button type="button" title="Connect SimpleFIN" aria-label="Connect SimpleFIN" disabled={isLinking} onClick={linkAccount} className="flex h-9 w-9 items-center justify-center rounded-full border border-border/60 bg-card text-muted-foreground hover:text-white disabled:opacity-50"><Link2 className="h-4 w-4"/></button>
+          <div title={user?.username || "Account"} className="ml-1 flex h-9 w-9 items-center justify-center rounded-full border-2 border-violet-400 text-xs font-semibold text-white">{String(user?.username || "U").slice(0,2).toUpperCase()}</div>
+          <button type="button" onClick={() => setTransactionDialogOpen(true)} title="Add expense" aria-label="Add expense" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#3b3c40] text-white hover:bg-[#4a4b50]"><Plus className="h-5 w-5"/></button>
+          <a href="#spending-budget" title="Budget settings" aria-label="Budget settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2a2b2e] text-white hover:bg-[#3b3c40]"><Settings2 className="h-5 w-5"/></a>
         </div>
       </header>
-      <div className="mx-auto grid max-w-[1310px] items-start gap-[18px] xl:grid-cols-[minmax(0,2.2fr)_minmax(310px,0.95fr)]">
-        <div className="min-w-0 space-y-4">
-          <section id="spending-overview" className="overflow-hidden rounded-[18px] border border-[#222428] bg-[#111214]">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222428] px-[18px] py-4">
+      <div className="mx-auto grid max-w-[1310px] items-start gap-[13px] xl:grid-cols-[minmax(0,2.2fr)_minmax(300px,0.95fr)]">
+        <div className="min-w-0 space-y-3">
+          <section id="spending-overview" className="overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222428] px-[14px] py-3">
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Spend this {range === "ytd" ? "year" : "month"}</h2>
               <div className="flex items-center gap-2">
                 <button type="button" aria-label="Previous month" className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setSelectedMonth(key => shiftMonth(key, -1))}><ChevronLeft className="h-4 w-4" /></button>
@@ -754,10 +754,10 @@ const unhideTransaction = async (id) => {
                 <button type="button" aria-label="Next month" className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setSelectedMonth(key => shiftMonth(key, 1))}><ChevronRight className="h-4 w-4" /></button>
               </div>
             </div>
-            <div className="px-5 pb-4 pt-4">
+            <div className="px-4 pb-3 pt-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-[30px] font-semibold leading-none tracking-tight tabular-nums">{money(totalSpent)}</p>
+                  <p className="text-[25px] font-semibold leading-none tracking-tight tabular-nums">{money(totalSpent)}</p>
                   <p className="mt-2 text-[11px] text-muted-foreground">{range === "ytd" ? `${selectedYear} cumulative spending` : monthLabel(selectedMonth)}</p>
                   {range === "month" && previousMonthToDate > 0 && (
                     <p className={`mt-1 text-[11px] ${monthDelta <= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(Math.abs(monthDelta))} {monthDelta <= 0 ? "less" : "more"} than last month{isCurrentMonth ? " to date" : ""}</p>
@@ -769,7 +769,7 @@ const unhideTransaction = async (id) => {
                   ))}
                 </div>
               </div>
-              <div className="mt-5 h-[clamp(225px,29vh,300px)] w-full">
+              <div className="mt-3 h-[clamp(185px,23vh,225px)] w-full">
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={chartData} margin={{ top: 10, right: 4, left: -22, bottom: 0 }}>
                     <defs><linearGradient id="originSpendingFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#38a5df" stopOpacity={0.24}/><stop offset="100%" stopColor="#38a5df" stopOpacity={0}/></linearGradient></defs>
@@ -790,16 +790,16 @@ const unhideTransaction = async (id) => {
             </div>
           </section>
 
-          <div className="grid gap-[18px] lg:grid-cols-2">
-            <section id="spending-transactions" className="min-w-0 overflow-hidden rounded-[18px] border border-[#222428] bg-[#111214]">
-              <div className="flex items-center justify-between border-b border-[#222428] px-[18px] py-4">
+          <div className="grid gap-[13px] lg:grid-cols-2">
+            <section id="spending-transactions" className="min-w-0 overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
+              <div className="flex items-center justify-between border-b border-[#222428] px-[14px] py-3">
                 <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Latest transactions</h2>
                 <button type="button" onClick={() => setAllTransactionsOpen(true)} className="text-[11px] text-muted-foreground hover:text-foreground">See all <ChevronRight className="inline h-3 w-3"/></button>
               </div>
-              <div className="divide-y divide-border/35 px-4">
+              <div className="divide-y divide-border/35 px-3.5">
                 {rangeTransactions.length ? rangeTransactions.slice(0, 5).map(item => (
-                  <div key={item.id} className="flex items-center gap-2.5 py-3">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary"><ReceiptText className="h-3.5 w-3.5 text-muted-foreground"/></div>
+                  <div key={item.id} className="flex items-center gap-2 py-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary"><ReceiptText className="h-3.5 w-3.5 text-muted-foreground"/></div>
                     <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{item.merchant || "Transaction"}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{humanDate(item.date)} · {item.category || "Other"}{item.pending ? " · Pending" : ""}</p></div>
                     <span className={`shrink-0 text-xs font-medium tabular-nums ${isIncome(item) ? "text-emerald-400" : ""}`}>{money(item.amount)}</span>
                   </div>
@@ -811,12 +811,12 @@ const unhideTransaction = async (id) => {
               </div>
             </section>
 
-            <section id="spending-upcoming" className="min-w-0 overflow-hidden rounded-[18px] border border-[#222428] bg-[#111214]">
-              <div className="flex items-center justify-between border-b border-[#222428] px-[18px] py-4">
+            <section id="spending-upcoming" className="min-w-0 overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
+              <div className="flex items-center justify-between border-b border-[#222428] px-[14px] py-3">
                 <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Upcoming transactions</h2>
                 <span className="text-[10px] text-muted-foreground">Next 14 days</span>
               </div>
-              <div className="grid grid-cols-7 gap-[2px] px-3 pt-3">
+              <div className="grid grid-cols-7 gap-[2px] px-2.5 pt-2.5">
                 {upcomingDays.map(day => {
                   const dayItems = upcoming.filter(item => item.date === day.key);
                   const total = dayItems.reduce((sum,item) => sum + Math.abs(Number(item.amount || 0)), 0);
@@ -827,30 +827,30 @@ const unhideTransaction = async (id) => {
                   </div>;
                 })}
               </div>
-              <div className="mt-3 space-y-2 border-t border-border/35 px-4 py-3">
+              <div className="mt-2 space-y-1.5 border-t border-border/35 px-3.5 py-2.5">
                 {upcoming.length ? upcoming.slice(0, 4).map((item,index) => (
                   <div key={item.id || index} className="flex items-center justify-between gap-2 text-[11px]"><span className="min-w-0 truncate">{item.merchant || item.category || "Transaction"} <span className="text-muted-foreground">· {humanDate(item.date)}</span></span><span className="shrink-0 tabular-nums">{money(item.amount)}</span></div>
-                )) : <p className="py-3 text-center text-[11px] text-muted-foreground">No dated transactions scheduled in the next 7 days.</p>}
+                )) : <p className="py-3 text-center text-[11px] text-muted-foreground">No dated transactions scheduled in the next 14 days.</p>}
                 <p className="text-[10px] text-muted-foreground">Based on recorded transaction dates, not predicted bills.</p>
               </div>
             </section>
           </div>
 
-          <section id="spending-reports" className="overflow-hidden rounded-[18px] border border-[#222428] bg-[#111214]">
-            <div className="flex items-center justify-between border-b border-[#222428] px-[18px] py-4">
+          <section id="spending-reports" className="overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
+            <div className="flex items-center justify-between border-b border-[#222428] px-[14px] py-3">
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Reports</h2><span className="text-[11px] text-muted-foreground">{selectedYear} spending by month</span>
             </div>
-            <div className="grid grid-cols-2 gap-4 px-5 py-4 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-4">
               <div><p className="text-[10px] text-muted-foreground">Income</p><p className="mt-1 text-lg font-semibold tabular-nums text-emerald-400">{money(totalIncome)}</p></div>
               <div><p className="text-[10px] text-muted-foreground">Expenses</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(totalSpent)}</p></div>
               <div><p className="text-[10px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-lg font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(netCashFlow)}</p></div>
               <div><p className="text-[10px] text-muted-foreground">Yearly spend</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(yearTotal)}</p></div>
             </div>
-            <div className="grid grid-cols-6 gap-1.5 border-t border-border/35 px-5 py-4 sm:grid-cols-12">
+            <div className="grid grid-cols-6 gap-1.5 border-t border-border/35 px-4 py-3 sm:grid-cols-12">
               {monthTiles.map(month => {
                 const largest = Math.max(1, ...monthTiles.map(tile => Math.abs(tile.total)));
                 return <button type="button" key={month.key} onClick={() => { setSelectedMonth(month.key); setRange("month"); document.getElementById("spending-overview")?.scrollIntoView({ behavior: "smooth" }); }} className="group flex min-w-0 flex-col items-center gap-1.5" title={`${month.label}: ${money(month.total)}`}>
-                  <div className="flex h-14 w-full items-end justify-center rounded-md bg-secondary/25 p-1"><div className={`w-full rounded-sm ${month.key === selectedMonth ? "bg-sky-400" : "bg-slate-500/60 group-hover:bg-sky-400/65"}`} style={{ height: `${Math.max(month.total ? 7 : 2, Math.abs(month.total) / largest * 100)}%` }}/></div>
+                  <div className="flex h-12 w-full items-end justify-center rounded-md bg-secondary/25 p-1"><div className={`w-full rounded-sm ${month.key === selectedMonth ? "bg-sky-400" : "bg-slate-500/60 group-hover:bg-sky-400/65"}`} style={{ height: `${Math.max(month.total ? 7 : 2, Math.abs(month.total) / largest * 100)}%` }}/></div>
                   <span className="text-[9px] text-muted-foreground">{month.label}</span>
                 </button>;
               })}
@@ -858,14 +858,14 @@ const unhideTransaction = async (id) => {
           </section>
         </div>
 
-        <aside className="min-w-0 space-y-4">
-          <section id="spending-categories" className="overflow-hidden rounded-[18px] border border-[#222428] bg-[#111214]">
-            <div className="flex items-center justify-between border-b border-[#222428] px-[18px] py-4">
+        <aside className="min-w-0 space-y-3">
+          <section id="spending-categories" className="overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
+            <div className="flex items-center justify-between border-b border-[#222428] px-[14px] py-3">
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Category breakdown</h2><span className="text-[10px] text-muted-foreground">{range === "ytd" ? selectedYear : monthLabel(selectedMonth)}</span>
             </div>
-            <div className="p-4">
+            <div className="p-3.5">
               {categoryBreakdown.length ? <>
-                <div className="relative mx-auto h-[235px] w-full max-w-[330px]">
+                <div className="relative mx-auto h-[184px] w-full max-w-[260px]">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart><Pie data={categoryBreakdown} dataKey="amount" nameKey="category" innerRadius="69%" outerRadius="91%" stroke="#111214" strokeWidth={4} paddingAngle={2.5} startAngle={90} endAngle={-270}>
                       {categoryBreakdown.map((entry,index) => <Cell key={entry.category} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}/>)}
@@ -873,8 +873,8 @@ const unhideTransaction = async (id) => {
                   </ResponsiveContainer>
                   <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><p className="text-xl font-semibold tabular-nums">{money(totalSpent)}</p><p className="mt-0.5 text-[10px] text-muted-foreground">Total expenses</p></div>
                 </div>
-                <div className="mt-3 divide-y divide-[#25272b] overflow-hidden rounded-[14px] border border-[#26282d] px-3">
-                  {categoryBreakdown.map((entry,index) => <button key={entry.category} type="button" onClick={() => openCategoryTransactions(entry.category)} className="flex w-full items-center gap-2.5 rounded-md py-3 text-left transition-colors hover:bg-[#202227]">
+                <div className="mt-2 divide-y divide-[#25272b] overflow-hidden rounded-[12px] border border-[#26282d] px-2.5">
+                  {categoryBreakdown.map((entry,index) => <button key={entry.category} type="button" onClick={() => openCategoryTransactions(entry.category)} className="flex w-full items-center gap-2 rounded-md py-2 text-left transition-colors hover:bg-[#202227]">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }}/>
                     <span className="min-w-0 flex-1 truncate text-[12px]">{entry.category}</span><span className="shrink-0 text-[12px] font-medium tabular-nums">{money(entry.amount)}</span><span className="w-10 shrink-0 text-right text-[10px] text-muted-foreground">{Math.round(entry.share)}%</span>
                   </button>)}
@@ -883,15 +883,15 @@ const unhideTransaction = async (id) => {
             </div>
           </section>
 
-          <section id="spending-budget" className="overflow-hidden rounded-[18px] border border-[#222428] bg-[#111214]">
-            <div className="flex items-center justify-between border-b border-[#222428] px-[18px] py-4">
+          <section id="spending-budget" className="overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
+            <div className="flex items-center justify-between border-b border-[#222428] px-[14px] py-3">
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Monthly budget</h2><span className="text-[10px] text-muted-foreground">{monthLabel(selectedMonth)}</span>
             </div>
-            <div className="px-5 py-4">
-              <p className="text-[23px] font-semibold tabular-nums">{money(totalSpent)} <span className="text-[12px] font-normal text-muted-foreground">of {budget > 0 ? money(budget) : "no budget set"}</span></p>
+            <div className="px-4 py-3">
+              <p className="text-[20px] font-semibold tabular-nums">{money(totalSpent)} <span className="text-[12px] font-normal text-muted-foreground">of {budget > 0 ? money(budget) : "no budget set"}</span></p>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#27292e]"><div className={`h-full rounded-full ${budget > 0 && totalSpent > budget ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${budget > 0 ? Math.min(100, totalSpent / budget * 100) : 0}%` }}/></div>
               <div className="mt-2 flex justify-between text-[11px] text-muted-foreground"><span>{budget > 0 ? `${money(Math.max(0,budget-totalSpent))} remaining` : "Set a budget to track progress"}</span><span>{budget > 0 ? `${Math.round(totalSpent/budget*100)}%` : "—"}</span></div>
-              <div className="mt-4 flex gap-2"><Input aria-label="Monthly budget" className="h-9 min-w-0 text-xs" type="number" min="0" placeholder="Budget amount" value={budgetInput} onChange={event => setBudgetInput(event.target.value)}/><Button size="sm" variant="outline" className="h-9 shrink-0 text-xs" onClick={saveBudget}>Save</Button></div>
+              <div className="mt-3 flex gap-2"><Input aria-label="Monthly budget" className="h-9 min-w-0 text-xs" type="number" min="0" placeholder="Budget amount" value={budgetInput} onChange={event => setBudgetInput(event.target.value)}/><Button size="sm" variant="outline" className="h-9 shrink-0 text-xs" onClick={saveBudget}>Save</Button></div>
             </div>
           </section>
         </aside>
