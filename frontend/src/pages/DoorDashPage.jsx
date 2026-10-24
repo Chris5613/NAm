@@ -147,13 +147,13 @@ function getApp(entry) {
 
 function Metric({ icon: Icon, label, value, detail }) {
   return (
-    <Card className="border-border/60 bg-card/70">
-      <CardContent className="p-5">
+    <Card className="rounded-[14px] border-border/60 bg-card/70">
+      <CardContent className="p-3.5">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <Icon className="h-4 w-4" />
           <span>{label}</span>
         </div>
-        <div className="mt-3 text-[28px] font-semibold tracking-tight">{value}</div>
+        <div className="mt-2 text-[23px] font-semibold tracking-tight">{value}</div>
         <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
       </CardContent>
     </Card>
@@ -418,11 +418,11 @@ const customWeeks = Array.from(
   }
 
   return (
-    <div className="space-y-7" data-testid="doordash-page">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="space-y-4" data-testid="doordash-page">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-sm font-medium text-muted-foreground">DoorDash + Uber Eats + Instacart + Shipt</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight">Delivery Earnings</h1>
+          <h1 className="mt-1 text-[23px] font-semibold tracking-tight">Delivery Earnings</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Simple tracking for earnings and expenses.
           </p>
@@ -434,7 +434,7 @@ const customWeeks = Array.from(
         </Button>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]">
+      <div className="grid gap-[13px] lg:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]">
         <Metric
           icon={WalletCards}
           label="All Time"
@@ -450,7 +450,7 @@ const customWeeks = Array.from(
         />
 
         <Card className="border-border/60 lg:col-span-2 xl:col-span-1">
-          <CardContent className="p-5">
+          <CardContent className="p-3.5">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm font-medium">Apps this month</p>
@@ -459,37 +459,37 @@ const customWeeks = Array.from(
               <ReceiptText className="h-4 w-4 text-muted-foreground" />
             </div>
 
-            <div className="mt-4 grid grid-cols-4 gap-3">
-              <div className="rounded-lg border border-border/50 bg-muted/15 p-3.5">
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div className="rounded-lg border border-border/50 bg-muted/15 p-2.5">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Bike className="h-3.5 w-3.5" />
                   DoorDash
                 </div>
-                <div className="mt-2 text-lg font-semibold">{money(appTotals.DoorDash)}</div>
+                <div className="mt-1 text-base font-semibold">{money(appTotals.DoorDash)}</div>
               </div>
 
-              <div className="rounded-lg border border-border/50 bg-muted/15 p-3.5">
+              <div className="rounded-lg border border-border/50 bg-muted/15 p-2.5">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Car className="h-3.5 w-3.5" />
                   Uber Eats
                 </div>
-                <div className="mt-2 text-lg font-semibold">{money(appTotals["Uber Eats"])}</div>
+                <div className="mt-1 text-base font-semibold">{money(appTotals["Uber Eats"])}</div>
               </div>
 
-              <div className="rounded-lg border border-border/50 bg-muted/15 p-3.5">
+              <div className="rounded-lg border border-border/50 bg-muted/15 p-2.5">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <ShoppingCart className="h-3.5 w-3.5" />
                   Instacart
                 </div>
-                <div className="mt-2 text-lg font-semibold">{money(appTotals.Instacart)}</div>
+                <div className="mt-1 text-base font-semibold">{money(appTotals.Instacart)}</div>
               </div>
 
-              <div className="rounded-lg border border-border/50 bg-muted/15 p-3.5">
+              <div className="rounded-lg border border-border/50 bg-muted/15 p-2.5">
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Package className="h-3.5 w-3.5" />
                   Shipt
                 </div>
-                <div className="mt-2 text-lg font-semibold">{money(appTotals.Shipt)}</div>
+                <div className="mt-1 text-base font-semibold">{money(appTotals.Shipt)}</div>
               </div>
             </div>
           </CardContent>
@@ -516,7 +516,7 @@ const customWeeks = Array.from(
                   type="button"
                   variant={chartView === "monthly" ? "secondary" : "ghost"}
                   onClick={() => setChartView("monthly")}
-                  className="h-10 rounded-none border-r border-border/60 px-4"
+                  className="h-9 rounded-none border-r border-border/60 px-3"
                 >
                   Monthly
                 </Button>
@@ -524,7 +524,7 @@ const customWeeks = Array.from(
                   type="button"
                   variant={chartView === "weekly" ? "secondary" : "ghost"}
                   onClick={() => setChartView("weekly")}
-                  className="h-10 rounded-none px-4"
+                  className="h-9 rounded-none px-3"
                 >
                   Weekly
                 </Button>
@@ -537,7 +537,7 @@ const customWeeks = Array.from(
                     variant="ghost"
                     size="icon"
                     onClick={goToPreviousMonth}
-                    className="h-10 w-10 rounded-none border-r border-border/60"
+                    className="h-9 w-9 rounded-none border-r border-border/60"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -552,7 +552,7 @@ const customWeeks = Array.from(
                     size="icon"
                     onClick={goToNextMonth}
                     disabled={!canGoNextMonth}
-                    className="h-10 w-10 rounded-none border-l border-border/60"
+                    className="h-9 w-9 rounded-none border-l border-border/60"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -566,7 +566,7 @@ const customWeeks = Array.from(
                     variant="ghost"
                     size="icon"
                     onClick={goToPreviousWeek}
-                    className="h-10 w-10 rounded-none border-r border-border/60"
+                    className="h-9 w-9 rounded-none border-r border-border/60"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
@@ -581,7 +581,7 @@ const customWeeks = Array.from(
                     size="icon"
                     onClick={goToNextWeek}
                     disabled={!canGoNextWeek}
-                    className="h-10 w-10 rounded-none border-l border-border/60"
+                    className="h-9 w-9 rounded-none border-l border-border/60"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -590,7 +590,7 @@ const customWeeks = Array.from(
             </div>
           </div>
 
-          <div className="mt-6 h-[380px]">
+          <div className="mt-4 h-[clamp(215px,27vh,275px)]">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart

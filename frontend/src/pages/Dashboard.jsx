@@ -2067,7 +2067,7 @@ export default function Dashboard() {
   });
   const incomeTotal = cashDays.reduce((sum,d) => sum+d.income,0);
   const expenseTotal = cashDays.reduce((sum,d) => sum+d.expenses,0);
-  const card = "min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card shadow-[0_8px_32px_rgba(0,0,0,0.10)]";
+  const card = "min-w-0 overflow-hidden rounded-[14px] border border-border/50 bg-card shadow-[0_8px_24px_rgba(0,0,0,0.08)]";
   const monthTitle = new Date(cashYear, cashMonthNum - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const bankTotal = bankAccounts.reduce((sum, account) => sum + Number(account.currentBalance ?? 0), 0);
   const sortedBankAccounts = [...bankAccounts].sort((a, b) => {
@@ -2079,7 +2079,7 @@ export default function Dashboard() {
   const chartTooltipStyle = { background: "#17191d", border: "1px solid #30343b", borderRadius: 10, color: "#f1f5f9", fontSize: 12 };
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] space-y-4 pb-8" data-testid="dashboard">
+    <div className="mx-auto w-full max-w-[1440px] space-y-3 pb-7" data-testid="dashboard">
       <header className="flex flex-wrap items-center justify-between gap-4 pb-1">
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold leading-tight tracking-tight" data-testid="page-title">Hi Christian</h1>
@@ -2094,20 +2094,20 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(320px,1fr)]">
+      <div className="grid items-start gap-[13px] lg:grid-cols-[minmax(0,1.75fr)_minmax(300px,1fr)]">
         <section className={card} aria-label="Net worth">
-          <div className="flex items-center justify-between border-b border-border/40 px-5 py-3.5">
+          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Net worth</h2>
             <span className="text-[10px] text-muted-foreground">Total portfolio</span>
           </div>
-          <div className="px-5 pt-4">
+          <div className="px-4 pt-3">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
-              <p className="text-[clamp(26px,2.5vw,35px)] font-semibold leading-none tracking-tight tabular-nums">{formatCurrency(totalNetWorth)}</p>
+              <p className="text-[clamp(24px,2.2vw,30px)] font-semibold leading-none tracking-tight tabular-nums">{formatCurrency(totalNetWorth)}</p>
               <span className={`text-xs font-medium tabular-nums ${todayPositive ? "text-emerald-400" : "text-rose-400"}`}>
                 {todayPositive ? "+" : "−"}{formatCurrency(Math.abs(todayChange))} today
               </span>
             </div>
-            <div className="mt-3 h-[clamp(160px,21vh,205px)] w-full">
+            <div className="mt-2 h-[clamp(155px,19vh,190px)] w-full">
               {netChart.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={netChart} margin={{ top: 8, right: 2, bottom: 0, left: 2 }}>
@@ -2128,7 +2128,7 @@ export default function Dashboard() {
               )}
             </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 px-5 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 px-4 py-2.5">
             <span className="text-[11px] text-muted-foreground">{netChart.length < 3 ? `${netChart.length} recorded ${netChart.length === 1 ? "value" : "values"} in this range` : "Net worth history"}</span>
             <div className="flex items-center gap-0.5 rounded-lg bg-background/70 p-0.5" aria-label="Net worth time range">
               {["1W", "1M", "3M", "YTD", "ALL"].map(range => (
@@ -2143,16 +2143,16 @@ export default function Dashboard() {
         </section>
 
         <section className={card} aria-label="Connected accounts">
-          <div className="flex items-center justify-between border-b border-border/40 px-5 py-3.5">
+          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Accounts</h2>
             <span className="text-[10px] text-muted-foreground">{bankAccounts.length} connected</span>
           </div>
-          <div className="px-5 pb-2 pt-4">
+          <div className="px-4 pb-2 pt-3">
             <p className="text-[11px] text-muted-foreground">Connected account balances</p>
-            <p className="mt-1 text-[26px] font-semibold leading-tight tracking-tight tabular-nums">{formatCurrency(bankTotal)}</p>
-            <div className="mt-3 divide-y divide-border/35">
+            <p className="mt-1 text-[23px] font-semibold leading-tight tracking-tight tabular-nums">{formatCurrency(bankTotal)}</p>
+            <div className="mt-2 divide-y divide-border/35">
               {sortedBankAccounts.length ? sortedBankAccounts.map((account, index) => (
-                <div key={account.id || index} className="flex min-w-0 items-center justify-between gap-3 py-2.5 transition-colors hover:bg-white/[0.015]">
+                <div key={account.id || index} className="flex min-w-0 items-center justify-between gap-3 py-2 transition-colors hover:bg-white/[0.015]">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <WalletCards className="h-4 w-4 shrink-0 text-sky-400/80" />
                     <span className="truncate text-[12px]">{account.name || account.displayName || account.institution || "Account"}</span>
@@ -2167,19 +2167,19 @@ export default function Dashboard() {
         </section>
 
         <section className={card} aria-label="Cash flow">
-          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-5 py-3.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-3">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Cash flow</h2>
             <input type="month" aria-label="Cash flow month" value={cashMonth} onChange={event => setCashMonth(event.target.value)}
               className="max-w-full rounded-md border border-border/60 bg-background px-2 py-1 text-[11px] text-foreground" />
           </div>
-          <div className="px-5 pb-4 pt-3">
+          <div className="px-4 pb-3 pt-3">
             <p className="text-[11px] text-muted-foreground">{monthTitle}</p>
-            <div className="mt-3 grid grid-cols-3 gap-3 border-b border-border/30 pb-4">
+            <div className="mt-3 grid grid-cols-3 gap-2 border-b border-border/30 pb-3">
               <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Income</p><p className="mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums text-emerald-400">{formatCurrency(incomeTotal)}</p></div>
               <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Expenses</p><p className="mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums">{formatCurrency(expenseTotal)}</p></div>
               <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{formatCurrency(netCashFlow)}</p></div>
             </div>
-            <div className="mt-3 h-[145px] w-full">
+            <div className="mt-2 h-[132px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={cashDays} barGap={1} margin={{ top: 6, right: 0, bottom: 0, left: -10 }}>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={18} />
@@ -2198,10 +2198,10 @@ export default function Dashboard() {
         </section>
 
         <section className={card} aria-label="Asset allocation">
-          <div className="border-b border-border/40 px-5 py-3.5">
+          <div className="border-b border-border/40 px-4 py-3">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Asset allocation</h2>
           </div>
-          <div className="space-y-2.5 px-5 py-4">
+          <div className="space-y-2 px-4 py-3">
             {["stocks", "crypto", "cash", "other", "debts"].map(category => (
               <button key={category} type="button" onClick={() => openCategoryModal(category)}
                 className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-secondary/35"

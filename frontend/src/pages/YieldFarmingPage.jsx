@@ -8565,11 +8565,11 @@ const summary =
 
   return (
     <div
-      className="space-y-8"
+      className="space-y-3"
       data-testid="yield-farming-page"
     >
-      <section className="border-b border-border/50 pb-8">
-        <div className="grid gap-x-12 gap-y-8 md:grid-cols-2 xl:grid-cols-6">
+      <section className="border-b border-border/50 pb-4">
+        <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <Metric
             label="Portfolio Balance"
             value={formatCurrency(
@@ -8655,7 +8655,7 @@ const summary =
         </div>
       )}
 
-      <section className="space-y-4">
+      <section className="space-y-3">
 {sortedProgramCards.length ===
 0 ? (
           <Card className="border-border/50 bg-card/70">
@@ -8672,7 +8672,7 @@ const summary =
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-[13px] md:grid-cols-2 xl:grid-cols-3">
   {sortedProgramCards.map(
               (
                 item
@@ -11796,7 +11796,7 @@ function Metric({
 }) {
   return (
     <div>
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+      <div className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
         <span className="whitespace-nowrap">
           {label}
         </span>
@@ -11811,7 +11811,7 @@ function Metric({
         </span>
       </div>
 
-      <div className="mt-3 text-4xl font-semibold tracking-tight tabular-nums">
+      <div className="mt-2 text-[clamp(20px,1.7vw,27px)] font-semibold tracking-tight tabular-nums">
         {value}
       </div>
     </div>

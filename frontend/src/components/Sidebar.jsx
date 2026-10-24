@@ -2,10 +2,10 @@ import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import ImportDataDialog from "@/components/ImportDataDialog";
 import { useAuth } from "@/lib/AuthContext";
-import { Home, CreditCard, CalendarDays, TrendingUp, Bike, Download, LogOut } from "lucide-react";
+import { Home, CreditCard, CalendarDays, Bike, Download, LogOut } from "lucide-react";
 
 const mainLinks = [{ to: "/", label: "Home", Icon: Home }, { to: "/spending", label: "Spending", Icon: CreditCard }];
-const financeLinks = [{ to: "/investments", label: "Investments", Icon: TrendingUp }, { to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/doordash", label: "Delivery", Icon: Bike }];
+const financeLinks = [{ to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/doordash", label: "Delivery", Icon: Bike }];
 
 export default function Sidebar() {
   const [importOpen, setImportOpen] = useState(false);
