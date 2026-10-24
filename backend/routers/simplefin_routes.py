@@ -1134,12 +1134,6 @@ def save_simplefin_payload(
                     str(posted)[:10]
                 )
 
-                existing_transaction.category = (
-                    classify_transaction(
-                        transaction
-                    )
-                )
-
                 existing_transaction.account_id = (
                     account_key
                 )
@@ -1684,12 +1678,6 @@ async def sync_simplefin(
 
                     existing_transaction.date = (
                         str(posted)[:10]
-                    )
-
-                    existing_transaction.category = (
-                        classify_transaction(
-                            transaction
-                        )
                     )
 
                     existing_transaction.account_id = (
