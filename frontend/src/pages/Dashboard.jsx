@@ -578,10 +578,8 @@ function getMonthlyNetWorthHistory(
                 item.time ||
                 item.monthKey,
 
-              value:
-                Number(
-                  item.value
-                ) || 0,
+              // Do not turn missing historical values into a fabricated $0.
+              value: item.value,
 
               live:
                 item.monthKey ===
@@ -670,14 +668,7 @@ function getMonthlyNetWorthHistory(
     )
   );
 
-  return history.map((item) =>
-  item.monthKey === "2026-09"
-    ? {
-        ...item,
-        value: (Number(item.value) || 0) + 0,
-      }
-    : item
-);
+  return history;
 }
 
 /* =========================================================
@@ -2024,11 +2015,34 @@ export default function Dashboard() {
   const now = new Date();
   const rangeDays = { "1W": 7, "1M": 30, "3M": 90, YTD: Math.ceil((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1 };
   const cutoff = new Date(now.getTime() - (rangeDays[chartRange] || 36500) * 86400000);
-  const livePoints = (liveHistory || []).map(p => ({ date: new Date(p.timestamp || p.date || p.time), value: Number(p.value) })).filter(p => Number.isFinite(p.date.getTime()) && Number.isFinite(p.value));
-  const monthPoints = (history || []).map(p => ({ date: new Date(p.monthKey ? p.monthKey + "-01T12:00:00" : (p.timestamp || p.date || p.time)), value: Number(p.value ?? p.total_net_worth) })).filter(p => Number.isFinite(p.date.getTime()) && Number.isFinite(p.value));
-  const existingMonths = new Set([...monthPoints, ...livePoints].map(p => `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,"0")}`));
-  const importedPoints = IMPORTED_NET_WORTH_HISTORY.filter(p => !existingMonths.has(p.date.slice(0,7))).map(p => ({date:new Date(p.date),value:p.value}));
-  const combined = [...importedPoints, ...monthPoints, ...livePoints, {date:now,value:totalNetWorth}].filter(p => chartRange === "ALL" || p.date >= cutoff).sort((a,b) => a.date-b.date);
+  // Imported 2024–2025 month-end values are user-provided history.
+  // Ignore duplicate snapshots for those months rather than replacing them.
+  // Outside that known history, preserve genuine numeric zeros and discard
+  // missing/invalid values (Number(null) and Number("") both become zero).
+  const parseHistoricalValue = raw => {
+    if (raw == null || typeof raw === "boolean" || (typeof raw === "string" && raw.trim() === "")) return null;
+    const parsed = Number(raw);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const toHistoryPoint = (dateInput, rawValue) => {
+    if (dateInput == null || dateInput === "") return null;
+    const date = new Date(dateInput);
+    const value = parseHistoricalValue(rawValue);
+    return Number.isFinite(date.getTime()) && value !== null ? { date, value } : null;
+  };
+  const importedMonths = new Set(IMPORTED_NET_WORTH_HISTORY.map(p => p.date.slice(0, 7)));
+  const isImportedMonth = point => importedMonths.has(`${point.date.getFullYear()}-${String(point.date.getMonth() + 1).padStart(2, "0")}`);
+  const livePoints = (liveHistory || [])
+    .map(p => p && toHistoryPoint(p.timestamp || p.date || p.time, p.value))
+    .filter(p => p && !isImportedMonth(p));
+  const monthPoints = (history || [])
+    .map(p => p && toHistoryPoint(p.monthKey ? p.monthKey + "-01T12:00:00" : (p.timestamp || p.date || p.time), p.value ?? p.total_net_worth))
+    .filter(p => p && !isImportedMonth(p));
+  const importedPoints = IMPORTED_NET_WORTH_HISTORY.map(p => toHistoryPoint(p.date, p.value)).filter(Boolean);
+  const currentPoint = toHistoryPoint(now, totalNetWorth);
+  const combined = [...importedPoints, ...monthPoints, ...livePoints, ...(currentPoint ? [currentPoint] : [])]
+    .filter(p => chartRange === "ALL" || p.date >= cutoff)
+    .sort((a,b) => a.date-b.date);
   const netChart = combined.map(p => ({ label: p.date.toLocaleDateString("en-US", {month:"short",day:"numeric"}), value:p.value }));
   const [cashYear, cashMonthNum] = cashMonth.split("-").map(Number);
   const days = new Date(cashYear, cashMonthNum, 0).getDate();
