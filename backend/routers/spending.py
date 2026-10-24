@@ -66,6 +66,25 @@ async def list_transactions(user: User = Depends(current_user), db: Session = De
     ).all()
     return [spending_transaction_to_dict(row) for row in rows]
 
+@router.get("/transactions/hidden")
+async def list_hidden_transactions(
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    rows = db.scalars(
+        select(SpendingTransaction)
+        .where(
+            SpendingTransaction.user_id == user.id,
+            SpendingTransaction.hidden.is_(True),
+        )
+        .order_by(SpendingTransaction.date.desc())
+    ).all()
+
+    return [
+        spending_transaction_to_dict(row)
+        for row in rows
+    ]
+
 
 def _transaction_row(payload: dict[str, Any], user_id: int) -> SpendingTransaction:
     return SpendingTransaction(

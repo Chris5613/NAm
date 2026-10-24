@@ -26,6 +26,7 @@ import {
   Utensils,
   WalletCards,
   EyeOff,
+  Eye,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -234,6 +235,14 @@ export default function SpendingPage() {
   const isCurrentMonth = selectedMonth === currentMonth;
   const previousMonth = shiftMonth(selectedMonth, -1);
   const elapsedDays = isCurrentMonth ? new Date().getDate() : daysInMonth(selectedMonth);
+  const [hiddenTransactionsOpen, setHiddenTransactionsOpen] =
+  useState(false);
+
+const [hiddenTransactions, setHiddenTransactions] =
+  useState([]);
+
+const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
+  useState(false);
 
   const monthTransactions = useMemo(
     () => transactions.filter((item) => item.date?.startsWith(selectedMonth) && item.date <= today).sort((a, b) => b.date.localeCompare(a.date)),
@@ -619,6 +628,53 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
     }
   };
 
+  const openHiddenTransactions = async () => {
+  setHiddenTransactionsOpen(true);
+  setLoadingHiddenTransactions(true);
+
+  try {
+    const hidden =
+      await spendingApi.hiddenTransactions();
+
+    setHiddenTransactions(
+      Array.isArray(hidden) ? hidden : []
+    );
+  } catch (error) {
+    toast.error(
+      error.message ||
+        "Could not load hidden transactions."
+    );
+  } finally {
+    setLoadingHiddenTransactions(false);
+  }
+};
+
+const unhideTransaction = async (id) => {
+  try {
+    const restored =
+      await spendingApi.unhideTransaction(id);
+
+    setHiddenTransactions((current) =>
+      current.filter((item) => item.id !== id)
+    );
+
+    setTransactions((current) =>
+      [restored, ...current].sort((a, b) =>
+        String(b.date || "").localeCompare(
+          String(a.date || "")
+        )
+      )
+    );
+
+    toast.success("Transaction restored");
+  } catch (error) {
+    toast.error(
+      error.message ||
+        "Could not restore the transaction."
+    );
+  }
+};
+
   const removeAccount = async (id) => {
     const previous = accounts;
     setAccounts((current) => current.filter((item) => item.id !== id));
@@ -859,42 +915,88 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
           </CardContent>
         </Card>
 
-        <Card className="rounded-lg border-border/70 bg-card shadow-none">
-          <CardContent className="p-0">
-            <div className="flex items-center justify-between px-5 py-4">
-              <h2 className="font-semibold">Recent transactions</h2>
-              <span className="rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">
-                {rangeTransactions.length} {range === "ytd" ? "this year" : "this month"}
-              </span>
-            </div>
-            {groups.length ? (
-              groups.map(([date, items]) => (
-                <div key={date}>
-                  <div className="flex justify-between border-y border-border/60 bg-secondary/35 px-5 py-2 text-xs text-muted-foreground">
-                    <span>{humanDate(date)}</span>
-                    <span>{money(items.reduce((sum, item) => sum + Number(item.amount || 0), 0))}</span>
-                  </div>
-                  {items.map((item) => (
-                    <TransactionRow key={item.id} item={item} color={categoryColorMap[item.category] || CATEGORY_COLORS[CATEGORY_COLORS.length - 1]} categories={categories} onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />
-                  ))}
-                </div>
-              ))
-            ) : (
-              <div className="px-5 py-16 text-center">
-                <ReceiptText className="mx-auto h-7 w-7 text-muted-foreground" />
-                <p className="mt-3 text-sm text-muted-foreground">No transactions in this period.</p>
-              </div>
-            )}
-            <div className="grid grid-cols-2 divide-x divide-border/60 border-t border-border/60">
-              <button className="py-3 text-sm font-medium hover:bg-secondary/50" onClick={() => setAllTransactionsOpen(true)}>
-                See all
-              </button>
-              <button className="flex items-center justify-center gap-1 py-3 text-sm font-medium hover:bg-secondary/50" onClick={() => setTransactionDialogOpen(true)}>
-                Add expense <ChevronRight className="h-4 w-4" />
-              </button>
-            </div>
-          </CardContent>
-        </Card>
+       <Card className="rounded-lg border-border/70 bg-card shadow-none">
+  <CardContent className="p-0">
+    <div className="flex items-center justify-between px-5 py-4">
+      <h2 className="font-semibold">Recent transactions</h2>
+
+      <span className="rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">
+        {rangeTransactions.length}{" "}
+        {range === "ytd" ? "this year" : "this month"}
+      </span>
+    </div>
+
+    {groups.length ? (
+      groups.map(([date, items]) => (
+        <div key={date}>
+          <div className="flex justify-between border-y border-border/60 bg-secondary/35 px-5 py-2 text-xs text-muted-foreground">
+            <span>{humanDate(date)}</span>
+
+            <span>
+              {money(
+                items.reduce(
+                  (sum, item) =>
+                    sum + Number(item.amount || 0),
+                  0
+                )
+              )}
+            </span>
+          </div>
+
+          {items.map((item) => (
+            <TransactionRow
+              key={item.id}
+              item={item}
+              color={
+                categoryColorMap[item.category] ||
+                CATEGORY_COLORS[
+                  CATEGORY_COLORS.length - 1
+                ]
+              }
+              categories={categories}
+              onRecategorize={recategorize}
+              onHide={hideTransaction}
+              onAddCategory={addCategory}
+            />
+          ))}
+        </div>
+      ))
+    ) : (
+      <div className="px-5 py-16 text-center">
+        <ReceiptText className="mx-auto h-7 w-7 text-muted-foreground" />
+
+        <p className="mt-3 text-sm text-muted-foreground">
+          No transactions in this period.
+        </p>
+      </div>
+    )}
+
+    <div className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60">
+      <button
+        className="py-3 text-sm font-medium hover:bg-secondary/50"
+        onClick={() => setAllTransactionsOpen(true)}
+      >
+        See all
+      </button>
+
+      <button
+        className="flex items-center justify-center gap-1 py-3 text-sm font-medium hover:bg-secondary/50"
+        onClick={openHiddenTransactions}
+      >
+        <EyeOff className="h-4 w-4" />
+        Hidden
+      </button>
+
+      <button
+        className="flex items-center justify-center gap-1 py-3 text-sm font-medium hover:bg-secondary/50"
+        onClick={() => setTransactionDialogOpen(true)}
+      >
+        Add expense
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  </CardContent>
+</Card>
       </section>
 
       <section className="mt-10 border-t border-border/60 pt-8">
@@ -906,6 +1008,96 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
           </div>
         </div>
       </section>
+
+      <Dialog
+  open={hiddenTransactionsOpen}
+  onOpenChange={setHiddenTransactionsOpen}
+>
+  <DialogContent className="max-w-2xl">
+    <DialogHeader>
+      <DialogTitle>Hidden transactions</DialogTitle>
+
+      <DialogDescription>
+        Hidden transactions are excluded from your spending
+        totals. Restore any transaction to include it again.
+      </DialogDescription>
+    </DialogHeader>
+
+    <div className="-mx-6 max-h-[60vh] divide-y divide-border/40 overflow-y-auto border-y border-border/60">
+      {loadingHiddenTransactions ? (
+        <div className="flex items-center justify-center gap-2 px-6 py-12 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading hidden transactions...
+        </div>
+      ) : hiddenTransactions.length ? (
+        hiddenTransactions.map((item) => (
+          <div
+            key={item.id}
+            className="flex items-center gap-4 px-6 py-4"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-secondary">
+              <EyeOff className="h-4 w-4 text-muted-foreground" />
+            </div>
+
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium">
+                {item.merchant}
+              </p>
+
+              <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                <span>{item.category}</span>
+                <span>•</span>
+                <span>{humanDate(item.date)}</span>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <p className="text-sm font-semibold tabular-nums">
+                {money(item.amount)}
+              </p>
+            </div>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="gap-2"
+              onClick={() =>
+                unhideTransaction(item.id)
+              }
+            >
+              <Eye className="h-4 w-4" />
+              Unhide
+            </Button>
+          </div>
+        ))
+      ) : (
+        <div className="px-6 py-12 text-center">
+          <Eye className="mx-auto h-7 w-7 text-muted-foreground" />
+
+          <p className="mt-3 text-sm font-medium">
+            No hidden transactions
+          </p>
+
+          <p className="mt-1 text-xs text-muted-foreground">
+            Transactions you hide will appear here.
+          </p>
+        </div>
+      )}
+    </div>
+
+    <DialogFooter>
+      <Button
+        variant="outline"
+        onClick={() =>
+          setHiddenTransactionsOpen(false)
+        }
+      >
+        Close
+      </Button>
+    </DialogFooter>
+  </DialogContent>
+</Dialog>
 
       <Dialog open={allTransactionsOpen} onOpenChange={setAllTransactionsOpen}>
         <DialogContent className="max-w-2xl">
