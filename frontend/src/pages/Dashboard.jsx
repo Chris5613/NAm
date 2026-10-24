@@ -60,6 +60,25 @@ const MONTHLY_NET_WORTH_HISTORY_KEY =
 
 const LIVE_HISTORY_MAX_POINTS = 200;
 
+// User-provided historical month-end net worth, January 2024 through February 2025.
+// Chart-only records: never overwrite current holdings, balances, or saved snapshots.
+const IMPORTED_NET_WORTH_HISTORY = [
+  { date: "2024-01-01T12:00:00", value: 10782.51 },
+  { date: "2024-02-01T12:00:00", value: 10693.68 },
+  { date: "2024-03-01T12:00:00", value: 9528.58 },
+  { date: "2024-04-01T12:00:00", value: 8632.42 },
+  { date: "2024-05-01T12:00:00", value: 10896.34 },
+  { date: "2024-06-01T12:00:00", value: 8972.98 },
+  { date: "2024-07-01T12:00:00", value: 11405.74 },
+  { date: "2024-08-01T12:00:00", value: 12575.42 },
+  { date: "2024-09-01T12:00:00", value: 11304.91 },
+  { date: "2024-10-01T12:00:00", value: 13220.50 },
+  { date: "2024-11-01T12:00:00", value: 12834.66 },
+  { date: "2024-12-01T12:00:00", value: 13600.00 },
+  { date: "2025-01-01T12:00:00", value: 16027.94 },
+  { date: "2025-02-01T12:00:00", value: 17568.45 },
+];
+
 /* =========================================================
    CATEGORY CONFIG
 ========================================================= */
@@ -2007,7 +2026,9 @@ export default function Dashboard() {
   const cutoff = new Date(now.getTime() - (rangeDays[chartRange] || 36500) * 86400000);
   const livePoints = (liveHistory || []).map(p => ({ date: new Date(p.timestamp || p.date || p.time), value: Number(p.value) })).filter(p => Number.isFinite(p.date.getTime()) && Number.isFinite(p.value));
   const monthPoints = (history || []).map(p => ({ date: new Date(p.monthKey ? p.monthKey + "-01T12:00:00" : (p.timestamp || p.date || p.time)), value: Number(p.value ?? p.total_net_worth) })).filter(p => Number.isFinite(p.date.getTime()) && Number.isFinite(p.value));
-  const combined = [...monthPoints, ...livePoints, {date:now,value:totalNetWorth}].filter(p => chartRange === "ALL" || p.date >= cutoff).sort((a,b) => a.date-b.date);
+  const existingMonths = new Set([...monthPoints, ...livePoints].map(p => `${p.date.getFullYear()}-${String(p.date.getMonth()+1).padStart(2,"0")}`));
+  const importedPoints = IMPORTED_NET_WORTH_HISTORY.filter(p => !existingMonths.has(p.date.slice(0,7))).map(p => ({date:new Date(p.date),value:p.value}));
+  const combined = [...importedPoints, ...monthPoints, ...livePoints, {date:now,value:totalNetWorth}].filter(p => chartRange === "ALL" || p.date >= cutoff).sort((a,b) => a.date-b.date);
   const netChart = combined.map(p => ({ label: p.date.toLocaleDateString("en-US", {month:"short",day:"numeric"}), value:p.value }));
   const [cashYear, cashMonthNum] = cashMonth.split("-").map(Number);
   const days = new Date(cashYear, cashMonthNum, 0).getDate();
