@@ -269,7 +269,7 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
   const monthTiles = useMemo(() => {
     const totals = new Map();
     transactions
-      .filter((item) => item.date?.startsWith(selectedYear) && item.date <= today)
+      .filter((item) => item.date?.startsWith(selectedYear) && item.date <= today && isExpense(item))
       .forEach((item) => {
         const key = item.date.slice(0, 7);
         totals.set(key, (totals.get(key) || 0) + Number(item.amount || 0));
@@ -282,22 +282,25 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
 
   const chartData = useMemo(() => {
     if (range === "ytd") {
-      const totals = new Map();
+      const expenses = new Map(), incomes = new Map();
       yearTransactions.forEach((item) => {
         const index = Number(item.date.slice(5, 7)) - 1;
-        totals.set(index, (totals.get(index) || 0) + Number(item.amount || 0));
+        const amount = Math.abs(Number(item.amount || 0));
+        if (isIncome(item)) incomes.set(index, (incomes.get(index) || 0) + amount);
+        else if (isExpense(item)) expenses.set(index, (expenses.get(index) || 0) + amount);
       });
       const length = selectedYear === String(new Date().getFullYear()) ? new Date().getMonth() + 1 : 12;
-      let running = 0;
+      let spent = 0, income = 0;
       return Array.from({ length }, (_, index) => {
-        running += totals.get(index) || 0;
-        return { label: MONTH_LABELS[index], spent: running };
+        spent += expenses.get(index) || 0;
+        income += incomes.get(index) || 0;
+        return { label: MONTH_LABELS[index], spent, income };
       });
     }
-
-    const current = cumulativeByDay(transactions, selectedMonth, elapsedDays);
-    const previous = cumulativeByDay(transactions, previousMonth, elapsedDays);
-    return current.map((spent, index) => ({ label: String(index + 1), spent, previous: previous[index] }));
+    const current = cumulativeByDay(transactions, selectedMonth, elapsedDays, isExpense);
+    const income = cumulativeByDay(transactions, selectedMonth, elapsedDays, isIncome);
+    const previous = cumulativeByDay(transactions, previousMonth, elapsedDays, isExpense);
+    return current.map((spent, index) => ({ label: String(index + 1), spent, income: income[index], previous: previous[index] }));
   }, [elapsedDays, previousMonth, range, selectedMonth, selectedYear, transactions, yearTransactions]);
 
   // Compares the same number of elapsed days so a partial month is judged fairly.
@@ -309,7 +312,7 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
 
   const categoryBreakdown = useMemo(() => {
     const totals = new Map();
-    rangeTransactions.forEach((item) => {
+    rangeTransactions.filter(isExpense).forEach((item) => {
       const category = item.category || "Other";
       totals.set(category, (totals.get(category) || 0) + Number(item.amount || 0));
     });
@@ -799,6 +802,7 @@ const unhideTransaction = async (id) => {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">{range === "ytd" ? `${selectedYear} spend to date` : `${monthLabel(selectedMonth)} spend`}</p>
                 <p className="mt-1 text-3xl font-semibold tabular-nums">{money(totalSpent)}</p>
+                <div className="mt-2 flex flex-wrap gap-4 text-sm"><span className="text-emerald-400">Income: {money(totalIncome)}</span><span className="text-muted-foreground">Net cash flow: {money(netCashFlow)}</span></div>
                 {range === "month" && previousMonthToDate > 0 && (
                   <p className={`mt-1 text-xs ${monthDelta <= 0 ? "text-emerald-400" : "text-rose-400"}`}>
                     {money(Math.abs(monthDelta))} {monthDelta <= 0 ? "less" : "more"} than last month{isCurrentMonth ? " at this point" : ""}
