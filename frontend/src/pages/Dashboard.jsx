@@ -2057,9 +2057,7 @@ export default function Dashboard() {
     <div className="mx-auto w-full max-w-[1440px] space-y-4 pb-8" data-testid="dashboard">
       <header className="flex flex-wrap items-center justify-between gap-4 pb-1">
         <div className="min-w-0">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Overview</p>
-          <h1 className="text-[22px] font-semibold leading-tight tracking-tight" data-testid="page-title">Financial overview</h1>
-          <p className="mt-1 text-xs text-muted-foreground">Your wealth, accounts and cash flow at a glance.</p>
+          <h1 className="text-[22px] font-semibold leading-tight tracking-tight" data-testid="page-title">Hi Christian</h1>
         </div>
         <div className="flex items-center gap-2">
           <Button size="sm" variant="outline" onClick={handleRefreshPrices} disabled={refreshingPrices} className="h-9 border-border/60 bg-card px-3 text-xs">
