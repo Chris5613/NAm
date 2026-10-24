@@ -2054,7 +2054,7 @@ export default function Dashboard() {
   const combined = [...importedPoints, ...monthPoints, ...livePoints, ...(currentPoint ? [currentPoint] : [])]
     .filter(p => !isUnverifiedMay9Zero(p) && (chartRange === "ALL" || p.date >= cutoff))
     .sort((a,b) => a.date-b.date);
-  const netChart = combined.map(p => ({ label: p.date.toLocaleDateString("en-US", {month:"short",day:"numeric"}), value:p.value }));
+  const netChart = combined.map(p => ({ timestamp: p.date.getTime(), value: p.value }));
   const [cashYear, cashMonthNum] = cashMonth.split("-").map(Number);
   const days = new Date(cashYear, cashMonthNum, 0).getDate();
   const cashDays = Array.from({length:days}, (_,i) => ({day:String(i+1),income:0,expenses:0}));
@@ -2117,9 +2117,9 @@ export default function Dashboard() {
                         <stop offset="100%" stopColor="#38a5df" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={30} dy={8} />
+                    <XAxis dataKey="timestamp" type="number" scale="time" domain={["dataMin", "dataMax"]} axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={30} dy={8} tickFormatter={timestamp => new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })} />
                     <YAxis hide domain={["auto", "auto"]} />
-                    <Tooltip formatter={value => formatCurrency(value)} contentStyle={chartTooltipStyle} />
+                    <Tooltip formatter={value => formatCurrency(value)} labelFormatter={timestamp => new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} contentStyle={chartTooltipStyle} />
                     <Area dataKey="value" type="monotone" stroke="#38a5df" fill="url(#dashboardNetFill)" strokeWidth={2.25} dot={netChart.length < 3 ? { r: 2.5, fill: "#38a5df" } : false} activeDot={{ r: 4 }} />
                   </AreaChart>
                 </ResponsiveContainer>
