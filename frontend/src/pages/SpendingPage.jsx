@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Area, AreaChart, Line, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, PieChart, Pie, Cell, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -729,295 +729,184 @@ const unhideTransaction = async (id) => {
   }
 
   return (
-    <div className="mx-auto max-w-7xl">
-      <header className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="mx-auto w-full max-w-[1440px] space-y-4 pb-8" data-testid="spending-page">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-400">Cash flow</p>
-          <h1 className="mt-1 text-3xl font-semibold">Spending</h1>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Personal finance</p>
+          <h1 className="mt-1 text-[23px] font-semibold tracking-tight">Spending</h1>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button size="sm" variant="outline" disabled={isSyncing || syncLock.isLocked} onClick={() => sync()}>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button size="sm" variant="outline" className="h-9 bg-card text-xs" disabled={isSyncing || syncLock.isLocked} onClick={() => sync()}>
             <RefreshCw className={isSyncing ? "animate-spin" : ""} /> {isSyncing ? "Syncing" : syncLock.isLocked ? `Sync at ${syncLock.nextHourLabel}` : "Sync"}
           </Button>
-          <Button size="sm" variant="outline" disabled={isLinking} onClick={linkAccount}>
+          <Button size="sm" variant="outline" className="h-9 bg-card text-xs" disabled={isLinking} onClick={linkAccount}>
             <Link2 /> {isLinking ? "Connecting" : "Connect SimpleFIN"}
           </Button>
-          <Button size="sm" onClick={() => setTransactionDialogOpen(true)}>
-            <Plus /> Add expense
-          </Button>
+          <Button size="sm" className="h-9 text-xs" onClick={() => setTransactionDialogOpen(true)}><Plus /> Add expense</Button>
         </div>
       </header>
 
-      <Card className="mb-5 rounded-lg border-border/70 bg-secondary/20 shadow-none">
-        <CardContent className="space-y-5 p-5">
-          <div className="flex items-center justify-between gap-3">
-            <button
-              type="button"
-              aria-label="Previous month"
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/40 bg-secondary/40 hover:bg-secondary"
-              onClick={() => setSelectedMonth((key) => shiftMonth(key, -1))}
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <div className="flex-1 text-center">
-              <h2 className="text-2xl font-bold tracking-wide sm:text-3xl">{monthLabel(selectedMonth)}</h2>
-              <p className="mt-1 font-mono text-xs font-semibold">
-                {selectedYear} Yearly Spend: <span className="text-emerald-300">{money(yearTotal)}</span>
-              </p>
-            </div>
-            <button
-              type="button"
-              aria-label="Next month"
-              className="flex h-10 w-10 items-center justify-center rounded-lg border border-border/40 bg-secondary/40 hover:bg-secondary"
-              onClick={() => setSelectedMonth((key) => shiftMonth(key, 1))}
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
+      <nav aria-label="Spending sections" className="flex flex-wrap items-center gap-1.5">
+        {[
+          ["Overview", "spending-overview"], ["Breakdown", "spending-categories"],
+          ["Budget", "spending-budget"], ["Upcoming", "spending-upcoming"],
+          ["Transactions", "spending-transactions"], ["Reports", "spending-reports"],
+        ].map(([label, target], index) => (
+          <a key={target} href={`#${target}`} className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition-colors hover:border-border hover:bg-secondary hover:text-foreground ${index === 0 ? "border-border/70 bg-secondary text-foreground" : "border-border/40 bg-card text-muted-foreground"}`}>{label}</a>
+        ))}
+      </nav>
 
-          <div className="grid grid-cols-4 gap-2.5 sm:grid-cols-6 lg:grid-cols-12">
-            {monthTiles.map((month) => (
-              <button
-                key={month.key}
-                type="button"
-                onClick={() => setSelectedMonth(month.key)}
-                className={`min-w-0 rounded-md border px-2 py-3 text-center transition-colors ${
-                  month.key === selectedMonth ? "border-emerald-400/70 bg-emerald-500/10" : "border-border/40 bg-secondary/30 hover:bg-secondary/60"
-                }`}
-              >
-                <span className="block text-xs uppercase text-muted-foreground">{month.label}</span>
-                <span className={`mt-1 block truncate font-mono text-xs font-semibold ${month.total ? "text-foreground" : "text-muted-foreground"}`}>
-                  {month.total ? money(month.total) : "-"}
-                </span>
-              </button>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <section className="space-y-5">
-        <Card className="rounded-lg border-border/70 bg-card shadow-none">
-          <CardContent className="p-5">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">{range === "ytd" ? `${selectedYear} spend to date` : `${monthLabel(selectedMonth)} spend`}</p>
-                <p className="mt-1 text-3xl font-semibold tabular-nums">{money(totalSpent)}</p>
-                <div className="mt-2 flex flex-wrap gap-4 text-sm"><span className="text-emerald-400">Income: {money(totalIncome)}</span><span className="text-muted-foreground">Net cash flow: {money(netCashFlow)}</span></div>
-                {range === "month" && previousMonthToDate > 0 && (
-                  <p className={`mt-1 text-xs ${monthDelta <= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                    {money(Math.abs(monthDelta))} {monthDelta <= 0 ? "less" : "more"} than last month{isCurrentMonth ? " at this point" : ""}
-                  </p>
-                )}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.85fr)_minmax(300px,0.9fr)]">
+        <div className="min-w-0 space-y-4">
+          <section id="spending-overview" className="overflow-hidden rounded-2xl border border-border/55 bg-card">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-3.5">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Spend this {range === "ytd" ? "year" : "month"}</h2>
+              <div className="flex items-center gap-2">
+                <button type="button" aria-label="Previous month" className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setSelectedMonth(key => shiftMonth(key, -1))}><ChevronLeft className="h-4 w-4" /></button>
+                <span className="min-w-[94px] text-center text-[11px] font-medium">{range === "ytd" ? selectedYear : monthLabel(selectedMonth)}</span>
+                <button type="button" aria-label="Next month" className="rounded-md p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" onClick={() => setSelectedMonth(key => shiftMonth(key, 1))}><ChevronRight className="h-4 w-4" /></button>
               </div>
-              <div className="flex items-center gap-3">
-                {range === "month" && budget > 0 && <p className="max-w-36 text-right text-xs leading-4 text-emerald-400">{money(Math.max(budget - totalSpent, 0))} left in budget</p>}
-                <div className="flex rounded-md border border-border/70 p-0.5">
-                  {[
-                    { key: "month", label: "Month" },
-                    { key: "ytd", label: "Year to date" },
-                  ].map((option) => (
-                    <button
-                      key={option.key}
-                      className={`rounded px-3 py-1 text-xs font-medium transition-colors ${
-                        range === option.key ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"
-                      }`}
-                      onClick={() => setRange(option.key)}
-                    >
-                      {option.label}
-                    </button>
+            </div>
+            <div className="px-5 pb-4 pt-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[30px] font-semibold leading-none tracking-tight tabular-nums">{money(totalSpent)}</p>
+                  <p className="mt-2 text-[11px] text-muted-foreground">{range === "ytd" ? `${selectedYear} cumulative spending` : monthLabel(selectedMonth)}</p>
+                  {range === "month" && previousMonthToDate > 0 && (
+                    <p className={`mt-1 text-[11px] ${monthDelta <= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(Math.abs(monthDelta))} {monthDelta <= 0 ? "less" : "more"} than last month{isCurrentMonth ? " to date" : ""}</p>
+                  )}
+                </div>
+                <div className="flex rounded-lg border border-border/50 bg-background/50 p-0.5">
+                  {[["month", "Month"], ["ytd", "YTD"]].map(([key, label]) => (
+                    <button key={key} type="button" onClick={() => setRange(key)} className={`rounded-md px-3 py-1.5 text-[11px] ${range === key ? "bg-secondary text-foreground" : "text-muted-foreground hover:text-foreground"}`}>{label}</button>
                   ))}
                 </div>
               </div>
+              <div className="mt-3 h-[clamp(190px,24vh,265px)] w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <AreaChart data={chartData} margin={{ top: 10, right: 4, left: -22, bottom: 0 }}>
+                    <defs><linearGradient id="originSpendingFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#38a5df" stopOpacity={0.24}/><stop offset="100%" stopColor="#38a5df" stopOpacity={0}/></linearGradient></defs>
+                    <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={28} />
+                    <YAxis hide domain={["auto", "auto"]}/>
+                    <Tooltip contentStyle={{ background: "#17191d", border: "1px solid #30343b", borderRadius: 10, fontSize: 12 }} labelFormatter={label => range === "ytd" ? label : `Day ${label}`} formatter={(value, name) => [money(value), name === "previous" ? "Previous month" : name === "income" ? "Income" : "Spent"]}/>
+                    {range === "month" && budget > 0 && <ReferenceLine y={budget} stroke="#64748b" strokeDasharray="4 4" />}
+                    {range === "month" && <Area type="monotone" dataKey="previous" stroke="#6b7280" strokeWidth={1.6} strokeDasharray="3 4" fill="none" dot={false}/>}
+                    <Area type="monotone" dataKey="spent" stroke="#38a5df" strokeWidth={2.5} fill="url(#originSpendingFill)" dot={false} activeDot={{ r: 4 }}/>
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
+                <span className="flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-full bg-[#38a5df]"/>Spending</span>
+                {range === "month" && <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t border-dashed border-slate-500"/>Previous month</span>}
+                {range === "month" && budget > 0 && <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t border-dashed border-slate-400"/>Budget</span>}
+              </div>
             </div>
+          </section>
 
-            <div className="mt-4 h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 12, right: 4, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="spending-area" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#60a5fa" stopOpacity={0.35} />
-                      <stop offset="100%" stopColor="#60a5fa" stopOpacity={0.02} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="label" tick={{ fill: "#a1a1aa", fontSize: 11 }} axisLine={false} tickLine={false} interval="preserveStartEnd" />
-                  <YAxis
-                    tick={{ fill: "#a1a1aa", fontSize: 11 }}
-                    axisLine={false}
-                    tickLine={false}
-                    tickFormatter={(value) => (value >= 1000 ? `$${(value / 1000).toFixed(1)}k` : `$${value}`)}
-                  />
-                  <Tooltip
-                    formatter={(value, name) => [money(value), name === "previous" ? "Last month" : name === "income" ? "Income" : "Spent"]}
-                    labelFormatter={(label) => (range === "ytd" ? label : `Day ${label}`)}
-                    contentStyle={{ background: "#19191c", border: "1px solid #3f3f46", borderRadius: 6 }}
-                  />
-                  {range === "month" && budget > 0 && <ReferenceLine y={budget} stroke="#71717a" strokeDasharray="4 4" />}
-                  {range === "month" && <Area type="monotone" dataKey="previous" stroke="#52525b" strokeWidth={2} strokeDasharray="4 4" fill="none" dot={false} />}
-                  <Area
-                    type="monotone"
-                    dataKey="spent"
-                    stroke="#60a5fa"
-                    strokeWidth={3}
-                    fill="url(#spending-area)"
-                    dot={{ r: 3, fill: "#93c5fd", stroke: "#1d4ed8", strokeWidth: 1 }}
-                    activeDot={{ r: 6, fill: "#bfdbfe", stroke: "#18181b", strokeWidth: 2 }}
-                  />
-                  <Line type="monotone" dataKey="income" stroke="#34d399" strokeWidth={3} dot={false} activeDot={{ r: 5 }} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section id="spending-transactions" className="min-w-0 overflow-hidden rounded-2xl border border-border/55 bg-card">
+              <div className="flex items-center justify-between border-b border-border/40 px-4 py-3.5">
+                <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Latest transactions</h2>
+                <button type="button" onClick={() => setAllTransactionsOpen(true)} className="text-[11px] text-muted-foreground hover:text-foreground">See all <ChevronRight className="inline h-3 w-3"/></button>
+              </div>
+              <div className="divide-y divide-border/35 px-4">
+                {rangeTransactions.length ? rangeTransactions.slice(0, 5).map(item => (
+                  <div key={item.id} className="flex items-center gap-2.5 py-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-secondary"><ReceiptText className="h-3.5 w-3.5 text-muted-foreground"/></div>
+                    <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{item.merchant || "Transaction"}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{humanDate(item.date)} · {item.category || "Other"}{item.pending ? " · Pending" : ""}</p></div>
+                    <span className={`shrink-0 text-xs font-medium tabular-nums ${isIncome(item) ? "text-emerald-400" : ""}`}>{money(item.amount)}</span>
+                  </div>
+                )) : <p className="py-8 text-center text-xs text-muted-foreground">No transactions in this period.</p>}
+              </div>
+              <div className="grid grid-cols-2 divide-x divide-border/40 border-t border-border/40">
+                <button type="button" onClick={openHiddenTransactions} className="py-3 text-[11px] text-muted-foreground hover:bg-secondary/40">Hidden transactions</button>
+                <button type="button" onClick={() => setTransactionDialogOpen(true)} className="py-3 text-[11px] text-muted-foreground hover:bg-secondary/40">Add expense</button>
+              </div>
+            </section>
 
-            <div className="mt-3 flex flex-wrap gap-4 text-xs text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <i className="h-0.5 w-5 bg-blue-400" /> {range === "ytd" ? "Cumulative this year" : "Selected month"}
-              </span>
-              {range === "month" && (
-                <span className="flex items-center gap-1.5">
-                  <i className="h-0 w-5 border-t-2 border-dashed border-zinc-600" /> Last month
-                </span>
-              )}
-              {range === "month" && budget > 0 && (
-                <span className="flex items-center gap-1.5">
-                  <i className="h-0 w-5 border-t border-dashed border-zinc-500" /> Budget
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="rounded-lg border-border/70 bg-card shadow-none">
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Category breakdown</h2>
-              <span className="text-xs text-muted-foreground">{range === "ytd" ? selectedYear : monthLabel(selectedMonth)}</span>
-            </div>
-            {categoryBreakdown.length ? (
-              <>
-                <div className="mt-4 flex h-2.5 overflow-hidden rounded-full bg-secondary">
-                  {categoryBreakdown.map((entry, index) => (
-                    <div
-                      key={entry.category}
-                      title={`${entry.category}: ${money(entry.amount)}`}
-                      style={{ width: `${entry.share}%`, background: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }}
-                    />
-                  ))}
-                </div>
-                <div className="mt-4 grid gap-x-6 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {categoryBreakdown.map((entry, index) => (
-                    <button
-                      type="button"
-                      className="flex items-center gap-2 rounded-md text-left hover:bg-secondary/60"
-                      key={entry.category}
-                      onClick={() => openCategoryTransactions(entry.category)}
-                      title={`View ${entry.category} transactions`}
-                    >
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }} />
-                      <span className="min-w-0 flex-1 truncate text-sm">{entry.category}</span>
-                      <span className="text-sm font-semibold tabular-nums">{money(entry.amount)}</span>
-                      <span className="w-9 text-right text-xs text-muted-foreground">{Math.round(entry.share)}%</span>
-                    </button>
-                  ))}
-                </div>
-              </>
-            ) : (
-              <p className="py-8 text-center text-sm text-muted-foreground">No spending in this period yet.</p>
-            )}
-          </CardContent>
-        </Card>
-
-       <Card className="rounded-lg border-border/70 bg-card shadow-none">
-  <CardContent className="p-0">
-    <div className="flex items-center justify-between px-5 py-4">
-      <h2 className="font-semibold">Recent transactions</h2>
-
-      <span className="rounded-full bg-secondary px-3 py-1 text-xs text-muted-foreground">
-        {rangeTransactions.length}{" "}
-        {range === "ytd" ? "this year" : "this month"}
-      </span>
-    </div>
-
-    {groups.length ? (
-      groups.map(([date, items]) => (
-        <div key={date}>
-          <div className="flex justify-between border-y border-border/60 bg-secondary/35 px-5 py-2 text-xs text-muted-foreground">
-            <span>{humanDate(date)}</span>
-
-            <span>
-              {money(
-                items.reduce(
-                  (sum, item) =>
-                    sum + Number(item.amount || 0),
-                  0
-                )
-              )}
-            </span>
+            <section id="spending-upcoming" className="min-w-0 overflow-hidden rounded-2xl border border-border/55 bg-card">
+              <div className="flex items-center justify-between border-b border-border/40 px-4 py-3.5">
+                <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Upcoming activity</h2>
+                <span className="text-[10px] text-muted-foreground">Next 7 days</span>
+              </div>
+              <div className="grid grid-cols-7 gap-1 px-3 pt-3">
+                {upcomingDays.map(day => {
+                  const dayItems = upcoming.filter(item => item.date === day.key);
+                  return <div key={day.key} className="min-w-0 text-center">
+                    <p className="text-[9px] text-muted-foreground">{day.weekday}</p><p className="mt-1 rounded-md bg-secondary/40 py-2 text-[11px]">{day.number}</p>
+                    <div className="mt-2 flex h-3 items-center justify-center gap-0.5">{dayItems.slice(0, 3).map((item,index) => <span key={item.id || index} className={`h-1.5 w-1.5 rounded-full ${isIncome(item) ? "bg-emerald-400" : "bg-rose-400"}`}/>)}</div>
+                  </div>;
+                })}
+              </div>
+              <div className="mt-3 space-y-2 border-t border-border/35 px-4 py-3">
+                {upcoming.length ? upcoming.slice(0, 4).map((item,index) => (
+                  <div key={item.id || index} className="flex items-center justify-between gap-2 text-[11px]"><span className="min-w-0 truncate">{item.merchant || item.category || "Transaction"} <span className="text-muted-foreground">· {humanDate(item.date)}</span></span><span className="shrink-0 tabular-nums">{money(item.amount)}</span></div>
+                )) : <p className="py-3 text-center text-[11px] text-muted-foreground">No dated transactions scheduled in the next 7 days.</p>}
+                <p className="text-[10px] text-muted-foreground">Based on recorded transaction dates, not predicted bills.</p>
+              </div>
+            </section>
           </div>
 
-          {items.map((item) => (
-            <TransactionRow
-              key={item.id}
-              item={item}
-              color={
-                categoryColorMap[item.category] ||
-                CATEGORY_COLORS[
-                  CATEGORY_COLORS.length - 1
-                ]
-              }
-              categories={categories}
-              onRecategorize={recategorize}
-              onHide={hideTransaction}
-              onAddCategory={addCategory}
-            />
-          ))}
+          <section id="spending-reports" className="overflow-hidden rounded-2xl border border-border/55 bg-card">
+            <div className="flex items-center justify-between border-b border-border/40 px-5 py-3.5">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Reports</h2><span className="text-[11px] text-muted-foreground">{selectedYear} spending by month</span>
+            </div>
+            <div className="grid grid-cols-2 gap-4 px-5 py-4 sm:grid-cols-4">
+              <div><p className="text-[10px] text-muted-foreground">Income</p><p className="mt-1 text-lg font-semibold tabular-nums text-emerald-400">{money(totalIncome)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Expenses</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(totalSpent)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-lg font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(netCashFlow)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Yearly spend</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(yearTotal)}</p></div>
+            </div>
+            <div className="grid grid-cols-6 gap-1.5 border-t border-border/35 px-5 py-4 sm:grid-cols-12">
+              {monthTiles.map(month => {
+                const largest = Math.max(1, ...monthTiles.map(tile => Math.abs(tile.total)));
+                return <button type="button" key={month.key} onClick={() => { setSelectedMonth(month.key); setRange("month"); document.getElementById("spending-overview")?.scrollIntoView({ behavior: "smooth" }); }} className="group flex min-w-0 flex-col items-center gap-1.5" title={`${month.label}: ${money(month.total)}`}>
+                  <div className="flex h-14 w-full items-end justify-center rounded-md bg-secondary/25 p-1"><div className={`w-full rounded-sm ${month.key === selectedMonth ? "bg-sky-400" : "bg-slate-500/60 group-hover:bg-sky-400/65"}`} style={{ height: `${Math.max(month.total ? 7 : 2, Math.abs(month.total) / largest * 100)}%` }}/></div>
+                  <span className="text-[9px] text-muted-foreground">{month.label}</span>
+                </button>;
+              })}
+            </div>
+          </section>
         </div>
-      ))
-    ) : (
-      <div className="px-5 py-16 text-center">
-        <ReceiptText className="mx-auto h-7 w-7 text-muted-foreground" />
 
-        <p className="mt-3 text-sm text-muted-foreground">
-          No transactions in this period.
-        </p>
+        <aside className="min-w-0 space-y-4">
+          <section id="spending-categories" className="overflow-hidden rounded-2xl border border-border/55 bg-card">
+            <div className="flex items-center justify-between border-b border-border/40 px-5 py-3.5">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Category breakdown</h2><span className="text-[10px] text-muted-foreground">{range === "ytd" ? selectedYear : monthLabel(selectedMonth)}</span>
+            </div>
+            <div className="p-4">
+              {categoryBreakdown.length ? <>
+                <div className="relative mx-auto h-[184px] w-full max-w-[280px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart><Pie data={categoryBreakdown} dataKey="amount" nameKey="category" innerRadius="66%" outerRadius="91%" stroke="#111317" strokeWidth={3} paddingAngle={1.5}>
+                      {categoryBreakdown.map((entry,index) => <Cell key={entry.category} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}/>)}
+                    </Pie><Tooltip contentStyle={{ background: "#17191d", border: "1px solid #30343b", borderRadius: 9, fontSize: 11 }} formatter={value => money(value)}/></PieChart>
+                  </ResponsiveContainer>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><p className="text-xl font-semibold tabular-nums">{money(totalSpent)}</p><p className="mt-0.5 text-[10px] text-muted-foreground">Total expenses</p></div>
+                </div>
+                <div className="mt-3 divide-y divide-border/35">
+                  {categoryBreakdown.map((entry,index) => <button key={entry.category} type="button" onClick={() => openCategoryTransactions(entry.category)} className="flex w-full items-center gap-2.5 rounded-md py-2.5 text-left transition-colors hover:bg-secondary/30">
+                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[index % CATEGORY_COLORS.length] }}/>
+                    <span className="min-w-0 flex-1 truncate text-[12px]">{entry.category}</span><span className="shrink-0 text-[12px] font-medium tabular-nums">{money(entry.amount)}</span><span className="w-10 shrink-0 text-right text-[10px] text-muted-foreground">{Math.round(entry.share)}%</span>
+                  </button>)}
+                </div>
+              </> : <p className="py-12 text-center text-xs text-muted-foreground">No spending in this period yet.</p>}
+            </div>
+          </section>
+
+          <section id="spending-budget" className="overflow-hidden rounded-2xl border border-border/55 bg-card">
+            <div className="flex items-center justify-between border-b border-border/40 px-5 py-3.5">
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Monthly budget</h2><span className="text-[10px] text-muted-foreground">{monthLabel(selectedMonth)}</span>
+            </div>
+            <div className="px-5 py-4">
+              <p className="text-[23px] font-semibold tabular-nums">{money(totalSpent)} <span className="text-[12px] font-normal text-muted-foreground">of {budget > 0 ? money(budget) : "no budget set"}</span></p>
+              <div className="mt-3 h-2 overflow-hidden rounded-full bg-secondary"><div className={`h-full rounded-full ${budget > 0 && totalSpent > budget ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${budget > 0 ? Math.min(100, totalSpent / budget * 100) : 0}%` }}/></div>
+              <div className="mt-2 flex justify-between text-[11px] text-muted-foreground"><span>{budget > 0 ? `${money(Math.max(0,budget-totalSpent))} remaining` : "Set a budget to track progress"}</span><span>{budget > 0 ? `${Math.round(totalSpent/budget*100)}%` : "—"}</span></div>
+              <div className="mt-4 flex gap-2"><Input aria-label="Monthly budget" className="h-9 min-w-0 text-xs" type="number" min="0" placeholder="Budget amount" value={budgetInput} onChange={event => setBudgetInput(event.target.value)}/><Button size="sm" variant="outline" className="h-9 shrink-0 text-xs" onClick={saveBudget}>Save</Button></div>
+            </div>
+          </section>
+        </aside>
       </div>
-    )}
-
-    <div className="grid grid-cols-3 divide-x divide-border/60 border-t border-border/60">
-      <button
-        className="py-3 text-sm font-medium hover:bg-secondary/50"
-        onClick={() => setAllTransactionsOpen(true)}
-      >
-        See all
-      </button>
-
-      <button
-        className="flex items-center justify-center gap-1 py-3 text-sm font-medium hover:bg-secondary/50"
-        onClick={openHiddenTransactions}
-      >
-        <EyeOff className="h-4 w-4" />
-        Hidden
-      </button>
-
-      <button
-        className="flex items-center justify-center gap-1 py-3 text-sm font-medium hover:bg-secondary/50"
-        onClick={() => setTransactionDialogOpen(true)}
-      >
-        Add expense
-        <ChevronRight className="h-4 w-4" />
-      </button>
-    </div>
-  </CardContent>
-</Card>
-      </section>
-
-      <section className="mt-10 border-t border-border/60 pt-8">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex-1" />
-          <div className="flex items-center gap-2">
-            <Input aria-label="Monthly budget" type="number" min="0" placeholder="Monthly budget" value={budgetInput} onChange={(event) => setBudgetInput(event.target.value)} />
-            <Button size="sm" variant="outline" onClick={saveBudget}>Save</Button>
-          </div>
-        </div>
-      </section>
 
       <Dialog
   open={hiddenTransactionsOpen}
