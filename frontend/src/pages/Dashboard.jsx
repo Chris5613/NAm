@@ -2042,14 +2042,14 @@ export default function Dashboard() {
   });
   const incomeTotal = cashDays.reduce((sum,d) => sum+d.income,0);
   const expenseTotal = cashDays.reduce((sum,d) => sum+d.expenses,0);
-  const card = "min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card shadow-sm";
+  const card = "min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card shadow-[0_8px_32px_rgba(0,0,0,0.10)]";
   const monthTitle = new Date(cashYear, cashMonthNum - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const bankTotal = bankAccounts.reduce((sum, account) => sum + Number(account.currentBalance ?? 0), 0);
   const netCashFlow = incomeTotal - expenseTotal;
   const chartTooltipStyle = { background: "#17191d", border: "1px solid #30343b", borderRadius: 10, color: "#f1f5f9", fontSize: 12 };
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] space-y-5 pb-8" data-testid="dashboard">
+    <div className="mx-auto w-full max-w-[1440px] space-y-4 pb-8" data-testid="dashboard">
       <header className="flex flex-wrap items-center justify-between gap-4 pb-1">
         <div className="min-w-0">
           <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted-foreground">Overview</p>
@@ -2066,33 +2066,33 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.85fr)_minmax(320px,1fr)]">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.75fr)_minmax(320px,1fr)]">
         <section className={card} aria-label="Net worth">
           <div className="flex items-center justify-between border-b border-border/40 px-5 py-3.5">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Net worth</h2>
-            <span className="text-[10px] text-muted-foreground">Portfolio value</span>
+            <span className="text-[10px] text-muted-foreground">Total portfolio</span>
           </div>
           <div className="px-5 pt-4">
-            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
               <p className="text-[clamp(26px,2.5vw,35px)] font-semibold leading-none tracking-tight tabular-nums">{formatCurrency(totalNetWorth)}</p>
               <span className={`text-xs font-medium tabular-nums ${todayPositive ? "text-emerald-400" : "text-rose-400"}`}>
                 {todayPositive ? "+" : "−"}{formatCurrency(Math.abs(todayChange))} today
               </span>
             </div>
-            <div className="mt-4 h-[clamp(175px,25vh,245px)] w-full">
+            <div className="mt-3 h-[clamp(160px,21vh,205px)] w-full">
               {netChart.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <AreaChart data={netChart} margin={{ top: 8, right: 2, bottom: 0, left: 2 }}>
                     <defs>
                       <linearGradient id="dashboardNetFill" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#38a5df" stopOpacity={0.23} />
-                        <stop offset="100%" stopColor="#38a5df" stopOpacity={0.015} />
+                        <stop offset="0%" stopColor="#38a5df" stopOpacity={0.19} />
+                        <stop offset="100%" stopColor="#38a5df" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={30} dy={8} />
                     <YAxis hide domain={["auto", "auto"]} />
                     <Tooltip formatter={value => formatCurrency(value)} contentStyle={chartTooltipStyle} />
-                    <Area dataKey="value" type="monotone" stroke="#38a5df" fill="url(#dashboardNetFill)" strokeWidth={2} dot={netChart.length < 3 ? { r: 3, fill: "#38a5df" } : false} activeDot={{ r: 4 }} />
+                    <Area dataKey="value" type="monotone" stroke="#38a5df" fill="url(#dashboardNetFill)" strokeWidth={2.25} dot={netChart.length < 3 ? { r: 2.5, fill: "#38a5df" } : false} activeDot={{ r: 4 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -2101,7 +2101,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 px-5 py-3">
-            <span className="text-[11px] text-muted-foreground">Net worth history</span>
+            <span className="text-[11px] text-muted-foreground">{netChart.length < 3 ? `${netChart.length} recorded ${netChart.length === 1 ? "value" : "values"} in this range` : "Net worth history"}</span>
             <div className="flex items-center gap-0.5 rounded-lg bg-background/70 p-0.5" aria-label="Net worth time range">
               {["1W", "1M", "3M", "YTD", "ALL"].map(range => (
                 <button key={range} type="button" onClick={() => setChartRange(range)}
@@ -2119,17 +2119,17 @@ export default function Dashboard() {
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Accounts</h2>
             <span className="text-[10px] text-muted-foreground">{bankAccounts.length} connected</span>
           </div>
-          <div className="px-5 pt-4">
+          <div className="px-5 pb-2 pt-4">
             <p className="text-[11px] text-muted-foreground">Connected account balances</p>
             <p className="mt-1 text-[26px] font-semibold leading-tight tracking-tight tabular-nums">{formatCurrency(bankTotal)}</p>
             <div className="mt-3 divide-y divide-border/35">
               {bankAccounts.length ? bankAccounts.map((account, index) => (
-                <div key={account.id || index} className="flex min-w-0 items-center justify-between gap-3 py-2.5">
+                <div key={account.id || index} className="flex min-w-0 items-center justify-between gap-3 py-2.5 transition-colors hover:bg-white/[0.015]">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <WalletCards className="h-4 w-4 shrink-0 text-sky-400/80" />
-                    <span className="truncate text-xs">{account.name || account.displayName || account.institution || "Account"}</span>
+                    <span className="truncate text-[12px]">{account.name || account.displayName || account.institution || "Account"}</span>
                   </div>
-                  <span className="shrink-0 text-xs font-medium tabular-nums">
+                  <span className="shrink-0 text-[12px] font-medium tabular-nums">
                     {account.currentBalance == null ? "Unavailable" : formatCurrency(account.currentBalance)}
                   </span>
                 </div>
@@ -2146,12 +2146,12 @@ export default function Dashboard() {
           </div>
           <div className="px-5 pb-4 pt-3">
             <p className="text-[11px] text-muted-foreground">{monthTitle}</p>
-            <div className="mt-3 grid grid-cols-3 gap-3">
+            <div className="mt-3 grid grid-cols-3 gap-3 border-b border-border/30 pb-4">
               <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Income</p><p className="mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums text-emerald-400">{formatCurrency(incomeTotal)}</p></div>
               <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Expenses</p><p className="mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums">{formatCurrency(expenseTotal)}</p></div>
               <div className="min-w-0"><p className="text-[11px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-[clamp(14px,1.5vw,21px)] font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{formatCurrency(netCashFlow)}</p></div>
             </div>
-            <div className="mt-3 h-[155px] w-full">
+            <div className="mt-3 h-[145px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={cashDays} barGap={1} margin={{ top: 6, right: 0, bottom: 0, left: -10 }}>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={18} />
@@ -2173,10 +2173,10 @@ export default function Dashboard() {
           <div className="border-b border-border/40 px-5 py-3.5">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Asset allocation</h2>
           </div>
-          <div className="space-y-3 px-5 py-4">
+          <div className="space-y-2.5 px-5 py-4">
             {["stocks", "crypto", "cash", "other", "debts"].map(category => (
               <button key={category} type="button" onClick={() => openCategoryModal(category)}
-                className="block w-full rounded-md px-1 py-1 text-left transition-colors hover:bg-secondary/40"
+                className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-secondary/35"
                 aria-label={`View ${category} allocation details`}>
                 <AllocationBar category={category} value={breakdown[category] || 0} maxValue={maxAllocation} />
               </button>
