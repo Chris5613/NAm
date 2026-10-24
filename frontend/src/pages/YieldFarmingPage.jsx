@@ -4087,7 +4087,7 @@ function KryptexProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[146px] w-full flex-col p-4 text-left"
+        className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
       >
         <div className="flex w-full items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -4131,9 +4131,9 @@ function KryptexProjectCard({
           />
         </div>
 
-        <div className="mt-auto pt-3">
+        <div className="mt-auto pt-2.5">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="text-[23px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
+            <div className="text-[22px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
               {formatCurrency(
                 stats?.currentBalanceUsd
               )}
@@ -9437,7 +9437,7 @@ function ProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[146px] w-full flex-col p-4 text-left"
+        className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
       >
         {/* TOP */}
 
@@ -9474,11 +9474,11 @@ function ProjectCard({
 </div>
         {/* VALUE */}
 
-        <div className="mt-auto pt-3">
+        <div className="mt-auto pt-2.5">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[23px]
+                text-[22px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9623,7 +9623,7 @@ function UnetworkProjectCard({
               !value
           )
         }
-        className="flex min-h-[146px] w-full flex-col p-4 text-left"
+        className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
       >
         {/* TOP */}
 
@@ -9665,11 +9665,11 @@ function UnetworkProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-3">
+        <div className="mt-auto pt-2.5">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[23px]
+                text-[22px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9901,7 +9901,7 @@ function SaladProjectCard({
               !value
           )
         }
-        className="flex min-h-[146px] w-full flex-col p-4 text-left"
+        className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
       >
         {/* TOP */}
 
@@ -9943,11 +9943,11 @@ function SaladProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-3">
+        <div className="mt-auto pt-2.5">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[23px]
+                text-[22px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -10168,7 +10168,7 @@ return (
             !current
         )
       }
-      className="flex min-h-[146px] w-full flex-col p-4 text-left"
+      className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
     >
 <div className="flex w-full items-start justify-between gap-3">
   <div className="flex min-w-0 items-center gap-3">
@@ -10200,11 +10200,11 @@ return (
   />
 </div>
 
-      <div className="mt-auto pt-3">
+      <div className="mt-auto pt-2.5">
         <div className="flex flex-wrap items-end gap-2">
           <div
             className="
-              text-[23px]
+              text-[22px]
               font-semibold
               leading-none
               tracking-tight
@@ -10958,8 +10958,8 @@ function ProjectIncomeSection({
   }
 
   return (
-    <section className="space-y-4 border-t border-border/50 pt-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <section className="space-y-3 border-t border-border/50 pt-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
@@ -11683,7 +11683,7 @@ function PortfolioAllocationBar({
     };
 
   return (
-    <div className="mt-8">
+    <div className="mt-5">
       <div className="flex h-[3px] w-full overflow-hidden rounded-full bg-white/5">
         {coins.map(
           (
@@ -11716,7 +11716,7 @@ function PortfolioAllocationBar({
         )}
       </div>
 
-      <div className="mt-3 flex flex-wrap gap-x-7 gap-y-2.5 text-base font-medium text-muted-foreground">
+      <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-2 text-[13px] font-medium text-muted-foreground">
         {coins.map(
           (
             coin,
