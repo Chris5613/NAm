@@ -4087,17 +4087,10 @@ function KryptexProjectCard({
         onClick={
           onToggle
         }
-        className="
-          flex
-          min-h-[190px]
-          w-full
-          flex-col
-          p-5
-          text-left
-        "
+        className="flex min-h-[146px] w-full flex-col p-4 text-left"
       >
         <div className="flex w-full items-center justify-between gap-4">
-          <div className="flex min-w-0 flex-1 items-center gap-4">
+          <div className="flex min-w-0 flex-1 items-center gap-3">
             <ProjectLogoButton
               platform="Kryptex"
               logo={logo}
@@ -4108,7 +4101,7 @@ function KryptexProjectCard({
 
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="whitespace-nowrap text-2xl font-semibold tracking-tight text-foreground">
+                <h3 className="whitespace-nowrap text-[18px] font-semibold tracking-tight text-foreground">
                   Kryptex
                 </h3>
 
@@ -4138,9 +4131,9 @@ function KryptexProjectCard({
           />
         </div>
 
-        <div className="mt-auto pt-7">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="text-[30px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
+        <div className="mt-auto pt-3">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="text-[23px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
               {formatCurrency(
                 stats?.currentBalanceUsd
               )}
@@ -4159,7 +4152,7 @@ function KryptexProjectCard({
             />
           </div>
 
-          <div className="mt-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm tabular-nums text-muted-foreground">
+          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums text-muted-foreground">
             <span>
               {formatCurrency(
                 stats?.dailyUsd
@@ -9336,7 +9329,7 @@ function ProjectPaybackEditor({
 
   return (
     <div className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-3">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
             Total spent
@@ -9444,19 +9437,12 @@ function ProjectCard({
         onClick={
           onToggle
         }
-        className="
-          flex
-          min-h-[190px]
-          w-full
-          flex-col
-          p-5
-          text-left
-        "
+        className="flex min-h-[146px] w-full flex-col p-4 text-left"
       >
         {/* TOP */}
 
 <div className="flex w-full items-center justify-between gap-4">
-  <div className="flex min-w-0 flex-1 items-center gap-4">
+  <div className="flex min-w-0 flex-1 items-center gap-3">
     <ProjectLogoButton
       platform={project.platform}
       logo={logo}
@@ -9465,7 +9451,7 @@ function ProjectCard({
 
     <div className="flex-1">
       <div className="flex items-center gap-2">
-        <h3 className="whitespace-nowrap text-2xl font-semibold tracking-tight text-foreground">
+        <h3 className="whitespace-nowrap text-[18px] font-semibold tracking-tight text-foreground">
           {project.platform}
         </h3>
 
@@ -9488,11 +9474,11 @@ function ProjectCard({
 </div>
         {/* VALUE */}
 
-        <div className="mt-auto pt-7">
-          <div className="flex flex-wrap items-end gap-3">
+        <div className="mt-auto pt-3">
+          <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[30px]
+                text-[23px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9522,13 +9508,13 @@ function ProjectCard({
 
           <div
             className="
-              mt-4
+              mt-2
               flex
               flex-wrap
               items-center
               gap-x-2
               gap-y-1
-              text-sm
+              text-xs
               tabular-nums
               text-muted-foreground
             "
@@ -9637,19 +9623,12 @@ function UnetworkProjectCard({
               !value
           )
         }
-        className="
-          flex
-          min-h-[190px]
-          w-full
-          flex-col
-          p-5
-          text-left
-        "
+        className="flex min-h-[146px] w-full flex-col p-4 text-left"
       >
         {/* TOP */}
 
-<div className="flex w-full items-start justify-between gap-4">
-  <div className="flex min-w-0 items-center gap-4">
+<div className="flex w-full items-start justify-between gap-3">
+  <div className="flex min-w-0 items-center gap-3">
     <ProjectLogoButton
       platform="Unetwork"
       logo={logo}
@@ -9658,7 +9637,7 @@ function UnetworkProjectCard({
 
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+        <h3 className="truncate text-[18px] font-semibold tracking-tight text-foreground">
           Unetwork
         </h3>
 
@@ -9677,7 +9656,7 @@ function UnetworkProjectCard({
   </div>
 
   <ChevronRight
-    className={`mt-5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+    className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
       expanded ? "rotate-90" : ""
     }`}
     strokeWidth={1.5}
@@ -9686,11 +9665,11 @@ function UnetworkProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-7">
-          <div className="flex flex-wrap items-end gap-3">
+        <div className="mt-auto pt-3">
+          <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[30px]
+                text-[23px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9718,13 +9697,13 @@ function UnetworkProjectCard({
 
           <div
             className="
-              mt-4
+              mt-2
               flex
               flex-wrap
               items-center
               gap-x-2
               gap-y-1
-              text-sm
+              text-xs
               tabular-nums
               text-muted-foreground
             "
@@ -9922,19 +9901,12 @@ function SaladProjectCard({
               !value
           )
         }
-        className="
-          flex
-          min-h-[190px]
-          w-full
-          flex-col
-          p-5
-          text-left
-        "
+        className="flex min-h-[146px] w-full flex-col p-4 text-left"
       >
         {/* TOP */}
 
-<div className="flex w-full items-start justify-between gap-4">
-  <div className="flex min-w-0 items-center gap-4">
+<div className="flex w-full items-start justify-between gap-3">
+  <div className="flex min-w-0 items-center gap-3">
     <ProjectLogoButton
       platform="Salad"
       logo={logo}
@@ -9943,7 +9915,7 @@ function SaladProjectCard({
 
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+        <h3 className="truncate text-[18px] font-semibold tracking-tight text-foreground">
           Salad
         </h3>
 
@@ -9962,7 +9934,7 @@ function SaladProjectCard({
   </div>
 
   <ChevronRight
-    className={`mt-5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+    className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
       expanded ? "rotate-90" : ""
     }`}
     strokeWidth={1.5}
@@ -9971,11 +9943,11 @@ function SaladProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-7">
-          <div className="flex flex-wrap items-end gap-3">
+        <div className="mt-auto pt-3">
+          <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[30px]
+                text-[23px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -10003,13 +9975,13 @@ function SaladProjectCard({
 
           <div
             className="
-              mt-4
+              mt-2
               flex
               flex-wrap
               items-center
               gap-x-2
               gap-y-1
-              text-sm
+              text-xs
               tabular-nums
               text-muted-foreground
             "
@@ -10196,17 +10168,10 @@ return (
             !current
         )
       }
-      className="
-        flex
-        min-h-[190px]
-        w-full
-        flex-col
-        p-5
-        text-left
-      "
+      className="flex min-h-[146px] w-full flex-col p-4 text-left"
     >
-<div className="flex w-full items-start justify-between gap-4">
-  <div className="flex min-w-0 items-center gap-4">
+<div className="flex w-full items-start justify-between gap-3">
+  <div className="flex min-w-0 items-center gap-3">
     <ProjectLogoButton
       platform="RollerCoin"
       logo={logo}
@@ -10215,7 +10180,7 @@ return (
 
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+        <h3 className="truncate text-[18px] font-semibold tracking-tight text-foreground">
           RollerCoin
         </h3>
 
@@ -10228,18 +10193,18 @@ return (
   </div>
 
   <ChevronRight
-    className={`mt-5 h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
+    className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
       expanded ? "rotate-90" : ""
     }`}
     strokeWidth={1.5}
   />
 </div>
 
-      <div className="mt-auto pt-7">
-        <div className="flex flex-wrap items-end gap-3">
+      <div className="mt-auto pt-3">
+        <div className="flex flex-wrap items-end gap-2">
           <div
             className="
-              text-[30px]
+              text-[23px]
               font-semibold
               leading-none
               tracking-tight
@@ -10267,13 +10232,13 @@ return (
 
         <div
           className="
-            mt-4
+            mt-2
             flex
             flex-wrap
             items-center
             gap-x-2
             gap-y-1
-            text-sm
+            text-xs
             tabular-nums
             text-muted-foreground
           "
@@ -10435,8 +10400,8 @@ function ProjectLogoButton({
         aria-label={`Change ${platform} logo`}
         className="
           flex
-          h-16
-          w-16
+          h-12
+          w-12
           cursor-pointer
           items-center
           justify-center
@@ -11071,14 +11036,14 @@ function ProjectIncomeSection({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-border/60 bg-card/35 px-5 pb-5 pt-6">
+      <div className="rounded-[14px] border border-border/60 bg-card/35 px-4 pb-4 pt-4">
         {chartMonths.length ===
         0 ? (
           <div className="flex h-56 items-center justify-center text-sm text-muted-foreground">
             No tracked months for this year.
           </div>
         ) : (
-          <div className="flex h-56 items-end gap-2 md:gap-4">
+          <div className="flex h-44 items-end gap-2 md:gap-3">
             {chartMonths.map(
               (month) => {
                 const amount =
@@ -11128,7 +11093,7 @@ function ProjectIncomeSection({
                     }
                     className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                   >
-                    <div className="flex h-44 w-full items-end justify-center gap-2 md:gap-3">
+                    <div className="flex h-36 w-full items-end justify-center gap-2 md:gap-3">
                       <div className="flex h-full w-[44%] max-w-10 flex-col items-center justify-end">
                         <div className="mb-2 flex min-h-8 items-end justify-center gap-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-emerald-400 md:text-[11px]">
                           {formatCurrency(
@@ -11811,7 +11776,7 @@ function Metric({
         </span>
       </div>
 
-      <div className="mt-2 text-[clamp(20px,1.7vw,27px)] font-semibold tracking-tight tabular-nums">
+      <div className="mt-1.5 text-[clamp(19px,1.55vw,24px)] font-semibold tracking-tight tabular-nums">
         {value}
       </div>
     </div>
