@@ -1222,7 +1222,7 @@ export default function Dashboard() {
     assets,
     setAssets,
   ] = useState([]);
-  const [chartRange, setChartRange] = useState("1M");
+  const [chartRange, setChartRange] = useState("ALL");
   const [cashMonth, setCashMonth] = useState(() => new Date().toISOString().slice(0,7));
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankTransactions, setBankTransactions] = useState([]);
@@ -2045,6 +2045,11 @@ export default function Dashboard() {
   const card = "min-w-0 overflow-hidden rounded-2xl border border-border/50 bg-card shadow-[0_8px_32px_rgba(0,0,0,0.10)]";
   const monthTitle = new Date(cashYear, cashMonthNum - 1, 1).toLocaleDateString("en-US", { month: "long", year: "numeric" });
   const bankTotal = bankAccounts.reduce((sum, account) => sum + Number(account.currentBalance ?? 0), 0);
+  const sortedBankAccounts = [...bankAccounts].sort((a, b) => {
+    const balanceA = a.currentBalance == null ? -Infinity : Number(a.currentBalance);
+    const balanceB = b.currentBalance == null ? -Infinity : Number(b.currentBalance);
+    return (Number.isFinite(balanceB) ? balanceB : -Infinity) - (Number.isFinite(balanceA) ? balanceA : -Infinity);
+  });
   const netCashFlow = incomeTotal - expenseTotal;
   const chartTooltipStyle = { background: "#17191d", border: "1px solid #30343b", borderRadius: 10, color: "#f1f5f9", fontSize: 12 };
 
@@ -2123,7 +2128,7 @@ export default function Dashboard() {
             <p className="text-[11px] text-muted-foreground">Connected account balances</p>
             <p className="mt-1 text-[26px] font-semibold leading-tight tracking-tight tabular-nums">{formatCurrency(bankTotal)}</p>
             <div className="mt-3 divide-y divide-border/35">
-              {bankAccounts.length ? bankAccounts.map((account, index) => (
+              {sortedBankAccounts.length ? sortedBankAccounts.map((account, index) => (
                 <div key={account.id || index} className="flex min-w-0 items-center justify-between gap-3 py-2.5 transition-colors hover:bg-white/[0.015]">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <WalletCards className="h-4 w-4 shrink-0 text-sky-400/80" />
