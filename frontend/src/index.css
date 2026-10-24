@@ -2,121 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
+/* NAm design tokens: one source of truth for Tailwind and shared UI components. */
 @layer base {
-    :root {
-        --background: 220 12% 4%;
-        --foreground: 210 20% 96%;
-        --card: 220 11% 7%;
-        --card-foreground: 210 20% 96%;
-        --popover: 220 12% 9%;
-        --popover-foreground: 210 20% 96%;
-        --primary: 210 20% 96%;
-        --primary-foreground: 220 12% 5%;
-        --secondary: 220 10% 12%;
-        --secondary-foreground: 210 20% 96%;
-        --muted: 220 9% 12%;
-        --muted-foreground: 216 10% 64%;
-        --accent: 220 10% 14%;
-        --accent-foreground: 210 20% 96%;
-        --destructive: 0 84% 60%;
-        --destructive-foreground: 0 0% 98%;
-        --border: 220 9% 18%;
-        --input: 220 9% 19%;
-        --ring: 217 91% 65%;
-        --chart-1: 0 0% 98%;
-        --chart-2: 240 5% 65%;
-        --chart-3: 240 4% 32%;
-        --chart-4: 240 4% 25%;
-        --chart-5: 240 4% 16%;
-        --radius: 0.75rem;
-    }
-}
+  :root {
+    color-scheme: dark;
+    --background: 220 12% 4%;
+    --foreground: 210 20% 96%;
+    --card: 220 11% 7%;
+    --card-foreground: 210 20% 96%;
+    --popover: 220 12% 9%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 210 20% 96%;
+    --primary-foreground: 220 12% 5%;
+    --secondary: 220 10% 12%;
+    --secondary-foreground: 210 20% 96%;
+    --muted: 220 9% 12%;
+    --muted-foreground: 216 10% 64%;
+    --accent: 220 10% 14%;
+    --accent-foreground: 210 20% 96%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 9% 18%;
+    --input: 220 9% 19%;
+    --ring: 217 91% 65%;
+    --chart-1: 217 91% 60%;
+    --chart-2: 158 64% 52%;
+    --chart-3: 330 81% 70%;
+    --chart-4: 42 94% 56%;
+    --chart-5: 262 83% 70%;
+    --radius: .75rem;
+  }
 
-@layer base {
-    * {
-        @apply border-border;
-    }
-    body {
-        @apply bg-background text-foreground;
-        font-family: 'Manrope', sans-serif;
-    }
-    h1, h2, h3, h4, h5, h6 {
-        font-family: 'Outfit', sans-serif;
-    }
-}
-
-.font-mono {
-    font-family: 'Space Mono', monospace !important;
-}
-
-@layer base {
-    [data-debug-wrapper="true"] {
-        display: contents !important;
-    }
-    [data-debug-wrapper="true"] > * {
-        margin-left: inherit;
-        margin-right: inherit;
-        margin-top: inherit;
-        margin-bottom: inherit;
-        padding-left: inherit;
-        padding-right: inherit;
-        padding-top: inherit;
-        padding-bottom: inherit;
-        column-gap: inherit;
-        row-gap: inherit;
-        gap: inherit;
-        border-left-width: inherit;
-        border-right-width: inherit;
-        border-top-width: inherit;
-        border-bottom-width: inherit;
-        border-left-style: inherit;
-        border-right-style: inherit;
-        border-top-style: inherit;
-        border-bottom-style: inherit;
-        border-left-color: inherit;
-        border-right-color: inherit;
-        border-top-color: inherit;
-        border-bottom-color: inherit;
-    }
-}
-
-/* Origin-inspired global design system: shared surfaces and responsive sizing.
-   Sidebar retains its existing colors, navigation, and behavior. */
-@layer base {
-  html { color-scheme: dark; font-size: 14px; -webkit-font-smoothing: antialiased; }
-  body { min-width: 320px; line-height: 1.5; letter-spacing: -0.012em; }
-  h1, h2, h3, h4, h5, h6 { letter-spacing: -0.025em; }
-  h1 { line-height: 1.18; }
-  h2, h3 { line-height: 1.28; }
+  *, *::before, *::after { box-sizing: border-box; @apply border-border; }
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+  body { @apply bg-background text-foreground; min-width: 320px; font-family: 'Manrope', sans-serif; line-height: 1.5; }
+  h1, h2, h3, h4, h5, h6 { font-family: 'Outfit', sans-serif; letter-spacing: -.025em; }
   button, input, select, textarea { font: inherit; }
-  button { cursor: pointer; }
   button:disabled { cursor: not-allowed; }
   :focus-visible { outline: 2px solid hsl(var(--ring)); outline-offset: 2px; }
-  ::selection { background: rgba(75, 130, 230, .35); color: #fff; }
+  ::selection { background: rgba(75,130,230,.35); color: white; }
 }
 
 @layer components {
-  /* Apply shared sizing to app content only, never the navigation sidebar. */
-  .nam-content { min-width: 0; }
+  /* Only structural defaults. Tailwind utilities remain the authority for size and spacing. */
+  .nam-main { min-width: 0; background: hsl(var(--background)); }
+  .nam-content { min-width: 0; min-height: 100vh; }
   .nam-content > * { min-width: 0; }
-  .nam-content :where(.rounded-xl, .rounded-2xl).border.bg-card {
-    border-color: hsl(var(--border) / .65);
-    box-shadow: 0 1px 1px rgba(0,0,0,.12);
-  }
-  .nam-content :where(button, a, input, select, textarea) { transition: background-color .16s ease, border-color .16s ease, color .16s ease, box-shadow .16s ease; }
   .nam-content :where(input, select, textarea) { max-width: 100%; }
   .nam-content :where(table) { font-variant-numeric: tabular-nums; }
   .nam-content :where(.recharts-responsive-container) { min-width: 0; }
-  .nam-content :where(.recharts-cartesian-axis-tick) { font-size: 11px; }
+  .nam-content :where(.overflow-x-auto) { scrollbar-width: thin; }
+
+  /* Dashboard-specific styling; no global card/button sizing overrides. */
+  .nam-dashboard { --dashboard-line: hsl(var(--border) / .7); }
+  .nam-dashboard :is(.nam-net-worth, .nam-accounts, .nam-cash-flow, .nam-allocation) {
+    border-color: var(--dashboard-line);
+    background-color: hsl(var(--card));
+  }
+  .nam-dashboard .nam-net-worth {
+    background-image: linear-gradient(180deg, rgba(255,255,255,.014), transparent);
+  }
+  .nam-dashboard .nam-net-worth .recharts-cartesian-grid line {
+    stroke: rgba(255,255,255,.055);
+  }
+  .nam-dashboard .nam-cash-flow input[type="month"] { color-scheme: dark; }
+  .nam-dashboard .nam-cash-flow .grid > div { min-width: 0; }
+  .nam-dashboard .nam-allocation button:hover { background: rgba(255,255,255,.035); }
 }
 
-@media (max-width: 1100px) {
-  .nam-content { padding-inline: 20px; }
-}
-@media (max-width: 700px) {
-  .nam-content { padding-inline: 14px; padding-block: 16px; }
-  .nam-content :where(.grid) { min-width: 0; }
-}
 @media (prefers-reduced-motion: reduce) {
-  .nam-content *, .nam-content *::before, .nam-content *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; }
+  .nam-content *, .nam-content *::before, .nam-content *::after {
+    scroll-behavior: auto !important;
+    transition-duration: .01ms !important;
+    animation-duration: .01ms !important;
+  }
 }
