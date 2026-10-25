@@ -419,15 +419,7 @@ const customWeeks = Array.from(
 
   return (
     <div className="space-y-3" data-testid="doordash-page">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="text-sm font-medium text-muted-foreground">DoorDash + Uber Eats + Instacart + Shipt</p>
-          <h1 className="mt-1 text-[22px] font-semibold tracking-tight">Delivery Earnings</h1>
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            Simple tracking for earnings and expenses.
-          </p>
-        </div>
-
+      <div className="flex justify-end">
         <Button onClick={() => setAddOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Add earnings
@@ -496,9 +488,9 @@ const customWeeks = Array.from(
         </Card>
       </div>
 
-      <div className="grid items-start gap-[14px] xl:grid-cols-[minmax(0,1.9fr)_minmax(345px,1fr)]">
-      <Card className="min-w-0 overflow-hidden rounded-[15px] border-[#25272c] bg-[#101114]">
-        <CardContent className="p-4 sm:p-5">
+      <div className="grid items-stretch gap-[14px] xl:grid-cols-[minmax(0,1.9fr)_minmax(345px,1fr)]">
+      <Card className="flex h-full min-w-0 flex-col overflow-hidden rounded-[15px] border-[#25272c] bg-[#101114]">
+        <CardContent className="flex h-full min-h-0 flex-col p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-[15px] font-semibold">
@@ -591,7 +583,7 @@ const customWeeks = Array.from(
             </div>
           </div>
 
-          <div className="mt-4 h-[clamp(230px,30vh,300px)]">
+          <div className="mt-4 min-h-[300px] flex-1">
             {chartData.length ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
