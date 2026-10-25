@@ -2204,7 +2204,7 @@ export default function Dashboard() {
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Asset allocation</h2>
           </div>
           <div className="space-y-2 px-4 py-3">
-            {["stocks", "crypto", "cash", "other", "debts"].map(category => (
+            {[...allocationCategories].sort((a, b) => Math.abs(Number(breakdown[b]) || 0) - Math.abs(Number(breakdown[a]) || 0)).map(category => (
               <button key={category} type="button" onClick={() => openCategoryModal(category)}
                 className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-secondary/35"
                 aria-label={`View ${category} allocation details`}>
