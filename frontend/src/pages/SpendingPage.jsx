@@ -775,15 +775,17 @@ const unhideTransaction = async (id) => {
                     <defs><linearGradient id="originSpendingFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#38a5df" stopOpacity={0.24}/><stop offset="100%" stopColor="#38a5df" stopOpacity={0}/></linearGradient></defs>
                     <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={28} />
                     <YAxis hide domain={["auto", "auto"]}/>
-                    <Tooltip contentStyle={{ background: "#17191d", border: "1px solid #30343b", borderRadius: 10, fontSize: 12 }} labelFormatter={label => range === "ytd" ? label : `Day ${label}`} formatter={(value, name) => [money(value), name === "previous" ? "Previous month" : name === "income" ? "Income" : "Spent"]}/>
+                    <Tooltip contentStyle={{ background: "#17191d", border: "1px solid #30343b", borderRadius: 10, fontSize: 12 }} labelFormatter={label => range === "ytd" ? label : `Day ${label}`} formatter={(value, name, item) => [money(value), item?.dataKey === "previous" ? "Previous month" : item?.dataKey === "income" ? "Income" : "Spending"]}/>
                     {range === "month" && budget > 0 && <ReferenceLine y={budget} stroke="#64748b" strokeDasharray="4 4" />}
                     {range === "month" && <Area type="monotone" dataKey="previous" stroke="#6b7280" strokeWidth={1.6} strokeDasharray="3 4" fill="none" dot={false}/>}
-                    <Area type="monotone" dataKey="spent" stroke="#38a5df" strokeWidth={2.5} fill="url(#originSpendingFill)" dot={false} activeDot={{ r: 4 }}/>
+                    <Area type="monotone" dataKey="spent" name="Spending" stroke="#38a5df" strokeWidth={2.5} fill="url(#originSpendingFill)" dot={false} activeDot={{ r: 4 }}/>
+                    <Area type="monotone" dataKey="income" name="Income" stroke="#36c595" strokeWidth={2.25} fill="none" dot={false} activeDot={{ r: 4, fill: "#36c595" }}/>
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
               <div className="mt-2 flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-full bg-[#38a5df]"/>Spending</span>
+                <span className="flex items-center gap-1.5"><span className="h-1.5 w-4 rounded-full bg-[#36c595]"/>Income</span>
                 {range === "month" && <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t border-dashed border-slate-500"/>Previous month</span>}
                 {range === "month" && budget > 0 && <span className="flex items-center gap-1.5"><span className="h-0 w-4 border-t border-dashed border-slate-400"/>Budget</span>}
               </div>
