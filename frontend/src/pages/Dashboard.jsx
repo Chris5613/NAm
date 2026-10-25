@@ -1,4 +1,4 @@
-import { Area, AreaChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from "recharts";
+import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from "recharts";
 import { spendingApi } from "@/lib/apiClient";
 import {
   useState,
@@ -2054,21 +2054,9 @@ export default function Dashboard() {
   const combined = [...importedPoints, ...monthPoints, ...livePoints, ...(currentPoint ? [currentPoint] : [])]
     .filter(p => !isUnverifiedMay9Zero(p) && (chartRange === "ALL" || p.date >= cutoff))
     .sort((a,b) => a.date-b.date);
-  // Missing historical months stay missing; dashed connectors are visual only.
-  const unrecordedGaps = [];
-  const netChart = [];
-  combined.forEach((point, index) => {
-    const previous = combined[index - 1];
-    if (previous && point.date.getTime() - previous.date.getTime() > 50 * 86400000) {
-      const bridgeKey = "unrecordedGap" + unrecordedGaps.length;
-      netChart[netChart.length - 1][bridgeKey] = previous.value;
-      netChart.push({ timestamp: Math.round((previous.date.getTime() + point.date.getTime()) / 2), value: null });
-      unrecordedGaps.push({ key: bridgeKey, start: previous.date, end: point.date });
-      netChart.push({ timestamp: point.date.getTime(), value: point.value, [bridgeKey]: point.value });
-    } else {
-      netChart.push({ timestamp: point.date.getTime(), value: point.value });
-    }
-  });
+  // Space recorded observations evenly so unrecorded months do not make a
+  // large empty horizontal interval. Dates remain unchanged in tooltips.
+  const netChart = combined.map(p => ({ dateKey: p.date.toISOString(), value: p.value }));
   const [cashYear, cashMonthNum] = cashMonth.split("-").map(Number);
   const days = new Date(cashYear, cashMonthNum, 0).getDate();
   const cashDays = Array.from({length:days}, (_,i) => ({day:String(i+1),income:0,expenses:0}));
@@ -2131,13 +2119,10 @@ export default function Dashboard() {
                         <stop offset="100%" stopColor="#38a5df" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <XAxis dataKey="timestamp" type="number" scale="time" domain={["dataMin", "dataMax"]} axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={30} dy={8} tickFormatter={timestamp => new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric" })} />
+                    <XAxis dataKey="dateKey" type="category" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={30} dy={8} tickFormatter={dateKey => new Date(dateKey).toLocaleDateString("en-US", { month: "short", day: "numeric" })} />
                     <YAxis hide domain={["auto", "auto"]} />
-                    <Tooltip formatter={(value, name) => name === "Unrecorded interval" ? [null, null] : formatCurrency(value)} labelFormatter={timestamp => new Date(timestamp).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} contentStyle={chartTooltipStyle} />
-                    <Area dataKey="value" type="monotone" connectNulls={false} stroke="#38a5df" fill="url(#dashboardNetFill)" strokeWidth={2.25} dot={combined.length < 3 ? { r: 2.5, fill: "#38a5df" } : false} activeDot={{ r: 4 }} />
-                    {unrecordedGaps.map(gap => (
-                      <Line key={gap.key} dataKey={gap.key} name="Unrecorded interval" type="linear" connectNulls stroke="#38a5df" strokeWidth={1.75} strokeDasharray="5 5" strokeOpacity={0.75} dot={false} activeDot={false} legendType="none" isAnimationActive={false} />
-                    ))}
+                    <Tooltip formatter={value => formatCurrency(value)} labelFormatter={dateKey => new Date(dateKey).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} contentStyle={chartTooltipStyle} />
+                    <Area dataKey="value" type="monotone" stroke="#38a5df" fill="url(#dashboardNetFill)" strokeWidth={2.25} dot={netChart.length < 3 ? { r: 2.5, fill: "#38a5df" } : false} activeDot={{ r: 4 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -2146,7 +2131,7 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/40 px-4 py-2.5">
-            <span className="text-[11px] text-muted-foreground">{netChart.length < 3 ? `${netChart.length} recorded ${netChart.length === 1 ? "value" : "values"} in this range` : unrecordedGaps.length ? "Dashed line = unrecorded period" : "Net worth history"}</span>
+            <span className="text-[11px] text-muted-foreground">{netChart.length < 3 ? `${netChart.length} recorded ${netChart.length === 1 ? "value" : "values"} in this range` : "Net worth history · recorded values spaced evenly"}</span>
             <div className="flex items-center gap-0.5 rounded-lg bg-background/70 p-0.5" aria-label="Net worth time range">
               {["1W", "1M", "3M", "YTD", "ALL"].map(range => (
                 <button key={range} type="button" onClick={() => setChartRange(range)}
