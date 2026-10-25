@@ -8561,81 +8561,32 @@ const summary =
       className="space-y-3"
       data-testid="yield-farming-page"
     >
-      <section className="border-b border-border/50 pb-4">
-        <div className="grid gap-x-5 gap-y-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-          <Metric
-            label="Portfolio Balance"
-            value={formatCurrency(
-              summary.portfolioBalance
-            )}
-            icon={
-              CircleDollarSign
-            }
-          />
-
-          <Metric
-            label="Total Earned"
-            value={formatCurrency(
-              summary.totalEarned
-            )}
-            icon={
-              BadgeDollarSign
-            }
-          />
-
-          <Metric
-            label="Weighted APY"
-            value={formatPercent(
-              summary.weightedApy
-            )}
-            icon={
-              Percent
-            }
-          />
-
-          <Metric
-            label="Estimated Yearly Income"
-            value={formatCurrency(
-              summary.annualYield
-            )}
-            icon={
-              TrendingUp
-            }
-          />
-
-          <Metric
-            label="Estimated Monthly Income"
-            value={formatCurrency(
-              summary.monthlyYield
-            )}
-            icon={
-              CalendarDays
-            }
-          />
-
-          <Metric
-            label="Active Positions"
-            value={String(
-              summary.activePositions
-            )}
-            icon={
-              Layers3
-            }
-          />
+      <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-4 sm:p-5">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-[15px] font-semibold tracking-tight">Portfolio Overview</h2>
+          <span className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-[11px] text-muted-foreground">
+            {summary.activePositions} active positions
+          </span>
         </div>
-
+        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.35fr)_repeat(4,minmax(0,1fr))]">
+          <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-4 py-3">
+            <span className="text-xs text-muted-foreground">Total Portfolio Balance</span>
+            <span className="mt-1 text-[clamp(25px,2.25vw,34px)] font-semibold leading-tight tracking-tight tabular-nums">
+              {formatCurrency(summary.portfolioBalance)}
+            </span>
+            <span className="mt-1 text-xs font-medium text-emerald-400">
+              {formatPercent(summary.weightedApy)} weighted APY
+            </span>
+          </div>
+          <Metric label="Estimated Monthly Income" value={formatCurrency(summary.monthlyYield)} icon={CalendarDays} />
+          <Metric label="Estimated Yearly Income" value={formatCurrency(summary.annualYield)} icon={TrendingUp} />
+          <Metric label="Total Earned" value={formatCurrency(summary.totalEarned)} icon={BadgeDollarSign} />
+          <Metric label="Active Positions" value={String(summary.activePositions)} icon={Layers3} />
+        </div>
         <PortfolioAllocationBar
-          projects={
-            projectCards
-          }
-          totalBalance={
-            summary.portfolioBalance
-          }
-          trxBalance={
-            Number(
-              rollerCoinStats?.currentBalanceUsd
-            ) || 0
-          }
+          projects={projectCards}
+          totalBalance={summary.portfolioBalance}
+          trxBalance={Number(rollerCoinStats?.currentBalanceUsd) || 0}
         />
       </section>
 
@@ -8648,7 +8599,11 @@ const summary =
         </div>
       )}
 
-      <section className="space-y-3">
+      <section className="space-y-3 rounded-2xl border border-[#252a32] bg-[#101318] p-3 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+          <h2 className="text-[15px] font-semibold">Your Projects</h2>
+          <span className="text-[11px] text-muted-foreground">Sorted by balance · {sortedProgramCards.length} projects</span>
+        </div>
 {sortedProgramCards.length ===
 0 ? (
           <Card className="border-border/50 bg-card/70">
@@ -8995,6 +8950,8 @@ if (
       </section>
 
 
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
+        <div className="min-w-0">
       <ProjectIncomeSection
         months={
           projectIncome
@@ -9061,6 +9018,37 @@ if (
           projectLogos
         }
       />
+
+        </div>
+        <PortfolioAllocationDonut
+          projects={projectCards}
+          totalBalance={summary.portfolioBalance}
+          trxBalance={Number(rollerCoinStats?.currentBalanceUsd) || 0}
+        />
+      </div>
+
+      <section className="rounded-2xl border border-[#252a32] bg-[#101318] px-4 py-3 sm:px-5">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <h2 className="text-[14px] font-semibold">Recorded Monthly Income</h2>
+          <span className="text-[11px] text-muted-foreground">Actual tracked months</span>
+        </div>
+        <div className="divide-y divide-white/[0.06]">
+          {projectIncome.filter(month => Number(month.total) > 0).slice().sort((a,b) => String(b.monthKey).localeCompare(String(a.monthKey))).slice(0, 4).map(month => (
+            <button
+              key={month.monthKey}
+              type="button"
+              onClick={() => { setSelectedYear(Number(String(month.monthKey).slice(0,4))); setSelectedMonthKey(month.monthKey); }}
+              className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition hover:text-emerald-400"
+            >
+              <span className="text-xs text-muted-foreground">{new Date(String(month.monthKey) + "-01T12:00:00").toLocaleDateString("en-US",{month:"long",year:"numeric"})}</span>
+              <span className="text-sm font-semibold tabular-nums text-emerald-400">{formatCurrency(month.total)}</span>
+            </button>
+          ))}
+          {!projectIncome.some(month => Number(month.total) > 0) && (
+            <p className="py-3 text-xs text-muted-foreground">No recorded monthly income yet.</p>
+          )}
+        </div>
+      </section>
 
             {completedRatexPositions.length >
         0 && (
@@ -10958,7 +10946,7 @@ function ProjectIncomeSection({
   }
 
   return (
-    <section className="space-y-3 border-t border-border/50 pt-5">
+    <section className="space-y-3 rounded-2xl border border-[#252a32] bg-[#101318] p-4 sm:p-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -11683,7 +11671,7 @@ function PortfolioAllocationBar({
     };
 
   return (
-    <div className="mt-5">
+    <div className="mt-4">
       <div className="flex h-[3px] w-full overflow-hidden rounded-full bg-white/5">
         {coins.map(
           (
@@ -11716,7 +11704,7 @@ function PortfolioAllocationBar({
         )}
       </div>
 
-      <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-2 text-[13px] font-medium text-muted-foreground">
+      <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-2 text-[12px] font-medium text-muted-foreground">
         {coins.map(
           (
             coin,
@@ -11754,10 +11742,69 @@ function PortfolioAllocationBar({
   );
 }
 
-function Metric({
-  label,
-  value,
-  icon: Icon,
+function PortfolioAllocationDonut({ projects, totalBalance, trxBalance = 0 }) {
+  const totals = new Map();
+  (projects || []).forEach(project => {
+    (project.assets || []).forEach(asset => {
+      const amount = Number(asset.balance) || 0;
+      if (amount <= 0) return;
+      const symbol = String(asset.allocationSymbol || asset.asset || "Other").trim().toUpperCase();
+      totals.set(symbol, (totals.get(symbol) || 0) + amount);
+    });
+  });
+  if (Number(trxBalance) > 0) totals.set("TRX", Number(trxBalance));
+  const colors = { ONYC: "#facc15", USDS: "#fb923c", USDC: "#60a5fa", TRX: "#f43f5e" };
+  const fallback = ["#34d399", "#a78bfa", "#22d3ee", "#f472b6"];
+  const entries = [...totals.entries()].filter(([,value]) => value > 0).sort((a,b) => b[1]-a[1]);
+  const sum = entries.reduce((total,[,value]) => total+value,0);
+  let position = 0;
+  const stops = entries.map(([symbol,value],index) => {
+    const start = position;
+    position += (value / (sum || 1)) * 100;
+    return `${colors[symbol] || fallback[index % fallback.length]} ${start}% ${position}%`;
+  });
+  return (
+    <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-4 sm:p-5">
+      <h2 className="text-[15px] font-semibold">Portfolio Allocation</h2>
+      <p className="mt-1 text-xs text-muted-foreground">Current asset balances by token</p>
+      <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row xl:flex-col 2xl:flex-row">
+        <div
+          className="relative flex h-44 w-44 shrink-0 items-center justify-center rounded-full"
+          style={{ background: sum > 0 ? `conic-gradient(${stops.join(", ")})` : "#252a32" }}
+        >
+          <div className="flex h-[66%] w-[66%] flex-col items-center justify-center rounded-full bg-[#101318]">
+            <span className="text-lg font-semibold tabular-nums">{formatCurrency(totalBalance)}</span>
+            <span className="text-[11px] text-muted-foreground">Total portfolio</span>
+          </div>
+        </div>
+        <div className="w-full min-w-0 space-y-3">
+          {entries.map(([symbol,value],index) => (
+            <div key={symbol} className="flex items-center gap-2 text-xs">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{backgroundColor: colors[symbol] || fallback[index % fallback.length]}} />
+              <span className="min-w-0 flex-1 truncate text-muted-foreground">{symbol}</span>
+              <span className="font-medium tabular-nums">{formatCurrency(value)}</span>
+              <span className="w-10 text-right tabular-nums text-muted-foreground">{sum > 0 ? ((value/sum)*100).toFixed(1) : "0.0"}%</span>
+            </div>
+          ))}
+          {!entries.length && <p className="text-xs text-muted-foreground">No token allocations available.</p>}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Metric({ label, value, icon: Icon }) {
+  return (
+    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3.5 py-3">
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.6} />
+        <span className="leading-snug">{label}</span>
+      </div>
+      <div className="mt-2 truncate text-[clamp(17px,1.5vw,23px)] font-semibold leading-tight tracking-tight tabular-nums" title={value}>
+        {value}
+      </div>
+    </div>
+  );
 }) {
   return (
     <div>
