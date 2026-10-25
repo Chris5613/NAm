@@ -342,17 +342,6 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
     );
   }, [categoryFilter, rangeTransactions, search]);
 
-  const upcomingDays = useMemo(
-    () =>
-      Array.from({ length: 14 }, (_, index) => {
-        const day = new Date();
-        day.setDate(day.getDate() + index);
-        return { key: dayKey(day), weekday: new Intl.DateTimeFormat("en-US", { weekday: "short" }).format(day), number: day.getDate() };
-      }),
-    []
-  );
-  const upcoming = useMemo(() => transactions.filter((item) => item.date >= today && item.date <= upcomingDays[13].key), [today, upcomingDays, transactions]);
-
   const loadAll = useCallback(async () => {
     setIsLoading(true);
     try {
@@ -792,15 +781,14 @@ const unhideTransaction = async (id) => {
             </div>
           </section>
 
-          <div className="grid gap-[13px] lg:grid-cols-2">
             <section id="spending-transactions" className="min-w-0 overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
               <div className="flex items-center justify-between border-b border-[#222428] px-[14px] py-3">
-                <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Latest transactions</h2>
+                <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Recent transactions</h2>
                 <button type="button" onClick={() => setAllTransactionsOpen(true)} className="text-[11px] text-muted-foreground hover:text-foreground">See all <ChevronRight className="inline h-3 w-3"/></button>
               </div>
-              <div className="divide-y divide-border/35 px-3.5">
-                {rangeTransactions.length ? rangeTransactions.slice(0, 5).map(item => (
-                  <div key={item.id} className="flex items-center gap-2 py-2">
+              <div className="grid divide-y divide-border/35 px-3.5 lg:grid-cols-2 lg:divide-y-0 lg:gap-x-5">
+                {rangeTransactions.length ? rangeTransactions.slice(0, 8).map(item => (
+                  <div key={item.id} className="flex items-center gap-2 border-b border-border/35 py-2.5">
                     <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-secondary"><ReceiptText className="h-3.5 w-3.5 text-muted-foreground"/></div>
                     <div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{item.merchant || "Transaction"}</p><p className="mt-0.5 text-[10px] text-muted-foreground">{humanDate(item.date)} · {item.category || "Other"}{item.pending ? " · Pending" : ""}</p></div>
                     <span className={`shrink-0 text-xs font-medium tabular-nums ${isIncome(item) ? "text-emerald-400" : ""}`}>{money(item.amount)}</span>
@@ -813,30 +801,7 @@ const unhideTransaction = async (id) => {
               </div>
             </section>
 
-            <section id="spending-upcoming" className="min-w-0 overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
-              <div className="flex items-center justify-between border-b border-[#222428] px-[14px] py-3">
-                <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Upcoming transactions</h2>
-                <span className="text-[10px] text-muted-foreground">Next 14 days</span>
-              </div>
-              <div className="grid grid-cols-7 gap-[2px] px-2.5 pt-2.5">
-                {upcomingDays.map(day => {
-                  const dayItems = upcoming.filter(item => item.date === day.key);
-                  const total = dayItems.reduce((sum,item) => sum + Math.abs(Number(item.amount || 0)), 0);
-                  return <div key={day.key} className="min-w-0 border border-[#23252a] bg-[#0e0f11] px-0.5 pb-1.5 pt-1 text-center">
-                    <p className="text-[9px] text-[#868b94]">{day.weekday}</p><p className="mt-1 text-[12px] text-white">{day.number}</p>
-                    <div className="mt-2 flex h-3 items-center justify-center gap-0.5">{dayItems.slice(0,3).map((item,index) => <span key={item.id || index} className={"h-1.5 w-1.5 rounded-full "+(isIncome(item) ? "bg-emerald-400" : "bg-rose-400")}/>)}</div>
-                    <p className="mt-1 truncate text-[9px] text-[#858a93]">{dayItems.length ? money(total) : "—"}</p>
-                  </div>;
-                })}
-              </div>
-              <div className="mt-2 space-y-1.5 border-t border-border/35 px-3.5 py-2.5">
-                {upcoming.length ? upcoming.slice(0, 4).map((item,index) => (
-                  <div key={item.id || index} className="flex items-center justify-between gap-2 text-[11px]"><span className="min-w-0 truncate">{item.merchant || item.category || "Transaction"} <span className="text-muted-foreground">· {humanDate(item.date)}</span></span><span className="shrink-0 tabular-nums">{money(item.amount)}</span></div>
-                )) : <p className="py-3 text-center text-[11px] text-muted-foreground">No dated transactions scheduled in the next 14 days.</p>}
-                <p className="text-[10px] text-muted-foreground">Based on recorded transaction dates, not predicted bills.</p>
-              </div>
-            </section>
-          </div>
+
 
           <section id="spending-reports" className="overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
             <div className="flex items-center justify-between border-b border-[#222428] px-[14px] py-3">
