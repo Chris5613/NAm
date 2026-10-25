@@ -4087,7 +4087,7 @@ function KryptexProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
+        className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
       >
         <div className="flex w-full items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -4131,9 +4131,9 @@ function KryptexProjectCard({
           />
         </div>
 
-        <div className="mt-auto pt-1.5">
+        <div className="mt-auto pt-1">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="text-[20px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
+            <div className="text-[19px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
               {formatCurrency(
                 stats?.currentBalanceUsd
               )}
@@ -8558,10 +8558,10 @@ const summary =
 
   return (
     <div
-      className="space-y-3"
+      className="space-y-2.5"
       data-testid="yield-farming-page"
     >
-      <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-3 sm:p-4">
+      <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-2.5 sm:p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[15px] font-semibold tracking-tight">Portfolio Overview</h2>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-[11px] text-muted-foreground">
@@ -8569,7 +8569,7 @@ const summary =
           </span>
         </div>
         <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.35fr)_repeat(4,minmax(0,1fr))]">
-          <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2.5">
+          <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2">
             <span className="text-xs text-muted-foreground">Total Portfolio Balance</span>
             <span className="mt-1 text-[clamp(24px,2vw,30px)] font-semibold leading-tight tracking-tight tabular-nums">
               {formatCurrency(summary.portfolioBalance)}
@@ -8599,7 +8599,7 @@ const summary =
         </div>
       )}
 
-      <section className="space-y-2.5 rounded-2xl border border-[#252a32] bg-[#101318] p-2.5 sm:p-3">
+      <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#101318] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Your Projects</h2>
           <span className="text-[11px] text-muted-foreground">Sorted by balance · {sortedProgramCards.length} projects</span>
@@ -8620,7 +8620,7 @@ const summary =
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
   {sortedProgramCards.map(
               (
                 item
@@ -9027,8 +9027,8 @@ if (
         />
       </div>
 
-      <section className="rounded-2xl border border-[#252a32] bg-[#101318] px-4 py-3 sm:px-5">
-        <div className="mb-2 flex items-center justify-between gap-3">
+      <section className="rounded-2xl border border-[#252a32] bg-[#101318] px-3 py-2.5">
+        <div className="mb-1 flex items-center justify-between gap-3">
           <h2 className="text-[14px] font-semibold">Recorded Monthly Income</h2>
           <span className="text-[11px] text-muted-foreground">Actual tracked months</span>
         </div>
@@ -9038,7 +9038,7 @@ if (
               key={month.monthKey}
               type="button"
               onClick={() => { setSelectedYear(Number(String(month.monthKey).slice(0,4))); setSelectedMonthKey(month.monthKey); }}
-              className="flex w-full items-center justify-between gap-3 py-2.5 text-left transition hover:text-emerald-400"
+              className="flex w-full items-center justify-between gap-3 py-1.5 text-left transition hover:text-emerald-400"
             >
               <span className="text-xs text-muted-foreground">{new Date(String(month.monthKey) + "-01T12:00:00").toLocaleDateString("en-US",{month:"long",year:"numeric"})}</span>
               <span className="text-sm font-semibold tabular-nums text-emerald-400">{formatCurrency(month.total)}</span>
@@ -9425,7 +9425,7 @@ function ProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
+        className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
       >
         {/* TOP */}
 
@@ -9462,11 +9462,11 @@ function ProjectCard({
 </div>
         {/* VALUE */}
 
-        <div className="mt-auto pt-1.5">
+        <div className="mt-auto pt-1">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[20px]
+                text-[19px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9611,7 +9611,7 @@ function UnetworkProjectCard({
               !value
           )
         }
-        className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
+        className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
       >
         {/* TOP */}
 
@@ -9653,11 +9653,11 @@ function UnetworkProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-1.5">
+        <div className="mt-auto pt-1">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[20px]
+                text-[19px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9889,7 +9889,7 @@ function SaladProjectCard({
               !value
           )
         }
-        className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
+        className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
       >
         {/* TOP */}
 
@@ -9931,11 +9931,11 @@ function SaladProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-1.5">
+        <div className="mt-auto pt-1">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[20px]
+                text-[19px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -10156,7 +10156,7 @@ return (
             !current
         )
       }
-      className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
+      className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
     >
 <div className="flex w-full items-start justify-between gap-3">
   <div className="flex min-w-0 items-center gap-3">
@@ -10188,11 +10188,11 @@ return (
   />
 </div>
 
-      <div className="mt-auto pt-1.5">
+      <div className="mt-auto pt-1">
         <div className="flex flex-wrap items-end gap-2">
           <div
             className="
-              text-[20px]
+              text-[19px]
               font-semibold
               leading-none
               tracking-tight
@@ -10388,8 +10388,8 @@ function ProjectLogoButton({
         aria-label={`Change ${platform} logo`}
         className="
           flex
-          h-10
-          w-10
+          h-9
+          w-9
           cursor-pointer
           items-center
           justify-center
@@ -10946,13 +10946,13 @@ function ProjectIncomeSection({
   }
 
   return (
-    <section className="space-y-3 rounded-2xl border border-[#252a32] bg-[#101318] p-4 sm:p-5">
+    <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#101318] p-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
 
-            <h2 className="text-lg font-semibold">
+            <h2 className="text-[15px] font-semibold">
               Project Income
             </h2>
           </div>
@@ -10963,8 +10963,8 @@ function ProjectIncomeSection({
 
         </div>
 
-        <div className="flex items-center gap-6">
-          <div className="flex h-10 items-center overflow-hidden rounded-lg border border-border/50 bg-white/[0.02]">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex h-8 items-center overflow-hidden rounded-lg border border-border/50 bg-white/[0.02]">
             <button
               type="button"
               onClick={() =>
@@ -10976,13 +10976,13 @@ function ProjectIncomeSection({
                 selectedYear <=
                 firstTrackingYear
               }
-              className="flex h-full w-10 items-center justify-center text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
+              className="flex h-full w-8 items-center justify-center text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
               aria-label="Previous year"
             >
               <ChevronLeft className="h-4 w-4" />
             </button>
 
-            <div className="flex h-full min-w-[88px] items-center justify-center border-x border-border/50 px-5 text-sm font-semibold tabular-nums">
+            <div className="flex h-full min-w-[65px] items-center justify-center border-x border-border/50 px-3 text-xs font-semibold tabular-nums">
               {selectedYear}
             </div>
 
@@ -10997,7 +10997,7 @@ function ProjectIncomeSection({
                 selectedYear >=
                 currentYear
               }
-              className="flex h-full w-10 items-center justify-center text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
+              className="flex h-full w-8 items-center justify-center text-muted-foreground transition hover:bg-white/5 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-25"
               aria-label="Next year"
             >
               <ChevronRight className="h-4 w-4" />
@@ -11009,13 +11009,13 @@ function ProjectIncomeSection({
               {selectedYear} total
             </div>
 
-            <div className="mt-1 text-xl font-semibold tabular-nums text-emerald-400">
+            <div className="mt-0.5 text-[16px] font-semibold tabular-nums text-emerald-400">
               {formatCurrency(
                 yearlyTotal
               )}
             </div>
 
-            <div className="mt-1 text-xs font-medium tabular-nums text-rose-400">
+            <div className="mt-0.5 text-[11px] font-medium tabular-nums text-rose-400">
               Expenses {formatCurrency(
                 yearlyExpenses
               )}
@@ -11024,14 +11024,14 @@ function ProjectIncomeSection({
         </div>
       </div>
 
-      <div className="rounded-[14px] border border-border/60 bg-card/35 px-4 pb-4 pt-4">
+      <div className="rounded-xl border border-border/60 bg-card/35 px-2.5 pb-2 pt-2.5">
         {chartMonths.length ===
         0 ? (
           <div className="flex h-56 items-center justify-center text-sm text-muted-foreground">
             No tracked months for this year.
           </div>
         ) : (
-          <div className="flex h-44 items-end gap-2 md:gap-3">
+          <div className="flex h-32 items-end gap-1.5 md:gap-2">
             {chartMonths.map(
               (month) => {
                 const amount =
@@ -11081,9 +11081,9 @@ function ProjectIncomeSection({
                     }
                     className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                   >
-                    <div className="flex h-36 w-full items-end justify-center gap-2 md:gap-3">
+                    <div className="flex h-24 w-full items-end justify-center gap-1 md:gap-1.5">
                       <div className="flex h-full w-[44%] max-w-10 flex-col items-center justify-end">
-                        <div className="mb-2 flex min-h-8 items-end justify-center gap-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-emerald-400 md:text-[11px]">
+                        <div className="mb-1 flex min-h-6 items-end justify-center gap-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-emerald-400 md:text-[11px]">
                           {formatCurrency(
                             amount
                           )}
@@ -11113,7 +11113,7 @@ function ProjectIncomeSection({
                       </div>
 
                       <div className="flex h-full w-[44%] max-w-10 flex-col items-center justify-end">
-                        <div className="mb-2 flex min-h-8 items-end justify-center whitespace-nowrap text-[10px] font-semibold tabular-nums text-rose-400 md:text-[11px]">
+                        <div className="mb-1 flex min-h-6 items-end justify-center whitespace-nowrap text-[10px] font-semibold tabular-nums text-rose-400 md:text-[11px]">
                           {formatCurrency(
                             expense
                           )}
@@ -11136,7 +11136,7 @@ function ProjectIncomeSection({
                       </div>
                     </div>
 
-                    <div className="mt-3 text-[11px] font-medium text-muted-foreground transition group-hover:text-foreground md:text-xs">
+                    <div className="mt-1.5 text-[10px] font-medium text-muted-foreground transition group-hover:text-foreground md:text-xs">
                       {formatShortMonth(
                         month.monthKey
                       )}
@@ -11671,7 +11671,7 @@ function PortfolioAllocationBar({
     };
 
   return (
-    <div className="mt-3">
+    <div className="mt-2.5">
       <div className="flex h-[3px] w-full overflow-hidden rounded-full bg-white/5">
         {coins.map(
           (
@@ -11704,7 +11704,7 @@ function PortfolioAllocationBar({
         )}
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] font-medium text-muted-foreground">
+      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-medium text-muted-foreground">
         {coins.map(
           (
             coin,
@@ -11764,12 +11764,12 @@ function PortfolioAllocationDonut({ projects, totalBalance, trxBalance = 0 }) {
     return `${colors[symbol] || fallback[index % fallback.length]} ${start}% ${position}%`;
   });
   return (
-    <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-4 sm:p-5">
+    <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-3">
       <h2 className="text-[15px] font-semibold">Portfolio Allocation</h2>
       <p className="mt-1 text-xs text-muted-foreground">Current asset balances by token</p>
-      <div className="mt-5 flex flex-col items-center gap-5 sm:flex-row xl:flex-col 2xl:flex-row">
+      <div className="mt-3 flex flex-col items-center gap-3 sm:flex-row xl:flex-col 2xl:flex-row">
         <div
-          className="relative flex h-44 w-44 shrink-0 items-center justify-center rounded-full"
+          className="relative flex h-32 w-32 shrink-0 items-center justify-center rounded-full"
           style={{ background: sum > 0 ? `conic-gradient(${stops.join(", ")})` : "#252a32" }}
         >
           <div className="flex h-[66%] w-[66%] flex-col items-center justify-center rounded-full bg-[#101318]">
@@ -11777,7 +11777,7 @@ function PortfolioAllocationDonut({ projects, totalBalance, trxBalance = 0 }) {
             <span className="text-[11px] text-muted-foreground">Total portfolio</span>
           </div>
         </div>
-        <div className="w-full min-w-0 space-y-3">
+        <div className="w-full min-w-0 space-y-2">
           {entries.map(([symbol,value],index) => (
             <div key={symbol} className="flex items-center gap-2 text-xs">
               <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{backgroundColor: colors[symbol] || fallback[index % fallback.length]}} />
@@ -11795,7 +11795,7 @@ function PortfolioAllocationDonut({ projects, totalBalance, trxBalance = 0 }) {
 
 function Metric({ label, value, icon: Icon }) {
   return (
-    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2.5">
+    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2">
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.6} />
         <span className="leading-snug">{label}</span>
