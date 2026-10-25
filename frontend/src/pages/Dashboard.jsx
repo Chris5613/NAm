@@ -2186,7 +2186,7 @@ export default function Dashboard() {
                 <BarChart data={cashDays} barGap={1} margin={{ top: 6, right: 0, bottom: 0, left: -10 }}>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={18} />
                   <YAxis tickLine={false} axisLine={false} tick={{ fill: "#78828d", fontSize: 10 }} width={48} tickFormatter={value => "$" + value} />
-                  <Tooltip contentStyle={chartTooltipStyle} formatter={value => formatCurrency(value)} />
+                  <Tooltip cursor={false} contentStyle={chartTooltipStyle} formatter={value => formatCurrency(value)} />
                   <Bar dataKey="income" name="Income" fill="#36b990" radius={[2, 2, 0, 0]} />
                   <Bar dataKey="expenses" name="Expenses" fill="#d97a9b" radius={[2, 2, 0, 0]} />
                 </BarChart>
