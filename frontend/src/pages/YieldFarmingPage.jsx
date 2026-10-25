@@ -4087,7 +4087,7 @@ function KryptexProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
+        className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
       >
         <div className="flex w-full items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -4131,9 +4131,9 @@ function KryptexProjectCard({
           />
         </div>
 
-        <div className="mt-auto pt-2.5">
+        <div className="mt-auto pt-1.5">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="text-[22px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
+            <div className="text-[20px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
               {formatCurrency(
                 stats?.currentBalanceUsd
               )}
@@ -8561,17 +8561,17 @@ const summary =
       className="space-y-3"
       data-testid="yield-farming-page"
     >
-      <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-4 sm:p-5">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-3 sm:p-4">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-[15px] font-semibold tracking-tight">Portfolio Overview</h2>
           <span className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-[11px] text-muted-foreground">
             {summary.activePositions} active positions
           </span>
         </div>
-        <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.35fr)_repeat(4,minmax(0,1fr))]">
-          <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-4 py-3">
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.35fr)_repeat(4,minmax(0,1fr))]">
+          <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2.5">
             <span className="text-xs text-muted-foreground">Total Portfolio Balance</span>
-            <span className="mt-1 text-[clamp(25px,2.25vw,34px)] font-semibold leading-tight tracking-tight tabular-nums">
+            <span className="mt-1 text-[clamp(24px,2vw,30px)] font-semibold leading-tight tracking-tight tabular-nums">
               {formatCurrency(summary.portfolioBalance)}
             </span>
             <span className="mt-1 text-xs font-medium text-emerald-400">
@@ -8599,7 +8599,7 @@ const summary =
         </div>
       )}
 
-      <section className="space-y-3 rounded-2xl border border-[#252a32] bg-[#101318] p-3 sm:p-4">
+      <section className="space-y-2.5 rounded-2xl border border-[#252a32] bg-[#101318] p-2.5 sm:p-3">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Your Projects</h2>
           <span className="text-[11px] text-muted-foreground">Sorted by balance · {sortedProgramCards.length} projects</span>
@@ -8620,7 +8620,7 @@ const summary =
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-[13px] md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
   {sortedProgramCards.map(
               (
                 item
@@ -9425,7 +9425,7 @@ function ProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
+        className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
       >
         {/* TOP */}
 
@@ -9462,11 +9462,11 @@ function ProjectCard({
 </div>
         {/* VALUE */}
 
-        <div className="mt-auto pt-2.5">
+        <div className="mt-auto pt-1.5">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[22px]
+                text-[20px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9611,7 +9611,7 @@ function UnetworkProjectCard({
               !value
           )
         }
-        className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
+        className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
       >
         {/* TOP */}
 
@@ -9653,11 +9653,11 @@ function UnetworkProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-2.5">
+        <div className="mt-auto pt-1.5">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[22px]
+                text-[20px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9889,7 +9889,7 @@ function SaladProjectCard({
               !value
           )
         }
-        className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
+        className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
       >
         {/* TOP */}
 
@@ -9931,11 +9931,11 @@ function SaladProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-2.5">
+        <div className="mt-auto pt-1.5">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[22px]
+                text-[20px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -10156,7 +10156,7 @@ return (
             !current
         )
       }
-      className="flex min-h-[138px] w-full flex-col px-4 pb-3 pt-3 text-left"
+      className="flex min-h-[112px] w-full flex-col px-3.5 pb-2.5 pt-2.5 text-left"
     >
 <div className="flex w-full items-start justify-between gap-3">
   <div className="flex min-w-0 items-center gap-3">
@@ -10188,11 +10188,11 @@ return (
   />
 </div>
 
-      <div className="mt-auto pt-2.5">
+      <div className="mt-auto pt-1.5">
         <div className="flex flex-wrap items-end gap-2">
           <div
             className="
-              text-[22px]
+              text-[20px]
               font-semibold
               leading-none
               tracking-tight
@@ -10388,8 +10388,8 @@ function ProjectLogoButton({
         aria-label={`Change ${platform} logo`}
         className="
           flex
-          h-12
-          w-12
+          h-10
+          w-10
           cursor-pointer
           items-center
           justify-center
@@ -11671,7 +11671,7 @@ function PortfolioAllocationBar({
     };
 
   return (
-    <div className="mt-4">
+    <div className="mt-3">
       <div className="flex h-[3px] w-full overflow-hidden rounded-full bg-white/5">
         {coins.map(
           (
@@ -11704,7 +11704,7 @@ function PortfolioAllocationBar({
         )}
       </div>
 
-      <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-2 text-[12px] font-medium text-muted-foreground">
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1.5 text-[11px] font-medium text-muted-foreground">
         {coins.map(
           (
             coin,
@@ -11795,12 +11795,12 @@ function PortfolioAllocationDonut({ projects, totalBalance, trxBalance = 0 }) {
 
 function Metric({ label, value, icon: Icon }) {
   return (
-    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3.5 py-3">
+    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2.5">
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.6} />
         <span className="leading-snug">{label}</span>
       </div>
-      <div className="mt-2 truncate text-[clamp(17px,1.5vw,23px)] font-semibold leading-tight tracking-tight tabular-nums" title={value}>
+      <div className="mt-1.5 truncate text-[clamp(16px,1.35vw,21px)] font-semibold leading-tight tracking-tight tabular-nums" title={value}>
         {value}
       </div>
     </div>
