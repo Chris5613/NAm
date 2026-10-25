@@ -11208,7 +11208,7 @@ function ProjectIncomeModal({
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-3 backdrop-blur-sm sm:p-4"
       onMouseDown={(
         event
       ) => {
@@ -11223,12 +11223,12 @@ function ProjectIncomeModal({
       <div
         role="dialog"
         aria-modal="true"
-        className="w-full max-w-lg overflow-hidden rounded-2xl border border-border/70 bg-card shadow-2xl"
+        className="flex max-h-[min(680px,calc(100dvh-24px))] w-full max-w-[440px] min-h-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-card shadow-2xl sm:max-h-[min(680px,calc(100dvh-32px))]"
       >
-        <div className="flex items-start justify-between gap-4 border-b border-border/50 px-5 py-5">
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
           <div>
             <div className="flex items-center gap-2">
-              <div className="text-lg font-semibold">
+              <div className="text-base font-semibold">
                 {formatMonthLabel(
                   month.monthKey
                 )}
@@ -11252,13 +11252,13 @@ function ProjectIncomeModal({
             </div>
           </div>
 
-          <div className="flex items-start gap-4">
+          <div className="flex items-center gap-2">
             <div className="text-right">
-              <div className="text-xs text-muted-foreground">
+              <div className="text-[11px] text-muted-foreground">
                 Project income
               </div>
 
-              <div className="mt-1 text-2xl font-semibold tabular-nums text-emerald-400">
+              <div className="mt-0.5 text-lg font-semibold tabular-nums text-emerald-400">
                 {formatCurrency(
                   total
                 )}
@@ -11270,7 +11270,7 @@ function ProjectIncomeModal({
               onClick={
                 onClose
               }
-              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-white/5 hover:text-foreground"
               aria-label="Close"
             >
               <X className="h-4 w-4" />
@@ -11278,21 +11278,21 @@ function ProjectIncomeModal({
           </div>
         </div>
 
-        <div className="p-5">
-          <div className="mb-5 rounded-xl border border-rose-500/20 bg-rose-500/[0.05] p-4">
-            <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="min-h-0 overflow-y-auto overscroll-contain p-3 [scrollbar-width:thin] sm:p-4">
+          <div className="mb-3 rounded-lg border border-rose-500/20 bg-rose-500/[0.05] p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="text-sm font-medium">
                   Monthly expenses
                 </div>
 
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Add costs for this month, such as equipment, fees, electricity, or other project expenses.
+                <div className="mt-0.5 max-w-[225px] text-[11px] leading-snug text-muted-foreground">
+                  Equipment, fees, electricity and other project costs.
                 </div>
               </div>
 
-              <div className="w-full sm:w-40">
-                <label className="mb-1.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              <div className="w-28 shrink-0 sm:w-32">
+                <label className="mb-1 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
                   Expense total
                 </label>
 
@@ -11334,12 +11334,12 @@ function ProjectIncomeModal({
                       event.currentTarget.blur();
                     }
                   }}
-                  className="text-right tabular-nums"
+                  className="h-8 text-right text-sm tabular-nums"
                 />
               </div>
             </div>
 
-            <div className="mt-3 flex items-center justify-between border-t border-rose-500/15 pt-3 text-xs">
+            <div className="mt-2 flex items-center justify-between border-t border-rose-500/15 pt-2 text-xs">
               <span className="text-muted-foreground">
                 Net project income
               </span>
@@ -11375,7 +11375,7 @@ function ProjectIncomeModal({
               No project income was recorded for this month.
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {month.platforms.map(
                 (
                   platform
@@ -11395,15 +11395,15 @@ function ProjectIncomeModal({
                       key={
                         platform.platform
                       }
-                      className="rounded-xl border border-border/50 bg-white/[0.02] px-4 py-4"
+                      className="rounded-lg border border-border/50 bg-white/[0.02] px-3 py-2"
                     >
-                      <div className="flex items-center justify-between gap-4">
-                        <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           {getProjectIncomeLogo(
                             platform.platform,
                             projectLogos
                           ) ? (
-                            <div className="h-9 w-9 shrink-0 overflow-hidden rounded-full border border-border/60 bg-white/[0.04]">
+                            <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full border border-border/60 bg-white/[0.04]">
                               <img
                                 src={
                                   getProjectIncomeLogo(
@@ -11416,28 +11416,28 @@ function ProjectIncomeModal({
                               />
                             </div>
                           ) : (
-                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-border/60 bg-white/[0.04] text-[10px] font-bold">
+                            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border/60 bg-white/[0.04] text-[10px] font-bold">
                               {getInitials(
                                 platform.platform
                               )}
                             </div>
                           )}
 
-                          <span className="truncate font-medium">
+                          <span className="truncate text-sm font-medium">
                             {
                               platform.platform
                             }
                           </span>
                         </div>
 
-                        <span className="shrink-0 font-semibold tabular-nums">
+                        <span className="shrink-0 text-sm font-semibold tabular-nums">
                           {formatCurrency(
                             platform.amount
                           )}
                         </span>
                       </div>
 
-                      <div className="mt-3 h-1 overflow-hidden rounded-full bg-white/[0.06]">
+                      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/[0.06]">
                         <div
                           className="h-full rounded-full bg-emerald-400/70"
                           style={{
@@ -11452,7 +11452,7 @@ function ProjectIncomeModal({
                         />
                       </div>
 
-                      <div className="mt-1.5 text-right text-[10px] tabular-nums text-muted-foreground">
+                      <div className="mt-1 text-right text-[10px] tabular-nums text-muted-foreground">
                         {share.toFixed(
                           1
                         )}
