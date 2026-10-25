@@ -4182,6 +4182,7 @@ function KryptexProjectCard({
       </button>
 
       {!collapsed && (
+        <ProjectDetailsModal title={"Kryptex"} onClose={onToggle}>
         <div className="border-t border-border/50 px-5 py-5">
           <div className="mb-5">
             <ProjectPaybackEditor
@@ -4288,6 +4289,7 @@ function KryptexProjectCard({
             </Button>
           </div>
         </div>
+      </ProjectDetailsModal>
       )}
     </div>
   );
@@ -9498,6 +9500,7 @@ function ProjectCard({
       </button>
 
       {!collapsed && (
+        <ProjectDetailsModal title={project.platform} onClose={onToggle}>
         <>
           {!hidePayback && (
             <div className="border-t border-border/40 px-5 py-4">
@@ -9527,6 +9530,7 @@ function ProjectCard({
             }
           />
         </>
+      </ProjectDetailsModal>
       )}
     </div>
   );
@@ -9687,6 +9691,7 @@ function UnetworkProjectCard({
       </button>
 
       {expanded && (
+        <ProjectDetailsModal title={"Unetwork"} onClose={() => setExpanded(false)}>
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
           <div className="mb-4">
             <ProjectPaybackEditor
@@ -9779,6 +9784,7 @@ function UnetworkProjectCard({
             </Button>
           </div>
         </div>
+      </ProjectDetailsModal>
       )}
     </div>
   );
@@ -9965,6 +9971,7 @@ function SaladProjectCard({
       </button>
 
       {expanded && (
+        <ProjectDetailsModal title={"Salad"} onClose={() => setExpanded(false)}>
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
           <div className="mb-4">
             <ProjectPaybackEditor
@@ -10057,6 +10064,7 @@ function SaladProjectCard({
             </Button>
           </div>
         </div>
+      </ProjectDetailsModal>
       )}
     </div>
   );
@@ -10222,6 +10230,7 @@ return (
     </button>
 
     {expanded && (
+        <ProjectDetailsModal title={"RollerCoin"} onClose={() => setExpanded(false)}>
       <div className="border-t border-border/40 px-5 py-4">
         <ProjectPaybackEditor
           value={
@@ -10238,9 +10247,54 @@ return (
           }
         />
       </div>
-    )}
+    </ProjectDetailsModal>
+      )}
   </div>
 );
+}
+
+function ProjectDetailsModal({ title, onClose, children }) {
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-5"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${title} project details`}
+        className="flex max-h-[min(740px,calc(100dvh-24px))] w-full max-w-[520px] min-h-0 flex-col overflow-hidden rounded-xl border border-border/70 bg-card shadow-2xl"
+      >
+        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-border/50 px-4 py-3">
+          <div>
+            <h2 className="text-base font-semibold">{title}</h2>
+            <p className="text-[11px] text-muted-foreground">Project details</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={`Close ${title} details`}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
+          {children}
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function ProjectLogoButton({
