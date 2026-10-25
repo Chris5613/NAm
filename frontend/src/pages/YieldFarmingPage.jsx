@@ -11805,27 +11805,4 @@ function Metric({ label, value, icon: Icon }) {
       </div>
     </div>
   );
-}) {
-  return (
-    <div>
-      <div className="flex items-center gap-2 text-[12px] font-medium text-muted-foreground">
-        <span className="whitespace-nowrap">
-          {label}
-        </span>
-
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/5">
-          <Icon
-            className="h-3.5 w-3.5"
-            strokeWidth={
-              1.6
-            }
-          />
-        </span>
-      </div>
-
-      <div className="mt-1.5 text-[clamp(19px,1.55vw,24px)] font-semibold tracking-tight tabular-nums">
-        {value}
-      </div>
-    </div>
-  );
 }
