@@ -8558,7 +8558,7 @@ const summary =
 
   return (
     <div
-      className="space-y-2.5"
+      className="min-w-0 space-y-2.5"
       data-testid="yield-farming-page"
     >
       <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-2.5 sm:p-3">
@@ -8568,7 +8568,7 @@ const summary =
             {summary.activePositions} active positions
           </span>
         </div>
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[minmax(240px,1.35fr)_repeat(4,minmax(0,1fr))]">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 min-[1450px]:grid-cols-[minmax(230px,1.4fr)_repeat(4,minmax(0,1fr))]">
           <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2">
             <span className="text-xs text-muted-foreground">Total Portfolio Balance</span>
             <span className="mt-1 text-[clamp(24px,2vw,30px)] font-semibold leading-tight tracking-tight tabular-nums">
@@ -8950,7 +8950,7 @@ if (
       </section>
 
 
-      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(340px,1fr)]">
+      <div className="grid items-start gap-3 min-[1400px]:grid-cols-[minmax(0,1.7fr)_minmax(330px,1fr)]">
         <div className="min-w-0">
       <ProjectIncomeSection
         months={
@@ -11031,7 +11031,7 @@ function ProjectIncomeSection({
             No tracked months for this year.
           </div>
         ) : (
-          <div className="flex h-32 items-end gap-1.5 md:gap-2">
+          <div className="flex h-[clamp(112px,17vh,148px)] items-end gap-1 md:gap-2">
             {chartMonths.map(
               (month) => {
                 const amount =
@@ -11079,9 +11079,9 @@ function ProjectIncomeSection({
                         month.monthKey
                       )
                     }
-                    className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-1 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
+                    className="group flex min-w-0 flex-1 flex-col items-center justify-end rounded-lg px-0.5 pt-1 outline-none transition focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                   >
-                    <div className="flex h-24 w-full items-end justify-center gap-1 md:gap-1.5">
+                    <div className="flex h-[clamp(84px,12vh,112px)] w-full items-end justify-center gap-1 md:gap-1.5">
                       <div className="flex h-full w-[44%] max-w-10 flex-col items-center justify-end">
                         <div className="mb-1 flex min-h-6 items-end justify-center gap-1 whitespace-nowrap text-[10px] font-semibold tabular-nums text-emerald-400 md:text-[11px]">
                           {formatCurrency(
@@ -11767,7 +11767,7 @@ function PortfolioAllocationDonut({ projects, totalBalance, trxBalance = 0 }) {
     <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-3">
       <h2 className="text-[15px] font-semibold">Portfolio Allocation</h2>
       <p className="mt-1 text-xs text-muted-foreground">Current asset balances by token</p>
-      <div className="mt-3 flex flex-col items-center gap-3 sm:flex-row xl:flex-col 2xl:flex-row">
+      <div className="mt-3 flex flex-col items-center gap-3 sm:flex-row min-[1400px]:flex-col min-[1650px]:flex-row">
         <div
           className="relative flex h-32 w-32 shrink-0 items-center justify-center rounded-full"
           style={{ background: sum > 0 ? `conic-gradient(${stops.join(", ")})` : "#252a32" }}
@@ -11800,7 +11800,7 @@ function Metric({ label, value, icon: Icon }) {
         <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.6} />
         <span className="leading-snug">{label}</span>
       </div>
-      <div className="mt-1.5 truncate text-[clamp(16px,1.35vw,21px)] font-semibold leading-tight tracking-tight tabular-nums" title={value}>
+      <div className="mt-1.5 min-w-0 text-[clamp(16px,1.4vw,21px)] font-semibold leading-tight tracking-tight tabular-nums break-words" title={value}>
         {value}
       </div>
     </div>
