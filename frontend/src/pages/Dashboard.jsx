@@ -2151,7 +2151,7 @@ export default function Dashboard() {
   const chartTooltipStyle = { background: "#17191d", border: "1px solid #30343b", borderRadius: 10, color: "#f1f5f9", fontSize: 12 };
 
   return (
-    <div className="mx-auto w-full max-w-[1440px] space-y-3 pb-7" data-testid="dashboard">
+    <div className="w-full min-w-0 max-w-none space-y-3 pb-7" data-testid="dashboard">
       <header className="flex flex-wrap items-center justify-between gap-4 pb-1">
         <div className="min-w-0">
           <h1 className="text-[22px] font-semibold leading-tight tracking-tight" data-testid="page-title">Hi Christian</h1>
