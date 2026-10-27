@@ -721,7 +721,7 @@ const unhideTransaction = async (id) => {
   }
 
   return (
-    <div className="mx-auto w-full max-w-[1510px] space-y-3 pb-7" data-testid="spending-page">
+    <div className="w-full min-w-0 max-w-none space-y-3 pb-7" data-testid="spending-page">
       <header className="flex min-h-[48px] flex-wrap items-center justify-between gap-3 pb-0.5">
         <h1 className="text-[22px] font-medium tracking-tight">Spending</h1>
         <div className="flex items-center gap-2">
@@ -732,7 +732,7 @@ const unhideTransaction = async (id) => {
           <a href="#spending-budget" title="Budget settings" aria-label="Budget settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2a2b2e] text-white hover:bg-[#3b3c40]"><Settings2 className="h-5 w-5"/></a>
         </div>
       </header>
-      <div className="mx-auto grid max-w-[1310px] items-start gap-[13px] xl:grid-cols-[minmax(0,2.2fr)_minmax(300px,0.95fr)]">
+      <div className="grid w-full min-w-0 items-start gap-[13px] xl:grid-cols-[minmax(0,2.2fr)_minmax(300px,0.95fr)]">
         <div className="min-w-0 space-y-3">
           <section id="spending-overview" className="overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#222428] px-[14px] py-3">
