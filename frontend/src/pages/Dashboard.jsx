@@ -2100,7 +2100,14 @@ export default function Dashboard() {
     point.date.getFullYear() === 2026 &&
     point.date.getMonth() === 4 &&
     point.date.getDate() === 9;
-  const combined = [...importedPoints, ...monthPoints, ...livePoints, ...(currentPoint ? [currentPoint] : [])]
+  // The current month is a live month: display one up-to-date value at
+  // today's date instead of both a first-of-month snapshot and today's value.
+  // Historical records stay in storage unchanged.
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const pointMonthKey = point => `${point.date.getFullYear()}-${String(point.date.getMonth() + 1).padStart(2, "0")}`;
+  const combined = [...importedPoints, ...monthPoints, ...livePoints]
+    .filter(p => pointMonthKey(p) !== currentMonthKey)
+    .concat(currentPoint ? [currentPoint] : [])
     .filter(p => !isUnverifiedMay9Zero(p) && (chartRange === "ALL" || p.date >= cutoff))
     .sort((a,b) => a.date-b.date);
   // Space recorded observations evenly so unrecorded months do not make a
