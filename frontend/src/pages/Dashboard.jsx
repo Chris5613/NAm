@@ -43,6 +43,9 @@ import {
   Download,
   Upload,
   X,
+  Target,
+  CalendarClock,
+  Trash2,
 } from "lucide-react";
 
 /* =========================================================
@@ -1220,6 +1223,52 @@ export default function Dashboard() {
   const [cashMonth, setCashMonth] = useState(() => new Date().toISOString().slice(0,7));
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankTransactions, setBankTransactions] = useState([]);
+  const [financialGoals, setFinancialGoals] = useState(() => {
+    const saved = storage.get("nam_financial_goals_v1");
+    return Array.isArray(saved) ? saved : [];
+  });
+  const [recurringBills, setRecurringBills] = useState(() => {
+    const saved = storage.get("nam_recurring_bills_v1");
+    return Array.isArray(saved) ? saved : [];
+  });
+  const [editingFinance, setEditingFinance] = useState(null);
+  const [financeDraft, setFinanceDraft] = useState({});
+  const openFinanceEditor = (type, item = null) => {
+    setEditingFinance({ type, id: item?.id || null });
+    setFinanceDraft(item ? { ...item } : type === "goal"
+      ? { title: "", saved: "", target: "" }
+      : { title: "", amount: "", dueDate: "", frequency: "monthly" });
+  };
+  const saveFinanceItem = (event) => {
+    event.preventDefault();
+    const draft = { ...financeDraft, title: String(financeDraft.title || "").trim() };
+    if (!draft.title) return;
+    if (editingFinance.type === "goal") {
+      const target = Number(draft.target), saved = Number(draft.saved);
+      if (!Number.isFinite(target) || target <= 0 || !Number.isFinite(saved) || saved < 0) return;
+      const nextItem = { id: editingFinance.id || `goal-${Date.now()}`, title: draft.title, saved, target };
+      const next = editingFinance.id ? financialGoals.map(item => item.id === editingFinance.id ? nextItem : item) : [...financialGoals, nextItem];
+      setFinancialGoals(next);
+      storage.set("nam_financial_goals_v1", next);
+    } else {
+      const amount = Number(draft.amount);
+      if (!Number.isFinite(amount) || amount < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(String(draft.dueDate))) return;
+      const nextItem = { id: editingFinance.id || `bill-${Date.now()}`, title: draft.title, amount, dueDate: draft.dueDate, frequency: draft.frequency === "once" ? "once" : "monthly" };
+      const next = editingFinance.id ? recurringBills.map(item => item.id === editingFinance.id ? nextItem : item) : [...recurringBills, nextItem];
+      setRecurringBills(next);
+      storage.set("nam_recurring_bills_v1", next);
+    }
+    setEditingFinance(null);
+  };
+  const deleteFinanceItem = () => {
+    if (!editingFinance?.id) return;
+    const isGoal = editingFinance.type === "goal";
+    const next = (isGoal ? financialGoals : recurringBills).filter(item => item.id !== editingFinance.id);
+    if (isGoal) { setFinancialGoals(next); storage.set("nam_financial_goals_v1", next); }
+    else { setRecurringBills(next); storage.set("nam_recurring_bills_v1", next); }
+    setEditingFinance(null);
+  };
+
   useEffect(() => {
     let mounted = true;
     Promise.all([spendingApi.accounts(), spendingApi.transactions()]).then(([accounts, transactions]) => {
@@ -2078,6 +2127,27 @@ export default function Dashboard() {
     return (Number.isFinite(balanceB) ? balanceB : -Infinity) - (Number.isFinite(balanceA) ? balanceA : -Infinity);
   });
   const netCashFlow = incomeTotal - expenseTotal;
+  const nextBills = recurringBills.map(bill => {
+    const date = new Date(`${bill.dueDate}T12:00:00`);
+    if (!Number.isFinite(date.getTime())) return null;
+    const today = new Date();
+    today.setHours(0,0,0,0);
+    if (bill.frequency === "monthly") {
+      const day = date.getDate();
+      let due = new Date(today.getFullYear(), today.getMonth(), Math.min(day, new Date(today.getFullYear(),today.getMonth()+1,0).getDate()),12);
+      if (due < today) due = new Date(today.getFullYear(),today.getMonth()+1,Math.min(day,new Date(today.getFullYear(),today.getMonth()+2,0).getDate()),12);
+      return { ...bill, nextDate: due };
+    }
+    return date >= today ? { ...bill, nextDate: date } : null;
+  }).filter(Boolean).sort((a,b) => a.nextDate-b.nextDate);
+  const netWorthCategories = [...allocationCategories].map(category => ({
+    category,
+    label: CATEGORY_CONFIG[category].shortLabel,
+    change: Number(dailyCategoryChanges?.[category]) || 0,
+  })).sort((a,b) => Math.abs(b.change)-Math.abs(a.change));
+  const categoryChangeTotal = netWorthCategories.reduce((sum,item) => sum + item.change, 0);
+  const hasDailyChange = dailyCategoryChanges !== null && netWorthCategories.some(item => item.change !== 0);
+
   const chartTooltipStyle = { background: "#17191d", border: "1px solid #30343b", borderRadius: 10, color: "#f1f5f9", fontSize: 12 };
 
   return (
@@ -2214,6 +2284,127 @@ export default function Dashboard() {
           </div>
         </section>
       </div>
+
+      <div className="grid items-start gap-[13px] lg:grid-cols-2 2xl:grid-cols-3">
+        <section className={card} aria-label="Financial goals">
+          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Financial goals</h2>
+            <button type="button" className="text-[11px] text-sky-400 hover:text-sky-300" onClick={() => openFinanceEditor("goal")}>+ Add goal</button>
+          </div>
+          <div className="space-y-3 px-4 py-3">
+            {financialGoals.length ? financialGoals.map(goal => {
+              const amount = Math.max(0,Number(goal.saved)||0);
+              const target = Number(goal.target)||0;
+              const percent = target > 0 ? Math.min(100,amount/target*100) : 0;
+              return (
+                <button key={goal.id} type="button" onClick={() => openFinanceEditor("goal",goal)} className="block w-full rounded-md px-1 py-1 text-left transition hover:bg-secondary/30">
+                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
+                    <span className="truncate font-medium">{goal.title}</span>
+                    <span className="shrink-0 tabular-nums text-muted-foreground">{formatCurrency(amount)} / {formatCurrency(target)}</span>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                    <div className="h-full rounded-full bg-emerald-400" style={{width: `${percent}%`}} />
+                  </div>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{Math.round(percent)}% of goal reached</p>
+                </button>
+              );
+            }) : (
+              <div className="flex min-h-[118px] flex-col items-center justify-center gap-2 text-center">
+                <Target className="h-5 w-5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">No goals added yet.</p>
+                <button type="button" onClick={() => openFinanceEditor("goal")} className="text-xs font-medium text-sky-400">Create a savings goal</button>
+              </div>
+            )}
+          </div>
+        </section>
+        <section className={card} aria-label="Net worth change breakdown">
+          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Net worth change</h2>
+            <span className="text-[10px] text-muted-foreground">Today</span>
+          </div>
+          <div className="px-4 py-3">
+            <p className={`mb-3 text-[23px] font-semibold tabular-nums ${todayChange >= 0 ? "text-emerald-400":"text-rose-400"}`}>{todayChange >= 0 ? "+" : ""}{formatCurrency(todayChange)}</p>
+            {dailyCategoryChanges === null ? <p className="py-4 text-xs text-muted-foreground">Daily change data is not available yet.</p> : (
+              <div className="space-y-2.5">
+                {netWorthCategories.map(item => {
+                  const Icon = CATEGORY_CONFIG[item.category].icon;
+                  return <div key={item.category} className="flex items-center gap-2 text-xs">
+                    <Icon className={`h-3.5 w-3.5 ${CATEGORY_CONFIG[item.category].color}`} />
+                    <span className="min-w-0 flex-1">{item.label}</span>
+                    <span className={`tabular-nums ${item.change > 0 ? "text-emerald-400" : item.change < 0 ? "text-rose-400":"text-muted-foreground"}`}>{item.change > 0 ? "+" : ""}{formatCurrency(item.change)}</span>
+                    <span className="w-12 text-right tabular-nums text-muted-foreground">{Math.abs(categoryChangeTotal) > 0 ? `${(item.change / categoryChangeTotal * 100).toFixed(1)}%` : "—"}</span>
+                  </div>;
+                })}
+                {!hasDailyChange && <p className="pt-1 text-[10px] text-muted-foreground">No category changes recorded today.</p>}
+              </div>
+            )}
+          </div>
+        </section>
+        <section className={`${card} lg:col-span-2 2xl:col-span-1`} aria-label="Upcoming recurring bills">
+          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Upcoming recurring bills</h2>
+            <button type="button" className="text-[11px] text-sky-400 hover:text-sky-300" onClick={() => openFinanceEditor("bill")}>+ Add bill</button>
+          </div>
+          <div className="space-y-1 px-4 py-3">
+            {nextBills.length ? nextBills.map(bill => (
+              <button key={bill.id} type="button" onClick={() => openFinanceEditor("bill",bill)} className="flex w-full items-center gap-2 rounded-md px-1 py-2 text-left text-xs transition hover:bg-secondary/30">
+                <CalendarClock className="h-4 w-4 shrink-0 text-sky-400" />
+                <span className="min-w-0 flex-1 truncate">{bill.title}</span>
+                <span className="shrink-0 text-[10px] text-muted-foreground">{bill.nextDate.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</span>
+                <span className="w-20 shrink-0 text-right font-medium tabular-nums">{formatCurrency(bill.amount)}</span>
+              </button>
+            )) : (
+              <div className="flex min-h-[118px] flex-col items-center justify-center gap-2 text-center">
+                <CalendarClock className="h-5 w-5 text-muted-foreground" />
+                <p className="text-xs text-muted-foreground">No upcoming bills scheduled.</p>
+                <button type="button" onClick={() => openFinanceEditor("bill")} className="text-xs font-medium text-sky-400">Add a recurring bill</button>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      {editingFinance && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" onMouseDown={event => { if(event.target === event.currentTarget) setEditingFinance(null); }}>
+          <div role="dialog" aria-modal="true" aria-label={editingFinance.type === "goal" ? "Edit financial goal" : "Edit recurring bill"} className="w-full max-w-md rounded-xl border border-border/70 bg-card p-5 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-base font-semibold">{editingFinance.id ? "Edit" : "Add"} {editingFinance.type === "goal" ? "financial goal" : "recurring bill"}</h2>
+              <button type="button" onClick={() => setEditingFinance(null)} aria-label="Close editor"><X className="h-4 w-4 text-muted-foreground" /></button>
+            </div>
+            <form onSubmit={saveFinanceItem} className="space-y-3">
+              <label className="block text-xs text-muted-foreground">Name
+                <input required maxLength={80} value={financeDraft.title || ""} onChange={event => setFinanceDraft({...financeDraft,title:event.target.value})} className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" placeholder={editingFinance.type === "goal" ? "Goal name" : "Bill name"} />
+              </label>
+              {editingFinance.type === "goal" ? (<>
+                <label className="block text-xs text-muted-foreground">Current savings
+                  <input required type="number" min="0" step="0.01" value={financeDraft.saved ?? ""} onChange={event => setFinanceDraft({...financeDraft,saved:event.target.value})} className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" />
+                </label>
+                <label className="block text-xs text-muted-foreground">Target
+                  <input required type="number" min="0.01" step="0.01" value={financeDraft.target ?? ""} onChange={event => setFinanceDraft({...financeDraft,target:event.target.value})} className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" />
+                </label>
+              </>) : (<>
+                <label className="block text-xs text-muted-foreground">Amount
+                  <input required type="number" min="0" step="0.01" value={financeDraft.amount ?? ""} onChange={event => setFinanceDraft({...financeDraft,amount:event.target.value})} className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" />
+                </label>
+                <label className="block text-xs text-muted-foreground">First due date
+                  <input required type="date" value={financeDraft.dueDate || ""} onChange={event => setFinanceDraft({...financeDraft,dueDate:event.target.value})} className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground" />
+                </label>
+                <label className="block text-xs text-muted-foreground">Repeat
+                  <select value={financeDraft.frequency || "monthly"} onChange={event => setFinanceDraft({...financeDraft,frequency:event.target.value})} className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground"><option value="monthly">Monthly</option><option value="once">One-time</option></select>
+                </label>
+              </>)}
+              <div className="flex items-center justify-between gap-2 pt-2">
+                {editingFinance.id ? <button type="button" onClick={deleteFinanceItem} className="flex items-center gap-1 text-xs text-rose-400"><Trash2 className="h-3.5 w-3.5" />Delete</button> : <span />}
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setEditingFinance(null)}>Cancel</Button>
+                  <Button type="submit" size="sm">Save</Button>
+                </div>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* =================================================
           DETAILS MODAL
       ================================================= */}
