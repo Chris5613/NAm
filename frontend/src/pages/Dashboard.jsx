@@ -2096,7 +2096,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      <div className="grid items-start gap-[13px] lg:grid-cols-[minmax(0,1.75fr)_minmax(300px,1fr)]">
+      <div className="grid items-stretch gap-[13px] lg:grid-cols-[minmax(0,1.75fr)_minmax(300px,1fr)]">
         <section className={card} aria-label="Net worth">
           <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Net worth</h2>
