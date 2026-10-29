@@ -7051,6 +7051,41 @@ const importSaladPayload =
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Periodically reload the page as a fallback for extension messages that
+  // only become visible on navigation. Keep it unobtrusive: preserve scroll,
+  // skip hidden tabs, and wait until the user is not interacting.
+  useEffect(() => {
+    const scrollKey = "nam_yield_auto_refresh_scroll_v1";
+    const stored = window.sessionStorage.getItem(scrollKey);
+    if (stored !== null) {
+      window.sessionStorage.removeItem(scrollKey);
+      const y = Number(stored);
+      if (Number.isFinite(y) && y >= 0) {
+        window.requestAnimationFrame(() => window.scrollTo(0, y));
+      }
+    }
+    let lastInteraction = Date.now();
+    const markInteraction = () => { lastInteraction = Date.now(); };
+    ["pointerdown", "keydown", "wheel", "touchstart"].forEach(type =>
+      window.addEventListener(type, markInteraction, { passive: true })
+    );
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      if (Date.now() - lastInteraction < 30000) return;
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return;
+      const active = document.activeElement;
+      if (active && /^(INPUT|TEXTAREA|SELECT)$/.test(active.tagName)) return;
+      window.sessionStorage.setItem(scrollKey, String(window.scrollY));
+      window.location.reload();
+    }, 180000);
+    return () => {
+      window.clearInterval(timer);
+      ["pointerdown", "keydown", "wheel", "touchstart"].forEach(type =>
+        window.removeEventListener(type, markInteraction)
+      );
+    };
+  }, []);
+
   const saladStats =
     useMemo(
       () =>
