@@ -9813,6 +9813,23 @@ return (
           />
         </div>
 
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums text-muted-foreground">
+          <span>
+            {Number.isFinite(Number(stats?.currentTrxBalance))
+              ? Number(stats.currentTrxBalance).toLocaleString("en-US", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 8,
+                })
+              : "—"} TRX
+          </span>
+          <span>·</span>
+          <span>
+            TRX price: {Number(stats?.liveTrxPrice) > 0
+              ? `${Number(stats.liveTrxPrice).toFixed(5)}`
+              : "Unavailable"}
+          </span>
+        </div>
+
         <div
           className="
             mt-2
