@@ -5128,11 +5128,18 @@ const requestRollerCoinLatest =
                   plausibleLimit;
               }
 
-              if (
-                acceptInterestDelta
-              ) {
-                monthEarned +=
-                  interestDelta;
+              // Preserve accepted yield by observation date. Never infer
+              // historical day allocations from a balance snapshot.
+              const observedDaily = {
+                ...(previous.observedDaily || {}),
+              };
+              if (acceptInterestDelta) {
+                monthEarned += interestDelta;
+                const observationDay = getTodayKey();
+                observedDaily[observationDay] = Number((
+                  (Number(observedDaily[observationDay]) || 0) +
+                  interestDelta
+                ).toFixed(8));
               }
 
               const updated = {
@@ -5148,6 +5155,7 @@ const requestRollerCoinLatest =
                       6
                     )
                   ),
+                observedDaily,
                 lastLifetimeInterest:
                   lifetimeInterest,
                 lastBalanceUsd:
@@ -7383,6 +7391,42 @@ const importSaladPayload =
       return previous;
     });
   }, [liveProjectIncome, earningsClock]);
+
+  // Commit Lulo's accepted interest increases to the persistent daily ledger.
+  // Keep legacy tracked earnings and the verified opening-day amount; never add
+  // the same increment from the monthly ledger a second time.
+  useEffect(() => {
+    const observedByDay = {};
+    Object.values(luloMonthlyBaselines || {}).forEach(months => {
+      Object.values(months || {}).forEach(tracker => {
+        Object.entries(tracker?.observedDaily || {}).forEach(([day, raw]) => {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+          const amount = Number(raw);
+          if (!Number.isFinite(amount) || amount <= 0) return;
+          observedByDay[day] = (observedByDay[day] || 0) + amount;
+        });
+      });
+    });
+    if (!Object.keys(observedByDay).length) return;
+    setEarningsLedger(previous => {
+      let changed = false;
+      const days = { ...previous.days };
+      for (const [day, amount] of Object.entries(observedByDay)) {
+        const existing = days[day]?.sources || {};
+        const existingAmount = Math.max(0, Number(existing.Lulo) || 0);
+        if (amount <= existingAmount + 0.00000001) continue;
+        days[day] = {
+          ...days[day],
+          sources: { ...existing, Lulo: Number(amount.toFixed(8)) },
+        };
+        changed = true;
+      }
+      if (!changed) return previous;
+      const next = { ...previous, days };
+      saveObject(DAILY_LEDGER_KEY, next);
+      return next;
+    });
+  }, [luloMonthlyBaselines]);
 
   // Reconcile Loopscale's timestamped positive P/L observations into the
   // persisted daily ledger. The ledger survives temporary missing snapshots
