@@ -36,6 +36,7 @@ const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 const KRYPTEX_TRACKER_KEY = "project_income_kryptex_tracker_v1";
+const PROJECT_QUICK_CACHE_KEY = "yield_project_quick_cache_v1";
 const PROJECT_PAYBACK_KEY = "yield_project_payback_v1";
 const PROJECT_EXPENSES_KEY = "project_income_monthly_expenses_v1";
 
@@ -4494,17 +4495,23 @@ export default function YieldFarmingPage() {
   const [
     allProjects,
     setAllProjects,
-  ] = useState([]);
+  ] = useState(() => {
+    const cached = readObject(PROJECT_QUICK_CACHE_KEY).projects;
+    return Array.isArray(cached) ? cached : [];
+  });
 
   const [
     luloProjects,
     setLuloProjects,
-  ] = useState([]);
+  ] = useState(() => {
+    const cached = readObject(PROJECT_QUICK_CACHE_KEY).projects;
+    return Array.isArray(cached) ? cached.filter(project => project?.yield_tracking === "lulo_lending") : [];
+  });
 
   const [
     ratexSnapshot,
     setRatexSnapshot,
-  ] = useState(null);
+  ] = useState(() => readObject(PROJECT_QUICK_CACHE_KEY).ratexSnapshot || null);
 
   const [
     ratexHistory,
@@ -4517,7 +4524,7 @@ export default function YieldFarmingPage() {
   const [
     loopscaleSnapshot,
     setLoopscaleSnapshot,
-  ] = useState(null);
+  ] = useState(() => readObject(PROJECT_QUICK_CACHE_KEY).loopscaleSnapshot || null);
 
   const [
     loopscaleHistory,
@@ -5553,6 +5560,9 @@ const requestRollerCoinLatest =
               "lulo_lending"
           )
         );
+        // A successful fetch refreshes the instant-on-load cache.
+        const cache = readObject(PROJECT_QUICK_CACHE_KEY);
+        saveObject(PROJECT_QUICK_CACHE_KEY, { ...cache, projects: normalized });
       },
       []
     );
@@ -7649,121 +7659,70 @@ const importSaladPayload =
     ]
   );
 
-  const syncLivePositions =
-    useCallback(
-      async () => {
-        setSyncError(
-          ""
-        );
+  const syncLivePositions = useCallback(async () => {
+    setSyncError("");
+    // Browser-extension updates do not depend on any API request finishing.
+    requestRollerCoinLatest();
+    requestSaladLatest();
+    requestUnetworkLatest();
+    requestKryptexLatest();
 
-        const errors =
-          [];
-
+    const errors = [];
+    // Load independent sources concurrently so slow network calls do not
+    // delay updates from the other projects.
+    await Promise.all([
+      (async () => {
         try {
-          const response =
-            await projectsApi.accrueApyTransactions();
-
-          applyProjectData(
-            response?.data
-          );
-        } catch (
-          error
-        ) {
-          console.error(
-            "Yield page project sync failed:",
-            error
-          );
-
-          errors.push(
-            `Projects: ${
-              error?.message ||
-              "sync failed"
-            }`
-          );
-
+          const response = await projectsApi.accrueApyTransactions();
+          if (!Array.isArray(response?.data)) throw new Error("Invalid project response");
+          applyProjectData(response.data);
+        } catch (error) {
+          console.error("Yield page project sync failed:", error);
+          errors.push(`Projects: ${error?.message || "sync failed"}`);
           try {
-            const response =
-              await projectsApi.getAll();
-
-            applyProjectData(
-              response?.data
-            );
-          } catch {
-            setLuloProjects(
-              []
-            );
+            const response = await projectsApi.getAll();
+            if (Array.isArray(response?.data)) applyProjectData(response.data);
+          } catch (fallbackError) {
+            console.error("Yield page project fallback failed:", fallbackError);
+            // Leave cached project cards in place if the connection fails.
           }
         }
-
+      })(),
+      (async () => {
         try {
-          const snapshot =
-            await getRatexPtonycSnapshot();
-
-          setRatexSnapshot(
-            snapshot
-          );
-        } catch (
-          error
-        ) {
-          console.error(
-            "Yield page RateX sync failed:",
-            error
-          );
-
-          errors.push(
-            `RateX: ${
-              error?.message ||
-              "sync failed"
-            }`
-          );
+          const snapshot = await getRatexPtonycSnapshot();
+          if (snapshot) {
+            setRatexSnapshot(snapshot);
+            const cache = readObject(PROJECT_QUICK_CACHE_KEY);
+            saveObject(PROJECT_QUICK_CACHE_KEY, { ...cache, ratexSnapshot: snapshot });
+          }
+        } catch (error) {
+          console.error("Yield page RateX sync failed:", error);
+          errors.push(`RateX: ${error?.message || "sync failed"}`);
         }
-
+      })(),
+      (async () => {
         try {
-          const snapshot =
-            await getLoopscaleOnycSnapshot();
-
-          setLoopscaleSnapshot(
-            snapshot
-          );
-        } catch (
-          error
-        ) {
-          console.error(
-            "Yield page Loopscale sync failed:",
-            error
-          );
-
-          errors.push(
-            `Loopscale: ${
-              error?.message ||
-              "sync failed"
-            }`
-          );
+          const snapshot = await getLoopscaleOnycSnapshot();
+          if (snapshot) {
+            setLoopscaleSnapshot(snapshot);
+            const cache = readObject(PROJECT_QUICK_CACHE_KEY);
+            saveObject(PROJECT_QUICK_CACHE_KEY, { ...cache, loopscaleSnapshot: snapshot });
+          }
+        } catch (error) {
+          console.error("Yield page Loopscale sync failed:", error);
+          errors.push(`Loopscale: ${error?.message || "sync failed"}`);
         }
-
-        requestRollerCoinLatest();
-        requestSaladLatest();
-        requestUnetworkLatest();
-        requestKryptexLatest();
-
-        if (
-          errors.length
-        ) {
-          setSyncError(
-            errors.join(
-              " · "
-            )
-          );
-        }
-      },
-      [
-        applyProjectData,
-        requestRollerCoinLatest,
-        requestSaladLatest,
-        requestUnetworkLatest,
-        requestKryptexLatest,
-      ]
-    );
+      })(),
+    ]);
+    if (errors.length) setSyncError(errors.join(" · "));
+  }, [
+    applyProjectData,
+    requestRollerCoinLatest,
+    requestSaladLatest,
+    requestUnetworkLatest,
+    requestKryptexLatest,
+  ]);
 
   useEffect(
     () => {
