@@ -7527,10 +7527,17 @@ const importSaladPayload =
     delete sources.RollerCoin;
     const minedEntry = rollerCoinTracker?.daily?.[key];
     const minedTrx = Number(minedEntry?.trx ?? minedEntry?.sol);
-    const trxUsd = Number(rollerCoinTracker?.lastTrxPrice) ||
-      Number(minedEntry?.trxPrice ?? minedEntry?.solPrice) || 0;
-    if (Number.isFinite(minedTrx) && minedTrx > 0 && trxUsd > 0) {
-      sources.RollerCoin = minedTrx * trxUsd;
+    // The row's saved USD value uses its recorded TRX price and is
+    // stable across later market repricing. Live price still determines
+    // wallet valuation and portfolio P/L elsewhere in the dashboard.
+    const rowUsd = Number(minedEntry?.usd);
+    const datedTrxPrice = Number(minedEntry?.trxPrice ?? minedEntry?.solPrice) ||
+      Number(rollerCoinTracker?.lastTrxPrice) || 0;
+    if (Number.isFinite(minedTrx) && minedTrx > 0) {
+      const miningUsd = Number.isFinite(rowUsd) && rowUsd > 0
+        ? rowUsd
+        : minedTrx * datedTrxPrice;
+      if (miningUsd > 0) sources.RollerCoin = miningUsd;
     }
     if (key === SALAD_FIXED_DAY) {
       // Preserve the verified 00:00–09:00 earnings, then take the later
