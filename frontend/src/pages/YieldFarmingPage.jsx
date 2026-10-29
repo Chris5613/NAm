@@ -8174,7 +8174,22 @@ const importSaladPayload =
   }, [liveProjectIncome, earningsClock]);
 
   const todayKey = getTodayKey();
-  const dailySourceTotals = earningsLedger.days[todayKey]?.sources || {};
+  // User-supplied Salad rate for Oct 29, 2026, 12:00 AM–9:00 AM PT only.
+  // Fixed historical estimate, NOT a live rate or a future-day default.
+  const SALAD_FIXED_DAY = "2026-10-29";
+  const SALAD_FIXED_HOURLY_USD = 0.0756;
+  const SALAD_FIXED_END_HOUR = 9;
+  const SALAD_FIXED_TOTAL = SALAD_FIXED_HOURLY_USD * SALAD_FIXED_END_HOUR;
+  const sourceTotalsForDay = key => {
+    const sources = { ...(earningsLedger.days[key]?.sources || {}) };
+    if (key === SALAD_FIXED_DAY) {
+      // Replace, rather than add to, v2 Salad observed increases for that day.
+      // Otherwise the same earnings could be counted twice.
+      sources.Salad = SALAD_FIXED_TOTAL;
+    }
+    return sources;
+  };
+  const dailySourceTotals = sourceTotalsForDay(todayKey);
   const todayBreakdown = Object.entries(dailySourceTotals)
     .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
     .map(([name,amount]) => ({ name, amount: Number(amount) }))
@@ -8186,9 +8201,9 @@ const importSaladPayload =
     const day = new Date(weekMonday);
     day.setUTCDate(weekMonday.getUTCDate() + index);
     const key = day.toISOString().slice(0,10);
-    const record = earningsLedger.days[key];
-    const value = record?.sources
-      ? Object.values(record.sources).reduce((sum,amount) => sum + Math.max(0,Number(amount)||0),0)
+    const sources = sourceTotalsForDay(key);
+    const value = Object.keys(sources).length
+      ? Object.values(sources).reduce((sum,amount) => sum + Math.max(0,Number(amount)||0),0)
       : null;
     return {
       key,
@@ -8210,13 +8225,29 @@ const importSaladPayload =
     ? earningsLedger.timeline[todayKey] : [];
   // Only show timestamps observed after intraday tracking was introduced.
   // An older daily total has no known clock-time and is not backfilled.
-  const dailyChartData = [
-    { x: 0, value: 0 },
-    ...todayTimeline
-      .filter(point => Number.isFinite(Number(point.hour)) && Number.isFinite(Number(point.amount)))
-      .map(point => ({ x: Math.max(0,Math.min(24,Number(point.hour))), value: Math.max(0,Number(point.amount)) }))
-      .sort((a,b)=>a.x-b.x),
-  ];
+  const isFixedSaladDay = todayKey === SALAD_FIXED_DAY;
+  const recordedSalad = Math.max(0, Number(earningsLedger.days[todayKey]?.sources?.Salad) || 0);
+  const dailyChartData = isFixedSaladDay
+    ? [
+        ...Array.from({ length: SALAD_FIXED_END_HOUR + 1 }, (_, hour) => ({
+          x: hour,
+          value: Number((hour * SALAD_FIXED_HOURLY_USD).toFixed(6)),
+        })),
+        ...todayTimeline
+          .filter(point => Number.isFinite(Number(point.hour)) && Number.isFinite(Number(point.amount)) && Number(point.hour) > SALAD_FIXED_END_HOUR)
+          .map(point => ({
+            x: Math.max(0, Math.min(24, Number(point.hour))),
+            value: SALAD_FIXED_TOTAL + Math.max(0, Number(point.amount) - recordedSalad),
+          }))
+          .sort((a,b) => a.x - b.x),
+      ]
+    : [
+        { x: 0, value: 0 },
+        ...todayTimeline
+          .filter(point => Number.isFinite(Number(point.hour)) && Number.isFinite(Number(point.amount)))
+          .map(point => ({ x: Math.max(0,Math.min(24,Number(point.hour))), value: Math.max(0,Number(point.amount)) }))
+          .sort((a,b)=>a.x-b.x),
+      ];
   const lastObserved = dailyChartData[dailyChartData.length-1];
   if (currentHour > lastObserved.x) {
     dailyChartData.push({ x: currentHour, value: lastObserved.value });
@@ -8760,7 +8791,7 @@ const summary =
             </ResponsiveContainer>
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            <span>Daily shows observed sync times; Weekly preserves recorded daily totals. No estimated backfill.</span>
+            <span>{todayKey === SALAD_FIXED_DAY ? "Salad: fixed $0.0756/hr from midnight–9 AM PT ($0.6804 estimated); not a live reading." : "Daily shows observed sync times; Weekly preserves recorded daily totals. No estimated backfill."}</span>
             <button type="button" className="text-sky-400 hover:text-sky-300" onClick={()=>setHistoryOpen(true)}>Monthly history</button>
           </div>
         </section>
