@@ -7995,7 +7995,7 @@ const summary =
               </div>
             </div>
           </div>
-          <div className="mt-3 h-[clamp(320px,42vh,460px)] w-full">
+          <div className="mt-3 h-[clamp(240px,30vh,320px)] w-full">
             <ResponsiveContainer width="100%" height="100%">
               {earningsChartRange === "daily" ? (
                 <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}}>
