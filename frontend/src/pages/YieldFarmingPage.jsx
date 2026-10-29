@@ -5160,6 +5160,7 @@ const requestRollerCoinLatest =
                   lifetimeInterest,
                 lastBalanceUsd:
                   balanceUsd,
+                // Only advance persistence timestamps for meaningful changes.
                 lastSyncedAt:
                   nowIso,
                 lastCashFlowAt:
@@ -5171,13 +5172,15 @@ const requestRollerCoinLatest =
                       ),
               };
 
+              // A fresh polling timestamp alone must not rewrite remote
+              // settings dozens of times per minute.
+              const previousComparable = { ...previous };
+              const updatedComparable = { ...updated };
+              delete previousComparable.lastSyncedAt;
+              delete updatedComparable.lastSyncedAt;
               if (
-                JSON.stringify(
-                  updated
-                ) !==
-                JSON.stringify(
-                  previous
-                )
+                JSON.stringify(updatedComparable) !==
+                JSON.stringify(previousComparable)
               ) {
                 projectMonths[
                   monthKey
