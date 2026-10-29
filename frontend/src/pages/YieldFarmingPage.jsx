@@ -7529,24 +7529,16 @@ const importSaladPayload =
   const LULO_FIXED_END_HOUR = 14;
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
-    // RollerCoin mining is dated by its earnings API, not by changes
-    // to the USD value of all TRX mined during the current month.
-    // Do not use the legacy cumulative-delta ledger (which can contain
-    // market-price gains or a recovered history range) as daily income.
+    // Live USD value of TRX mined on this date. This can move up OR down
+    // with TRX/USD without mislabeling older months' price changes as
+    // newly mined TRX. Retain dated TRX counts across incomplete syncs.
     delete sources.RollerCoin;
     const minedEntry = rollerCoinTracker?.daily?.[key];
     const minedTrx = Number(minedEntry?.trx ?? minedEntry?.sol);
-    // The row's saved USD value uses its recorded TRX price and is
-    // stable across later market repricing. Live price still determines
-    // wallet valuation and portfolio P/L elsewhere in the dashboard.
-    const rowUsd = Number(minedEntry?.usd);
-    const datedTrxPrice = Number(minedEntry?.trxPrice ?? minedEntry?.solPrice) ||
-      Number(rollerCoinTracker?.lastTrxPrice) || 0;
-    if (Number.isFinite(minedTrx) && minedTrx > 0) {
-      const miningUsd = Number.isFinite(rowUsd) && rowUsd > 0
-        ? rowUsd
-        : minedTrx * datedTrxPrice;
-      if (miningUsd > 0) sources.RollerCoin = miningUsd;
+    const livePrice = Number(rollerCoinTracker?.lastTrxPrice) ||
+      Number(minedEntry?.trxPrice ?? minedEntry?.solPrice) || 0;
+    if (Number.isFinite(minedTrx) && minedTrx > 0 && livePrice > 0) {
+      sources.RollerCoin = minedTrx * livePrice;
     }
     if (key === SALAD_FIXED_DAY) {
       // Preserve the verified 00:00–09:00 earnings, then take the later
