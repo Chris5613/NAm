@@ -7391,7 +7391,7 @@ const importSaladPayload =
     const observedByDay = {};
     Object.values(loopscaleHistory?.positions || {}).forEach(position => {
       Object.entries(position?.observedDaily || {}).forEach(([day, raw]) => {
-        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day)) return;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
         const amount = Number(raw);
         if (!Number.isFinite(amount) || amount <= 0) return;
         observedByDay[day] = (observedByDay[day] || 0) + amount;
