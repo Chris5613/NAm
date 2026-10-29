@@ -5953,16 +5953,29 @@ const importSaladPayload =
           1500
         );
 
-      const handleFocus =
-        () =>
-          requestSaladLatest();
+      const handleFocus = () => {
+        requestSaladLatest();
+        // Refresh the actual Salad API data rather than only rereading
+        // the previous extension cache whenever the user returns.
+        syncSaladBalance();
+      };
 
       window.addEventListener(
         "focus",
         handleFocus
       );
 
+      // Salad's own tab timer can be throttled or stopped in the background.
+      // A dashboard-side sync drives the extension's SYNC_NOW background
+      // request while this page remains open, without requiring a reload.
+      const liveSaladTimer = window.setInterval(() => {
+        if (document.visibilityState === "visible") {
+          syncSaladBalance();
+        }
+      }, 60000);
+
       return () => {
+        window.clearInterval(liveSaladTimer);
         window.removeEventListener(
           "message",
           handleMessage
@@ -5985,6 +5998,7 @@ const importSaladPayload =
     [
       importSaladPayload,
       requestSaladLatest,
+      syncSaladBalance,
     ]
   );
 
