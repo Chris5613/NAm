@@ -3353,11 +3353,8 @@ function KryptexProjectCard({
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
-        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
-          <div className="min-w-0">
-            <div className="text-[10px] text-muted-foreground">Today</div>
-            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
-          </div>
+        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
+
           <div className="max-w-[90px] text-right">
             <div className="text-[10px] text-muted-foreground">Last sync</div>
             <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
@@ -9307,11 +9304,8 @@ function ProjectCard({
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
-        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
-          <div className="min-w-0">
-            <div className="text-[10px] text-muted-foreground">Today</div>
-            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
-          </div>
+        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
+
           <div className="max-w-[90px] text-right">
             <div className="text-[10px] text-muted-foreground">Last sync</div>
             <div className="truncate text-[10px] text-muted-foreground" title={project.lastSyncedAt || project.updated_at || project.updatedAt || ""}>
@@ -9416,11 +9410,8 @@ function UnetworkProjectCard({
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
         </div>
-        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
-          <div className="min-w-0">
-            <div className="text-[10px] text-muted-foreground">Today</div>
-            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
-          </div>
+        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
+
           <div className="max-w-[90px] text-right">
             <div className="text-[10px] text-muted-foreground">Last sync</div>
             <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
@@ -9614,11 +9605,8 @@ function SaladProjectCard({
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
         </div>
-        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
-          <div className="min-w-0">
-            <div className="text-[10px] text-muted-foreground">Today</div>
-            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
-          </div>
+        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
+
           <div className="max-w-[90px] text-right">
             <div className="text-[10px] text-muted-foreground">Last sync</div>
             <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
@@ -9801,11 +9789,8 @@ return (
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
         </div>
-        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
-          <div className="min-w-0">
-            <div className="text-[10px] text-muted-foreground">Today</div>
-            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
-          </div>
+        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
+
           <div className="max-w-[90px] text-right">
             <div className="text-[10px] text-muted-foreground">Last sync</div>
             <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
