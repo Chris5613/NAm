@@ -7320,7 +7320,7 @@ const importSaladPayload =
     };
   });
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [earningsChartRange, setEarningsChartRange] = useState("weekly");
+  const [earningsChartRange, setEarningsChartRange] = useState("daily");
   const [selectedEarningsPoint, setSelectedEarningsPoint] = useState(null);
   useEffect(() => {
     if (!selectedEarningsPoint) return;
@@ -8747,26 +8747,52 @@ if (
 
 
 
-      <section className="rounded-2xl border border-[#263342] bg-[#0c141e] px-4 py-3">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold">Projections</h2>
-          <span className="text-[11px] text-muted-foreground">Based on current project estimates</span>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            {label:"Estimated Monthly",amount:summary.monthlyYield},
-            {label:"Estimated Yearly",amount:summary.annualYield},
-            {label:"Average Weekly",amount:summary.annualYield/52.1775},
-            {label:"Average Daily",amount:summary.annualYield/365},
-          ].map(item=>(
-            <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-3">
-              <div className="text-[11px] text-muted-foreground">{item.label}</div>
-              <div className="mt-1 text-[clamp(18px,1.6vw,25px)] font-semibold tabular-nums text-emerald-400">{formatCurrency(item.amount)}</div>
-              
-            </div>
-          ))}
-        </div>
-      </section>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.85fr)_minmax(290px,1fr)]">
+        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] px-4 py-3">
+          <h2 className="mb-3 text-[13px] font-semibold">Projections</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              {label:"Daily",amount:summary.annualYield/365,symbol:"D"},
+              {label:"Weekly",amount:summary.annualYield/52.1775,symbol:"W"},
+              {label:"Monthly",amount:summary.monthlyYield,symbol:"M"},
+              {label:"Yearly",amount:summary.annualYield,symbol:"Y"},
+            ].map(item => (
+              <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#23364b] text-[11px] font-bold text-[#a5c3d7]">{item.symbol}</span>
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-muted-foreground">{item.label}</div>
+                    <div className="truncate text-[clamp(13px,1.2vw,19px)] font-semibold tabular-nums" title={formatCurrency(item.amount)}>{formatCurrency(item.amount)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] px-3 py-3">
+          <div className="mb-2 flex items-center justify-between">
+            <h2 className="text-[13px] font-semibold">Connection Status</h2>
+            <span className="text-[10px] text-muted-foreground">Latest sync</span>
+          </div>
+          <div className="space-y-1.5">
+            {[
+              {name:"RollerCoin", connected:rollerCoinConnected, synced:rollerCoinTracker?.lastSyncedAt},
+              {name:"Loopscale", connected:Boolean(loopscaleSnapshot), synced:loopscaleSnapshot?.lastSyncedAt || loopscaleSnapshot?.syncedAt},
+              {name:"Salad", connected:saladConnected, synced:saladTracker?.lastSyncedAt},
+              {name:"Lulo", connected:luloProjects.some(project=>project.autoSynced), synced:luloProjects.map(project=>project.lastSyncedAt || project.lulo_last_synced_at).filter(Boolean).sort().at(-1)},
+              {name:"Unetwork", connected:unetworkConnected, synced:unetworkTracker?.lastSyncedAt},
+            ].map(item => (
+              <div key={item.name} className="grid grid-cols-[minmax(70px,1fr)_minmax(80px,1fr)_auto] items-center gap-2 text-[10px]">
+                <span className="truncate font-medium">{item.name}</span>
+                <span className="truncate text-muted-foreground">{formatCompactSyncAge(item.synced)}</span>
+                <span className={item.connected ? "text-emerald-400" : "text-amber-300"}>
+                  ● {item.connected ? "Connected" : "Not connected"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
       {selectedBreakdown && earningsChartRange !== "daily" && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
           onMouseDown={event => { if (event.target === event.currentTarget) setSelectedEarningsPoint(null); }}>
