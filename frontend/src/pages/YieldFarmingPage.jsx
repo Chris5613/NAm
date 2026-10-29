@@ -7931,7 +7931,36 @@ const summary =
 
       <header className="flex flex-wrap items-center justify-between gap-3 px-1">
         <h1 className="text-[22px] font-semibold tracking-tight">Passive Income</h1>
+        <div className="flex flex-wrap items-center gap-3">
+        {inactiveProgramCards.length > 0 && (
+          <div className="shrink-0">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button type="button" variant="outline" size="sm" className="border-[#2b3848] bg-[#101923] text-muted-foreground hover:text-white">
+                  Inactive projects ({inactiveProgramCards.length})
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-xl">
+                <DialogHeader>
+                  <DialogTitle>Inactive projects ({inactiveProgramCards.length})</DialogTitle>
+                </DialogHeader>
+                <div className="grid max-h-[60vh] gap-2 overflow-y-auto py-2">
+                  {inactiveProgramCards.map(item => (
+                    <div key={item.key} className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card/30 px-3 py-2.5">
+                      <div className="min-w-0">
+                        <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : "Salad"}</div>
+                        <div className="text-xs tabular-nums text-muted-foreground">{formatCurrency(item.amount)}</div>
+                      </div>
+                      <button type="button" onClick={() => reactivateProject(item.key)} className="shrink-0 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10">Reactivate</button>
+                    </div>
+                  ))}
+                </div>
+              </DialogContent>
+            </Dialog>
+          </div>
+        )}
         <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
+        </div>
       </header>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)]">
         <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
@@ -7966,7 +7995,7 @@ const summary =
               </div>
             </div>
           </div>
-          <div className="mt-3 h-[clamp(180px,25vh,235px)] w-full">
+          <div className="mt-3 h-[clamp(320px,42vh,460px)] w-full">
             <ResponsiveContainer width="100%" height="100%">
               {earningsChartRange === "daily" ? (
                 <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}}>
@@ -8427,33 +8456,7 @@ if (
             )}
           </div>
         )}
-      {inactiveProgramCards.length > 0 && (
-        <div className="mt-3 border-t border-border/40 px-1 pt-3">
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button type="button" variant="outline" size="sm" className="text-muted-foreground">
-                Inactive projects ({inactiveProgramCards.length})
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-xl">
-              <DialogHeader>
-                <DialogTitle>Inactive projects ({inactiveProgramCards.length})</DialogTitle>
-              </DialogHeader>
-              <div className="grid max-h-[60vh] gap-2 overflow-y-auto py-2">
-                {inactiveProgramCards.map(item => (
-                  <div key={item.key} className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card/30 px-3 py-2.5">
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : "Salad"}</div>
-                      <div className="text-xs tabular-nums text-muted-foreground">{formatCurrency(item.amount)}</div>
-                    </div>
-                    <button type="button" onClick={() => reactivateProject(item.key)} className="shrink-0 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10">Reactivate</button>
-                  </div>
-                ))}
-              </div>
-            </DialogContent>
-          </Dialog>
-        </div>
-      )}
+
       </section>
 
 
