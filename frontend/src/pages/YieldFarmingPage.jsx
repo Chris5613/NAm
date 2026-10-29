@@ -8783,7 +8783,6 @@ if (
               {name:"RollerCoin", connected:rollerCoinConnected, synced:rollerCoinTracker?.lastSyncedAt},
               {name:"Loopscale", connected:Boolean(loopscaleSnapshot), synced:loopscaleSnapshot?.lastSyncedAt || loopscaleSnapshot?.syncedAt},
               {name:"Salad", connected:saladConnected, synced:saladTracker?.lastSyncedAt},
-              {name:"Lulo", connected:luloProjects.some(project => { const t = Date.parse(project.lastSyncedAt || ""); return Number.isFinite(t) && Date.now() - t >= 0 && Date.now() - t < 15 * 60 * 1000; }), synced:luloProjects.map(project=>project.lastSyncedAt).filter(Boolean).sort().at(-1)},
               {name:"Unetwork", connected:unetworkConnected, synced:unetworkTracker?.lastSyncedAt},
             ].map(item => (
               <div key={item.name} className="grid grid-cols-[minmax(0,1fr)_85px_95px] items-center gap-2 border-b border-white/5 py-1 text-[10px] last:border-b-0">
