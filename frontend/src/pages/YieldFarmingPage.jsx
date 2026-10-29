@@ -4088,7 +4088,7 @@ function KryptexProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
+        className="flex min-h-[132px] w-full flex-col px-4 py-3.5 text-left"
       >
         <div className="flex w-full items-center justify-between gap-4">
           <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -4102,7 +4102,7 @@ function KryptexProjectCard({
 
             <div className="flex-1">
               <div className="flex items-center gap-2">
-                <h3 className="whitespace-nowrap text-[18px] font-semibold tracking-tight text-foreground">
+                <h3 className="whitespace-nowrap text-[16px] font-semibold tracking-tight text-foreground">
                   Kryptex
                 </h3>
 
@@ -4132,15 +4132,15 @@ function KryptexProjectCard({
           />
         </div>
 
-        <div className="mt-auto pt-1">
+        <div className="mt-auto pt-3">
           <div className="flex flex-wrap items-end gap-2">
-            <div className="text-[19px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
+            <div className="text-[23px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
               {formatCurrency(
                 stats?.currentBalanceUsd
               )}
             </div>
 
-            <ProjectPaybackStatus
+            <ProjectPaybackStatus compact
               earned={
                 stats?.lifetimeUsd
               }
@@ -4167,23 +4167,14 @@ function KryptexProjectCard({
               {formatCurrency(
                 stats?.monthlyUsd
               )}
-              /month
-            </span>
-
-            <span>·</span>
-
-            <span>
-              {formatCurrency(
-                stats?.yearlyUsd
-              )}
-              /year
+              /mo
             </span>
           </div>
         </div>
       </button>
 
       {!collapsed && (
-        <ProjectDetailsModal title={"Kryptex"} onClose={onToggle}>
+        <ProjectDetailsModal title={"Kryptex"} onClose={onToggle} projections={{ daily: stats?.dailyUsd, monthly: stats?.monthlyUsd, yearly: stats?.yearlyUsd }}>
         <div className="border-t border-border/50 px-5 py-5">
           <div className="mb-5">
             <ProjectPaybackEditor
@@ -8717,7 +8708,7 @@ const summary =
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 min-[1680px]:grid-cols-6">
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
   {sortedProgramCards.map(
               (
                 item
@@ -9307,6 +9298,7 @@ function ProjectPaybackStatus({
   earned,
   dailyIncome,
   totalSpent,
+  compact = false,
 }) {
   const stats =
     getPaybackStats(
@@ -9314,6 +9306,8 @@ function ProjectPaybackStatus({
       dailyIncome,
       totalSpent
     );
+
+  if (compact && !stats.configured) return null;
 
   if (
     !stats.configured
@@ -9332,6 +9326,12 @@ function ProjectPaybackStatus({
 
   const profitable =
     stats.pnl >= 0;
+
+  if (compact) return (
+    <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-medium tabular-nums ${profitable ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-amber-500/25 bg-amber-500/10 text-amber-300"}`}>
+      P/L {stats.pnl >= 0 ? "+" : ""}{formatCurrency(stats.pnl)}
+    </span>
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
@@ -9523,7 +9523,7 @@ function ProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
+        className="flex min-h-[132px] w-full flex-col px-4 py-3.5 text-left"
       >
         {/* TOP */}
 
@@ -9537,7 +9537,7 @@ function ProjectCard({
 
     <div className="flex-1">
       <div className="flex items-center gap-2">
-        <h3 className="whitespace-nowrap text-[18px] font-semibold tracking-tight text-foreground">
+        <h3 className="whitespace-nowrap text-[16px] font-semibold tracking-tight text-foreground">
           {project.platform}
         </h3>
 
@@ -9560,11 +9560,11 @@ function ProjectCard({
 </div>
         {/* VALUE */}
 
-        <div className="mt-auto pt-1">
+        <div className="mt-auto pt-3">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[19px]
+                text-[23px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9578,7 +9578,7 @@ function ProjectCard({
             </div>
 
             {!hidePayback && (
-              <ProjectPaybackStatus
+              <ProjectPaybackStatus compact
                 earned={
                   project.earned
                 }
@@ -9618,23 +9618,14 @@ function ProjectCard({
               {formatCurrency(
                 projections.monthly
               )}
-              /month
-            </span>
-
-            <span>·</span>
-
-            <span>
-              {formatCurrency(
-                projections.yearly
-              )}
-              /year
+              /mo
             </span>
           </div>
         </div>
       </button>
 
       {!collapsed && (
-        <ProjectDetailsModal title={project.platform} onClose={onToggle}>
+        <ProjectDetailsModal title={project.platform} onClose={onToggle} projections={{ daily: projections.daily, monthly: projections.monthly, yearly: projections.yearly }}>
         <>
           {!hidePayback && (
             <div className="border-t border-border/40 px-5 py-4">
@@ -9711,7 +9702,7 @@ function UnetworkProjectCard({
               !value
           )
         }
-        className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
+        className="flex min-h-[132px] w-full flex-col px-4 py-3.5 text-left"
       >
         {/* TOP */}
 
@@ -9725,7 +9716,7 @@ function UnetworkProjectCard({
 
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-[18px] font-semibold tracking-tight text-foreground">
+        <h3 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
           Unetwork
         </h3>
 
@@ -9753,11 +9744,11 @@ function UnetworkProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-1">
+        <div className="mt-auto pt-3">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[19px]
+                text-[23px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -9770,7 +9761,7 @@ function UnetworkProjectCard({
 )}
             </div>
 
-            <ProjectPaybackStatus
+            <ProjectPaybackStatus compact
               earned={
                 stats?.lifetimeUsd
               }
@@ -9809,23 +9800,14 @@ function UnetworkProjectCard({
               {formatCurrency(
                 stats?.estimatedMonthlyUsd
               )}
-              /month
-            </span>
-
-            <span>·</span>
-
-            <span>
-              {formatCurrency(
-                stats?.estimatedYearlyUsd
-              )}
-              /year
+              /mo
             </span>
           </div>
         </div>
       </button>
 
       {expanded && (
-        <ProjectDetailsModal title={"Unetwork"} onClose={() => setExpanded(false)}>
+        <ProjectDetailsModal title={"Unetwork"} onClose={() = projections={{ daily: stats?.estimatedDailyUsd, monthly: stats?.estimatedMonthlyUsd, yearly: stats?.estimatedYearlyUsd }}> setExpanded(false)}>
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
           <div className="mb-4">
             <ProjectPaybackEditor
@@ -9991,7 +9973,7 @@ function SaladProjectCard({
               !value
           )
         }
-        className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
+        className="flex min-h-[132px] w-full flex-col px-4 py-3.5 text-left"
       >
         {/* TOP */}
 
@@ -10005,7 +9987,7 @@ function SaladProjectCard({
 
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-[18px] font-semibold tracking-tight text-foreground">
+        <h3 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
           Salad
         </h3>
 
@@ -10033,11 +10015,11 @@ function SaladProjectCard({
 
         {/* VALUE */}
 
-        <div className="mt-auto pt-1">
+        <div className="mt-auto pt-3">
           <div className="flex flex-wrap items-end gap-2">
             <div
               className="
-                text-[19px]
+                text-[23px]
                 font-semibold
                 leading-none
                 tracking-tight
@@ -10050,7 +10032,7 @@ function SaladProjectCard({
               )}
             </div>
 
-            <ProjectPaybackStatus
+            <ProjectPaybackStatus compact
               earned={
                 stats?.lifetimeUsd
               }
@@ -10089,23 +10071,14 @@ function SaladProjectCard({
               {formatCurrency(
                 monthlyIncome
               )}
-              /month
-            </span>
-
-            <span>·</span>
-
-            <span>
-              {formatCurrency(
-                yearlyIncome
-              )}
-              /year
+              /mo
             </span>
           </div>
         </div>
       </button>
 
       {expanded && (
-        <ProjectDetailsModal title={"Salad"} onClose={() => setExpanded(false)}>
+        <ProjectDetailsModal title={"Salad"} onClose={() = projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}> setExpanded(false)}>
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
           <div className="mb-4">
             <ProjectPaybackEditor
@@ -10260,7 +10233,7 @@ return (
             !current
         )
       }
-      className="flex min-h-[92px] w-full flex-col px-3 pb-2 pt-2 text-left"
+      className="flex min-h-[132px] w-full flex-col px-4 py-3.5 text-left"
     >
 <div className="flex w-full items-start justify-between gap-3">
   <div className="flex min-w-0 items-center gap-3">
@@ -10272,7 +10245,7 @@ return (
 
     <div className="min-w-0">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-[18px] font-semibold tracking-tight text-foreground">
+        <h3 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
           RollerCoin
         </h3>
 
@@ -10292,11 +10265,11 @@ return (
   />
 </div>
 
-      <div className="mt-auto pt-1">
+      <div className="mt-auto pt-3">
         <div className="flex flex-wrap items-end gap-2">
           <div
             className="
-              text-[19px]
+              text-[23px]
               font-semibold
               leading-none
               tracking-tight
@@ -10309,7 +10282,7 @@ return (
 )}
           </div>
 
-          <ProjectPaybackStatus
+          <ProjectPaybackStatus compact
             earned={
               stats?.lifetimeUsd
             }
@@ -10348,23 +10321,14 @@ return (
             {formatCurrency(
               monthlyIncome
             )}
-            /month
-          </span>
-
-          <span>·</span>
-
-          <span>
-            {formatCurrency(
-              yearlyIncome
-            )}
-            /year
+            /mo
           </span>
         </div>
       </div>
     </button>
 
     {expanded && (
-        <ProjectDetailsModal title={"RollerCoin"} onClose={() => setExpanded(false)}>
+        <ProjectDetailsModal title={"RollerCoin"} onClose={() = projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}> setExpanded(false)}>
       <div className="border-t border-border/40 px-5 py-4">
         <ProjectPaybackEditor
           value={
@@ -10387,7 +10351,7 @@ return (
 );
 }
 
-function ProjectDetailsModal({ title, onClose, children }) {
+function ProjectDetailsModal({ title, onClose, projections, children }) {
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -10424,6 +10388,9 @@ function ProjectDetailsModal({ title, onClose, children }) {
           </button>
         </div>
         <div className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
+          {projections && <div className="grid grid-cols-3 gap-2 border-b border-border/50 px-4 py-3">
+            {[["Daily",projections.daily],["Monthly",projections.monthly],["Yearly",projections.yearly]].map(([label,value])=><div key={label} className="min-w-0 rounded-lg bg-white/[0.03] p-2"><p className="text-[10px] text-muted-foreground">{label} estimate</p><p className="mt-1 truncate text-xs font-semibold tabular-nums" title={formatCurrency(value)}>{formatCurrency(value)}</p></div>)}
+          </div>}
           {children}
         </div>
       </div>
