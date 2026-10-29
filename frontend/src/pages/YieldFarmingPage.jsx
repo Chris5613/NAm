@@ -3310,6 +3310,7 @@ function KryptexProjectCard({
   totalSpent,
   onTotalSpentChange,
   onDeactivate,
+  todayUsd = 0,
 }) {
   const isLive =
     Boolean(
@@ -3339,85 +3340,29 @@ function KryptexProjectCard({
         }
         className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
       >
-        <div className="flex w-full items-center justify-between gap-4">
-          <div className="flex min-w-0 flex-1 items-center gap-3">
-            <ProjectLogoButton
-              platform="Kryptex"
-              logo={logo}
-              onLogoChange={
-                onLogoChange
-              }
-            />
-
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <h3 className="whitespace-nowrap text-[16px] font-semibold tracking-tight text-foreground">
-                  Kryptex
-                </h3>
-
-                <span
-                  className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-                    isLive
-                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
-                      : "border-amber-500/25 bg-amber-500/10 text-amber-300"
-                  }`}
-                >
-                  <Wifi className="h-3 w-3" />
-                  {isLive
-                    ? "LIVE"
-                    : "OFFLINE"}
-                </span>
-              </div>
+        <div className="flex w-full min-w-0 items-start gap-2">
+          <ProjectLogoButton platform={"Kryptex"} logo={logo} onLogoChange={onLogoChange} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="min-w-0 truncate text-[12px] font-semibold">Kryptex</span>
+              <span className={`shrink-0 text-[9px] ${isLive ? "text-emerald-400" : "text-amber-300"}`}>
+                ● {isLive ? "Online" : "Offline"}
+              </span>
             </div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(stats?.currentBalanceUsd)}</div>
           </div>
-
-          <ChevronRight
-            className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
-              collapsed
-                ? ""
-                : "rotate-90"
-            }`}
-            strokeWidth={1.5}
-          />
+          <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
-
-        <div className="mt-auto pt-2">
-          <div className="flex flex-wrap items-end gap-2">
-            <div className="text-[23px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
-              {formatCurrency(
-                stats?.currentBalanceUsd
-              )}
-            </div>
-
-            <ProjectPaybackStatus compact
-              earned={
-                stats?.lifetimeUsd
-              }
-              dailyIncome={
-                stats?.dailyUsd
-              }
-              totalSpent={
-                totalSpent
-              }
-            />
+        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground">Today</div>
+            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
           </div>
-
-          <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums text-muted-foreground">
-            <span>
-              {formatCurrency(
-                stats?.dailyUsd
-              )}
-              /day
-            </span>
-
-            <span>·</span>
-
-            <span>
-              {formatCurrency(
-                stats?.monthlyUsd
-              )}
-              /mo
-            </span>
+          <div className="max-w-[90px] text-right">
+            <div className="text-[10px] text-muted-foreground">Last sync</div>
+            <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
+              {formatCompactSyncAge(tracker?.lastSyncedAt)}
+            </div>
           </div>
         </div>
       </button>
@@ -8460,7 +8405,7 @@ const summary =
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
   {activeProgramCards.map(
               (
                 item
@@ -8472,6 +8417,7 @@ if (
 ) {
   return (
     <KryptexProjectCard
+      todayUsd={Number(dailySourceTotals["Kryptex"]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
       key={
         item.key
@@ -8541,6 +8487,7 @@ if (
 
                   return (
                     <ProjectCard
+      todayUsd={Number(dailySourceTotals[project.platform]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
@@ -8599,6 +8546,7 @@ if (
                 ) {
                   return (
                     <RollerCoinProjectCard
+      todayUsd={Number(dailySourceTotals["RollerCoin"]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
@@ -8680,6 +8628,7 @@ if (
                 ) {
                   return (
                     <SaladProjectCard
+      todayUsd={Number(dailySourceTotals["Salad"]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
@@ -8736,6 +8685,7 @@ if (
 
                 return (
                   <UnetworkProjectCard
+      todayUsd={Number(dailySourceTotals["Unetwork"]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
                     key={
                       item.key
@@ -9253,6 +9203,18 @@ function ProjectPaybackEditor({
   );
 }
 
+function formatCompactSyncAge(value) {
+  if (!value) return "Waiting";
+  const time = new Date(value).getTime();
+  if (!Number.isFinite(time)) return "Waiting";
+  const mins = Math.max(0, Math.floor((Date.now() - time) / 60000));
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.floor(hours / 24)}d ago`;
+}
+
 function ProjectCard({
   project,
   collapsed,
@@ -9263,6 +9225,7 @@ function ProjectCard({
   totalSpent,
   onTotalSpentChange,
   onDeactivate,
+  todayUsd = 0,
 }) {
   const projections =
     getProjectProjections(
@@ -9305,101 +9268,29 @@ function ProjectCard({
         }
         className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
       >
-        {/* TOP */}
-
-<div className="flex w-full items-center justify-between gap-4">
-  <div className="flex min-w-0 flex-1 items-center gap-3">
-    <ProjectLogoButton
-      platform={project.platform}
-      logo={logo}
-      onLogoChange={onLogoChange}
-    />
-
-    <div className="flex-1">
-      <div className="flex items-center gap-2">
-        <h3 className="whitespace-nowrap text-[16px] font-semibold tracking-tight text-foreground">
-          {project.platform}
-        </h3>
-
-        {project.autoSynced && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
-            <Wifi className="h-3 w-3" />
-            LIVE
-          </span>
-        )}
-      </div>
-    </div>
-  </div>
-
-  <ChevronRight
-    className={`h-5 w-5 shrink-0 text-muted-foreground transition-transform ${
-      collapsed ? "" : "rotate-90"
-    }`}
-    strokeWidth={1.5}
-  />
-</div>
-        {/* VALUE */}
-
-        <div className="mt-auto pt-2">
-          <div className="flex flex-wrap items-end gap-2">
-            <div
-              className="
-                text-[23px]
-                font-semibold
-                leading-none
-                tracking-tight
-                text-foreground
-                tabular-nums
-              "
-            >
-              {formatCurrency(
-                project.totalBalance
-              )}
+        <div className="flex w-full min-w-0 items-start gap-2">
+          <ProjectLogoButton platform={project.platform} logo={logo} onLogoChange={onLogoChange} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="min-w-0 truncate text-[12px] font-semibold">{project.platform}</span>
+              <span className={`shrink-0 text-[9px] ${project.autoSynced ? "text-emerald-400" : "text-amber-300"}`}>
+                ● {project.autoSynced ? "Online" : "Offline"}
+              </span>
             </div>
-
-            {!hidePayback && (
-              <ProjectPaybackStatus compact
-                earned={
-                  project.earned
-                }
-                dailyIncome={
-                  projections.daily
-                }
-                totalSpent={
-                  totalSpent
-                }
-              />
-            )}
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(project.totalBalance)}</div>
           </div>
-
-          <div
-            className="
-              mt-2
-              flex
-              flex-wrap
-              items-center
-              gap-x-2
-              gap-y-1
-              text-xs
-              tabular-nums
-              text-muted-foreground
-            "
-          >
-            <span>
-              {formatCurrency(
-                projections.daily
-              )}
-              /day
-            </span>
-
-            <span>·</span>
-
-            <span>
-              {formatCurrency(
-                projections.monthly
-              )}
-              /mo
-            </span>
+          <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
+        </div>
+        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground">Today</div>
+            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
+          </div>
+          <div className="max-w-[90px] text-right">
+            <div className="text-[10px] text-muted-foreground">Last sync</div>
+            <div className="truncate text-[10px] text-muted-foreground" title={project.lastSyncedAt || project.updated_at || project.updatedAt || ""}>
+              {formatCompactSyncAge(project.lastSyncedAt || project.updated_at || project.updatedAt)}
+            </div>
           </div>
         </div>
       </button>
@@ -9454,6 +9345,7 @@ function UnetworkProjectCard({
   totalSpent,
   onTotalSpentChange,
   onDeactivate,
+  todayUsd = 0,
 }) {
   const [
     expanded,
@@ -9485,104 +9377,29 @@ function UnetworkProjectCard({
         }
         className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
       >
-        {/* TOP */}
-
-<div className="flex w-full items-start justify-between gap-3">
-  <div className="flex min-w-0 items-center gap-3">
-    <ProjectLogoButton
-      platform="Unetwork"
-      logo={logo}
-      onLogoChange={onLogoChange}
-    />
-
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
-          Unetwork
-        </h3>
-
-        <span
-          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-            connected
-              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
-              : "border-amber-500/25 bg-amber-500/10 text-amber-300"
-          }`}
-        >
-          <Wifi className="h-3 w-3" />
-          {connected ? "LIVE" : "OFFLINE"}
-        </span>
-      </div>
-    </div>
-  </div>
-
-  <ChevronRight
-    className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-      expanded ? "rotate-90" : ""
-    }`}
-    strokeWidth={1.5}
-  />
-</div>
-
-        {/* VALUE */}
-
-        <div className="mt-auto pt-2">
-          <div className="flex flex-wrap items-end gap-2">
-            <div
-              className="
-                text-[23px]
-                font-semibold
-                leading-none
-                tracking-tight
-                text-foreground
-                tabular-nums
-              "
-            >
-{formatCurrency(
-  stats?.currentBalance
-)}
+        <div className="flex w-full min-w-0 items-start gap-2">
+          <ProjectLogoButton platform={"Unetwork"} logo={logo} onLogoChange={onLogoChange} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="min-w-0 truncate text-[12px] font-semibold">Unetwork</span>
+              <span className={`shrink-0 text-[9px] ${connected ? "text-emerald-400" : "text-amber-300"}`}>
+                ● {connected ? "Online" : "Offline"}
+              </span>
             </div>
-
-            <ProjectPaybackStatus compact
-              earned={
-                stats?.lifetimeUsd
-              }
-              dailyIncome={
-                stats?.estimatedDailyUsd
-              }
-              totalSpent={
-                totalSpent
-              }
-            />
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(stats?.currentBalance)}</div>
           </div>
-
-          <div
-            className="
-              mt-2
-              flex
-              flex-wrap
-              items-center
-              gap-x-2
-              gap-y-1
-              text-xs
-              tabular-nums
-              text-muted-foreground
-            "
-          >
-            <span>
-              {formatCurrency(
-                stats?.estimatedDailyUsd
-              )}
-              /day
-            </span>
-
-            <span>·</span>
-
-            <span>
-              {formatCurrency(
-                stats?.estimatedMonthlyUsd
-              )}
-              /mo
-            </span>
+          <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
+        </div>
+        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground">Today</div>
+            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
+          </div>
+          <div className="max-w-[90px] text-right">
+            <div className="text-[10px] text-muted-foreground">Last sync</div>
+            <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
+              {formatCompactSyncAge(tracker?.lastSyncedAt)}
+            </div>
           </div>
         </div>
       </button>
@@ -9699,6 +9516,7 @@ function SaladProjectCard({
   totalSpent,
   onTotalSpentChange,
   onDeactivate,
+  todayUsd = 0,
 }) {
   const [
     expanded,
@@ -9757,104 +9575,29 @@ function SaladProjectCard({
         }
         className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
       >
-        {/* TOP */}
-
-<div className="flex w-full items-start justify-between gap-3">
-  <div className="flex min-w-0 items-center gap-3">
-    <ProjectLogoButton
-      platform="Salad"
-      logo={logo}
-      onLogoChange={onLogoChange}
-    />
-
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
-          Salad
-        </h3>
-
-        <span
-          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
-            connected
-              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
-              : "border-amber-500/25 bg-amber-500/10 text-amber-300"
-          }`}
-        >
-          <Wifi className="h-3 w-3" />
-          {connected ? "LIVE" : "OFFLINE"}
-        </span>
-      </div>
-    </div>
-  </div>
-
-  <ChevronRight
-    className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-      expanded ? "rotate-90" : ""
-    }`}
-    strokeWidth={1.5}
-  />
-</div>
-
-        {/* VALUE */}
-
-        <div className="mt-auto pt-2">
-          <div className="flex flex-wrap items-end gap-2">
-            <div
-              className="
-                text-[23px]
-                font-semibold
-                leading-none
-                tracking-tight
-                text-foreground
-                tabular-nums
-              "
-            >
-              {formatCurrency(
-                stats?.currentBalance
-              )}
+        <div className="flex w-full min-w-0 items-start gap-2">
+          <ProjectLogoButton platform={"Salad"} logo={logo} onLogoChange={onLogoChange} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="min-w-0 truncate text-[12px] font-semibold">Salad</span>
+              <span className={`shrink-0 text-[9px] ${connected ? "text-emerald-400" : "text-amber-300"}`}>
+                ● {connected ? "Online" : "Offline"}
+              </span>
             </div>
-
-            <ProjectPaybackStatus compact
-              earned={
-                stats?.lifetimeUsd
-              }
-              dailyIncome={
-                dailyIncome
-              }
-              totalSpent={
-                totalSpent
-              }
-            />
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(stats?.currentBalance)}</div>
           </div>
-
-          <div
-            className="
-              mt-2
-              flex
-              flex-wrap
-              items-center
-              gap-x-2
-              gap-y-1
-              text-xs
-              tabular-nums
-              text-muted-foreground
-            "
-          >
-            <span>
-              {formatCurrency(
-                dailyIncome
-              )}
-              /day
-            </span>
-
-            <span>·</span>
-
-            <span>
-              {formatCurrency(
-                monthlyIncome
-              )}
-              /mo
-            </span>
+          <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
+        </div>
+        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground">Today</div>
+            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
+          </div>
+          <div className="max-w-[90px] text-right">
+            <div className="text-[10px] text-muted-foreground">Last sync</div>
+            <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
+              {formatCompactSyncAge(tracker?.lastSyncedAt)}
+            </div>
           </div>
         </div>
       </button>
@@ -9978,6 +9721,7 @@ function RollerCoinProjectCard({
   totalSpent,
   onTotalSpentChange,
   onDeactivate,
+  todayUsd = 0,
 }) {
   const [
     expanded,
@@ -10018,114 +9762,32 @@ return (
       }
       className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
     >
-<div className="flex w-full items-start justify-between gap-3">
-  <div className="flex min-w-0 items-center gap-3">
-    <ProjectLogoButton
-      platform="RollerCoin"
-      logo={logo}
-      onLogoChange={onLogoChange}
-    />
-
-    <div className="min-w-0">
-      <div className="flex flex-wrap items-center gap-2">
-        <h3 className="truncate text-[16px] font-semibold tracking-tight text-foreground">
-          RollerCoin
-        </h3>
-
-        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
-          <Wifi className="h-3 w-3" />
-          LIVE
-        </span>
-      </div>
-    </div>
-  </div>
-
-  <ChevronRight
-    className={`mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform ${
-      expanded ? "rotate-90" : ""
-    }`}
-    strokeWidth={1.5}
-  />
-</div>
-
-      <div className="mt-auto pt-2">
-        <div className="flex flex-wrap items-end gap-2">
-          <div
-            className="
-              text-[23px]
-              font-semibold
-              leading-none
-              tracking-tight
-              text-foreground
-              tabular-nums
-            "
-          >
-{formatCurrency(
-  stats?.currentBalanceUsd
-)}
+        <div className="flex w-full min-w-0 items-start gap-2">
+          <ProjectLogoButton platform={"RollerCoin"} logo={logo} onLogoChange={onLogoChange} />
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="min-w-0 truncate text-[12px] font-semibold">RollerCoin</span>
+              <span className={`shrink-0 text-[9px] ${connected ? "text-emerald-400" : "text-amber-300"}`}>
+                ● {connected ? "Online" : "Offline"}
+              </span>
+            </div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(stats?.currentBalanceUsd)}</div>
           </div>
-
-          <ProjectPaybackStatus compact
-            earned={
-              stats?.lifetimeUsd
-            }
-            dailyIncome={
-              dailyIncome
-            }
-            totalSpent={
-              totalSpent
-            }
-          />
+          <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
         </div>
-
-        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs tabular-nums text-muted-foreground">
-          <span>
-            {Number.isFinite(Number(stats?.currentTrxBalance))
-              ? Number(stats.currentTrxBalance).toLocaleString("en-US", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 8,
-                })
-              : "—"} TRX
-          </span>
-          <span>·</span>
-          <span>
-            TRX price: {Number(stats?.liveTrxPrice) > 0
-              ? `${Number(stats.liveTrxPrice).toFixed(5)}`
-              : "Unavailable"}
-          </span>
+        <div className="mt-auto flex w-full items-end justify-between gap-2 pt-2">
+          <div className="min-w-0">
+            <div className="text-[10px] text-muted-foreground">Today</div>
+            <div className="text-[13px] font-semibold tabular-nums text-emerald-400">{formatCurrency(todayUsd)}</div>
+          </div>
+          <div className="max-w-[90px] text-right">
+            <div className="text-[10px] text-muted-foreground">Last sync</div>
+            <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
+              {formatCompactSyncAge(tracker?.lastSyncedAt)}
+            </div>
+          </div>
         </div>
-
-        <div
-          className="
-            mt-2
-            flex
-            flex-wrap
-            items-center
-            gap-x-2
-            gap-y-1
-            text-xs
-            tabular-nums
-            text-muted-foreground
-          "
-        >
-          <span>
-            {formatCurrency(
-              dailyIncome
-            )}
-            /day
-          </span>
-
-          <span>·</span>
-
-          <span>
-            {formatCurrency(
-              monthlyIncome
-            )}
-            /mo
-          </span>
-        </div>
-      </div>
-    </button>
+      </button>
 
     {expanded && (
         <ProjectDetailsModal title={"RollerCoin"} onClose={() => setExpanded(false)} onDeactivate={onDeactivate} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
