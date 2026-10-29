@@ -7376,6 +7376,7 @@ const importSaladPayload =
   });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [earningsChartRange, setEarningsChartRange] = useState("daily");
+  const [selectedEarningsPoint, setSelectedEarningsPoint] = useState(null);
   useEffect(() => {
     const timer = window.setInterval(() => setEarningsClock(Date.now()), 60000);
     return () => window.clearInterval(timer);
@@ -7625,6 +7626,34 @@ const importSaladPayload =
     return sources;
   };
   const dailySourceTotals = sourceTotalsForDay(todayKey);
+  const selectedBreakdown = (() => {
+    const selection = selectedEarningsPoint;
+    if (!selection || selection.range !== earningsChartRange) return null;
+    let sources = {};
+    let label = "";
+    let note = "";
+    if (selection.range === "monthly") {
+      const month = projectIncome.find(item => item.monthKey === selection.key);
+      if (!month) return null;
+      sources = Object.fromEntries((month.platforms || [])
+        .filter(item => Number.isFinite(Number(item.amount)))
+        .map(item => [String(item.platform), Number(item.amount)]));
+      label = selection.key;
+      note = "Recorded monthly project totals";
+    } else {
+      if (selection.key > todayKey) return null;
+      sources = sourceTotalsForDay(selection.key);
+      label = selection.key;
+      note = selection.range === "daily"
+        ? "Daily project totals currently available; intraday per-project snapshots were not saved"
+        : "Recorded earnings for this day";
+    }
+    const entries = Object.entries(sources)
+      .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) !== 0)
+      .map(([name, amount]) => ({name, amount: Number(amount)}))
+      .sort((a,b) => b.amount-a.amount);
+    return { label, note, entries, total: entries.reduce((sum,item)=>sum+item.amount,0) };
+  })();
   const todayBreakdown = Object.entries(dailySourceTotals)
     .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
     .map(([name,amount]) => ({ name, amount: Number(amount) }))
@@ -8261,7 +8290,7 @@ const summary =
           <div className="mt-3 h-[300px] w-full lg:h-auto lg:min-h-[280px] lg:flex-1">
             <ResponsiveContainer width="100%" height="100%">
               {earningsChartRange === "daily" ? (
-                <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}}>
+                <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}} onClick={point => { if (point?.activePayload?.length) setSelectedEarningsPoint({range:"daily",key:todayKey}); }}>
                   <defs>
                     <linearGradient id="yieldDailyFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
@@ -8280,7 +8309,7 @@ const summary =
                   <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
                 </AreaChart>
               ) : earningsChartRange === "weekly" ? (
-                <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}}>
+                <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}} onClick={point => { const day = point?.activePayload?.[0]?.payload?.key; if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly",key:day}); }}>
                   <defs>
                     <linearGradient id="yieldWeeklyLiveFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
@@ -8297,11 +8326,7 @@ const summary =
                 <AreaChart data={monthlyChartData} margin={{top:12,right:10,left:-8,bottom:3}}
                   onClick={point => {
                     const monthKey = point?.activePayload?.[0]?.payload?.monthKey;
-                    if (monthKey) {
-                      setSelectedYear(Number(monthKey.slice(0,4)));
-                      setSelectedMonthKey(monthKey);
-                      setHistoryOpen(true);
-                    }
+                    if (monthKey) setSelectedEarningsPoint({range:"monthly",key:monthKey});
                   }}>
                   <defs>
                     <linearGradient id="yieldMonthlyFill" x1="0" y1="0" x2="0" y2="1">
@@ -8318,6 +8343,30 @@ const summary =
               )}
             </ResponsiveContainer>
           </div>
+          {selectedBreakdown && (
+            <div className="mt-3 rounded-xl border border-[#33465a] bg-[#101923] p-3" aria-live="polite">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <h3 className="text-sm font-semibold">Earnings by project · {selectedBreakdown.label}</h3>
+                  <p className="mt-1 text-[10px] text-muted-foreground">{selectedBreakdown.note}</p>
+                </div>
+                <button type="button" onClick={() => setSelectedEarningsPoint(null)} className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-white/10" aria-label="Close earnings breakdown">Close</button>
+              </div>
+              {selectedBreakdown.entries.length ? (
+                <div className="mt-3 space-y-2">
+                  {selectedBreakdown.entries.map(item => (
+                    <div key={item.name} className="flex justify-between gap-3 text-xs">
+                      <span className="truncate text-muted-foreground">{item.name}</span>
+                      <span className="font-medium tabular-nums">{formatCurrency(item.amount)}</span>
+                    </div>
+                  ))}
+                  <div className="flex justify-between border-t border-[#33465a] pt-2 text-xs font-semibold">
+                    <span>Total</span><span className="tabular-nums">{formatCurrency(selectedBreakdown.total)}</span>
+                  </div>
+                </div>
+              ) : <p className="mt-3 text-xs text-muted-foreground">No recorded project breakdown for this point.</p>}
+            </div>
+          )}
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
