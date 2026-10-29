@@ -6580,16 +6580,33 @@ const importSaladPayload =
                     previousBalance
                   )
                 : currentBalance;
+              // Unetwork normally posts its daily rewards at about 7:20 PM
+              // America/Los_Angeles. Polling is still continuous: only a
+              // real balance increase counts, never an estimated daily credit.
+              // The first balance is an opening baseline, not today's income.
               const positiveDelta = initialized
                 ? Math.max(0, currentBalance - balanceHighWater)
-                : currentBalance;
+                : 0;
 
               if (
                 positiveDelta >
                 0
               ) {
-                const today =
-                  getTodayKey();
+                // Attribute the actual increase to the Pacific date on
+                // which it was seen, including the expected ~7:20 PM post.
+                // Do not assign yesterday's income to today just because
+                // the extension happened to sync after midnight.
+                const observedAt = new Date(
+                  payload?.synced_at || payload?.syncedAt || Date.now()
+                );
+                const today = Number.isNaN(observedAt.getTime())
+                  ? getTodayKey()
+                  : new Intl.DateTimeFormat("en-CA", {
+                      timeZone: "America/Los_Angeles",
+                      year: "numeric",
+                      month: "2-digit",
+                      day: "2-digit",
+                    }).format(observedAt);
 
                 const previousEntry =
                   nextDaily[
