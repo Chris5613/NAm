@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
 import { projectsApi } from "@/lib/api";
-import { getRatexPtonycSnapshot } from "@/lib/ratexYieldSync";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +19,6 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Archive,
   CheckCircle2,
   Lock,
 } from "lucide-react";
@@ -30,7 +28,6 @@ const LOGO_STORAGE_KEY = "yield_project_logos_v1";
 const MONTHLY_BACKFILL_KEY = "yield_monthly_earnings_backfill_v1";
 const LULO_MONTHLY_BASELINE_KEY = "yield_lulo_monthly_baselines_v1";
 const MONTHLY_SNAPSHOT_KEY = "yield_monthly_snapshots_v1";
-const RATEX_HISTORY_KEY = "yield_ratex_position_history_v1";
 const LOOPSCALE_HISTORY_KEY = "yield_loopscale_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
@@ -47,8 +44,6 @@ const PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY =
 const MONTHLY_TRACKING_START = "2026-09";
 const LULO_SEPTEMBER_2026_OPENING_EARNED = 9.05;
 const LULO_MONTHLY_ACCOUNTING_VERSION = 5;
-const RATEX_ACCOUNTING_VERSION = 2;
-const RATEX_LEGACY_INITIAL_QUANTITY = 606.27;
 
 const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
 
@@ -223,29 +218,6 @@ function loadMonthlySnapshots() {
 function saveMonthlySnapshots(value) {
   saveObject(
     MONTHLY_SNAPSHOT_KEY,
-    value
-  );
-}
-
-function loadRatexHistory() {
-  const parsed =
-    readObject(
-      RATEX_HISTORY_KEY
-    );
-
-  return {
-    positions:
-      parsed.positions &&
-      typeof parsed.positions ===
-        "object"
-        ? parsed.positions
-        : {},
-  };
-}
-
-function saveRatexHistory(value) {
-  saveObject(
-    RATEX_HISTORY_KEY,
     value
   );
 }
@@ -1479,14 +1451,7 @@ const fixedKeys = {
     ];
   }
 
-  const prefix =
-    normalized ===
-    "lulo"
-      ? "lulo-project-"
-      : normalized ===
-        "ratex"
-        ? "ratex-project-"
-        : "";
+  const prefix = normalized === "lulo" ? "lulo-project-" : "";
 
   if (
     prefix
@@ -2191,263 +2156,6 @@ function createLuloProjectCard(project) {
   };
 }
 
-function getRatexPositionKey(
-  snapshot
-) {
-  const mint =
-    String(
-      snapshot?.mint ||
-        "ratex"
-    );
-
-  const maturity =
-    String(
-      snapshot?.maturity ||
-        "unknown"
-    );
-
-  return `${mint}::${maturity}`;
-}
-
-function isRatexMatured(
-  value
-) {
-  if (!value) {
-    return false;
-  }
-
-  const maturity =
-    new Date(value);
-
-  if (
-    Number.isNaN(
-      maturity.getTime()
-    )
-  ) {
-    return false;
-  }
-
-  return (
-    new Date().getTime() >=
-    maturity.getTime()
-  );
-}
-
-function createRatexProjectCard(
-  snapshot,
-  ratexHistory
-) {
-  if (
-    !snapshot ||
-    !(
-      Number(
-        snapshot.quantity
-      ) > 0
-    ) ||
-    isRatexMatured(
-      snapshot.maturity
-    )
-  ) {
-    return null;
-  }
-
-  const positionKey =
-    getRatexPositionKey(
-      snapshot
-    );
-
-  const trackedPosition =
-    ratexHistory?.positions?.[
-      positionKey
-    ] || null;
-
-  const maturityDate =
-    new Date(
-      snapshot.maturity
-    );
-
-  const now =
-    new Date();
-
-  const daysRemaining =
-    Number.isNaN(
-      maturityDate.getTime()
-    )
-      ? null
-      : Math.max(
-          0,
-          Math.ceil(
-            (
-              maturityDate.getTime() -
-              now.getTime()
-            ) /
-              86400000
-          )
-        );
-
-  const currentValueUsd =
-    Number(
-      snapshot.currentValueUsd
-    ) || 0;
-
-  const quantity =
-    Number(
-      snapshot.quantity
-    ) || 0;
-
-  const priceUsd =
-    Number(
-      snapshot.priceUsd
-    ) ||
-    (
-      quantity > 0
-        ? currentValueUsd /
-          quantity
-        : 0
-    );
-
-  const maturityValueUsd =
-    Number(
-      snapshot.maturityValueUsd
-    ) || quantity;
-
-  let earnedUsd =
-    Number(
-      trackedPosition?.lastEarnedUsd
-    );
-
-  let adjustedCostBasisUsd =
-    Number(
-      trackedPosition?.costBasisUsd
-    );
-
-  /*
-   * If the page is rendering before the history migration effect has
-   * finished, calculate the corrected value immediately so a deposit
-   * never flashes as "earnings".
-   */
-  if (
-    !trackedPosition ||
-    Number(
-      trackedPosition.accountingVersion
-    ) !==
-      RATEX_ACCOUNTING_VERSION
-  ) {
-    const legacyCostBasis =
-      Number(
-        snapshot.costBasisUsd
-      ) ||
-      Number(
-        trackedPosition?.costBasisUsd
-      ) ||
-      0;
-
-    const addedQuantity =
-      Math.max(
-        0,
-        quantity -
-          RATEX_LEGACY_INITIAL_QUANTITY
-      );
-
-    adjustedCostBasisUsd =
-      legacyCostBasis +
-      (
-        addedQuantity *
-        priceUsd
-      );
-
-    earnedUsd =
-      Math.max(
-        0,
-        currentValueUsd -
-          adjustedCostBasisUsd
-      );
-  }
-
-  if (
-    !Number.isFinite(
-      earnedUsd
-    )
-  ) {
-    earnedUsd = 0;
-  }
-
-  if (
-    !Number.isFinite(
-      adjustedCostBasisUsd
-    )
-  ) {
-    adjustedCostBasisUsd =
-      Number(
-        snapshot.costBasisUsd
-      ) || 0;
-  }
-
-  const projectedProfitUsd =
-    Math.max(
-      0,
-      maturityValueUsd -
-        adjustedCostBasisUsd
-    );
-
-  const asset = {
-    id:
-      positionKey,
-    asset:
-      "PTONyc",
-    allocationSymbol:
-      "ONyc",
-    strategy:
-      "Fixed Yield",
-    balance:
-      currentValueUsd,
-    quantity,
-    price:
-      priceUsd,
-    apy:
-      Number(
-        snapshot.fixedApy
-      ) || 0,
-    maturity:
-      snapshot.maturity,
-    maturityValueUsd,
-    projectedProfitUsd,
-    remainingYieldUsd:
-      Number(
-        snapshot.remainingYieldUsd
-      ) ||
-      Math.max(
-        0,
-        maturityValueUsd -
-          currentValueUsd
-      ),
-    daysRemaining,
-    sourceLabel:
-      "RateX",
-  };
-
-  return {
-    id: `ratex-project-${positionKey}`,
-    platform:
-      "RateX",
-    autoSynced:
-      true,
-    totalBalance:
-      asset.balance,
-    weightedApy:
-      asset.apy,
-    earned:
-      earnedUsd,
-    lastSyncedAt:
-      snapshot.syncedAt ||
-      null,
-    assets: [
-      asset,
-    ],
-  };
-}
-
-
 function getLoopscalePositionKey(
   snapshot
 ) {
@@ -2859,410 +2567,6 @@ function groupManualPositions(
   );
 }
 
-function updateRatexHistoryFromSnapshot(
-  current,
-  snapshot
-) {
-  if (
-    !snapshot ||
-    !snapshot.mint ||
-    !snapshot.maturity
-  ) {
-    return current;
-  }
-
-  const next = {
-    positions: {
-      ...(
-        current?.positions ||
-        {}
-      ),
-    },
-  };
-
-  const key =
-    getRatexPositionKey(
-      snapshot
-    );
-
-  const now =
-    new Date();
-
-  const nowIso =
-    now.toISOString();
-
-  const monthKey =
-    getCurrentMonthKey();
-
-  const quantity =
-    Number(
-      snapshot.quantity
-    ) || 0;
-
-  const currentValueUsd =
-    Number(
-      snapshot.currentValueUsd
-    ) || 0;
-
-  const priceUsd =
-    Number(
-      snapshot.priceUsd
-    ) ||
-    (
-      quantity > 0
-        ? currentValueUsd /
-          quantity
-        : 0
-    );
-
-  const existing =
-    next.positions[
-      key
-    ];
-
-  if (
-    quantity > 0
-  ) {
-    const previous =
-      existing || {
-        key,
-        platform:
-          "RateX",
-        asset:
-          "PTONyc",
-        mint:
-          snapshot.mint,
-        maturity:
-          snapshot.maturity,
-        openedAt:
-          nowIso,
-        status:
-          "active",
-        monthlyBaselines:
-          {},
-        monthlyEarnings:
-          {},
-        lastMonthKey:
-          null,
-        lastEarnedUsd:
-          0,
-        quantity:
-          0,
-        costBasisUsd:
-          0,
-        principalAddedUsd:
-          0,
-      };
-
-    const previousQuantity =
-      Number(
-        previous.quantity
-      ) || 0;
-
-    const legacyCostBasis =
-      Number(
-        snapshot.costBasisUsd
-      ) ||
-      Number(
-        previous.costBasisUsd
-      ) ||
-      0;
-
-    let adjustedCostBasisUsd =
-      Number(
-        previous.costBasisUsd
-      ) || 0;
-
-    let principalAddedUsd =
-      Number(
-        previous.principalAddedUsd
-      ) || 0;
-
-    const isLegacyRecord =
-      Number(
-        previous.accountingVersion
-      ) !==
-        RATEX_ACCOUNTING_VERSION;
-
-    if (
-      isLegacyRecord
-    ) {
-      /*
-       * The original RateX position was 606.27 PTONyc bought with
-       * $600. Older accounting treated every dollar above that $600
-       * as yield, so a later deposit looked like instant earnings.
-       *
-       * One-time migration:
-       *   original lot -> keep the original $600 basis
-       *   extra tokens -> treat their current purchase value as principal
-       *
-       * This immediately repairs the already-inflated September number.
-       */
-      const addedQuantity =
-        Math.max(
-          0,
-          quantity -
-            RATEX_LEGACY_INITIAL_QUANTITY
-        );
-
-      const addedPrincipalUsd =
-        addedQuantity *
-        priceUsd;
-
-      adjustedCostBasisUsd =
-        legacyCostBasis +
-        addedPrincipalUsd;
-
-      principalAddedUsd =
-        Math.max(
-          0,
-          addedPrincipalUsd
-        );
-    } else if (
-      previousQuantity > 0
-    ) {
-      const quantityDelta =
-        quantity -
-        previousQuantity;
-
-      if (
-        quantityDelta >
-        0.000001
-      ) {
-        /*
-         * New PTONyc appeared in the wallet. This is a deposit /
-         * principal addition, NOT yield.
-         */
-        const addedPrincipalUsd =
-          quantityDelta *
-          priceUsd;
-
-        adjustedCostBasisUsd +=
-          addedPrincipalUsd;
-
-        principalAddedUsd +=
-          addedPrincipalUsd;
-      } else if (
-        quantityDelta <
-        -0.000001
-      ) {
-        /*
-         * If tokens leave the position, reduce the tracked cost basis
-         * proportionally so the remaining position keeps its true P/L.
-         */
-        adjustedCostBasisUsd =
-          previousQuantity >
-          0
-            ? adjustedCostBasisUsd *
-              (
-                quantity /
-                previousQuantity
-              )
-            : 0;
-      }
-    } else if (
-      !(adjustedCostBasisUsd > 0)
-    ) {
-      adjustedCostBasisUsd =
-        currentValueUsd;
-    }
-
-    adjustedCostBasisUsd =
-      Math.max(
-        0,
-        adjustedCostBasisUsd
-      );
-
-    const earnedUsd =
-      Math.max(
-        0,
-        currentValueUsd -
-          adjustedCostBasisUsd
-      );
-
-    const baselines = {
-      ...(
-        previous.monthlyBaselines ||
-        {}
-      ),
-    };
-
-    const monthlyEarnings = {
-      ...(
-        previous.monthlyEarnings ||
-        {}
-      ),
-    };
-
-    if (
-      baselines[
-        monthKey
-      ] ===
-      undefined
-    ) {
-      if (
-        previous.lastMonthKey &&
-        previous.lastMonthKey !==
-          monthKey
-      ) {
-        baselines[
-          monthKey
-        ] =
-          Number(
-            previous.lastEarnedUsd
-          ) || 0;
-      } else {
-        baselines[
-          monthKey
-        ] =
-          0;
-      }
-    }
-
-    const baseline =
-      Number(
-        baselines[
-          monthKey
-        ]
-      ) || 0;
-
-    /*
-     * Because deposits increase the cost basis at the same time they
-     * increase position value, earnedUsd does not jump when you deposit.
-     * Only actual PT appreciation above principal changes this number.
-     */
-    monthlyEarnings[
-      monthKey
-    ] =
-      Number(
-        Math.max(
-          0,
-          earnedUsd -
-            baseline
-        ).toFixed(6)
-      );
-
-    const matured =
-      isRatexMatured(
-        snapshot.maturity
-      );
-
-    const maturityValueUsd =
-      Number(
-        snapshot.maturityValueUsd
-      ) || quantity;
-
-    const projectedProfitUsd =
-      Math.max(
-        0,
-        maturityValueUsd -
-          adjustedCostBasisUsd
-      );
-
-    next.positions[
-      key
-    ] = {
-      ...previous,
-      accountingVersion:
-        RATEX_ACCOUNTING_VERSION,
-      key,
-      platform:
-        "RateX",
-      asset:
-        "PTONyc",
-      mint:
-        snapshot.mint,
-      maturity:
-        snapshot.maturity,
-      status:
-        matured
-          ? "matured"
-          : "active",
-      completedAt:
-        matured
-          ? (
-              previous.completedAt ||
-              nowIso
-            )
-          : null,
-      fixedApy:
-        Number(
-          snapshot.fixedApy
-        ) || 0,
-      costBasisUsd:
-        Number(
-          adjustedCostBasisUsd.toFixed(
-            8
-          )
-        ),
-      principalAddedUsd:
-        Number(
-          principalAddedUsd.toFixed(
-            8
-          )
-        ),
-      quantity,
-      finalQuantity:
-        quantity,
-      lastPriceUsd:
-        priceUsd,
-      lastValueUsd:
-        currentValueUsd,
-      maturityValueUsd,
-      lastEarnedUsd:
-        Number(
-          earnedUsd.toFixed(
-            8
-          )
-        ),
-      projectedProfitUsd:
-        Number(
-          projectedProfitUsd.toFixed(
-            8
-          )
-        ),
-      monthlyBaselines:
-        baselines,
-      monthlyEarnings,
-      lastMonthKey:
-        monthKey,
-      lastSyncedAt:
-        snapshot.syncedAt ||
-        nowIso,
-    };
-
-    return next;
-  }
-
-  if (
-    existing &&
-    existing.status ===
-      "active"
-  ) {
-    const matured =
-      isRatexMatured(
-        existing.maturity
-      );
-
-    next.positions[
-      key
-    ] = {
-      ...existing,
-      status:
-        matured
-          ? "matured"
-          : "closed",
-      completedAt:
-        nowIso,
-      lastSyncedAt:
-        snapshot.syncedAt ||
-        nowIso,
-    };
-  }
-
-  return next;
-}
-
 function loadKryptexTracker() {
   const parsed =
     readObject(
@@ -3420,7 +2724,6 @@ function getKryptexStats(
 
 function buildProjectIncome(
   luloProjects,
-  ratexHistory,
   loopscaleHistory,
   saladTracker,
   monthlyBackfills,
@@ -3566,32 +2869,6 @@ function buildProjectIncome(
         addEarning(
           monthKey,
           "Lulo",
-          amount
-        );
-      }
-    );
-  }
-);
-
-/*
- * RATEX
- */
-Object.values(
-  ratexHistory?.positions ||
-    {}
-).forEach(
-  (position) => {
-    Object.entries(
-      position.monthlyEarnings ||
-        {}
-    ).forEach(
-      ([
-        monthKey,
-        amount,
-      ]) => {
-        addEarning(
-          monthKey,
-          "RateX",
           amount
         );
       }
@@ -4509,19 +3786,6 @@ export default function YieldFarmingPage() {
   });
 
   const [
-    ratexSnapshot,
-    setRatexSnapshot,
-  ] = useState(() => readObject(PROJECT_QUICK_CACHE_KEY).ratexSnapshot || null);
-
-  const [
-    ratexHistory,
-    setRatexHistory,
-  ] = useState(
-    loadRatexHistory
-  );
-
-
-  const [
     loopscaleSnapshot,
     setLoopscaleSnapshot,
   ] = useState(() => readObject(PROJECT_QUICK_CACHE_KEY).loopscaleSnapshot || null);
@@ -4808,17 +4072,6 @@ export default function YieldFarmingPage() {
     },
     [
       luloMonthlyBaselines,
-    ]
-  );
-
-  useEffect(
-    () => {
-      saveRatexHistory(
-        ratexHistory
-      );
-    },
-    [
-      ratexHistory,
     ]
   );
 
@@ -6088,43 +5341,6 @@ const requestRollerCoinLatest =
       luloMonthlyBaselines,
     ]
   );
-
-  useEffect(
-    () => {
-      if (
-        !ratexSnapshot
-      ) {
-        return;
-      }
-
-      setRatexHistory(
-        (current) => {
-          const next =
-            updateRatexHistoryFromSnapshot(
-              current,
-              ratexSnapshot
-            );
-
-          if (
-            JSON.stringify(
-              next
-            ) ===
-            JSON.stringify(
-              current
-            )
-          ) {
-            return current;
-          }
-
-          return next;
-        }
-      );
-    },
-    [
-      ratexSnapshot,
-    ]
-  );
-
 
   useEffect(
     () => {
@@ -7690,19 +6906,6 @@ const importSaladPayload =
       })(),
       (async () => {
         try {
-          const snapshot = await getRatexPtonycSnapshot();
-          if (snapshot) {
-            setRatexSnapshot(snapshot);
-            const cache = readObject(PROJECT_QUICK_CACHE_KEY);
-            saveObject(PROJECT_QUICK_CACHE_KEY, { ...cache, ratexSnapshot: snapshot });
-          }
-        } catch (error) {
-          console.error("Yield page RateX sync failed:", error);
-          errors.push(`RateX: ${error?.message || "sync failed"}`);
-        }
-      })(),
-      (async () => {
-        try {
           const snapshot = await getLoopscaleOnycSnapshot();
           if (snapshot) {
             setLoopscaleSnapshot(snapshot);
@@ -7832,12 +7035,6 @@ const importSaladPayload =
             createLuloProjectCard
           );
 
-        const ratexProject =
-          createRatexProjectCard(
-            ratexSnapshot,
-            ratexHistory
-          );
-
         const loopscaleProject =
           createLoopscaleProjectCard(
             loopscaleSnapshot
@@ -7851,13 +7048,6 @@ const importSaladPayload =
         return [
           ...autoProjects,
           ...(
-            ratexProject
-              ? [
-                  ratexProject,
-                ]
-              : []
-          ),
-          ...(
             loopscaleProject
               ? [
                   loopscaleProject,
@@ -7869,8 +7059,6 @@ const importSaladPayload =
       },
       [
         luloProjects,
-        ratexSnapshot,
-        ratexHistory,
         loopscaleSnapshot,
         manualPositions,
       ]
@@ -7972,42 +7160,6 @@ const importSaladPayload =
 ]
     );
 
-  const completedRatexPositions =
-    useMemo(
-      () =>
-        Object.values(
-          ratexHistory.positions ||
-            {}
-        )
-          .filter(
-            (position) =>
-              position.status ===
-                "matured" ||
-              position.status ===
-                "closed"
-          )
-          .sort(
-            (
-              a,
-              b
-            ) =>
-              String(
-                b.completedAt ||
-                  b.maturity ||
-                  ""
-              ).localeCompare(
-                String(
-                  a.completedAt ||
-                    a.maturity ||
-                    ""
-                )
-              )
-          ),
-      [
-        ratexHistory,
-      ]
-    );
-
   const allAssets =
     useMemo(
       () =>
@@ -8026,7 +7178,6 @@ const importSaladPayload =
       () =>
         buildProjectIncome(
           luloProjects,
-          ratexHistory,
           loopscaleHistory,
           saladTracker,
           monthlyBackfills,
@@ -8036,7 +7187,6 @@ const importSaladPayload =
         ),
       [
         luloProjects,
-        ratexHistory,
         loopscaleHistory,
         saladTracker,
         monthlyBackfills,
@@ -9283,15 +8433,6 @@ if (
           projectLogos
         }
       />
-
-      {completedRatexPositions.length >
-        0 && (
-        <CompletedPositionsSection
-          positions={
-            completedRatexPositions
-          }
-        />
-      )}
 
             </div>
           </div>
@@ -10862,171 +10003,6 @@ function PositionRow({
         </div>
       </div>
     </div>
-  );
-}
-
-function CompletedPositionsSection({
-  positions,
-}) {
-  return (
-    <section className="space-y-4 border-t border-border/50 pt-8">
-      <div className="flex items-center gap-2">
-        <Archive className="h-4 w-4 text-muted-foreground" />
-
-        <div>
-          <h2 className="text-lg font-semibold">
-            Completed Positions
-          </h2>
-
-          <p className="mt-1 text-xs text-muted-foreground">
-            Matured and closed positions stay here for your records.
-          </p>
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        {positions.map(
-          (position) => {
-            const matured =
-              position.status ===
-              "matured";
-
-            const finalValue =
-              matured
-                ? (
-                    Number(
-                      position.maturityValueUsd
-                    ) ||
-                    Number(
-                      position.lastValueUsd
-                    ) ||
-                    0
-                  )
-                : (
-                    Number(
-                      position.lastValueUsd
-                    ) ||
-                    0
-                  );
-
-            const earned =
-              matured
-                ? (
-                    Number(
-                      position.projectedProfitUsd
-                    ) ||
-                    Number(
-                      position.lastEarnedUsd
-                    ) ||
-                    0
-                  )
-                : (
-                    Number(
-                      position.lastEarnedUsd
-                    ) ||
-                    0
-                  );
-
-            return (
-              <div
-                key={
-                  position.key
-                }
-                className="rounded-2xl border border-border/50 bg-card/30 px-5 py-4"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-border/60 bg-white/[0.04] text-xs font-bold">
-                      RX
-                    </div>
-
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-semibold">
-                          RateX
-                        </span>
-
-                        <span className="text-sm text-muted-foreground">
-                          PTONyc
-                        </span>
-
-                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-emerald-400">
-                          <CheckCircle2 className="h-3 w-3" />
-
-                          {matured
-                            ? "Matured"
-                            : "Closed"}
-                        </span>
-                      </div>
-
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {matured
-                          ? `Matured ${formatDate(
-                              position.maturity
-                            )}`
-                          : `Closed ${formatDate(
-                              position.completedAt
-                            )}`}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-right sm:grid-cols-4">
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Cost basis
-                      </div>
-
-                      <div className="mt-1 text-sm font-semibold tabular-nums">
-                        {formatCurrency(
-                          position.costBasisUsd
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Final value
-                      </div>
-
-                      <div className="mt-1 text-sm font-semibold tabular-nums">
-                        {formatCurrency(
-                          finalValue
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Earned
-                      </div>
-
-                      <div className="mt-1 text-sm font-semibold tabular-nums text-emerald-400">
-                        {formatCurrency(
-                          earned
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                        APY
-                      </div>
-
-                      <div className="mt-1 text-sm font-semibold tabular-nums">
-                        {formatPercent(
-                          position.fixedApy
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-        )}
-      </div>
-    </section>
   );
 }
 
