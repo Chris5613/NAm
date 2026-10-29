@@ -388,6 +388,74 @@ async def proxy(
             logger.exception("[Lulo Sync] unexpected failure endpoint=%s", path)
         raise
 
+    if provider == "lulo" and "performance.getPerformance" in path:
+        # Aggregate recognized performance fields only. Missing fields remain
+        # unknown, rather than being logged as confirmed zero earnings.
+        rows_data = data if isinstance(data, list) else (
+            data.get("data") if isinstance(data, dict) else None
+        )
+        rows_data = rows_data if isinstance(rows_data, list) else []
+        day_totals = {}
+        parsed_rows = 0
+        for row in rows_data:
+            if not isinstance(row, dict):
+                continue
+            raw_day = row.get("fromTimestamp") if path.startswith("v0/") else (
+                row.get("date") or row.get("createdAt")
+            )
+            try:
+                from datetime import datetime, timezone
+                if isinstance(raw_day, (int, float)) or (
+                    isinstance(raw_day, str) and raw_day.isdigit()
+                ):
+                    stamp = float(raw_day)
+                    day = datetime.fromtimestamp(
+                        stamp / 1000 if stamp > 1e11 else stamp,
+                        tz=timezone.utc,
+                    ).date().isoformat()
+                else:
+                    day = datetime.fromisoformat(
+                        str(raw_day).replace("Z", "+00:00")
+                    ).date().isoformat()
+            except (ValueError, TypeError, OverflowError, OSError):
+                continue
+            amount = None
+            if path.startswith("v0/"):
+                changes = row.get("balanceChanges")
+                if isinstance(changes, dict):
+                    values = [
+                        item.get("balance_change")
+                        for item in changes.values()
+                        if isinstance(item, dict)
+                    ]
+                    try:
+                        amount = sum(float(v) for v in values if v is not None)
+                    except (ValueError, TypeError):
+                        pass
+            else:
+                values = [
+                    row.get("regularInterestEarned"),
+                    row.get("protectedInterestEarned"),
+                ]
+                if any(v is not None for v in values):
+                    try:
+                        amount = sum(float(v) for v in values if v is not None)
+                    except (ValueError, TypeError):
+                        pass
+            if amount is None:
+                continue
+            parsed_rows += 1
+            day_totals[day] = day_totals.get(day, 0) + amount
+        latest_day = max(day_totals) if day_totals else "none"
+        logger.info(
+            "[Lulo Earnings] source=%s rows=%d parsed=%d latest_day=%s latest_usd=%.6f",
+            "USDS" if path.startswith("v0/") else "USDC",
+            len(rows_data),
+            parsed_rows,
+            latest_day,
+            day_totals.get(latest_day, 0),
+        )
+
     if provider == "lulo":
         # Log only response shape, not wallet IDs, personal data, or API secrets.
         rows = len(data) if isinstance(data, list) else None
