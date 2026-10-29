@@ -6,6 +6,7 @@ import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent } from "@/components/ui/card";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   CircleDollarSign,
@@ -8428,18 +8429,29 @@ if (
         )}
       {inactiveProgramCards.length > 0 && (
         <div className="mt-3 border-t border-border/40 px-1 pt-3">
-          <h3 className="mb-2 text-xs font-semibold text-muted-foreground">Inactive projects ({inactiveProgramCards.length})</h3>
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-            {inactiveProgramCards.map(item => (
-              <div key={item.key} className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card/30 px-3 py-2.5">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : "Salad"}</div>
-                  <div className="text-xs tabular-nums text-muted-foreground">{formatCurrency(item.amount)}</div>
-                </div>
-                <button type="button" onClick={() => reactivateProject(item.key)} className="shrink-0 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10">Reactivate</button>
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button type="button" variant="outline" size="sm" className="text-muted-foreground">
+                Inactive projects ({inactiveProgramCards.length})
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Inactive projects ({inactiveProgramCards.length})</DialogTitle>
+              </DialogHeader>
+              <div className="grid max-h-[60vh] gap-2 overflow-y-auto py-2">
+                {inactiveProgramCards.map(item => (
+                  <div key={item.key} className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card/30 px-3 py-2.5">
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : "Salad"}</div>
+                      <div className="text-xs tabular-nums text-muted-foreground">{formatCurrency(item.amount)}</div>
+                    </div>
+                    <button type="button" onClick={() => reactivateProject(item.key)} className="shrink-0 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10">Reactivate</button>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </DialogContent>
+          </Dialog>
         </div>
       )}
       </section>
