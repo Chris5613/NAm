@@ -7514,6 +7514,27 @@ const importSaladPayload =
     });
   }, [loopscaleHistory]);
 
+  // Restore the previously recorded RollerCoin earnings for today as a
+  // one-time USD reference. Later market moves reprice that reference up
+  // or down, rather than silently discarding it when dated rows are absent.
+  const ROLLERCOIN_RESTORE_KEY = "yield_rollercoin_restored_daily_anchor_v1";
+  const [rollerCoinRestoredAnchors, setRollerCoinRestoredAnchors] = useState(
+    () => readObject(ROLLERCOIN_RESTORE_KEY)
+  );
+  useEffect(() => {
+    const today = getTodayKey();
+    if (rollerCoinRestoredAnchors?.[today]) return;
+    const recorded = Number(earningsLedger.days?.[today]?.sources?.RollerCoin);
+    const price = Number(rollerCoinTracker?.lastTrxPrice);
+    if (!(recorded > 0) || !(price > 0)) return;
+    const next = {
+      ...rollerCoinRestoredAnchors,
+      [today]: { usd: recorded, trxPrice: price },
+    };
+    setRollerCoinRestoredAnchors(next);
+    saveObject(ROLLERCOIN_RESTORE_KEY, next);
+  }, [earningsLedger.days, rollerCoinTracker?.lastTrxPrice, rollerCoinRestoredAnchors]);
+
   const todayKey = getTodayKey();
   // User-supplied Salad rate for Oct 29, 2026, 12:00 AM–9:00 AM PT only.
   // Fixed historical estimate, NOT a live rate or a future-day default.
@@ -7537,9 +7558,21 @@ const importSaladPayload =
     const minedTrx = Number(minedEntry?.trx ?? minedEntry?.sol);
     const livePrice = Number(rollerCoinTracker?.lastTrxPrice) ||
       Number(minedEntry?.trxPrice ?? minedEntry?.solPrice) || 0;
-    if (Number.isFinite(minedTrx) && minedTrx > 0 && livePrice > 0) {
-      sources.RollerCoin = minedTrx * livePrice;
-    }
+    const datedMiningUsd = Number.isFinite(minedTrx) && minedTrx > 0 && livePrice > 0
+      ? minedTrx * livePrice
+      : 0;
+    const anchor = rollerCoinRestoredAnchors?.[key];
+    const referencePrice = Number(anchor?.trxPrice);
+    const restoredUsd = Number(anchor?.usd);
+    const repricedHistory = restoredUsd > 0 && referencePrice > 0 && livePrice > 0
+      ? restoredUsd * livePrice / referencePrice
+      : 0;
+    // Use the previously recorded daily amount when it exceeds the dated
+    // API record; do not sum them because both represent RollerCoin.
+    // This explicitly restores legacy daily figures, including any earlier
+    // month-to-date repricing that was folded into those figures.
+    const rollerCoinDailyUsd = Math.max(datedMiningUsd, repricedHistory);
+    if (rollerCoinDailyUsd > 0) sources.RollerCoin = rollerCoinDailyUsd;
     if (key === SALAD_FIXED_DAY) {
       // Preserve the verified 00:00–09:00 earnings, then take the later
       // earnings from the extension's dated full-day total when available.
