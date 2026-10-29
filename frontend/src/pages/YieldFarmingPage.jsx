@@ -34,6 +34,7 @@ const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
 const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 const KRYPTEX_TRACKER_KEY = "project_income_kryptex_tracker_v1";
 const PROJECT_QUICK_CACHE_KEY = "yield_project_quick_cache_v1";
+const INACTIVE_PROJECTS_KEY = "yield_inactive_project_ids_v1";
 const PROJECT_PAYBACK_KEY = "yield_project_payback_v1";
 const PROJECT_EXPENSES_KEY = "project_income_monthly_expenses_v1";
 
@@ -3339,6 +3340,7 @@ function KryptexProjectCard({
   onLogoChange,
   totalSpent,
   onTotalSpentChange,
+  onDeactivate,
 }) {
   const isLive =
     Boolean(
@@ -3452,7 +3454,7 @@ function KryptexProjectCard({
       </button>
 
       {!collapsed && (
-        <ProjectDetailsModal title={"Kryptex"} onClose={onToggle} projections={{ daily: stats?.dailyUsd, monthly: stats?.monthlyUsd, yearly: stats?.yearlyUsd }}>
+        <ProjectDetailsModal title={"Kryptex"} onClose={onToggle} projections={{ daily: stats?.dailyUsd, monthly: stats?.monthlyUsd, yearly: stats?.yearlyUsd }} onDeactivate={onDeactivate}>
         <div className="border-t border-border/50 px-5 py-5">
           <div className="mb-5">
             <ProjectPaybackEditor
@@ -3769,6 +3771,20 @@ export default function YieldFarmingPage() {
     loadProjectExpenses
   );
 
+  const [inactiveProjectIds, setInactiveProjectIds] = useState(() => {
+    const saved = readObject(INACTIVE_PROJECTS_KEY).ids;
+    return Array.isArray(saved) ? saved.map(String) : [];
+  });
+  const deactivateProject = key => setInactiveProjectIds(current => {
+    const next = current.includes(String(key)) ? current : [...current, String(key)];
+    saveObject(INACTIVE_PROJECTS_KEY, { ids: next });
+    return next;
+  });
+  const reactivateProject = key => setInactiveProjectIds(current => {
+    const next = current.filter(id => id !== String(key));
+    saveObject(INACTIVE_PROJECTS_KEY, { ids: next });
+    return next;
+  });
   const [
     allProjects,
     setAllProjects,
@@ -7159,6 +7175,8 @@ const importSaladPayload =
   kryptexStats,
 ]
     );
+  const activeProgramCards = sortedProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key)));
+  const inactiveProgramCards = sortedProgramCards.filter(item => inactiveProjectIds.includes(String(item.key)));
 
   const allAssets =
     useMemo(
@@ -8057,10 +8075,10 @@ const summary =
 
       <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#101318] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <h2 className="text-[15px] font-semibold">Projects ({sortedProgramCards.length})</h2>
-          <span className="text-[11px] text-muted-foreground">Sorted by balance · {sortedProgramCards.length} projects</span>
+          <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
+          <span className="text-[11px] text-muted-foreground">Sorted by balance · {activeProgramCards.length} projects</span>
         </div>
-{sortedProgramCards.length ===
+{activeProgramCards.length ===
 0 ? (
           <Card className="border-border/50 bg-card/70">
             <CardContent className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
@@ -8077,7 +8095,7 @@ const summary =
           </Card>
         ) : (
           <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
-  {sortedProgramCards.map(
+  {activeProgramCards.map(
               (
                 item
               ) => {
@@ -8088,6 +8106,7 @@ if (
 ) {
   return (
     <KryptexProjectCard
+      onDeactivate={() => deactivateProject(item.key)}
       key={
         item.key
       }
@@ -8156,6 +8175,7 @@ if (
 
                   return (
                     <ProjectCard
+      onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
                       }
@@ -8213,6 +8233,7 @@ if (
                 ) {
                   return (
                     <RollerCoinProjectCard
+      onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
                       }
@@ -8293,6 +8314,7 @@ if (
                 ) {
                   return (
                     <SaladProjectCard
+      onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
                       }
@@ -8348,6 +8370,7 @@ if (
 
                 return (
                   <UnetworkProjectCard
+      onDeactivate={() => deactivateProject(item.key)}
                     key={
                       item.key
                     }
@@ -8403,6 +8426,22 @@ if (
             )}
           </div>
         )}
+      {inactiveProgramCards.length > 0 && (
+        <div className="mt-3 border-t border-border/40 px-1 pt-3">
+          <h3 className="mb-2 text-xs font-semibold text-muted-foreground">Inactive projects ({inactiveProgramCards.length})</h3>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {inactiveProgramCards.map(item => (
+              <div key={item.key} className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card/30 px-3 py-2.5">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : "Salad"}</div>
+                  <div className="text-xs tabular-nums text-muted-foreground">{formatCurrency(item.amount)}</div>
+                </div>
+                <button type="button" onClick={() => reactivateProject(item.key)} className="shrink-0 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10">Reactivate</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       </section>
 
 
@@ -8842,6 +8881,7 @@ function ProjectCard({
   onLogoChange,
   totalSpent,
   onTotalSpentChange,
+  onDeactivate,
 }) {
   const projections =
     getProjectProjections(
@@ -8984,7 +9024,7 @@ function ProjectCard({
       </button>
 
       {!collapsed && (
-        <ProjectDetailsModal title={project.platform} onClose={onToggle} projections={{ daily: projections.daily, monthly: projections.monthly, yearly: projections.yearly }}>
+        <ProjectDetailsModal title={project.platform} onClose={onToggle} projections={{ daily: projections.daily, monthly: projections.monthly, yearly: projections.yearly }} onDeactivate={onDeactivate}>
         <>
           {!hidePayback && (
             <div className="border-t border-border/40 px-5 py-4">
@@ -9032,6 +9072,7 @@ function UnetworkProjectCard({
   onLogoChange,
   totalSpent,
   onTotalSpentChange,
+  onDeactivate,
 }) {
   const [
     expanded,
@@ -9166,7 +9207,7 @@ function UnetworkProjectCard({
       </button>
 
       {expanded && (
-        <ProjectDetailsModal title={"Unetwork"} onClose={() => setExpanded(false)} projections={{ daily: stats?.estimatedDailyUsd, monthly: stats?.estimatedMonthlyUsd, yearly: stats?.estimatedYearlyUsd }}>
+        <ProjectDetailsModal title={"Unetwork"} onClose={() = onDeactivate={onDeactivate}> setExpanded(false)} projections={{ daily: stats?.estimatedDailyUsd, monthly: stats?.estimatedMonthlyUsd, yearly: stats?.estimatedYearlyUsd }}>
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
           <div className="mb-4">
             <ProjectPaybackEditor
@@ -9276,6 +9317,7 @@ function SaladProjectCard({
   onLogoChange,
   totalSpent,
   onTotalSpentChange,
+  onDeactivate,
 }) {
   const [
     expanded,
@@ -9437,7 +9479,7 @@ function SaladProjectCard({
       </button>
 
       {expanded && (
-        <ProjectDetailsModal title={"Salad"} onClose={() => setExpanded(false)} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
+        <ProjectDetailsModal title={"Salad"} onClose={() = onDeactivate={onDeactivate}> setExpanded(false)} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
           <div className="mb-4">
             <ProjectPaybackEditor
@@ -9554,6 +9596,7 @@ function RollerCoinProjectCard({
   onLogoChange,
   totalSpent,
   onTotalSpentChange,
+  onDeactivate,
 }) {
   const [
     expanded,
@@ -9687,7 +9730,7 @@ return (
     </button>
 
     {expanded && (
-        <ProjectDetailsModal title={"RollerCoin"} onClose={() => setExpanded(false)} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
+        <ProjectDetailsModal title={"RollerCoin"} onClose={() = onDeactivate={onDeactivate}> setExpanded(false)} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
       <div className="border-t border-border/40 px-5 py-4">
         <ProjectPaybackEditor
           value={
@@ -9710,7 +9753,7 @@ return (
 );
 }
 
-function ProjectDetailsModal({ title, onClose, projections, children }) {
+function ProjectDetailsModal({ title, onClose, onDeactivate, projections, children }) {
   useEffect(() => {
     const handleEscape = (event) => {
       if (event.key === "Escape") onClose();
@@ -9737,6 +9780,10 @@ function ProjectDetailsModal({ title, onClose, projections, children }) {
             <h2 className="text-base font-semibold">{title}</h2>
             <p className="text-[11px] text-muted-foreground">Project details</p>
           </div>
+          <div className="flex shrink-0 items-center gap-2">
+            {onDeactivate && (
+              <button type="button" onClick={() => { onDeactivate(); onClose(); }} className="rounded-md border border-border/60 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground">Set inactive</button>
+            )}
           <button
             type="button"
             onClick={onClose}
@@ -9745,6 +9792,7 @@ function ProjectDetailsModal({ title, onClose, projections, children }) {
           >
             <X className="h-4 w-4" />
           </button>
+          </div>
         </div>
         <div className="min-h-0 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
           {projections && <div className="grid grid-cols-3 gap-2 border-b border-border/50 px-4 py-3">
