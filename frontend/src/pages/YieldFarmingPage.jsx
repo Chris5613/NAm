@@ -8771,7 +8771,7 @@ const summary =
                     const mins = Math.floor((rounded-hours)*60);
                     return `${String(hours).padStart(2,"0")}:${String(mins).padStart(2,"0")} PT`;
                   }} formatter={value=>[formatCurrency(value),"Recorded today"]}/>
-                  <Area type="stepAfter" dataKey="value" stroke="#30e69b" strokeWidth={2.5} fill="url(#yieldDailyFill)" dot={false} activeDot={{r:5}} isAnimationActive={false}/>
+                  <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
                 </AreaChart>
               ) : (
                 <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}}>
@@ -8785,7 +8785,7 @@ const summary =
                   <XAxis dataKey="day" axisLine={false} tickLine={false} interval={0} tick={{fontSize:11,fill:"#91a1b2"}} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,observedWeekMaximum*1.15]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
                   <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
-                  <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.5} fill="url(#yieldWeeklyLiveFill)" dot={{r:3,fill:"#30e69b"}} activeDot={{r:5}} connectNulls={false} isAnimationActive={false}/>
+                  <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldWeeklyLiveFill)" dot={false} activeDot={{r:4, strokeWidth:2}} connectNulls={false} isAnimationActive={false}/>
                 </AreaChart>
               )}
             </ResponsiveContainer>
