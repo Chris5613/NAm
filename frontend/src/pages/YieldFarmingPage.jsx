@@ -8133,7 +8133,8 @@ const importSaladPayload =
         if (sameMonth && Number.isFinite(prior) && amount > prior) {
           increments[name] = amount - prior;
         }
-        lastSources[name] = amount;
+        // Do not count a temporary downward correction and subsequent rebound twice.
+        lastSources[name] = sameMonth && Number.isFinite(prior) ? Math.max(prior, amount) : amount;
       }
       const todaySources = {
         ...((previous.days[today] && previous.days[today].sources) || {}),
