@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
 import { projectsApi } from "@/lib/api";
 import { getRatexPtonycSnapshot } from "@/lib/ratexYieldSync";
@@ -7724,25 +7724,61 @@ const importSaladPayload =
     requestKryptexLatest,
   ]);
 
-  useEffect(
-    () => {
-      syncLivePositions();
+  // Keep polling intervals stable even when an extension pushes a new balance.
+  // Otherwise every callback change resets the one-minute timer and can
+  // indefinitely postpone Lulo's next scheduled accrual.
+  const syncLiveRef = useRef(syncLivePositions);
+  syncLiveRef.current = syncLivePositions;
+  const quickRefreshRef = useRef(refreshProjectsOnly);
+  quickRefreshRef.current = refreshProjectsOnly;
+  const syncRunningRef = useRef(false);
+  const quickRunningRef = useRef(false);
 
-      const timer =
-        window.setInterval(
-          syncLivePositions,
-          60_000
-        );
-
-      return () =>
-        window.clearInterval(
-          timer
-        );
-    },
-    [
-      syncLivePositions,
-    ]
-  );
+  useEffect(() => {
+    let active = true;
+    const fullRefresh = async () => {
+      if (!active || syncRunningRef.current) return;
+      syncRunningRef.current = true;
+      try {
+        await syncLiveRef.current();
+      } finally {
+        syncRunningRef.current = false;
+      }
+    };
+    const quickRefresh = async () => {
+      if (!active || quickRunningRef.current) return;
+      quickRunningRef.current = true;
+      try {
+        // Request current extension readings whether or not a full API
+        // accrual is still running.
+        requestRollerCoinLatest();
+        requestSaladLatest();
+        requestUnetworkLatest();
+        requestKryptexLatest();
+        await quickRefreshRef.current();
+      } finally {
+        quickRunningRef.current = false;
+      }
+    };
+    fullRefresh();
+    const fullTimer = window.setInterval(fullRefresh, 60000);
+    const quickTimer = window.setInterval(quickRefresh, 20000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        quickRefresh();
+        fullRefresh();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      active = false;
+      document.removeEventListener("visibilitychange", onVisible);
+      window.clearInterval(fullTimer);
+      window.clearInterval(quickTimer);
+    };
+  // The latest callbacks are read from refs; the timers must not restart.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const saladStats =
     useMemo(
