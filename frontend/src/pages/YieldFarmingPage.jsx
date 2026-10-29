@@ -5,6 +5,7 @@ import { getRatexPtonycSnapshot } from "@/lib/ratexYieldSync";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent } from "@/components/ui/card";
+import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -8102,6 +8103,66 @@ const importSaladPayload =
       ]
     );
 
+
+  // Observation ledger for the weekly chart. A monthly aggregate cannot tell
+  // us which past day earned each dollar, so we record subsequent positive
+  // changes on their observed sync date and never invent older daily totals.
+  const DAILY_LEDGER_KEY = "yield_daily_live_earnings_v1";
+  const [earningsClock, setEarningsClock] = useState(() => Date.now());
+  const [earningsLedger, setEarningsLedger] = useState(() => {
+    const saved = readObject(DAILY_LEDGER_KEY);
+    return { days: saved.days || {}, lastMonth: saved.lastMonth || "", lastSources: saved.lastSources || {} };
+  });
+  const [historyOpen, setHistoryOpen] = useState(false);
+  useEffect(() => {
+    const timer = window.setInterval(() => setEarningsClock(Date.now()), 60000);
+    return () => window.clearInterval(timer);
+  }, []);
+  useEffect(() => {
+    const today = getTodayKey();
+    const monthKey = today.slice(0, 7);
+    const month = liveProjectIncome.find(entry => entry.monthKey === monthKey);
+    const sources = Object.fromEntries((month?.platforms || []).map(item => [
+      String(item.platform).toLowerCase(),
+      Math.max(0, Number(item.amount) || 0),
+    ]));
+    setEarningsLedger(previous => {
+      const sameMonth = previous.lastMonth === monthKey;
+      const delta = sameMonth
+        ? Object.entries(sources).reduce((total,[key,value]) =>
+            total + Math.max(0, value - (Number(previous.lastSources[key]) || 0)), 0)
+        : 0;
+      const days = delta > 0
+        ? { ...previous.days, [today]: (Number(previous.days[today]) || 0) + delta }
+        : previous.days;
+      const next = { days, lastMonth: monthKey, lastSources: sources };
+      if (JSON.stringify(previous) !== JSON.stringify(next)) {
+        saveObject(DAILY_LEDGER_KEY, next);
+        return next;
+      }
+      return previous;
+    });
+  }, [liveProjectIncome, earningsClock]);
+  const todayKey = getTodayKey();
+  const weekMonday = new Date(todayKey + "T12:00:00Z");
+  weekMonday.setUTCDate(weekMonday.getUTCDate() - ((weekMonday.getUTCDay() + 6) % 7));
+  const weekDays = Array.from({ length: 7 }, (_, index) => {
+    const day = new Date(weekMonday);
+    day.setUTCDate(weekMonday.getUTCDate() + index);
+    const key = day.toISOString().slice(0,10);
+    return {
+      key,
+      day: new Intl.DateTimeFormat("en-US",{weekday:"short",timeZone:"UTC"}).format(day),
+      date: new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",timeZone:"UTC"}).format(day),
+      value: key > todayKey ? null : Math.max(0,Number(earningsLedger.days[key]) || 0),
+      live: key === todayKey,
+    };
+  });
+  const todayEarnings = Math.max(0,Number(earningsLedger.days[todayKey]) || 0);
+  const weekEarnings = weekDays.reduce((total,day) => total+(day.value || 0),0);
+  const observedWeekMaximum = Math.max(1,...weekDays.map(day => day.value || 0));
+  const connectedSources = [saladConnected,unetworkConnected,kryptexConnected,rollerCoinConnected].filter(Boolean).length;
+
 const summary =
   useMemo(
     () => {
@@ -8563,30 +8624,69 @@ const summary =
       className="min-w-0 space-y-2.5"
       data-testid="yield-farming-page"
     >
-      <section className="rounded-2xl border border-[#252a32] bg-[#101318] p-2.5 sm:p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-[15px] font-semibold tracking-tight">Portfolio Overview</h2>
-          <span className="rounded-full border border-white/10 bg-white/[0.035] px-3 py-1 text-[11px] text-muted-foreground">
-            {summary.activePositions} active positions
-          </span>
-        </div>
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 min-[1450px]:grid-cols-[minmax(230px,1.4fr)_repeat(4,minmax(0,1fr))]">
-          <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2">
-            <span className="text-xs text-muted-foreground">Total Portfolio Balance</span>
-            <span className="mt-1 text-[clamp(24px,2vw,30px)] font-semibold leading-tight tracking-tight tabular-nums">
-              {formatCurrency(summary.portfolioBalance)}
-            </span>
-            <span className="mt-1 text-xs font-medium text-emerald-400">
-              {formatPercent(summary.weightedApy)} weighted APY
-            </span>
-          </div>
-          <Metric label="Estimated Monthly Income" value={formatCurrency(summary.monthlyYield)} icon={CalendarDays} />
-          <Metric label="Estimated Yearly Income" value={formatCurrency(summary.annualYield)} icon={TrendingUp} />
-          <Metric label="Total Earned" value={formatCurrency(summary.totalEarned)} icon={BadgeDollarSign} />
-          <Metric label="Active Positions" value={String(summary.activePositions)} icon={Layers3} />
-        </div>
-      </section>
 
+      <header className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <h1 className="text-[22px] font-semibold tracking-tight">Passive Income</h1>
+        <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
+      </header>
+      <div className="grid gap-3 lg:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)]">
+        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[16px] font-semibold">Earnings This Week</h2>
+              <p className="mt-1 text-[11px] text-muted-foreground">Daily earnings recorded from synced projects · today updates live</p>
+              <div className="mt-2 text-[27px] font-semibold tabular-nums text-emerald-400">{formatCurrency(weekEarnings)}</div>
+            </div>
+            <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
+              <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />Live
+            </div>
+          </div>
+          <div className="mt-3 h-[clamp(180px,25vh,235px)] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}}>
+                <defs>
+                  <linearGradient id="yieldWeeklyLiveFill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                    <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                <XAxis dataKey="day" axisLine={false} tickLine={false} interval={0} tick={{fontSize:11,fill:"#91a1b2"}} />
+                <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,observedWeekMaximum*1.15]} tickFormatter={v=>"$"+Number(v).toFixed(0)} />
+                <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
+                <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.5} fill="url(#yieldWeeklyLiveFill)" dot={{r:3,fill:"#30e69b"}} activeDot={{r:5}} connectNulls={false} isAnimationActive={false}/>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
+            <span>Earlier daily values are recorded only after tracking begins. Past dates are not estimated.</span>
+            <button type="button" className="text-sky-400 hover:text-sky-300" onClick={()=>setHistoryOpen(true)}>Monthly history</button>
+          </div>
+        </section>
+        <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
+          <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
+          <p className="mt-1 text-[11px] text-muted-foreground">Observed increases · resets at midnight Pacific</p>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100)}%, #25313d 0)`}}>
+              <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0c141e]">
+                <strong className="text-xl font-semibold tabular-nums">{formatCurrency(todayEarnings)}</strong>
+                <span className="text-[10px] text-muted-foreground">Today so far</span>
+              </div>
+            </div>
+            <p className="text-[11px] text-muted-foreground">{formatCurrency(summary.monthlyYield / 30.4375)} estimated daily</p>
+          </div>
+          <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="rounded-xl border border-[#2b3848] p-2.5">
+              <span className="block text-[10px] text-muted-foreground">Tracked projects</span>
+              <strong className="mt-1 block text-lg tabular-nums">{sortedProgramCards.length}</strong>
+            </div>
+            <div className="rounded-xl border border-[#2b3848] p-2.5">
+              <span className="block text-[10px] text-muted-foreground">Connected sources</span>
+              <strong className="mt-1 block text-lg tabular-nums">{connectedSources}</strong>
+            </div>
+          </div>
+        </section>
+      </div>
       {syncError && (
         <div className="rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
           One or more live sources could not refresh.
@@ -8598,7 +8698,7 @@ const summary =
 
       <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#101318] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <h2 className="text-[15px] font-semibold">Your Projects</h2>
+          <h2 className="text-[15px] font-semibold">Projects ({sortedProgramCards.length})</h2>
           <span className="text-[11px] text-muted-foreground">Sorted by balance · {sortedProgramCards.length} projects</span>
         </div>
 {sortedProgramCards.length ===
@@ -8617,7 +8717,7 @@ const summary =
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3 min-[1680px]:grid-cols-6">
   {sortedProgramCards.map(
               (
                 item
@@ -8947,6 +9047,35 @@ if (
       </section>
 
 
+
+      <section className="rounded-2xl border border-[#263342] bg-[#0c141e] px-4 py-3">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold">Projections</h2>
+          <span className="text-[11px] text-muted-foreground">Based on current project estimates</span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            {label:"Estimated Monthly",amount:summary.monthlyYield},
+            {label:"Estimated Yearly",amount:summary.annualYield},
+            {label:"Average Weekly",amount:summary.annualYield/52.1775},
+            {label:"Average Daily",amount:summary.annualYield/365},
+          ].map(item=>(
+            <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-3">
+              <div className="text-[11px] text-muted-foreground">{item.label}</div>
+              <div className="mt-1 text-[clamp(18px,1.6vw,25px)] font-semibold tabular-nums text-emerald-400">{formatCurrency(item.amount)}</div>
+              <div className="mt-2 h-1 overflow-hidden rounded-full bg-[#263342]"><div className="h-full w-[65%] rounded-full bg-emerald-400/80"/></div>
+            </div>
+          ))}
+        </div>
+      </section>
+      {historyOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm" onMouseDown={event=>{if(event.target===event.currentTarget)setHistoryOpen(false)}}>
+          <div role="dialog" aria-modal="true" aria-label="Monthly income history" className="flex max-h-[90dvh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border/60 bg-card shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-4 py-3">
+              <h2 className="text-base font-semibold">Monthly Income History</h2>
+              <button type="button" aria-label="Close monthly history" onClick={()=>setHistoryOpen(false)} className="rounded-md p-1 text-muted-foreground hover:bg-white/10"><X className="h-5 w-5"/></button>
+            </div>
+            <div className="min-h-0 overflow-y-auto p-3 sm:p-4">
       <ProjectIncomeSection
         months={
           projectIncome
@@ -9021,6 +9150,11 @@ if (
             completedRatexPositions
           }
         />
+      )}
+
+            </div>
+          </div>
+        </div>
       )}
 
 
