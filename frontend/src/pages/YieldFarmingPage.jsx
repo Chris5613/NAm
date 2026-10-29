@@ -9771,7 +9771,7 @@ return (
                 ● {connected ? "Online" : "Offline"}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(stats?.currentBalanceUsd)}</div>
+            <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 tabular-nums"><span className="text-[14px] font-semibold">{formatCurrency(stats?.currentBalanceUsd)}</span><span className="text-[10px] text-muted-foreground">{Number(stats?.currentTrxBalance || 0).toFixed(2)} TRX</span></div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
         </div>
