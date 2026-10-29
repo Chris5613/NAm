@@ -8844,7 +8844,7 @@ if (
             <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-3">
               <div className="text-[11px] text-muted-foreground">{item.label}</div>
               <div className="mt-1 text-[clamp(18px,1.6vw,25px)] font-semibold tabular-nums text-emerald-400">{formatCurrency(item.amount)}</div>
-              <p className="mt-1 text-[10px] text-muted-foreground">Current run-rate estimate</p>
+              
             </div>
           ))}
         </div>
