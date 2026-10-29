@@ -4307,6 +4307,19 @@ export default function YieldFarmingPage() {
                     date
                   ];
 
+                // Incomplete range syncs sometimes return zero or a smaller
+                // partial total. Keep the last confirmed mined amount rather
+                // than erasing historical chart earnings.
+                const priorTrx = Number(previous?.trx ?? previous?.sol);
+                if (!Number.isFinite(trx) || trx < 0 ||
+                    (Number.isFinite(priorTrx) && priorTrx > 0 &&
+                      trx < priorTrx - 1e-9)) {
+                  return;
+                }
+                if (trx === 0 && Number.isFinite(priorTrx) && priorTrx > 0) {
+                  return;
+                }
+
                 const sameTrx =
                   previous &&
                   Math.abs(
@@ -4333,15 +4346,11 @@ export default function YieldFarmingPage() {
                   date
                 ] = {
                   trx,
-                  usd:
-                    Number(
-                      (
-                        trx *
-                        rowPrice
-                      ).toFixed(
-                        8
-                      )
-                    ),
+                  // Keep the historical mining USD valuation for unchanged
+                  // TRX rows; market movements remain in portfolio P/L.
+                  usd: sameTrx && Number(previous?.usd) > 0
+                    ? Number(previous.usd)
+                    : Number((trx * rowPrice).toFixed(8)),
                   trxPrice:
                     rowPrice,
                   syncedAt:
