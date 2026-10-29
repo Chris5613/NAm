@@ -8199,7 +8199,6 @@ const summary =
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
           {[
             {label:"Portfolio Balance",value:summary.portfolioBalance},
-            {label:"Today's Earnings",value:todayEarnings},
             {label:"Yesterday's Earnings",value:Object.values(sourceTotalsForDay(new Date(Date.parse(todayKey+"T12:00:00Z")-86400000).toISOString().slice(0,10))).reduce((sum,v)=>sum+(Number(v)||0),0)},
             {label:"This Week",value:weekEarnings},
             {label:"This Month",value:thisMonthEarned},
