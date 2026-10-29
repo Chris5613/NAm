@@ -7471,17 +7471,6 @@ const importSaladPayload =
     .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
     .map(([name,amount]) => ({ name, amount: Number(amount) }))
     .sort((a,b) => b.amount - a.amount);
-  const loopscaleHasSnapshot = Boolean(loopscaleSnapshot?.syncedAt);
-  const loopscalePnl = Number(loopscaleSnapshot?.pnlUsd);
-  const loopscaleHasPnl = loopscaleHasSnapshot && Number.isFinite(loopscalePnl);
-  const loopscaleObservedToday = Object.values(loopscaleHistory?.positions || {})
-    .reduce((sum, position) => sum + Math.max(0, Number(position?.observedDaily?.[todayKey]) || 0), 0);
-  const loopscaleLastSyncLabel = loopscaleHasSnapshot
-    ? new Date(loopscaleSnapshot.syncedAt).toLocaleTimeString("en-US", {
-        timeZone: "America/Los_Angeles", hour: "numeric", minute: "2-digit",
-      })
-    : null;
-
   const todayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
   const weekMonday = new Date(todayKey + "T12:00:00Z");
   weekMonday.setUTCDate(weekMonday.getUTCDate() - ((weekMonday.getUTCDay() + 6) % 7));
@@ -8184,19 +8173,6 @@ const summary =
             </div>
             <p className="text-[11px] text-muted-foreground">{formatCurrency(summary.monthlyYield / 30.4375)} estimated daily</p>
           </div>
-          <div className="mt-3 rounded-lg border border-[#2b3848] bg-[#101923]/70 px-3 py-2 text-[11px] text-muted-foreground">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span>Loopscale · {loopscaleHasSnapshot ? `synced ${loopscaleLastSyncLabel} PT` : "awaiting API sync"}</span>
-              <span className="tabular-nums">{loopscaleHasPnl ? `Live P/L: ${formatCurrency(loopscalePnl)}` : "Live P/L unavailable"}</span>
-            </div>
-            <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
-              <span>Observed increase today</span>
-              <span className="tabular-nums">{`${loopscaleObservedToday.toFixed(6)}`}</span>
-            </div>
-            {loopscaleHasSnapshot && loopscaleObservedToday === 0 && (
-              <p className="mt-1">No positive P/L change has been captured today. A synced balance is not automatically counted as today's earnings.</p>
-            )}
-          </div>
           <div className="mt-4 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="text-[12px] font-semibold">Where today's earnings came from</h3>
@@ -8214,7 +8190,7 @@ const summary =
                 ))}
                 {!todayBreakdown.some(source => source.name === "Loopscale") && (
                   <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="min-w-0 text-muted-foreground">Loopscale <span className="text-[10px] opacity-75">({loopscaleHasSnapshot ? "awaiting P/L increase" : "not synced"})</span></span>
+                    <span className="min-w-0 text-muted-foreground">Loopscale <span className="text-[10px] opacity-75">("awaiting increase")</span></span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">$0.000000</span>
                   </div>
                 )}
@@ -8226,7 +8202,7 @@ const summary =
             ) : (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Loopscale ({loopscaleHasSnapshot ? "awaiting P/L increase" : "not synced"})</span>
+                  <span className="text-muted-foreground">Loopscale ("awaiting increase")</span>
                   <span className="tabular-nums text-muted-foreground">$0.000000</span>
                 </div>
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
