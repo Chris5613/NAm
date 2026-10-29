@@ -7378,6 +7378,14 @@ const importSaladPayload =
   const [earningsChartRange, setEarningsChartRange] = useState("weekly");
   const [selectedEarningsPoint, setSelectedEarningsPoint] = useState(null);
   useEffect(() => {
+    if (!selectedEarningsPoint) return;
+    const closeOnEscape = event => {
+      if (event.key === "Escape") setSelectedEarningsPoint(null);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [selectedEarningsPoint]);
+  useEffect(() => {
     const timer = window.setInterval(() => setEarningsClock(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
@@ -8270,7 +8278,7 @@ const summary =
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-[#2b3848] bg-[#101923] p-0.5" aria-label="Earnings chart period">
-                {["weekly", "monthly"].map(period => (
+                {["daily", "weekly", "monthly"].map(period => (
                   <button
                     key={period}
                     type="button"
@@ -8369,46 +8377,6 @@ const summary =
               )}
             </ResponsiveContainer>
           </div>
-          {earningsChartRange !== "daily" && (
-            <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Select an earnings chart point">
-              {(earningsChartRange === "weekly" ? weekDays.filter(day => day.key <= todayKey && day.value !== null).map(day => ({
-                key: day.key, label: day.day + " " + day.date
-              })) : monthlyChartData.map(month => ({
-                key: month.monthKey, label: month.label
-              }))).map(point => (
-                <button type="button" key={point.key}
-                  onClick={() => setSelectedEarningsPoint({range:earningsChartRange,key:point.key})}
-                  aria-pressed={selectedEarningsPoint?.range === earningsChartRange && selectedEarningsPoint?.key === point.key}
-                  className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${selectedEarningsPoint?.range === earningsChartRange && selectedEarningsPoint?.key === point.key ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-400" : "border-[#344454] text-muted-foreground hover:border-emerald-500/50 hover:text-white"}`}>
-                  {point.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {selectedBreakdown && (
-            <div className="mt-3 rounded-xl border border-[#33465a] bg-[#101923] p-3" aria-live="polite">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-sm font-semibold">Earnings by project · {selectedBreakdown.label}</h3>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{selectedBreakdown.note}</p>
-                </div>
-                <button type="button" onClick={() => setSelectedEarningsPoint(null)} className="rounded-lg px-2 py-1 text-xs text-muted-foreground hover:bg-white/10" aria-label="Close earnings breakdown">Close</button>
-              </div>
-              {selectedBreakdown.entries.length ? (
-                <div className="mt-3 space-y-2">
-                  {selectedBreakdown.entries.map(item => (
-                    <div key={item.name} className="flex justify-between gap-3 text-xs">
-                      <span className="truncate text-muted-foreground">{item.name}</span>
-                      <span className="font-medium tabular-nums">{formatCurrency(item.amount)}</span>
-                    </div>
-                  ))}
-                  <div className="flex justify-between border-t border-[#33465a] pt-2 text-xs font-semibold">
-                    <span>Total</span><span className="tabular-nums">{formatCurrency(selectedBreakdown.total)}</span>
-                  </div>
-                </div>
-              ) : <p className="mt-3 text-xs text-muted-foreground">No recorded project breakdown for this point.</p>}
-            </div>
-          )}
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
@@ -8849,6 +8817,36 @@ if (
           ))}
         </div>
       </section>
+      {selectedBreakdown && earningsChartRange !== "daily" && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          onMouseDown={event => { if (event.target === event.currentTarget) setSelectedEarningsPoint(null); }}>
+          <div role="dialog" aria-modal="true" aria-label={`Earnings by project for ${selectedBreakdown.label}`}
+            className="w-full max-w-[480px] rounded-2xl border border-[#33465a] bg-[#0c141e] p-5 shadow-2xl">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold">Earnings by project</h3>
+                <p className="mt-1 text-xs text-muted-foreground">{selectedBreakdown.label}</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">{selectedBreakdown.note}</p>
+              </div>
+              <button type="button" onClick={() => setSelectedEarningsPoint(null)}
+                className="rounded-lg p-2 text-muted-foreground hover:bg-white/10" aria-label="Close earnings breakdown">
+                <X className="h-4 w-4"/>
+              </button>
+            </div>
+            <div className="mt-4 space-y-3">
+              {selectedBreakdown.entries.length ? selectedBreakdown.entries.map(item => (
+                <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
+                  <span className="truncate text-muted-foreground">{item.name}</span>
+                  <span className="font-semibold tabular-nums">{formatCurrency(item.amount)}</span>
+                </div>
+              )) : <p className="text-sm text-muted-foreground">No recorded project earnings for this point.</p>}
+              <div className="flex items-center justify-between border-t border-[#33465a] pt-3 text-sm font-semibold">
+                <span>Total</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {historyOpen && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm" onMouseDown={event=>{if(event.target===event.currentTarget)setHistoryOpen(false)}}>
           <div role="dialog" aria-modal="true" aria-label="Monthly income history" className="flex max-h-[90dvh] w-full max-w-5xl flex-col overflow-hidden rounded-xl border border-border/60 bg-card shadow-2xl">
