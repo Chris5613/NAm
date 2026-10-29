@@ -8095,38 +8095,56 @@ const importSaladPayload =
     );
 
 
-  // Observation ledger for the weekly chart. A monthly aggregate cannot tell
-  // us which past day earned each dollar, so we record subsequent positive
-  // changes on their observed sync date and never invent older daily totals.
-  const DAILY_LEDGER_KEY = "yield_daily_live_earnings_v1";
+  // Version 2 records earnings changes by project rather than storing a
+  // single unexplained sum. The original v1 ledger is retained untouched.
+  // Monthly aggregates are not proof of when earnings occurred, so first
+  // readings (including a newly seen source) establish a baseline only.
+  const DAILY_LEDGER_KEY = "yield_daily_earnings_by_source_v2";
   const [earningsClock, setEarningsClock] = useState(() => Date.now());
   const [earningsLedger, setEarningsLedger] = useState(() => {
     const saved = readObject(DAILY_LEDGER_KEY);
-    return { days: saved.days || {}, lastMonth: saved.lastMonth || "", lastSources: saved.lastSources || {} };
+    return {
+      days: saved.days && typeof saved.days === "object" ? saved.days : {},
+      lastMonth: saved.lastMonth || "",
+      lastSources: saved.lastSources && typeof saved.lastSources === "object" ? saved.lastSources : {},
+    };
   });
   const [historyOpen, setHistoryOpen] = useState(false);
   useEffect(() => {
     const timer = window.setInterval(() => setEarningsClock(Date.now()), 60000);
     return () => window.clearInterval(timer);
   }, []);
+
   useEffect(() => {
     const today = getTodayKey();
     const monthKey = today.slice(0, 7);
     const month = liveProjectIncome.find(entry => entry.monthKey === monthKey);
-    const sources = Object.fromEntries((month?.platforms || []).map(item => [
-      String(item.platform).toLowerCase(),
-      Math.max(0, Number(item.amount) || 0),
-    ]));
+    const sources = Object.fromEntries((month?.platforms || [])
+      .filter(item => Number.isFinite(Number(item.amount)) && Number(item.amount) >= 0)
+      .map(item => [String(item.platform).trim(), Number(item.amount)]));
     setEarningsLedger(previous => {
       const sameMonth = previous.lastMonth === monthKey;
-      const delta = sameMonth
-        ? Object.entries(sources).reduce((total,[key,value]) =>
-            total + Math.max(0, value - (Number(previous.lastSources[key]) || 0)), 0)
-        : 0;
-      const days = delta > 0
-        ? { ...previous.days, [today]: (Number(previous.days[today]) || 0) + delta }
+      // When a source temporarily disappears from an incomplete sync, keep
+      // its last observed baseline to prevent counting old earnings again.
+      const lastSources = sameMonth ? { ...previous.lastSources } : {};
+      const increments = {};
+      for (const [name, amount] of Object.entries(sources)) {
+        const prior = lastSources[name];
+        if (sameMonth && Number.isFinite(prior) && amount > prior) {
+          increments[name] = amount - prior;
+        }
+        lastSources[name] = amount;
+      }
+      const todaySources = {
+        ...((previous.days[today] && previous.days[today].sources) || {}),
+      };
+      for (const [name, change] of Object.entries(increments)) {
+        todaySources[name] = (Number(todaySources[name]) || 0) + change;
+      }
+      const days = Object.keys(increments).length
+        ? { ...previous.days, [today]: { sources: todaySources } }
         : previous.days;
-      const next = { days, lastMonth: monthKey, lastSources: sources };
+      const next = { days, lastMonth: monthKey, lastSources };
       if (JSON.stringify(previous) !== JSON.stringify(next)) {
         saveObject(DAILY_LEDGER_KEY, next);
         return next;
@@ -8134,22 +8152,32 @@ const importSaladPayload =
       return previous;
     });
   }, [liveProjectIncome, earningsClock]);
+
   const todayKey = getTodayKey();
+  const dailySourceTotals = earningsLedger.days[todayKey]?.sources || {};
+  const todayBreakdown = Object.entries(dailySourceTotals)
+    .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
+    .map(([name,amount]) => ({ name, amount: Number(amount) }))
+    .sort((a,b) => b.amount - a.amount);
+  const todayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
   const weekMonday = new Date(todayKey + "T12:00:00Z");
   weekMonday.setUTCDate(weekMonday.getUTCDate() - ((weekMonday.getUTCDay() + 6) % 7));
   const weekDays = Array.from({ length: 7 }, (_, index) => {
     const day = new Date(weekMonday);
     day.setUTCDate(weekMonday.getUTCDate() + index);
     const key = day.toISOString().slice(0,10);
+    const record = earningsLedger.days[key];
+    const value = record?.sources
+      ? Object.values(record.sources).reduce((sum,amount) => sum + Math.max(0,Number(amount)||0),0)
+      : null;
     return {
       key,
       day: new Intl.DateTimeFormat("en-US",{weekday:"short",timeZone:"UTC"}).format(day),
       date: new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",timeZone:"UTC"}).format(day),
-      value: key > todayKey ? null : Object.prototype.hasOwnProperty.call(earningsLedger.days,key) ? Math.max(0,Number(earningsLedger.days[key]) || 0) : key === todayKey ? 0 : null,
+      value: key > todayKey ? null : (value ?? (key === todayKey ? 0 : null)),
       live: key === todayKey,
     };
   });
-  const todayEarnings = Math.max(0,Number(earningsLedger.days[todayKey]) || 0);
   const weekEarnings = weekDays.reduce((total,day) => total+(day.value || 0),0);
   const observedWeekMaximum = Math.max(1,...weekDays.map(day => day.value || 0));
   const connectedSources = [saladConnected,unetworkConnected,kryptexConnected,rollerCoinConnected].filter(Boolean).length;
@@ -8656,7 +8684,7 @@ const summary =
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
-          <p className="mt-1 text-[11px] text-muted-foreground">Observed increases · resets at midnight Pacific</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Tracked increases since baseline · resets at midnight Pacific</p>
           <div className="mt-4 flex flex-col items-center gap-2">
             <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100)}%, #25313d 0)`}}>
               <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0c141e]">
@@ -8665,6 +8693,33 @@ const summary =
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">{formatCurrency(summary.monthlyYield / 30.4375)} estimated daily</p>
+          </div>
+          <div className="mt-4 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="text-[12px] font-semibold">Where today's earnings came from</h3>
+              <span className="text-[10px] text-muted-foreground">Tracked increases</span>
+            </div>
+            {todayBreakdown.length ? (
+              <div className="space-y-2">
+                {todayBreakdown.map(source => (
+                  <div key={source.name} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
+                    <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{formatCurrency(source.amount)}</span>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs">
+                  <span className="font-medium">Total</span>
+                  <span className="font-semibold tabular-nums">{formatCurrency(todayEarnings)}</span>
+                </div>
+              </div>
+            ) : (
+              <p className="text-[11px] leading-relaxed text-muted-foreground">
+                No new increases recorded yet. Each source starts from its first observed balance; earlier amounts are not assumed to be earned today.
+              </p>
+            )}
+            <p className="mt-3 text-[10px] leading-relaxed text-amber-300/80">
+              Based on changes to synced monthly totals, not verified transaction timestamps. Delayed updates or corrections may appear on the day they're received.
+            </p>
           </div>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <div className="rounded-xl border border-[#2b3848] p-2.5">
