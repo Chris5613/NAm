@@ -7498,6 +7498,23 @@ const importSaladPayload =
     if (key === LULO_FIXED_DAY) {
       sources.Lulo = Math.max(LULO_FIXED_TOTAL, Number(sources.Lulo) || 0);
     }
+    // Lulo's existing performance API provides dated yield observations.
+    // Prefer the reported daily amount when present; never add it to the
+    // monthly-delta ledger, which may describe the same interest.
+    // Keep the existing ledger as a fallback if performance is unavailable.
+    const reportedLuloDaily = (luloProjects || []).reduce((total, project) => {
+      const matching = (Array.isArray(project?.lulo_daily_performance)
+        ? project.lulo_daily_performance : [])
+        .filter(row => row?.date === key)
+        .reduce((sum, row) => sum + Math.max(0, Number(row?.amount) || 0), 0);
+      return total + matching;
+    }, 0);
+    if (reportedLuloDaily > 0) {
+      sources.Lulo = Math.max(
+        Math.max(0, Number(sources.Lulo) || 0),
+        reportedLuloDaily
+      );
+    }
     // A date-specific Loopscale observation can supplement the generic
     // monthly-increase ledger. Use the larger value, never add both.
     const observedLoopscale = Object.values(loopscaleHistory?.positions || {})
