@@ -7386,6 +7386,13 @@ const importSaladPayload =
       const lastSources = sameMonth ? { ...previous.lastSources } : {};
       const increments = {};
       for (const [name, amount] of Object.entries(sources)) {
+        // RollerCoin's month-to-date USD valuation changes with the TRX
+        // market price. Those changes are P/L, not newly mined rewards.
+        // Actual dated mining income is rendered from RollerCoin daily rows.
+        if (name === "RollerCoin") {
+          lastSources[name] = amount;
+          continue;
+        }
         const prior = lastSources[name];
         if (sameMonth && Number.isFinite(prior) && amount > prior) {
           increments[name] = amount - prior;
@@ -7513,6 +7520,18 @@ const importSaladPayload =
   const LULO_FIXED_END_HOUR = 14;
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
+    // RollerCoin mining is dated by its earnings API, not by changes
+    // to the USD value of all TRX mined during the current month.
+    // Do not use the legacy cumulative-delta ledger (which can contain
+    // market-price gains or a recovered history range) as daily income.
+    delete sources.RollerCoin;
+    const minedEntry = rollerCoinTracker?.daily?.[key];
+    const minedTrx = Number(minedEntry?.trx ?? minedEntry?.sol);
+    const trxUsd = Number(rollerCoinTracker?.lastTrxPrice) ||
+      Number(minedEntry?.trxPrice ?? minedEntry?.solPrice) || 0;
+    if (Number.isFinite(minedTrx) && minedTrx > 0 && trxUsd > 0) {
+      sources.RollerCoin = minedTrx * trxUsd;
+    }
     if (key === SALAD_FIXED_DAY) {
       // Preserve the verified 00:00–09:00 earnings, then take the later
       // earnings from the extension's dated full-day total when available.
