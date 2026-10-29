@@ -8200,13 +8200,6 @@ const summary =
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-[16px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : "This Month"}</h2>
-              <p className="mt-1 text-[11px] text-muted-foreground">
-                {earningsChartRange === "daily"
-                  ? "Today's observed earnings updates · Pacific Time"
-                  : earningsChartRange === "weekly"
-                    ? "Daily totals from synced projects · today updates live"
-                    : "Monthly income history"}
-              </p>
               <div className="mt-2 text-[27px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : earningsChartRange === "weekly" ? weekEarnings : thisMonthEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
@@ -8317,7 +8310,6 @@ const summary =
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
-          <p className="mt-1 text-[11px] text-muted-foreground">Tracked increases since baseline · resets at midnight Pacific</p>
           <div className="mt-4 flex flex-col items-center gap-2">
             <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100)}%, #25313d 0)`}}>
               <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0b1017]">
