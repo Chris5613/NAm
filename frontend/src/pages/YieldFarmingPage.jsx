@@ -8320,13 +8320,22 @@ const summary =
                   <XAxis dataKey="day" axisLine={false} tickLine={false} interval={0} tick={{fontSize:11,fill:"#91a1b2"}} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,observedWeekMaximum*1.15]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
                   <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
-                  <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldWeeklyLiveFill)" dot={false} activeDot={{r:7, strokeWidth:2, cursor:"pointer", onClick: (_event, payload) => {
-                    const day = payload?.payload?.key;
-                    if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly", key:day});
-                  }}} dot={{r:4, fill:"#30e69b", cursor:"pointer", onClick: (_event, payload) => {
-                    const day = payload?.payload?.key;
-                    if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly", key:day});
-                  }}} connectNulls={false} isAnimationActive={false}/>
+                  <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldWeeklyLiveFill)"
+                    dot={props => {
+                      const day = props?.payload?.key;
+                      if (!day || day > todayKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={6} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"weekly",key:day})}/>;
+                    }}
+                    activeDot={props => {
+                      const day = props?.payload?.key;
+                      if (!day || day > todayKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={8} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"weekly",key:day})}/>;
+                    }}
+                    connectNulls={false} isAnimationActive={false}/>
                 </AreaChart>
               ) : (
                 <AreaChart data={monthlyChartData} margin={{top:12,right:10,left:-8,bottom:3}}>
@@ -8340,10 +8349,22 @@ const summary =
                   <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} interval="preserveStartEnd" />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(0)}/>
                   <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} formatter={(value,name,props)=>[formatCurrency(value),"Monthly income"]}/>
-                  <Area type="monotone" dataKey="value" name="Monthly income" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)" dot={{r:4,fill:"#30e69b",cursor:"pointer",onClick: (_event, payload) => { const monthKey = payload?.payload?.monthKey; if(monthKey) setSelectedEarningsPoint({range:"monthly",key:monthKey}); }}} activeDot={{r:7, cursor:"pointer", onClick: (_event, payload) => {
-                  const monthKey = payload?.payload?.monthKey;
-                  if (monthKey) setSelectedEarningsPoint({range:"monthly",key:monthKey});
-                }}} isAnimationActive={false}/>
+                  <Area type="monotone" dataKey="value" name="Monthly income" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)"
+                    dot={props => {
+                      const monthKey = props?.payload?.monthKey;
+                      if (!monthKey) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={6} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"monthly",key:monthKey})}/>;
+                    }}
+                    activeDot={props => {
+                      const monthKey = props?.payload?.monthKey;
+                      if (!monthKey) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={8} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"monthly",key:monthKey})}/>;
+                    }}
+                    isAnimationActive={false}/>
                 </AreaChart>
               )}
             </ResponsiveContainer>
