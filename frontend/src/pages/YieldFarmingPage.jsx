@@ -7963,7 +7963,7 @@ const summary =
         </div>
       </header>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)]">
-        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
+        <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-[16px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : "This Month"}</h2>
@@ -7995,7 +7995,7 @@ const summary =
               </div>
             </div>
           </div>
-          <div className="mt-3 h-[clamp(240px,30vh,320px)] w-full">
+          <div className="mt-3 h-[300px] w-full lg:h-auto lg:min-h-[280px] lg:flex-1">
             <ResponsiveContainer width="100%" height="100%">
               {earningsChartRange === "daily" ? (
                 <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}}>
