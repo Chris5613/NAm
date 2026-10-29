@@ -7352,9 +7352,15 @@ const importSaladPayload =
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     if (key === SALAD_FIXED_DAY) {
-      // Replace, rather than add to, v2 Salad observed increases for that day.
-      // Otherwise the same earnings could be counted twice.
-      sources.Salad = SALAD_FIXED_TOTAL;
+      // Preserve the verified 00:00–09:00 earnings, then take the later
+      // earnings from the extension's dated full-day total when available.
+      // The dated amount already includes the morning window, so adding
+      // the fixed amount to it would double-count those earnings.
+      const datedTotal = Number(saladTracker?.daily?.[key]);
+      const observedIncrease = Math.max(0, Number(sources.Salad) || 0);
+      sources.Salad = Number.isFinite(datedTotal) && datedTotal > 0
+        ? Math.max(SALAD_FIXED_TOTAL, datedTotal)
+        : Math.max(SALAD_FIXED_TOTAL, observedIncrease);
     }
     if (key === LULO_FIXED_DAY) {
       sources.Lulo = Math.max(LULO_FIXED_TOTAL, Number(sources.Lulo) || 0);
@@ -7418,7 +7424,7 @@ const importSaladPayload =
       const hour = Math.max(0, Math.min(24, Number(point.hour)));
       const otherObserved = Math.max(0,
         Number(point.amount) -
-        (isFixedSaladDay ? recordedSalad : 0) -
+        (isFixedSaladDay ? Math.min(recordedSalad, SALAD_FIXED_TOTAL) : 0) -
         (isFixedLuloDay ? Math.min(recordedLulo, LULO_FIXED_TOTAL) : 0)
       );
       return {
