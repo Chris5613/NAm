@@ -4,7 +4,7 @@ import { projectsApi } from "@/lib/api";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent } from "@/components/ui/card";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -8195,22 +8195,6 @@ const summary =
         <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
         </div>
       </header>
-      <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
-          {[
-            {label:"Portfolio Balance",value:summary.portfolioBalance},
-            {label:"Yesterday's Earnings",value:Object.values(sourceTotalsForDay(new Date(Date.parse(todayKey+"T12:00:00Z")-86400000).toISOString().slice(0,10))).reduce((sum,v)=>sum+(Number(v)||0),0)},
-            {label:"This Week",value:weekEarnings},
-            {label:"This Month",value:thisMonthEarned},
-            {label:"Total Earned",value:summary.totalEarned},
-          ].map(metric=>(
-            <div key={metric.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-2.5">
-              <div className="truncate text-[11px] text-muted-foreground" title={metric.label}>{metric.label}</div>
-              <div className="mt-1 truncate text-[clamp(16px,1.4vw,23px)] font-semibold tabular-nums" title={formatCurrency(metric.value)}>{formatCurrency(metric.value)}</div>
-            </div>
-          ))}
-        </div>
-      </section>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)]">
         <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -8266,7 +8250,7 @@ const summary =
                   <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
                 </AreaChart>
               ) : earningsChartRange === "weekly" ? (
-                <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? weekDays[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly",key:day}); }}>
+                <AreaChart data={weekDays} margin={{top:28,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? weekDays[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly",key:day}); }}>
                   <defs>
                     <linearGradient id="yieldWeeklyLiveFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
@@ -8292,10 +8276,12 @@ const summary =
                         stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => setSelectedEarningsPoint({range:"weekly",key:day})}/>;
                     }}
-                    connectNulls={false} isAnimationActive={false}/>
+                    connectNulls={false} isAnimationActive={false}>
+                    <LabelList dataKey="value" position="top" offset={12} formatter={value => value == null ? "" : formatCurrency(value)} style={{fill:"#c7f9e5",fontSize:10,fontWeight:600}} />
+                  </Area>
                 </AreaChart>
               ) : (
-                <AreaChart data={monthlyChartData} margin={{top:12,right:10,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const month = point?.activePayload?.[0]?.payload?.monthKey || (Number.isInteger(index) ? monthlyChartData[index]?.monthKey : null); if (month) setSelectedEarningsPoint({range:"monthly",key:month}); }}>
+                <AreaChart data={monthlyChartData} margin={{top:28,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const month = point?.activePayload?.[0]?.payload?.monthKey || (Number.isInteger(index) ? monthlyChartData[index]?.monthKey : null); if (month) setSelectedEarningsPoint({range:"monthly",key:month}); }}>
                   <defs>
                     <linearGradient id="yieldMonthlyFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
@@ -8321,7 +8307,9 @@ const summary =
                         stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => setSelectedEarningsPoint({range:"monthly",key:monthKey})}/>;
                     }}
-                    isAnimationActive={false}/>
+                    isAnimationActive={false}>
+                    <LabelList dataKey="value" position="top" offset={12} formatter={value => value == null ? "" : formatCurrency(value)} style={{fill:"#c7f9e5",fontSize:10,fontWeight:600}} />
+                  </Area>
                 </AreaChart>
               )}
             </ResponsiveContainer>
