@@ -5,6 +5,7 @@ open proxy. Responses are cached briefly to stay within upstream rate limits.
 """
 
 import json
+import logging
 import os
 import time
 import urllib.error
@@ -21,6 +22,8 @@ router = APIRouter(
     prefix="/api/market",
     tags=["market"],
 )
+
+logger = logging.getLogger(__name__)
 
 CACHE_TTL_SECONDS = 45
 _cache: dict[str, tuple[float, Any]] = {}
@@ -325,6 +328,14 @@ async def proxy(
 
     cached = _cache.get(cache_key)
 
+    if provider == "lulo":
+        logger.info(
+            "[Lulo Sync] request endpoint=%s api_key_configured=%s cache_hit=%s",
+            path,
+            bool(os.getenv("LULO_API_KEY")),
+            bool(cached and time.time() - cached[0] < CACHE_TTL_SECONDS),
+        )
+
     if (
         cached
         and time.time() - cached[0]
@@ -358,11 +369,34 @@ async def proxy(
             "Content-Type"
         ] = "application/json"
 
-    data = _fetch(
-        url,
-        headers,
-        body,
-    )
+    try:
+        data = _fetch(
+            url,
+            headers,
+            body,
+        )
+    except HTTPException as error:
+        if provider == "lulo":
+            logger.warning(
+                "[Lulo Sync] failed endpoint=%s status=%s",
+                path,
+                error.status_code,
+            )
+        raise
+    except Exception:
+        if provider == "lulo":
+            logger.exception("[Lulo Sync] unexpected failure endpoint=%s", path)
+        raise
+
+    if provider == "lulo":
+        # Log only response shape, not wallet IDs, personal data, or API secrets.
+        rows = len(data) if isinstance(data, list) else None
+        logger.info(
+            "[Lulo Sync] success endpoint=%s response_type=%s rows=%s",
+            path,
+            type(data).__name__,
+            rows if rows is not None else "n/a",
+        )
 
     _cache[cache_key] = (
         time.time(),
