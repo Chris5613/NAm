@@ -3338,7 +3338,7 @@ function KryptexProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
+        className="flex w-full flex-col px-3.5 py-2.5 text-left"
       >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={"Kryptex"} logo={logo} onLogoChange={onLogoChange} />
@@ -9297,7 +9297,7 @@ function ProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
+        className="flex w-full flex-col px-3.5 py-2.5 text-left"
       >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={project.platform} logo={logo} onLogoChange={onLogoChange} />
@@ -9394,7 +9394,7 @@ function UnetworkProjectCard({
               !value
           )
         }
-        className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
+        className="flex w-full flex-col px-3.5 py-2.5 text-left"
       >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={"Unetwork"} logo={logo} onLogoChange={onLogoChange} />
@@ -9580,7 +9580,7 @@ function SaladProjectCard({
               !value
           )
         }
-        className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
+        className="flex w-full flex-col px-3.5 py-2.5 text-left"
       >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={"Salad"} logo={logo} onLogoChange={onLogoChange} />
@@ -9755,7 +9755,7 @@ return (
             !current
         )
       }
-      className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
+      className="flex w-full flex-col px-3.5 py-2.5 text-left"
     >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={"RollerCoin"} logo={logo} onLogoChange={onLogoChange} />
