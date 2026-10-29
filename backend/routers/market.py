@@ -83,6 +83,11 @@ def _provider_config() -> dict[str, dict[str, Any]]:
         },
         "lulo": {
             "base": "https://api.lulo.fi",
+            "headers": {
+                "x-api-key": os.environ["LULO_API_KEY"],
+            }
+            if os.getenv("LULO_API_KEY")
+            else {},
         },
         "ratex": {
             "base": "https://api.rate-x.io",
