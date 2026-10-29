@@ -9207,7 +9207,7 @@ function UnetworkProjectCard({
       </button>
 
       {expanded && (
-        <ProjectDetailsModal title={"Unetwork"} onClose={() = onDeactivate={onDeactivate}> setExpanded(false)} projections={{ daily: stats?.estimatedDailyUsd, monthly: stats?.estimatedMonthlyUsd, yearly: stats?.estimatedYearlyUsd }}>
+        <ProjectDetailsModal title={"Unetwork"} onClose={() => setExpanded(false)} onDeactivate={onDeactivate} projections={{ daily: stats?.estimatedDailyUsd, monthly: stats?.estimatedMonthlyUsd, yearly: stats?.estimatedYearlyUsd }}>
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
           <div className="mb-4">
             <ProjectPaybackEditor
@@ -9479,7 +9479,7 @@ function SaladProjectCard({
       </button>
 
       {expanded && (
-        <ProjectDetailsModal title={"Salad"} onClose={() = onDeactivate={onDeactivate}> setExpanded(false)} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
+        <ProjectDetailsModal title={"Salad"} onClose={() => setExpanded(false)} onDeactivate={onDeactivate} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
         <div className="border-t border-border/40 px-5 pb-5 pt-4">
           <div className="mb-4">
             <ProjectPaybackEditor
@@ -9730,7 +9730,7 @@ return (
     </button>
 
     {expanded && (
-        <ProjectDetailsModal title={"RollerCoin"} onClose={() = onDeactivate={onDeactivate}> setExpanded(false)} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
+        <ProjectDetailsModal title={"RollerCoin"} onClose={() => setExpanded(false)} onDeactivate={onDeactivate} projections={{ daily: dailyIncome, monthly: monthlyIncome, yearly: yearlyIncome }}>
       <div className="border-t border-border/40 px-5 py-4">
         <ProjectPaybackEditor
           value={
