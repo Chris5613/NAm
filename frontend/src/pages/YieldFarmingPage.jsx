@@ -2172,150 +2172,82 @@ function getLoopscalePositionKey(
   );
 }
 
-function updateLoopscaleHistoryFromSnapshot(
-  history,
-  snapshot
-) {
-  if (
-    !snapshot ||
-    !(
-      Number(
-        snapshot.positionValueUsd
-      ) >
-      0
-    )
-  ) {
+function updateLoopscaleHistoryFromSnapshot(history, snapshot) {
+  const positionValue = Number(snapshot?.positionValueUsd);
+  const pnlUsd = Number(snapshot?.pnlUsd);
+  if (!Number.isFinite(positionValue) || positionValue <= 0 ||
+      !Number.isFinite(pnlUsd)) {
     return history;
   }
 
-  const positionKey =
-    getLoopscalePositionKey(
-      snapshot
-    );
+  const positionKey = getLoopscalePositionKey(snapshot);
+  const currentMonth = getCurrentMonthKey();
+  const startMonth = getMonthKey(snapshot.startTime);
+  const existing = history?.positions?.[positionKey] || {};
+  const incomingTime = Date.parse(snapshot.syncedAt || "");
+  const previousTime = Date.parse(existing.lastSyncedAt || "");
 
-  const currentMonth =
-    getCurrentMonthKey();
+  // Async refreshes can finish out of order. An older snapshot must never
+  // roll back the current position or create duplicate observed earnings.
+  if (Number.isFinite(previousTime) &&
+      (!Number.isFinite(incomingTime) || incomingTime < previousTime)) {
+    return history;
+  }
 
-  const startMonth =
-    getMonthKey(
-      snapshot.startTime
-    );
+  const monthlyEarnings = { ...(existing.monthlyEarnings || {}) };
+  const monthBaselines = { ...(existing.monthBaselines || {}) };
+  const existingBaseline = monthBaselines[currentMonth];
+  const hasBaseline = existingBaseline !== null &&
+    existingBaseline !== undefined &&
+    Number.isFinite(Number(existingBaseline));
 
-  const pnlUsd =
-    Number(
-      snapshot.pnlUsd
-    ) || 0;
-
-  const existing =
-    history?.positions?.[
-      positionKey
-    ] || {};
-
-  const monthlyEarnings = {
-    ...(
-      existing.monthlyEarnings ||
-      {}
-    ),
-  };
-
-  const monthBaselines = {
-    ...(
-      existing.monthBaselines ||
-      {}
-    ),
-  };
-
-  if (
-    !Number.isFinite(
-      Number(
-        monthBaselines[
-          currentMonth
-        ]
-      )
-    )
-  ) {
-    /*
-     * The position was opened this month, so its current Loopscale
-     * P&L is this month's income. For a position discovered in a
-     * later month, start from the P&L at discovery instead.
-     */
-    monthBaselines[
-      currentMonth
-    ] =
-      startMonth ===
-      currentMonth
-        ? 0
+  if (!hasBaseline) {
+    // If we observed this loan last month, use the last observed cumulative
+    // P/L as the new opening baseline. This avoids losing everything accrued
+    // between monthly refreshes, but that interval cannot be precisely dated.
+    // For a newly discovered older loan, the first reading is the baseline.
+    const previousMonth = getMonthKey(existing.lastSyncedAt);
+    const priorPnl = Number(existing.lastPnlUsd);
+    monthBaselines[currentMonth] = startMonth === currentMonth
+      ? 0
+      : previousMonth && previousMonth < currentMonth && Number.isFinite(priorPnl)
+        ? priorPnl
         : pnlUsd;
   }
 
-  const baseline =
-    Number(
-      monthBaselines[
-        currentMonth
-      ]
-    ) || 0;
+  const baseline = Number(monthBaselines[currentMonth]);
+  monthlyEarnings[currentMonth] = Number(
+    Math.max(0, pnlUsd - baseline).toFixed(8)
+  );
 
-  monthlyEarnings[
-    currentMonth
-  ] =
-    Number(
-      Math.max(
-        0,
-        pnlUsd -
-          baseline
-      ).toFixed(
-        8
-      )
-    );
+  // Record observation timestamps for reconciliation without pretending the
+  // API supplies exact timestamps for the interest accrued between polls.
+  const observations = Array.isArray(existing.observations)
+    ? existing.observations.slice(-1439)
+    : [];
+  if (Number.isFinite(incomingTime) &&
+      (!observations.length ||
+        observations[observations.length - 1].syncedAt !== snapshot.syncedAt)) {
+    observations.push({ syncedAt: snapshot.syncedAt, pnlUsd });
+  }
 
   return {
     ...history,
-
     positions: {
-      ...(
-        history?.positions ||
-        {}
-      ),
-
+      ...(history?.positions || {}),
       [positionKey]: {
         ...existing,
-
-        key:
-          positionKey,
-
-        loanAddress:
-          snapshot.loanAddress ||
-          positionKey,
-
-        asset:
-          snapshot.asset ||
-          "ONyc",
-
-        startTime:
-          snapshot.startTime ||
-          existing.startTime ||
-          null,
-
-        lastPnlUsd:
-          pnlUsd,
-
-        lastValueUsd:
-          Number(
-            snapshot.positionValueUsd
-          ) || 0,
-
-        lastApy:
-          Number(
-            snapshot.netApy
-          ) || 0,
-
-        lastSyncedAt:
-          snapshot.syncedAt ||
-          new Date().toISOString(),
-
+        key: positionKey,
+        loanAddress: snapshot.loanAddress || positionKey,
+        asset: snapshot.asset || "ONyc",
+        startTime: snapshot.startTime || existing.startTime || null,
+        lastPnlUsd: pnlUsd,
+        lastValueUsd: positionValue,
+        lastApy: Number(snapshot.netApy) || 0,
+        lastSyncedAt: snapshot.syncedAt || new Date().toISOString(),
         monthBaselines,
-
         monthlyEarnings,
+        observations,
       },
     },
   };
