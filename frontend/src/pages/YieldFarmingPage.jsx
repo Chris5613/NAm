@@ -3338,7 +3338,7 @@ function KryptexProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
+        className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
       >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={"Kryptex"} logo={logo} onLogoChange={onLogoChange} />
@@ -8196,7 +8196,7 @@ const summary =
         </div>
       </header>
       <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-3">
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
           {[
             {label:"Portfolio Balance",value:summary.portfolioBalance},
             {label:"Today's Earnings",value:todayEarnings},
@@ -8784,10 +8784,10 @@ if (
               {name:"RollerCoin", connected:rollerCoinConnected, synced:rollerCoinTracker?.lastSyncedAt},
               {name:"Loopscale", connected:Boolean(loopscaleSnapshot), synced:loopscaleSnapshot?.lastSyncedAt || loopscaleSnapshot?.syncedAt},
               {name:"Salad", connected:saladConnected, synced:saladTracker?.lastSyncedAt},
-              {name:"Lulo", connected:luloProjects.some(project=>project.autoSynced), synced:luloProjects.map(project=>project.lastSyncedAt || project.lulo_last_synced_at).filter(Boolean).sort().at(-1)},
+              {name:"Lulo", connected:luloProjects.some(project => { const t = Date.parse(project.lastSyncedAt || ""); return Number.isFinite(t) && Date.now() - t >= 0 && Date.now() - t < 15 * 60 * 1000; }), synced:luloProjects.map(project=>project.lastSyncedAt).filter(Boolean).sort().at(-1)},
               {name:"Unetwork", connected:unetworkConnected, synced:unetworkTracker?.lastSyncedAt},
             ].map(item => (
-              <div key={item.name} className="grid grid-cols-[minmax(70px,1fr)_minmax(80px,1fr)_auto] items-center gap-2 text-[10px]">
+              <div key={item.name} className="grid grid-cols-[minmax(0,1fr)_85px_95px] items-center gap-2 border-b border-white/5 py-1 text-[10px] last:border-b-0">
                 <span className="truncate font-medium">{item.name}</span>
                 <span className="truncate text-muted-foreground">{formatCompactSyncAge(item.synced)}</span>
                 <span className={item.connected ? "text-emerald-400" : "text-amber-300"}>
@@ -9297,7 +9297,7 @@ function ProjectCard({
         onClick={
           onToggle
         }
-        className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
+        className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
       >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={project.platform} logo={logo} onLogoChange={onLogoChange} />
@@ -9394,7 +9394,7 @@ function UnetworkProjectCard({
               !value
           )
         }
-        className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
+        className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
       >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={"Unetwork"} logo={logo} onLogoChange={onLogoChange} />
@@ -9580,7 +9580,7 @@ function SaladProjectCard({
               !value
           )
         }
-        className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
+        className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
       >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={"Salad"} logo={logo} onLogoChange={onLogoChange} />
@@ -9755,7 +9755,7 @@ return (
             !current
         )
       }
-      className="flex min-h-[112px] w-full flex-col px-3.5 py-2.5 text-left"
+      className="flex min-h-[76px] w-full flex-col px-3.5 py-3 text-left"
     >
         <div className="flex w-full min-w-0 items-start gap-2">
           <ProjectLogoButton platform={"RollerCoin"} logo={logo} onLogoChange={onLogoChange} />
