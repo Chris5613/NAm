@@ -4513,6 +4513,9 @@ export default function YieldFarmingPage() {
       []
     );
 
+// Keep cheap cached updates frequent, but fetch the full RollerCoin
+// monthly history no more than once per minute.
+const lastRollerCoinRangeRequestRef = useRef(0);
 const requestRollerCoinLatest =
   useCallback(
     () => {
@@ -4562,20 +4565,19 @@ const requestRollerCoinLatest =
        * day from the 1st of the current month through
        * today.
        */
-      window.postMessage(
-        {
-          source:
-            "rollercoin-app",
-
-          type:
-            "SYNC_RANGE",
-
-          from,
-
-          to,
-        },
-        window.location.origin
-      );
+      const now = Date.now();
+      if (now - lastRollerCoinRangeRequestRef.current >= 60000) {
+        lastRollerCoinRangeRequestRef.current = now;
+        window.postMessage(
+          {
+            source: "rollercoin-app",
+            type: "SYNC_RANGE",
+            from,
+            to,
+          },
+          window.location.origin
+        );
+      }
     },
     []
   );;
