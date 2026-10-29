@@ -8107,9 +8107,11 @@ const importSaladPayload =
       days: saved.days && typeof saved.days === "object" ? saved.days : {},
       lastMonth: saved.lastMonth || "",
       lastSources: saved.lastSources && typeof saved.lastSources === "object" ? saved.lastSources : {},
+      timeline: saved.timeline && typeof saved.timeline === "object" ? saved.timeline : {},
     };
   });
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [earningsChartRange, setEarningsChartRange] = useState("daily");
   useEffect(() => {
     const timer = window.setInterval(() => setEarningsClock(Date.now()), 60000);
     return () => window.clearInterval(timer);
@@ -8145,7 +8147,24 @@ const importSaladPayload =
       const days = Object.keys(increments).length
         ? { ...previous.days, [today]: { sources: todaySources } }
         : previous.days;
-      const next = { days, lastMonth: monthKey, lastSources };
+      // Capture each observed increase with its Pacific-time clock position.
+      // The historical daily totals are preserved, but intraday timing starts
+      // from this release since the previous ledger did not retain timestamps.
+      const pacificTime = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit",
+        second: "2-digit", hourCycle: "h23",
+      }).formatToParts(new Date());
+      const timePart = key => Number(pacificTime.find(part => part.type === key)?.value || 0);
+      const hour = timePart("hour") + timePart("minute") / 60 + timePart("second") / 3600;
+      const totalIncrease = Object.values(increments).reduce((sum, amount) => sum + amount, 0);
+      const priorTimeline = previous.timeline?.[today] || [];
+      const timeline = totalIncrease > 0
+        ? {
+            ...previous.timeline,
+            [today]: [...priorTimeline, { hour, amount: Object.values(todaySources).reduce((sum, amount) => sum + (Number(amount) || 0), 0) }].slice(-250),
+          }
+        : previous.timeline || {};
+      const next = { days, lastMonth: monthKey, lastSources, timeline };
       if (JSON.stringify(previous) !== JSON.stringify(next)) {
         saveObject(DAILY_LEDGER_KEY, next);
         return next;
@@ -8181,6 +8200,29 @@ const importSaladPayload =
   });
   const weekEarnings = weekDays.reduce((total,day) => total+(day.value || 0),0);
   const observedWeekMaximum = Math.max(1,...weekDays.map(day => day.value || 0));
+  const pacificClockParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(earningsClock));
+  const clockPart = key => Number(pacificClockParts.find(part => part.type === key)?.value || 0);
+  const currentHour = clockPart("hour") + clockPart("minute") / 60;
+  const todayTimeline = Array.isArray(earningsLedger.timeline?.[todayKey])
+    ? earningsLedger.timeline[todayKey] : [];
+  // Only show timestamps observed after intraday tracking was introduced.
+  // An older daily total has no known clock-time and is not backfilled.
+  const dailyChartData = [
+    { x: 0, value: 0 },
+    ...todayTimeline
+      .filter(point => Number.isFinite(Number(point.hour)) && Number.isFinite(Number(point.amount)))
+      .map(point => ({ x: Math.max(0,Math.min(24,Number(point.hour))), value: Math.max(0,Number(point.amount)) }))
+      .sort((a,b)=>a.x-b.x),
+  ];
+  const lastObserved = dailyChartData[dailyChartData.length-1];
+  if (currentHour > lastObserved.x) {
+    dailyChartData.push({ x: currentHour, value: lastObserved.value });
+  }
+  const dailyChartMax = Math.max(0.1, ...dailyChartData.map(point => point.value)) * 1.2;
+
 
 const summary =
   useMemo(
@@ -8652,33 +8694,73 @@ const summary =
         <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-[16px] font-semibold">Earnings This Week</h2>
-              <p className="mt-1 text-[11px] text-muted-foreground">Daily earnings recorded from synced projects · today updates live</p>
-              <div className="mt-2 text-[27px] font-semibold tabular-nums text-emerald-400">{formatCurrency(weekEarnings)}</div>
+              <h2 className="text-[16px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : "This Week"}</h2>
+              <p className="mt-1 text-[11px] text-muted-foreground">
+                {earningsChartRange === "daily"
+                  ? "Today's observed earnings updates · Pacific Time"
+                  : "Daily totals from synced projects · today updates live"}
+              </p>
+              <div className="mt-2 text-[27px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : weekEarnings)}</div>
             </div>
-            <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs text-emerald-400">
-              <span className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full bg-emerald-400" />Live
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg border border-[#2b3848] bg-[#101923] p-0.5" aria-label="Earnings chart period">
+                {["daily", "weekly"].map(period => (
+                  <button
+                    key={period}
+                    type="button"
+                    onClick={() => setEarningsChartRange(period)}
+                    aria-pressed={earningsChartRange === period}
+                    className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${earningsChartRange === period ? "bg-[#293747] text-white" : "text-muted-foreground hover:text-white"}`}
+                  >
+                    {period === "daily" ? "Daily" : "Weekly"}
+                  </button>
+                ))}
+              </div>
+              <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-400">
+                <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />Live
+              </div>
             </div>
           </div>
           <div className="mt-3 h-[clamp(180px,25vh,235px)] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}}>
-                <defs>
-                  <linearGradient id="yieldWeeklyLiveFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
-                    <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
-                <XAxis dataKey="day" axisLine={false} tickLine={false} interval={0} tick={{fontSize:11,fill:"#91a1b2"}} />
-                <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,observedWeekMaximum*1.15]} tickFormatter={v=>"$"+Number(v).toFixed(0)} />
-                <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
-                <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.5} fill="url(#yieldWeeklyLiveFill)" dot={{r:3,fill:"#30e69b"}} activeDot={{r:5}} connectNulls={false} isAnimationActive={false}/>
-              </AreaChart>
+              {earningsChartRange === "daily" ? (
+                <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}}>
+                  <defs>
+                    <linearGradient id="yieldDailyFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <XAxis dataKey="x" type="number" domain={[0,24]} ticks={[0,4,8,12,16,20,24]} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} tickFormatter={hour => hour === 0 ? "12am" : hour === 12 ? "12pm" : hour === 24 ? "12am" : hour < 12 ? hour+"am" : (hour-12)+"pm"}/>
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,dailyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={hour => {
+                    const rounded = Math.max(0, Math.min(24,Number(hour)));
+                    const hours = Math.floor(rounded);
+                    const mins = Math.floor((rounded-hours)*60);
+                    return `${String(hours).padStart(2,"0")}:${String(mins).padStart(2,"0")} PT`;
+                  }} formatter={value=>[formatCurrency(value),"Recorded today"]}/>
+                  <Area type="stepAfter" dataKey="value" stroke="#30e69b" strokeWidth={2.5} fill="url(#yieldDailyFill)" dot={false} activeDot={{r:5}} isAnimationActive={false}/>
+                </AreaChart>
+              ) : (
+                <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}}>
+                  <defs>
+                    <linearGradient id="yieldWeeklyLiveFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} interval={0} tick={{fontSize:11,fill:"#91a1b2"}} />
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,observedWeekMaximum*1.15]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
+                  <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.5} fill="url(#yieldWeeklyLiveFill)" dot={{r:3,fill:"#30e69b"}} activeDot={{r:5}} connectNulls={false} isAnimationActive={false}/>
+                </AreaChart>
+              )}
             </ResponsiveContainer>
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            <span>Earlier daily values are recorded only after tracking begins. Past dates are not estimated.</span>
+            <span>Daily shows observed sync times; Weekly preserves recorded daily totals. No estimated backfill.</span>
             <button type="button" className="text-sky-400 hover:text-sky-300" onClick={()=>setHistoryOpen(true)}>Monthly history</button>
           </div>
         </section>
