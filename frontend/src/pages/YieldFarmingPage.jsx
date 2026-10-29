@@ -5481,6 +5481,26 @@ const importSaladPayload =
             }
           );
 
+          // Carry forward the manually verified Oct 29 midnight–9 AM amount.
+          // When the dated history endpoint is missing or stale, count only
+          // *new* lifetime earnings observed between successful extension syncs.
+          // Keep this cursor in the tracker so refreshes cannot reset it.
+          const fixedSaladDay = "2026-10-29";
+          const fixedSaladEnd = Date.parse("2026-10-29T09:00:00-07:00");
+          const previousLifetime = Number(current?.lastLifetimeBalance);
+          const previousSync = Date.parse(current?.lastSyncedAt || "");
+          const incomingSync = Date.parse(syncedAt);
+          const validNewSync = Number.isFinite(incomingSync) &&
+            (!Number.isFinite(previousSync) || incomingSync > previousSync);
+          const postMorningDelta = validNewSync &&
+            Number.isFinite(previousSync) && previousSync >= fixedSaladEnd &&
+            Number.isFinite(previousLifetime)
+              ? Math.max(0, lifetimeBalance - previousLifetime)
+              : 0;
+          const saladPostMorningEarned = Number((
+            Math.max(0, Number(current?.saladPostMorningEarned) || 0) +
+            postMorningDelta
+          ).toFixed(8));
           const monthlyEarnings = {
             ...(
               current?.monthlyEarnings ||
@@ -5744,6 +5764,8 @@ const importSaladPayload =
             monthlyEarnings,
 
             daily,
+
+            saladPostMorningEarned,
 
             earningSnapshots:
               earningSnapshots.slice(
@@ -7358,9 +7380,16 @@ const importSaladPayload =
       // the fixed amount to it would double-count those earnings.
       const datedTotal = Number(saladTracker?.daily?.[key]);
       const observedIncrease = Math.max(0, Number(sources.Salad) || 0);
-      sources.Salad = Number.isFinite(datedTotal) && datedTotal > 0
-        ? Math.max(SALAD_FIXED_TOTAL, datedTotal)
-        : Math.max(SALAD_FIXED_TOTAL, observedIncrease);
+      const postMorningTotal = SALAD_FIXED_TOTAL +
+        Math.max(0, Number(saladTracker?.saladPostMorningEarned) || 0);
+      // Dated full-day earnings already include the morning amount.
+      // The fallback counts only new lifetime-balance increases after 9 AM.
+      sources.Salad = Math.max(
+        SALAD_FIXED_TOTAL,
+        Number.isFinite(datedTotal) ? datedTotal : 0,
+        postMorningTotal,
+        observedIncrease
+      );
     }
     if (key === LULO_FIXED_DAY) {
       sources.Lulo = Math.max(LULO_FIXED_TOTAL, Number(sources.Lulo) || 0);
