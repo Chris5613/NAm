@@ -7762,7 +7762,7 @@ const importSaladPayload =
     };
     fullRefresh();
     const fullTimer = window.setInterval(fullRefresh, 60000);
-    const quickTimer = window.setInterval(quickRefresh, 20000);
+    const quickTimer = window.setInterval(quickRefresh, 3000);
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         quickRefresh();
