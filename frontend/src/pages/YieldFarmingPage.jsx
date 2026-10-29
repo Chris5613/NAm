@@ -8791,7 +8791,7 @@ const summary =
             </ResponsiveContainer>
           </div>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            <span>{todayKey === SALAD_FIXED_DAY ? "Salad: fixed $0.0756/hr from midnight–9 AM PT ($0.6804 estimated); not a live reading." : "Daily shows observed sync times; Weekly preserves recorded daily totals. No estimated backfill."}</span>
+            
             <button type="button" className="text-sky-400 hover:text-sky-300" onClick={()=>setHistoryOpen(true)}>Monthly history</button>
           </div>
         </section>
