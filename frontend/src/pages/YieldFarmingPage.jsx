@@ -7407,10 +7407,32 @@ const importSaladPayload =
         value: (isFixedSaladDay || isFixedLuloDay ? fixedIncomeAtHour(hour) : 0) + otherObserved,
       };
     });
-  const dailyChartData = [...fixedHours, ...observedPoints].sort((a,b) => a.x - b.x);
-  const lastObserved = dailyChartData[dailyChartData.length-1];
-  if (currentHour > lastObserved.x) {
-    dailyChartData.push({ x: currentHour, value: lastObserved.value });
+  // Fixed hourly estimates and observed snapshots can land at the same
+  // clock position. Combine duplicate times, then preserve a cumulative
+  // running maximum so out-of-order or corrected syncs never make the
+  // earnings line plunge and rebound.
+  const dailyPointsByHour = new Map();
+  [...fixedHours, ...observedPoints].forEach(point => {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.value)) return;
+    const hour = Math.max(0, Math.min(currentHour, point.x));
+    const value = Math.max(0, Math.min(todayEarnings, point.value));
+    dailyPointsByHour.set(hour, Math.max(dailyPointsByHour.get(hour) || 0, value));
+  });
+  let runningTotal = 0;
+  const dailyChartData = [...dailyPointsByHour.entries()]
+    .sort(([a],[b]) => a - b)
+    .map(([x,value]) => {
+      runningTotal = Math.max(runningTotal, value);
+      return { x, value: runningTotal };
+    });
+  const lastObserved = dailyChartData[dailyChartData.length - 1];
+  if (!lastObserved || currentHour > lastObserved.x) {
+    dailyChartData.push({
+      x: currentHour,
+      value: Math.max(runningTotal, todayEarnings),
+    });
+  } else if (lastObserved.x === currentHour) {
+    lastObserved.value = Math.max(lastObserved.value, todayEarnings);
   }
   const dailyChartMax = Math.max(0.1, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
   const monthlyChartData = projectIncome
