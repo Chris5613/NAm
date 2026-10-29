@@ -7325,12 +7325,20 @@ const importSaladPayload =
   const SALAD_FIXED_HOURLY_USD = 0.0756;
   const SALAD_FIXED_END_HOUR = 9;
   const SALAD_FIXED_TOTAL = SALAD_FIXED_HOURLY_USD * SALAD_FIXED_END_HOUR;
+  // User-supplied Oct 29 Lulo earnings: $0.31 from midnight to 10:14 AM
+  // Pacific Time, distributed evenly over only that observed window.
+  const LULO_FIXED_DAY = "2026-10-29";
+  const LULO_FIXED_TOTAL = 0.31;
+  const LULO_FIXED_END_HOUR = 10 + 14 / 60;
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     if (key === SALAD_FIXED_DAY) {
       // Replace, rather than add to, v2 Salad observed increases for that day.
       // Otherwise the same earnings could be counted twice.
       sources.Salad = SALAD_FIXED_TOTAL;
+    }
+    if (key === LULO_FIXED_DAY) {
+      sources.Lulo = Math.max(LULO_FIXED_TOTAL, Number(sources.Lulo) || 0);
     }
     return sources;
   };
@@ -7368,36 +7376,54 @@ const importSaladPayload =
   const currentHour = clockPart("hour") + clockPart("minute") / 60;
   const todayTimeline = Array.isArray(earningsLedger.timeline?.[todayKey])
     ? earningsLedger.timeline[todayKey] : [];
-  // Only show timestamps observed after intraday tracking was introduced.
-  // An older daily total has no known clock-time and is not backfilled.
+  const isFixedLuloDay = todayKey === LULO_FIXED_DAY;
   const isFixedSaladDay = todayKey === SALAD_FIXED_DAY;
   const recordedSalad = Math.max(0, Number(earningsLedger.days[todayKey]?.sources?.Salad) || 0);
-  const dailyChartData = isFixedSaladDay
-    ? [
-        ...Array.from({ length: SALAD_FIXED_END_HOUR + 1 }, (_, hour) => ({
-          x: hour,
-          value: Number((hour * SALAD_FIXED_HOURLY_USD).toFixed(6)),
-        })),
-        ...todayTimeline
-          .filter(point => Number.isFinite(Number(point.hour)) && Number.isFinite(Number(point.amount)) && Number(point.hour) > SALAD_FIXED_END_HOUR)
-          .map(point => ({
-            x: Math.max(0, Math.min(24, Number(point.hour))),
-            value: SALAD_FIXED_TOTAL + Math.max(0, Number(point.amount) - recordedSalad),
-          }))
-          .sort((a,b) => a.x - b.x),
-      ]
-    : [
-        { x: 0, value: 0 },
-        ...todayTimeline
-          .filter(point => Number.isFinite(Number(point.hour)) && Number.isFinite(Number(point.amount)))
-          .map(point => ({ x: Math.max(0,Math.min(24,Number(point.hour))), value: Math.max(0,Number(point.amount)) }))
-          .sort((a,b)=>a.x-b.x),
-      ];
+  const recordedLulo = Math.max(0, Number(earningsLedger.days[todayKey]?.sources?.Lulo) || 0);
+  const fixedIncomeAtHour = hour =>
+    (isFixedSaladDay ? SALAD_FIXED_TOTAL * Math.min(Math.max(hour, 0) / SALAD_FIXED_END_HOUR, 1) : 0) +
+    (isFixedLuloDay ? LULO_FIXED_TOTAL * Math.min(Math.max(hour, 0) / LULO_FIXED_END_HOUR, 1) : 0);
+  const fixedHours = (isFixedSaladDay || isFixedLuloDay)
+    ? [...new Set([
+        0,
+        ...Array.from({ length: Math.floor(Math.min(24,currentHour)) + 1 }, (_, hour) => hour),
+        ...(isFixedSaladDay ? [SALAD_FIXED_END_HOUR] : []),
+        ...(isFixedLuloDay ? [LULO_FIXED_END_HOUR] : []),
+      ])].filter(hour => hour <= currentHour).map(hour => ({
+        x: hour, value: fixedIncomeAtHour(hour),
+      }))
+    : [{ x: 0, value: 0 }];
+  const observedPoints = todayTimeline
+    .filter(point => Number.isFinite(Number(point.hour)) && Number.isFinite(Number(point.amount)))
+    .map(point => {
+      const hour = Math.max(0, Math.min(24, Number(point.hour)));
+      const otherObserved = Math.max(0,
+        Number(point.amount) -
+        (isFixedSaladDay ? recordedSalad : 0) -
+        (isFixedLuloDay ? Math.min(recordedLulo, LULO_FIXED_TOTAL) : 0)
+      );
+      return {
+        x: hour,
+        value: (isFixedSaladDay || isFixedLuloDay ? fixedIncomeAtHour(hour) : 0) + otherObserved,
+      };
+    });
+  const dailyChartData = [...fixedHours, ...observedPoints].sort((a,b) => a.x - b.x);
   const lastObserved = dailyChartData[dailyChartData.length-1];
   if (currentHour > lastObserved.x) {
     dailyChartData.push({ x: currentHour, value: lastObserved.value });
   }
-  const dailyChartMax = Math.max(0.1, ...dailyChartData.map(point => point.value)) * 1.2;
+  const dailyChartMax = Math.max(0.1, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
+  const monthlyChartData = projectIncome
+    .filter(month => /^\d{4}-\d{2}$/.test(String(month.monthKey)) && Number.isFinite(Number(month.total)))
+    .map(month => ({
+      monthKey: month.monthKey,
+      label: new Intl.DateTimeFormat("en-US",{month:"short",year:"2-digit",timeZone:"UTC"}).format(new Date(month.monthKey+"-15T12:00:00Z")),
+      value: Math.max(0,Number(month.total)),
+      expenses: Math.max(0,Number(projectExpenses[month.monthKey]) || 0),
+    }))
+    .sort((a,b) => a.monthKey.localeCompare(b.monthKey));
+  const thisMonthEarned = monthlyChartData.find(month => month.monthKey === getCurrentMonthKey())?.value || 0;
+  const monthlyChartMax = Math.max(0.1,...monthlyChartData.map(month => month.value))*1.15;
 
 
 const summary =
@@ -7870,17 +7896,19 @@ const summary =
         <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-[16px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : "This Week"}</h2>
+              <h2 className="text-[16px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : "This Month"}</h2>
               <p className="mt-1 text-[11px] text-muted-foreground">
                 {earningsChartRange === "daily"
                   ? "Today's observed earnings updates · Pacific Time"
-                  : "Daily totals from synced projects · today updates live"}
+                  : earningsChartRange === "weekly"
+                    ? "Daily totals from synced projects · today updates live"
+                    : "Monthly income history"}
               </p>
-              <div className="mt-2 text-[27px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : weekEarnings)}</div>
+              <div className="mt-2 text-[27px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : earningsChartRange === "weekly" ? weekEarnings : thisMonthEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-[#2b3848] bg-[#101923] p-0.5" aria-label="Earnings chart period">
-                {["daily", "weekly"].map(period => (
+                {["daily", "weekly", "monthly"].map(period => (
                   <button
                     key={period}
                     type="button"
@@ -7888,7 +7916,7 @@ const summary =
                     aria-pressed={earningsChartRange === period}
                     className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${earningsChartRange === period ? "bg-[#293747] text-white" : "text-muted-foreground hover:text-white"}`}
                   >
-                    {period === "daily" ? "Daily" : "Weekly"}
+                    {period === "daily" ? "Daily" : period === "weekly" ? "Weekly" : "Monthly"}
                   </button>
                 ))}
               </div>
@@ -7918,7 +7946,7 @@ const summary =
                   }} formatter={value=>[formatCurrency(value),"Recorded today"]}/>
                   <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
                 </AreaChart>
-              ) : (
+              ) : earningsChartRange === "weekly" ? (
                 <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}}>
                   <defs>
                     <linearGradient id="yieldWeeklyLiveFill" x1="0" y1="0" x2="0" y2="1">
@@ -7932,12 +7960,30 @@ const summary =
                   <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
                   <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldWeeklyLiveFill)" dot={false} activeDot={{r:4, strokeWidth:2}} connectNulls={false} isAnimationActive={false}/>
                 </AreaChart>
+              ) : (
+                <AreaChart data={monthlyChartData} margin={{top:12,right:10,left:-8,bottom:3}}
+                  onClick={point => {
+                    const monthKey = point?.activePayload?.[0]?.payload?.monthKey;
+                    if (monthKey) {
+                      setSelectedYear(Number(monthKey.slice(0,4)));
+                      setSelectedMonthKey(monthKey);
+                      setHistoryOpen(true);
+                    }
+                  }}>
+                  <defs>
+                    <linearGradient id="yieldMonthlyFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} interval="preserveStartEnd" />
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(0)}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} formatter={(value,name,props)=>[formatCurrency(value),"Monthly income"]}/>
+                  <Area type="monotone" dataKey="value" name="Monthly income" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)" dot={{r:3,fill:"#30e69b"}} activeDot={{r:5}} isAnimationActive={false}/>
+                </AreaChart>
               )}
             </ResponsiveContainer>
-          </div>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[10px] text-muted-foreground">
-            
-            <button type="button" className="text-sky-400 hover:text-sky-300" onClick={()=>setHistoryOpen(true)}>Monthly history</button>
           </div>
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
