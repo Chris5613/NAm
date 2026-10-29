@@ -3353,15 +3353,6 @@ function KryptexProjectCard({
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
-        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
-
-          <div className="max-w-[90px] text-right">
-            <div className="text-[10px] text-muted-foreground">Last sync</div>
-            <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
-              {formatCompactSyncAge(tracker?.lastSyncedAt)}
-            </div>
-          </div>
-        </div>
       </button>
 
       {!collapsed && (
@@ -8204,6 +8195,23 @@ const summary =
         <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
         </div>
       </header>
+      <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-3">
+        <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
+          {[
+            {label:"Portfolio Balance",value:summary.portfolioBalance},
+            {label:"Today's Earnings",value:todayEarnings},
+            {label:"Yesterday's Earnings",value:Object.values(sourceTotalsForDay(new Date(Date.parse(todayKey+"T12:00:00Z")-86400000).toISOString().slice(0,10))).reduce((sum,v)=>sum+(Number(v)||0),0)},
+            {label:"This Week",value:weekEarnings},
+            {label:"This Month",value:thisMonthEarned},
+            {label:"Total Earned",value:summary.totalEarned},
+          ].map(metric=>(
+            <div key={metric.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-2.5">
+              <div className="truncate text-[11px] text-muted-foreground" title={metric.label}>{metric.label}</div>
+              <div className="mt-1 truncate text-[clamp(16px,1.4vw,23px)] font-semibold tabular-nums" title={formatCurrency(metric.value)}>{formatCurrency(metric.value)}</div>
+            </div>
+          ))}
+        </div>
+      </section>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)]">
         <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -9304,15 +9312,6 @@ function ProjectCard({
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
-        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
-
-          <div className="max-w-[90px] text-right">
-            <div className="text-[10px] text-muted-foreground">Last sync</div>
-            <div className="truncate text-[10px] text-muted-foreground" title={project.lastSyncedAt || project.updated_at || project.updatedAt || ""}>
-              {formatCompactSyncAge(project.lastSyncedAt || project.updated_at || project.updatedAt)}
-            </div>
-          </div>
-        </div>
       </button>
 
       {!collapsed && (
@@ -9409,15 +9408,6 @@ function UnetworkProjectCard({
             <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(stats?.currentBalance)}</div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
-        </div>
-        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
-
-          <div className="max-w-[90px] text-right">
-            <div className="text-[10px] text-muted-foreground">Last sync</div>
-            <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
-              {formatCompactSyncAge(tracker?.lastSyncedAt)}
-            </div>
-          </div>
         </div>
       </button>
 
@@ -9605,15 +9595,6 @@ function SaladProjectCard({
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
         </div>
-        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
-
-          <div className="max-w-[90px] text-right">
-            <div className="text-[10px] text-muted-foreground">Last sync</div>
-            <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
-              {formatCompactSyncAge(tracker?.lastSyncedAt)}
-            </div>
-          </div>
-        </div>
       </button>
 
       {expanded && (
@@ -9788,15 +9769,6 @@ return (
             <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 tabular-nums"><span className="text-[14px] font-semibold">{formatCurrency(stats?.currentBalanceUsd)}</span><span className="text-[10px] text-muted-foreground">{Number(stats?.currentTrxBalance || 0).toFixed(2)} TRX</span></div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
-        </div>
-        <div className="mt-auto flex w-full items-end justify-end gap-2 pt-2">
-
-          <div className="max-w-[90px] text-right">
-            <div className="text-[10px] text-muted-foreground">Last sync</div>
-            <div className="truncate text-[10px] text-muted-foreground" title={tracker?.lastSyncedAt || ""}>
-              {formatCompactSyncAge(tracker?.lastSyncedAt)}
-            </div>
-          </div>
         </div>
       </button>
 
