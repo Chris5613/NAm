@@ -8154,7 +8154,7 @@ const importSaladPayload =
       key,
       day: new Intl.DateTimeFormat("en-US",{weekday:"short",timeZone:"UTC"}).format(day),
       date: new Intl.DateTimeFormat("en-US",{month:"short",day:"numeric",timeZone:"UTC"}).format(day),
-      value: key > todayKey ? null : Math.max(0,Number(earningsLedger.days[key]) || 0),
+      value: key > todayKey ? null : Object.prototype.hasOwnProperty.call(earningsLedger.days,key) ? Math.max(0,Number(earningsLedger.days[key]) || 0) : key === todayKey ? 0 : null,
       live: key === todayKey,
     };
   });
@@ -9063,7 +9063,7 @@ if (
             <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-3">
               <div className="text-[11px] text-muted-foreground">{item.label}</div>
               <div className="mt-1 text-[clamp(18px,1.6vw,25px)] font-semibold tabular-nums text-emerald-400">{formatCurrency(item.amount)}</div>
-              <div className="mt-2 h-1 overflow-hidden rounded-full bg-[#263342]"><div className="h-full w-[65%] rounded-full bg-emerald-400/80"/></div>
+              <p className="mt-1 text-[10px] text-muted-foreground">Current run-rate estimate</p>
             </div>
           ))}
         </div>
