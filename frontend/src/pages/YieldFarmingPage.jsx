@@ -2194,6 +2194,32 @@ function updateLoopscaleHistoryFromSnapshot(history, snapshot) {
     return history;
   }
 
+  // Attribute changes to the Pacific day they were observed. This is
+  // observation timing, not an assertion of the protocol's accrual timestamp.
+  const observedDaily = { ...(existing.observedDaily || {}) };
+  const previousPnl = Number(existing.lastPnlUsd);
+  const previousDay = Number.isFinite(previousTime)
+    ? new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Los_Angeles", year: "numeric",
+        month: "2-digit", day: "2-digit",
+      }).format(new Date(previousTime))
+    : null;
+  const observationDay = Number.isFinite(incomingTime)
+    ? new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Los_Angeles", year: "numeric",
+        month: "2-digit", day: "2-digit",
+      }).format(new Date(incomingTime))
+    : null;
+  if (observationDay && previousDay &&
+      Number.isFinite(previousPnl) && incomingTime > previousTime) {
+    const increase = Math.max(0, pnlUsd - previousPnl);
+    if (increase > 0) {
+      observedDaily[observationDay] = Number((
+        (Number(observedDaily[observationDay]) || 0) + increase
+      ).toFixed(8));
+    }
+  }
+
   const monthlyEarnings = { ...(existing.monthlyEarnings || {}) };
   const monthBaselines = { ...(existing.monthBaselines || {}) };
   const existingBaseline = monthBaselines[currentMonth];
@@ -2248,6 +2274,7 @@ function updateLoopscaleHistoryFromSnapshot(history, snapshot) {
         monthBaselines,
         monthlyEarnings,
         observations,
+        observedDaily,
       },
     },
   };
@@ -7391,6 +7418,17 @@ const importSaladPayload =
     }
     if (key === LULO_FIXED_DAY) {
       sources.Lulo = Math.max(LULO_FIXED_TOTAL, Number(sources.Lulo) || 0);
+    }
+    // A date-specific Loopscale observation can supplement the generic
+    // monthly-increase ledger. Use the larger value, never add both.
+    const observedLoopscale = Object.values(loopscaleHistory?.positions || {})
+      .reduce((sum, position) => sum +
+        Math.max(0, Number(position?.observedDaily?.[key]) || 0), 0);
+    if (observedLoopscale > 0) {
+      sources.Loopscale = Math.max(
+        Math.max(0, Number(sources.Loopscale) || 0),
+        observedLoopscale
+      );
     }
     return sources;
   };
