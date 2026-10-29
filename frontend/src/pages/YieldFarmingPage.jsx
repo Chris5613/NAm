@@ -3325,12 +3325,12 @@ function KryptexProjectCard({
         rounded-2xl
         border
         border-border/60
-        bg-card/45
+        bg-[#0e1218]
         shadow-sm
         transition-all
         duration-200
         hover:border-border
-        hover:bg-card/65
+        hover:bg-[#151e28]
       "
     >
       <button
@@ -8169,7 +8169,7 @@ const summary =
           <div className="shrink-0">
             <Dialog>
               <DialogTrigger asChild>
-                <Button type="button" variant="outline" size="sm" className="border-[#2b3848] bg-[#101923] text-muted-foreground hover:text-white">
+                <Button type="button" variant="outline" size="sm" className="border-[#2b3848] bg-[#0e141c] text-muted-foreground hover:text-white">
                   Inactive projects ({inactiveProgramCards.length})
                 </Button>
               </DialogTrigger>
@@ -8195,7 +8195,7 @@ const summary =
         <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
         </div>
       </header>
-      <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-3">
+      <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-5">
           {[
             {label:"Portfolio Balance",value:summary.portfolioBalance},
@@ -8204,7 +8204,7 @@ const summary =
             {label:"This Month",value:thisMonthEarned},
             {label:"Total Earned",value:summary.totalEarned},
           ].map(metric=>(
-            <div key={metric.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-2.5">
+            <div key={metric.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-2.5">
               <div className="truncate text-[11px] text-muted-foreground" title={metric.label}>{metric.label}</div>
               <div className="mt-1 truncate text-[clamp(16px,1.4vw,23px)] font-semibold tabular-nums" title={formatCurrency(metric.value)}>{formatCurrency(metric.value)}</div>
             </div>
@@ -8212,7 +8212,7 @@ const summary =
         </div>
       </section>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.8fr)_minmax(290px,1fr)]">
-        <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
+        <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-[16px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : "This Month"}</h2>
@@ -8226,7 +8226,7 @@ const summary =
               <div className="mt-2 text-[27px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : earningsChartRange === "weekly" ? weekEarnings : thisMonthEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex rounded-lg border border-[#2b3848] bg-[#101923] p-0.5" aria-label="Earnings chart period">
+              <div className="flex rounded-lg border border-[#2b3848] bg-[#0e141c] p-0.5" aria-label="Earnings chart period">
                 {["daily", "weekly", "monthly"].map(period => (
                   <button
                     key={period}
@@ -8327,19 +8327,19 @@ const summary =
             </ResponsiveContainer>
           </div>
         </section>
-        <section className="rounded-2xl border border-[#263342] bg-[#0c141e] p-4">
+        <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
           <p className="mt-1 text-[11px] text-muted-foreground">Tracked increases since baseline · resets at midnight Pacific</p>
           <div className="mt-4 flex flex-col items-center gap-2">
             <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100)}%, #25313d 0)`}}>
-              <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0c141e]">
+              <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0b1017]">
                 <strong className="text-xl font-semibold tabular-nums">{formatCurrency(todayEarnings)}</strong>
                 <span className="text-[10px] text-muted-foreground">Today so far</span>
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground">{formatCurrency(summary.monthlyYield / 30.4375)} estimated daily</p>
           </div>
-          <div className="mt-4 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-3">
+          <div className="mt-4 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="text-[12px] font-semibold">Where today's earnings came from</h3>
               <span className="text-[10px] text-muted-foreground">Tracked increases</span>
@@ -8388,7 +8388,7 @@ const summary =
         </div>
       )}
 
-      <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#101318] p-2.5">
+      <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
           <span className="text-[11px] text-muted-foreground">Sorted by balance · {activeProgramCards.length} projects</span>
@@ -8752,7 +8752,7 @@ if (
 
 
       <div className="grid gap-3 lg:grid-cols-[minmax(0,1.85fr)_minmax(290px,1fr)]">
-        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] px-4 py-3">
+        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017] px-4 py-3">
           <h2 className="mb-3 text-[13px] font-semibold">Projections</h2>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
@@ -8761,7 +8761,7 @@ if (
               {label:"Monthly",amount:summary.monthlyYield,symbol:"M"},
               {label:"Yearly",amount:summary.annualYield,symbol:"Y"},
             ].map(item => (
-              <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#101923] px-3 py-2.5">
+              <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-2.5">
                 <div className="flex items-center gap-2">
                   <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#23364b] text-[11px] font-bold text-[#a5c3d7]">{item.symbol}</span>
                   <div className="min-w-0">
@@ -8773,7 +8773,7 @@ if (
             ))}
           </div>
         </section>
-        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0c141e] px-3 py-3">
+        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017] px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-[13px] font-semibold">Connection Status</h2>
             <span className="text-[10px] text-muted-foreground">Latest sync</span>
@@ -8801,7 +8801,7 @@ if (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
           onMouseDown={event => { if (event.target === event.currentTarget) setSelectedEarningsPoint(null); }}>
           <div role="dialog" aria-modal="true" aria-label={`Earnings by project for ${selectedBreakdown.label}`}
-            className="w-full max-w-[480px] rounded-2xl border border-[#33465a] bg-[#0c141e] p-5 shadow-2xl">
+            className="w-full max-w-[480px] rounded-2xl border border-[#33465a] bg-[#0b1017] p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold">Earnings by project</h3>
@@ -9283,12 +9283,12 @@ function ProjectCard({
         rounded-2xl
         border
         border-border/60
-        bg-card/45
+        bg-[#0e1218]
         shadow-sm
         transition-all
         duration-200
         hover:border-border
-        hover:bg-card/65
+        hover:bg-[#151e28]
       "
     >
       <button
@@ -9377,12 +9377,12 @@ function UnetworkProjectCard({
         rounded-2xl
         border
         border-border/60
-        bg-card/45
+        bg-[#0e1218]
         shadow-sm
         transition-all
         duration-200
         hover:border-border
-        hover:bg-card/65
+        hover:bg-[#151e28]
       "
     >
       <button
@@ -9563,12 +9563,12 @@ function SaladProjectCard({
         rounded-2xl
         border
         border-border/60
-        bg-card/45
+        bg-[#0e1218]
         shadow-sm
         transition-all
         duration-200
         hover:border-border
-        hover:bg-card/65
+        hover:bg-[#151e28]
       "
     >
       <button
@@ -9738,12 +9738,12 @@ return (
       rounded-2xl
       border
       border-border/60
-      bg-card/45
+      bg-[#0e1218]
       shadow-sm
       transition-all
       duration-200
       hover:border-border
-      hover:bg-card/65
+      hover:bg-[#151e28]
     "
   >
     <button
@@ -10347,7 +10347,7 @@ function ProjectIncomeSection({
   }
 
   return (
-    <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#101318] p-3">
+    <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -10911,7 +10911,7 @@ function ProjectIncomeModal({
 
 function Metric({ label, value, icon: Icon }) {
   return (
-    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#151a20] px-3 py-2">
+    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#0e141c] px-3 py-2">
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.6} />
         <span className="leading-snug">{label}</span>
