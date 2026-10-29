@@ -7469,11 +7469,12 @@ const importSaladPayload =
   const SALAD_FIXED_HOURLY_USD = 0.0756;
   const SALAD_FIXED_END_HOUR = 9;
   const SALAD_FIXED_TOTAL = SALAD_FIXED_HOURLY_USD * SALAD_FIXED_END_HOUR;
-  // User-supplied Oct 29 Lulo earnings: $0.31 from midnight to 10:14 AM
-  // Pacific Time, distributed evenly over only that observed window.
+  // Verified Lulo dashboard screenshot for Oct 29: $0.21 USDC +
+  // $0.15 USDS = $0.36 at the time of observation. This is a dated
+  // historical floor, not a live per-asset API feed or a future-day rate.
   const LULO_FIXED_DAY = "2026-10-29";
-  const LULO_FIXED_TOTAL = 0.31;
-  const LULO_FIXED_END_HOUR = 10 + 14 / 60;
+  const LULO_FIXED_TOTAL = 0.36;
+  const LULO_FIXED_END_HOUR = 14;
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     if (key === SALAD_FIXED_DAY) {
