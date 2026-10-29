@@ -510,31 +510,29 @@ export async function getLuloYieldSnapshot(
     timestamp,
     amount
   ) {
-    const numericTimestamp =
-      Number(timestamp) || 0;
-
-    if (!(numericTimestamp > 0)) {
-      return;
-    }
-
-    const date = new Date(
-      numericTimestamp
-    )
-      .toISOString()
-      .slice(0, 10);
+    // Performance versions may supply milliseconds, Unix seconds,
+    // or an ISO date. Never interpret seconds as 1970 milliseconds.
+    const numericTimestamp = Number(timestamp);
+    const parsedTimestamp = Number.isFinite(numericTimestamp) && numericTimestamp > 0
+      ? new Date(numericTimestamp < 1e11 ? numericTimestamp * 1000 : numericTimestamp)
+      : new Date(timestamp);
+    if (!Number.isFinite(parsedTimestamp.getTime())) return;
+    const date = parsedTimestamp.toISOString().slice(0, 10);
+    const safeTimestamp = parsedTimestamp.getTime();
+    const safeAmount = Number(amount);
+    if (!Number.isFinite(safeAmount) || safeAmount <= 0) return;
 
     const previous =
       earningsByDay.get(date) || {
         date,
         amount: 0,
-        timestamp: numericTimestamp,
+        timestamp: safeTimestamp,
       };
 
     earningsByDay.set(date, {
       ...previous,
       amount:
-        previous.amount +
-        (Number(amount) || 0),
+        previous.amount + safeAmount,
     });
   }
 
