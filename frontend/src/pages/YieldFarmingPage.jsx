@@ -8231,7 +8231,7 @@ const summary =
                     aria-pressed={earningsChartRange === period}
                     className={`rounded-md px-3 py-1.5 text-[11px] font-medium transition-colors ${earningsChartRange === period ? "bg-[#293747] text-white" : "text-muted-foreground hover:text-white"}`}
                   >
-                    {period === "weekly" ? "Weekly" : "Monthly"}
+                    {period === "daily" ? "Daily" : period === "weekly" ? "Weekly" : "Monthly"}
                   </button>
                 ))}
               </div>
