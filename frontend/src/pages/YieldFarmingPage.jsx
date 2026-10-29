@@ -8290,7 +8290,7 @@ const summary =
           <div className="mt-3 h-[300px] w-full lg:h-auto lg:min-h-[280px] lg:flex-1">
             <ResponsiveContainer width="100%" height="100%">
               {earningsChartRange === "daily" ? (
-                <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}} onClick={point => { if (point?.activePayload?.length) setSelectedEarningsPoint({range:"daily",key:todayKey}); }}>
+                <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}}>
                   <defs>
                     <linearGradient id="yieldDailyFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
@@ -8309,7 +8309,7 @@ const summary =
                   <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
                 </AreaChart>
               ) : earningsChartRange === "weekly" ? (
-                <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}}>
+                <AreaChart data={weekDays} margin={{top:12,right:6,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? weekDays[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly",key:day}); }}>
                   <defs>
                     <linearGradient id="yieldWeeklyLiveFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
@@ -8338,7 +8338,7 @@ const summary =
                     connectNulls={false} isAnimationActive={false}/>
                 </AreaChart>
               ) : (
-                <AreaChart data={monthlyChartData} margin={{top:12,right:10,left:-8,bottom:3}}>
+                <AreaChart data={monthlyChartData} margin={{top:12,right:10,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const month = point?.activePayload?.[0]?.payload?.monthKey || (Number.isInteger(index) ? monthlyChartData[index]?.monthKey : null); if (month) setSelectedEarningsPoint({range:"monthly",key:month}); }}>
                   <defs>
                     <linearGradient id="yieldMonthlyFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
@@ -8369,6 +8369,22 @@ const summary =
               )}
             </ResponsiveContainer>
           </div>
+          {earningsChartRange !== "daily" && (
+            <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Select an earnings chart point">
+              {(earningsChartRange === "weekly" ? weekDays.filter(day => day.key <= todayKey && day.value !== null).map(day => ({
+                key: day.key, label: day.day + " " + day.date
+              })) : monthlyChartData.map(month => ({
+                key: month.monthKey, label: month.label
+              }))).map(point => (
+                <button type="button" key={point.key}
+                  onClick={() => setSelectedEarningsPoint({range:earningsChartRange,key:point.key})}
+                  aria-pressed={selectedEarningsPoint?.range === earningsChartRange && selectedEarningsPoint?.key === point.key}
+                  className={`rounded-md border px-2 py-1 text-[11px] transition-colors ${selectedEarningsPoint?.range === earningsChartRange && selectedEarningsPoint?.key === point.key ? "border-emerald-500/60 bg-emerald-500/10 text-emerald-400" : "border-[#344454] text-muted-foreground hover:border-emerald-500/50 hover:text-white"}`}>
+                  {point.label}
+                </button>
+              ))}
+            </div>
+          )}
           {selectedBreakdown && (
             <div className="mt-3 rounded-xl border border-[#33465a] bg-[#101923] p-3" aria-live="polite">
               <div className="flex items-center justify-between gap-2">
