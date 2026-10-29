@@ -275,6 +275,10 @@ function loadSaladTracker() {
       Number(
         parsed.lastBalance
       ) || 0,
+
+    balanceHighWater:
+      Number(parsed.balanceHighWater) ||
+      Number(parsed.lastBalance) || 0,
     lastLifetimeBalance:
       Number(
         parsed.lastLifetimeBalance
@@ -6527,25 +6531,26 @@ const importSaladPayload =
                     return;
                   }
 
-                  nextDaily[
-                    date
-                  ] = {
+                  // Allocation history can be incomplete on later syncs.
+                  // Never overwrite a previously confirmed daily total with
+                  // a smaller partial response.
+                  const previousEntry = nextDaily[date];
+                  const previousUsd = typeof previousEntry === "number"
+                    ? Number(previousEntry) || 0
+                    : Number(previousEntry?.usd) || 0;
+                  if (usd < previousUsd) return;
+                  nextDaily[date] = {
                     usd,
-
-                    micros:
-                      Number(
-                        row?.micros
-                      ) || 0,
-
-                    count:
-                      Number(
-                        row?.count
-                      ) || 0,
-
-                    syncedAt:
-                      payload?.synced_at ||
-                      payload?.syncedAt ||
-                      new Date().toISOString(),
+                    micros: Math.max(
+                      Number(previousEntry?.micros) || 0,
+                      Number(row?.micros) || 0
+                    ),
+                    count: Math.max(
+                      Number(previousEntry?.count) || 0,
+                      Number(row?.count) || 0
+                    ),
+                    syncedAt: payload?.synced_at ||
+                      payload?.syncedAt || new Date().toISOString(),
                   };
                 }
               );
@@ -6566,14 +6571,18 @@ const importSaladPayload =
                   current?.initialized
                 );
 
-              const positiveDelta =
-                initialized
-                  ? Math.max(
-                      0,
-                      currentBalance -
-                        previousBalance
-                    )
-                  : currentBalance;
+              // Only recognize balance growth above the previous
+              // high-water mark. A withdrawal followed by balance
+              // recovery must not be counted as fresh earnings.
+              const balanceHighWater = initialized
+                ? Math.max(
+                    Number(current?.balanceHighWater) || 0,
+                    previousBalance
+                  )
+                : currentBalance;
+              const positiveDelta = initialized
+                ? Math.max(0, currentBalance - balanceHighWater)
+                : currentBalance;
 
               if (
                 positiveDelta >
@@ -6667,6 +6676,13 @@ const importSaladPayload =
 
               lastBalance:
                 currentBalance,
+
+              // Persist a high-water mark for balance-only fallbacks.
+              balanceHighWater: Math.max(
+                Number(current?.balanceHighWater) || 0,
+                Number(current?.lastBalance) || 0,
+                currentBalance
+              ),
 
               withdrawals:
                 (
