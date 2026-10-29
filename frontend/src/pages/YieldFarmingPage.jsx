@@ -8181,7 +8181,6 @@ const importSaladPayload =
   });
   const weekEarnings = weekDays.reduce((total,day) => total+(day.value || 0),0);
   const observedWeekMaximum = Math.max(1,...weekDays.map(day => day.value || 0));
-  const connectedSources = [saladConnected,unetworkConnected,kryptexConnected,rollerCoinConnected].filter(Boolean).length;
 
 const summary =
   useMemo(
@@ -8718,19 +8717,6 @@ const summary =
                 No new increases recorded yet. Each source starts from its first observed balance; earlier amounts are not assumed to be earned today.
               </p>
             )}
-            <p className="mt-3 text-[10px] leading-relaxed text-amber-300/80">
-              Based on changes to synced monthly totals, not verified transaction timestamps. Delayed updates or corrections may appear on the day they're received.
-            </p>
-          </div>
-          <div className="mt-4 grid grid-cols-2 gap-2">
-            <div className="rounded-xl border border-[#2b3848] p-2.5">
-              <span className="block text-[10px] text-muted-foreground">Tracked projects</span>
-              <strong className="mt-1 block text-lg tabular-nums">{sortedProgramCards.length}</strong>
-            </div>
-            <div className="rounded-xl border border-[#2b3848] p-2.5">
-              <span className="block text-[10px] text-muted-foreground">Connected sources</span>
-              <strong className="mt-1 block text-lg tabular-nums">{connectedSources}</strong>
-            </div>
           </div>
         </section>
       </div>
