@@ -314,6 +314,11 @@ function loadSaladTracker() {
         "object"
         ? parsed.daily
         : {},
+    // Preserve post-9 AM live earnings across page reloads.
+    saladPostMorningEarned: Math.max(
+      0,
+      Number(parsed.saladPostMorningEarned) || 0
+    ),
     earningSnapshots:
       Array.isArray(
         parsed.earningSnapshots
@@ -5442,6 +5447,16 @@ const importSaladPayload =
 
       setSaladTracker(
         (current) => {
+          // GET_LATEST and SYNC_NOW may resolve out of order. Do not
+          // replace a newer lifetime balance with a stale cached payload.
+          const incomingTimestamp = Date.parse(syncedAt);
+          const savedTimestamp = Date.parse(current?.lastSyncedAt || "");
+          if (
+            Number.isFinite(savedTimestamp) &&
+            (!Number.isFinite(incomingTimestamp) || incomingTimestamp < savedTimestamp)
+          ) {
+            return current;
+          }
           const daily = {
             ...(
               current?.daily ||
