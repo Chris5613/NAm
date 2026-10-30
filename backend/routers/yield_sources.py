@@ -1,5 +1,6 @@
 """Authenticated configuration and read-only server snapshots for yield sources."""
 from datetime import datetime, timezone
+import os
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -16,7 +17,9 @@ from ..yield_earnings_state import (
 )
 from ..yield_earnings_ledger import lulo_monthly_backfills
 from ..yield_source_sync import LULO_TRANSACTION_PREVIEW_KEY
-from ..yield_cutover_parity import parity_observation, update_parity_history
+from ..yield_cutover_parity import (
+    parity_observation, update_parity_history, persisted_project_parity, source_poll_health,
+)
 
 router = APIRouter(prefix="/api/yield-sources", tags=["yield sources"])
 
@@ -151,6 +154,7 @@ async def yield_migration_status(
     age = max(0, (now - synced_at).total_seconds()) if synced_at else None
     parity = _read(db, user.id, PARITY_SETTINGS_KEY)
     previews = _read(db, user.id, LULO_TRANSACTION_PREVIEW_KEY)
+    provider_health = source_poll_health(sources, now)
     real_projects = db.query(Project).filter(
         Project.user_id == user.id
     ).all()
@@ -162,11 +166,24 @@ async def yield_migration_status(
         preview = previews.get(project.id)
         last_browser_sync = (project.data or {}).get("lulo_last_synced_at")
         last_preview_sync = preview.get("lulo_last_synced_at") if isinstance(preview, dict) else None
+        persisted = {
+            **(project.data or {}),
+            "id": project.id,
+            "earned": project.earned,
+            "invested": project.invested,
+        }
+        parity_result = persisted_project_parity(
+            persisted, preview if isinstance(preview, dict) else None
+        )
+        lulo_wallet = (project.data or {}).get("lulo_wallet_address")
+        source_fresh = bool((provider_health["lulo"].get(lulo_wallet) or {}).get("fresh"))
         project_status[project.id] = {
             "parityMatches": latest_report.get("consecutiveMatches", 0),
             "sameInputDiagnosticsPassed": bool(latest_report.get("diagnosticThresholdMet")),
+            "persistedLedgerParity": parity_result,
             "browserLastSyncedAt": last_browser_sync,
             "backendPreviewLastSyncedAt": last_preview_sync,
+            "independentProviderPollFresh": source_fresh,
             "comparisonMode": True,
             "eligibleForAutomaticWrites": False,
         }
@@ -175,6 +192,8 @@ async def yield_migration_status(
         "lastSuccessfulPollAt": latest,
         "lastSuccessfulPollAgeSeconds": round(age) if age is not None else None,
         "providerErrors": sources.get("errors") or {},
+        "providerFreshness": provider_health,
+        "luloApiKeyConfigured": bool(os.getenv("LULO_API_KEY")),
         "luloProjects": project_status,
         "cutoverEnabled": False,
         "note": "Live history parity and safe write ownership still require verification.",
