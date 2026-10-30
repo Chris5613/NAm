@@ -7681,7 +7681,7 @@ const importSaladPayload =
     // income. Older days retain their stored values for compatibility.
     const walletDay = rollerCoinTracker?.walletDaily?.[key];
     const minedEntry = rollerCoinTracker?.daily?.[key];
-    if (key === todayKey || walletDay) {
+    if (key === todayKey || walletDay || recoveredEarningsByDay?.[key]?.RollerCoin) {
       // A new wallet tracker begins at zero *additional* TRX, not at zero
       // earnings for the whole day. Preserve the dated earnings previously
       // captured before wallet tracking began, then add only wallet changes
