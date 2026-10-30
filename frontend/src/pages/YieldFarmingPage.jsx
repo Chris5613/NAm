@@ -4,7 +4,7 @@ import { projectsApi } from "@/lib/api";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { Card, CardContent } from "@/components/ui/card";
-import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, AreaChart, CartesianGrid, LabelList, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -8231,6 +8231,7 @@ const summary =
                       <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
                     </linearGradient>
                   </defs>
+                  {currentHour < 24 && <ReferenceArea x1={currentHour} x2={24} fill="#02070d" fillOpacity={0.38} strokeOpacity={0} ifOverflow="hidden" />}
                   <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="x" type="number" domain={[0,24]} ticks={[0,4,8,12,16,20,24]} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} tickFormatter={hour => hour === 0 ? "12am" : hour === 12 ? "12pm" : hour === 24 ? "12am" : hour < 12 ? hour+"am" : (hour-12)+"pm"}/>
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,dailyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
