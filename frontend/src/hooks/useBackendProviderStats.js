@@ -1,31 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/apiClient";
 import { getTodayKey } from "@/lib/yieldFarmingAccounting";
+import { statsMatch } from "@/lib/yieldProviderParity";
 
 // The backend calculates from persisted tracker snapshots. The browser still
 // receives extension events; while a new event is flushing to PostgreSQL,
 // preserve the locally newer result rather than displaying stale server data.
-const ALLOWABLE_NUMERIC_DIFFERENCE = 0.000001;
-
-export function statsMatch(local, server) {
-  if (!server || !local) return false;
-  return Object.entries(local).every(([key, value]) => {
-    const computed = server[key];
-    if (typeof value === "number") {
-      return Number.isFinite(value) &&
-        typeof computed === "number" &&
-        Number.isFinite(computed) &&
-        Math.abs(value - computed) <= ALLOWABLE_NUMERIC_DIFFERENCE;
-    }
-    if (value === null || value === undefined ||
-        typeof value === "boolean" || typeof value === "string") {
-      return (value ?? null) === (computed ?? null);
-    }
-    // Large display-only arrays such as miner lists stay browser-owned.
-    return true;
-  });
-}
-
 export function useBackendProviderStats(trackers, localStats) {
   const [serverSnapshot, setServerSnapshot] = useState(null);
   const snapshotSignature = JSON.stringify(trackers);
