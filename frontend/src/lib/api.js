@@ -313,7 +313,8 @@ export const projectsApi = {
       try {
         const snapshot = await getLuloYieldSnapshot(
           project.lulo_wallet_address,
-          { newerThan: project.lulo_last_synced_at }
+          { newerThan: project.lulo_last_synced_at,
+            referenceBalanceUsd: project.lulo_total_balance_usd }
         );
         return applyLuloYieldSnapshot(project, snapshot, now);
       } catch (error) {
