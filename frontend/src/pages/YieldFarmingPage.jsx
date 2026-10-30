@@ -8847,7 +8847,7 @@ if (
           </div>
           <div className="space-y-1.5">
             {[
-              {name:"RollerCoin", connected:rollerCoinConnected, synced:rollerCoinTracker?.lastSyncedAt},
+              {name:"RollerCoin", connected:rollerCoinConnected, synced:rollerCoinTracker?.balanceSyncedAt || rollerCoinTracker?.lastSyncedAt},
               {name:"Loopscale", connected:Boolean(loopscaleSnapshot), synced:loopscaleSnapshot?.lastSyncedAt || loopscaleSnapshot?.syncedAt},
               {name:"Salad", connected:saladConnected, synced:saladTracker?.lastSyncedAt},
               {name:"Unetwork", connected:unetworkConnected, synced:unetworkTracker?.lastSyncedAt},
