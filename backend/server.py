@@ -14,7 +14,7 @@ load_dotenv(Path(__file__).with_name(".env"))
 
 from .db import init_db  # noqa: E402  (imported after load_dotenv so DATABASE_URL is set)
 from .scheduler import scheduler_status, start_scheduler, stop_scheduler  # noqa: E402
-from .routers import auth_routes, market, migration, resources, simplefin_routes, spending, project_tracking  # noqa: E402
+from .routers import auth_routes, market, migration, resources, simplefin_routes, spending, project_tracking, yield_sources  # noqa: E402
 
 app = FastAPI(title="Net Worth Tracker - Backend", version="1.0.0")
 
@@ -36,6 +36,7 @@ app.include_router(market.router)
 app.include_router(migration.router)
 app.include_router(simplefin_routes.router)
 app.include_router(project_tracking.router)
+app.include_router(yield_sources.router)
 
 
 @app.on_event("startup")
