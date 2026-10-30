@@ -1,6 +1,7 @@
 import {
   proxyFetch,
 } from "./cors-proxy";
+import { getFreshBackendYieldSnapshot } from "./backendYieldSourceSnapshots";
 
 const USDS_MINT =
   "USDSwr9ApdHk5bvJKMjzff41FfuX8bSxdKcR81vTwcA";
@@ -254,13 +255,22 @@ function fulfilledValue(result) {
 }
 
 export async function getLuloYieldSnapshot(
-  walletAddress
+  walletAddress,
+  { newerThan = null } = {}
 ) {
   if (!walletAddress) {
     throw new Error(
       "Lulo wallet address is missing."
     );
   }
+
+  // Reuse a new server-owned observation instead of fetching all five
+  // upstream endpoints again. Keep the existing API path as a fallback,
+  // and never accept a stale observation over a newer project reading.
+  const persisted = await getFreshBackendYieldSnapshot(
+    "lulo", walletAddress, newerThan
+  );
+  if (persisted) return persisted;
 
   const thirtyDaysAgo =
     Date.now() - 30 * 24 * 60 * 60 * 1000;
