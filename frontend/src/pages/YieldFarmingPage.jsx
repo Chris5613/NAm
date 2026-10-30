@@ -4,6 +4,7 @@ import { projectsApi } from "@/lib/api";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
+import { useBackendProviderStats } from "@/hooks/useBackendProviderStats";
 import { Card, CardContent } from "@/components/ui/card";
 import { Area, AreaChart, CartesianGrid, LabelList, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -3333,49 +3334,38 @@ const importSaladPayload =
     };
   }, []);
 
-  const saladStats =
-    useMemo(
-      () =>
-        getSaladTrackerStats(
-          saladTracker
-        ),
-      [
-        saladTracker,
-      ]
-    );
-
-  const rollerCoinStats =
-    useMemo(
-      () =>
-        getRollerCoinTrackerStats(
-          rollerCoinTracker
-        ),
-      [
-        rollerCoinTracker,
-      ]
-    );
-
-  const unetworkStats =
-    useMemo(
-      () =>
-        getUnetworkTrackerStats(
-          unetworkTracker
-        ),
-      [
-        unetworkTracker,
-      ]
-    );
-
-  const kryptexStats =
-    useMemo(
-      () =>
-        getKryptexStats(
-          kryptexTracker
-        ),
-      [
-        kryptexTracker,
-      ]
-    );
+  const localSaladStats = useMemo(
+    () => getSaladTrackerStats(saladTracker), [saladTracker]
+  );
+  const localRollerCoinStats = useMemo(
+    () => getRollerCoinTrackerStats(rollerCoinTracker), [rollerCoinTracker]
+  );
+  const localUnetworkStats = useMemo(
+    () => getUnetworkTrackerStats(unetworkTracker), [unetworkTracker]
+  );
+  const localKryptexStats = useMemo(
+    () => getKryptexStats(kryptexTracker), [kryptexTracker]
+  );
+  // Backend computations now own provider projections once they agree
+  // with the current saved observation. Newly synced extension values
+  // retain the existing frontend calculation as a temporary fallback.
+  const providerTrackers = useMemo(() => ({
+    salad: saladTracker,
+    rollercoin: rollerCoinTracker,
+    unetwork: unetworkTracker,
+    kryptex: kryptexTracker,
+  }), [saladTracker, rollerCoinTracker, unetworkTracker, kryptexTracker]);
+  const localProviderStats = useMemo(() => ({
+    salad: localSaladStats,
+    rollercoin: localRollerCoinStats,
+    unetwork: localUnetworkStats,
+    kryptex: localKryptexStats,
+  }), [localSaladStats, localRollerCoinStats, localUnetworkStats, localKryptexStats]);
+  const providerStats = useBackendProviderStats(providerTrackers, localProviderStats);
+  const saladStats = providerStats.salad;
+  const rollerCoinStats = providerStats.rollercoin;
+  const unetworkStats = providerStats.unetwork;
+  const kryptexStats = providerStats.kryptex;
 
   const projectCards =
     useMemo(
