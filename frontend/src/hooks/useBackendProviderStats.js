@@ -7,7 +7,7 @@ import { getTodayKey } from "@/lib/yieldFarmingAccounting";
 // preserve the locally newer result rather than displaying stale server data.
 const ALLOWABLE_NUMERIC_DIFFERENCE = 0.000001;
 
-function statsMatch(local, server) {
+export function statsMatch(local, server) {
   if (!server || !local) return false;
   return Object.entries(local).every(([key, value]) => {
     const computed = server[key];
