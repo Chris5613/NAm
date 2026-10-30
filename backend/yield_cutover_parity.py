@@ -117,7 +117,9 @@ def parity_observation(
         return {"status": "invalid", "reason": "invalid-project"}
     if not snapshot.get("walletAddress") or snapshot.get("walletAddress") != before.get("lulo_wallet_address"):
         return {"status": "invalid", "reason": "wallet-mismatch"}
-    if at is None or observed is None or observed > at + timedelta(seconds=15) or at > now + timedelta(minutes=5):
+    # The browser stamps its batch at the start; parallel upstream fetches
+    # can finish a little later. Both engines still use the SAME appliedAt.
+    if at is None or observed is None or observed > at + timedelta(minutes=3) or at > now + timedelta(minutes=5):
         return {"status": "invalid", "reason": "invalid-time"}
     if abs((now - at).total_seconds()) > MAX_OBSERVATION_AGE_SECONDS:
         return {"status": "invalid", "reason": "expired-application"}
