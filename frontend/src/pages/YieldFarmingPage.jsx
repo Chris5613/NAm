@@ -4328,12 +4328,8 @@ const lastRollerCoinRangeRequestRef = useRef(0);
 const requestRollerCoinLatest =
   useCallback(
     () => {
-      const from =
-        `${getCurrentMonthKey()}-01`;
-
-      const to =
-        getTodayKey();
-
+      // Ask the extension for the latest unified wallet snapshot.
+      // Dated income API rows are no longer required for today's RollerCoin total.
       /*
        * Ask the extension for its latest cached state/status.
        */
@@ -4359,31 +4355,13 @@ const requestRollerCoinLatest =
         window.location.origin
       );
 
-      /*
-       * IMPORTANT:
-       *
-       * Also resync the FULL current month.
-       *
-       * REQUEST_LATEST can contain only the extension's
-       * most recent cached payload. If older days are
-       * missing from rollerCoinTracker.daily, simply
-       * requesting the latest payload will never restore
-       * them.
-       *
-       * This forces RollerCoin to return every earning
-       * day from the 1st of the current month through
-       * today.
-       */
+      // Request one fresh TRX wallet + price observation per ten minutes.
+      // The extension also runs a 10-minute alarm while Chrome is active.
       const now = Date.now();
-      if (now - lastRollerCoinRangeRequestRef.current >= 60000) {
+      if (now - lastRollerCoinRangeRequestRef.current >= 600000) {
         lastRollerCoinRangeRequestRef.current = now;
         window.postMessage(
-          {
-            source: "rollercoin-app",
-            type: "SYNC_RANGE",
-            from,
-            to,
-          },
+          { source: "rollercoin-app", type: "SYNC_WALLET" },
           window.location.origin
         );
       }
