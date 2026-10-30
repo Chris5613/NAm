@@ -176,3 +176,60 @@ def update_parity_history(existing: Any, observation: dict) -> dict:
             },
         },
     }
+
+
+def persisted_project_parity(project: dict, preview: dict | None) -> dict:
+    """Compare the REAL PostgreSQL project with a server shadow result.
+
+    Only a same-snapshot comparison is definitive. A server poll ahead of
+    the last browser write is pending, not evidence of incorrect accounting.
+    """
+    if not isinstance(preview, dict):
+        return {"status": "missing-preview", "differences": [], "ready": False}
+    if str(project.get("id")) != str(preview.get("id")) or (
+        project.get("lulo_wallet_address") != preview.get("lulo_wallet_address")
+    ):
+        return {"status": "identity-mismatch", "differences": ["project-or-wallet"], "ready": False}
+    real_at = parse_time(project.get("lulo_last_synced_at"))
+    preview_at = parse_time(preview.get("lulo_last_synced_at"))
+    if real_at is None or preview_at is None:
+        return {"status": "missing-timestamp", "differences": [], "ready": False}
+    if preview_at > real_at:
+        return {"status": "server-ahead", "differences": [], "ready": False}
+    if real_at > preview_at:
+        return {"status": "browser-ahead", "differences": [], "ready": False}
+    differences = compare_lulo_outputs(preview, project)
+    return {
+        "status": "matched" if not differences else "mismatch",
+        "differences": differences[:40],
+        "differenceCount": len(differences),
+        "ready": not differences,
+    }
+
+
+def source_poll_health(source: dict, now: datetime | None = None) -> dict:
+    """Distinguish fresh independent polling from cached browser data."""
+    now = now or datetime.now(timezone.utc)
+    accounts = source.get("lulo") if isinstance(source.get("lulo"), dict) else {}
+    lulo = {}
+    for wallet, snapshot in accounts.items():
+        if not isinstance(snapshot, dict):
+            continue
+        stamp = parse_time(snapshot.get("syncedAt"))
+        age = max(0.0, (now - stamp).total_seconds()) if stamp else None
+        lulo[wallet] = {
+            "lastSyncedAt": snapshot.get("syncedAt"),
+            "ageSeconds": round(age) if age is not None else None,
+            "fresh": age is not None and (now - stamp).total_seconds() >= 0 and age <= 10 * 60,
+        }
+    loop = source.get("loopscale")
+    loop_at = parse_time(loop.get("syncedAt")) if isinstance(loop, dict) else None
+    loop_age = max(0.0, (now - loop_at).total_seconds()) if loop_at else None
+    return {
+        "lulo": lulo,
+        "loopscale": {
+            "lastSyncedAt": loop.get("syncedAt") if isinstance(loop, dict) else None,
+            "ageSeconds": round(loop_age) if loop_age is not None else None,
+            "fresh": loop_age is not None and (now - loop_at).total_seconds() >= 0 and loop_age <= 10 * 60,
+        },
+    }
