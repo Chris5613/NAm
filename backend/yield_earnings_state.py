@@ -46,7 +46,23 @@ def seed_loopscale_history(canonical: Any, legacy: Any) -> dict:
         incoming_at = parse_time(item.get("lastSyncedAt"))
         saved_at = parse_time(previous.get("lastSyncedAt"))
         if incoming_at and (saved_at is None or incoming_at > saved_at):
-            merged[key] = deepcopy(item)
+            # A browser can have the newest *position* while its local cache
+            # is missing older months captured only by the backend. Keep
+            # those periods and observation timestamps during promotion.
+            combined = {**deepcopy(previous), **deepcopy(item)}
+            for field in ("monthBaselines", "monthlyEarnings", "observedDaily"):
+                combined[field] = {
+                    **(previous.get(field) or {}),
+                    **(item.get(field) or {}),
+                }
+            observations = {}
+            for entry in (previous.get("observations") or []) + (item.get("observations") or []):
+                if isinstance(entry, dict) and entry.get("syncedAt"):
+                    observations[entry["syncedAt"]] = deepcopy(entry)
+            combined["observations"] = [
+                observations[key] for key in sorted(observations)
+            ][-1440:]
+            merged[key] = combined
     saved["positions"] = merged
     return saved
 
