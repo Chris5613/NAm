@@ -79,7 +79,7 @@ class YieldSourceNormalizationTests(TestCase):
         self.assertEqual(result["regularBalanceUsd"], 50)
         self.assertEqual(result["protectedBalanceUsd"], 40)
         self.assertEqual(result["usdsBalanceUsd"], 20)
-        self.assertEqual(result["totalInterestEarnedUsd"], 5.3)
+        self.assertAlmostEqual(result["totalInterestEarnedUsd"], 5.3)
         self.assertAlmostEqual(result["weightedApy"], (50*5+40*3+20*7)/120)
         self.assertEqual(result["source"], "lulo_api")
 
