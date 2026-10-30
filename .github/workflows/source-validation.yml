@@ -37,5 +37,5 @@ jobs:
         run: npm ci --no-audit --no-fund
         working-directory: frontend
       - name: Compile production UI
-        run: CI=false npm run build
+        run: CI=true npm run build
         working-directory: frontend
