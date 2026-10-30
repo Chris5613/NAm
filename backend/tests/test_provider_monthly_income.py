@@ -47,7 +47,7 @@ class MonthlyProviderTests(unittest.TestCase):
             }
         }, "2026-10"))
         self.assertEqual(rows["2026-09"]["RollerCoin"], .20)
-        self.assertEqual(rows["2026-10"]["RollerCoin"], .3 + .27 + .33)
+        self.assertAlmostEqual(rows["2026-10"]["RollerCoin"], .3 + .27 + .33)
 
     def test_rollcoin_wallet_only_month_uses_stored_usd(self):
         rows = monthly_sources(monthly_provider_income({
