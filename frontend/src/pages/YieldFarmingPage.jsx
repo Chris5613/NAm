@@ -7525,6 +7525,11 @@ const importSaladPayload =
   const ROLLERCOIN_OCT30_ANCHOR_DAY = "2026-10-30";
   const ROLLERCOIN_OCT30_ANCHOR_TRX = 35.269272;
   const ROLLERCOIN_OCT30_ANCHOR_AT = Date.parse("2026-10-30T16:04:00Z");
+  // Reconstruct the untracked 00:00-09:04 window from the user's daily
+  // production rate, assuming uniform rewards (one block per minute).
+  // This applies to Oct 30 only, not recurring or future dates.
+  const ROLLERCOIN_OCT30_ESTIMATED_MORNING_TRX =
+    Number((1.403988 * (9 * 60 + 4) / (24 * 60)).toFixed(8));
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     // Wallet delta, not a second earnings feed, powers today's RollerCoin
@@ -7539,9 +7544,16 @@ const importSaladPayload =
       // an empty first wallet snapshot.
       const priorLedgerUsd = Number(sources.RollerCoin) || 0;
       const datedUsd = Number(minedEntry?.usd) || 0;
-      const previouslyRecordedUsd = Math.max(0, priorLedgerUsd, datedUsd);
       const changeTrx = Number(walletDay?.trx) || 0;
       const price = Number(rollerCoinTracker?.lastTrxPrice) || 0;
+      const preAnchorEstimateUsd = key === ROLLERCOIN_OCT30_ANCHOR_DAY
+        ? ROLLERCOIN_OCT30_ESTIMATED_MORNING_TRX * price : 0;
+      // Never add estimated morning rewards twice to any saved dated entry.
+      // Preserve the larger of previously recorded income or the estimate,
+      // then separately add post-9:04 wallet changes.
+      const previouslyRecordedUsd = Math.max(
+        0, priorLedgerUsd, datedUsd, preAnchorEstimateUsd
+      );
       let walletChangeUsd = walletDay?.usd != null &&
         Number.isFinite(Number(walletDay.usd))
         ? Number(walletDay.usd) : changeTrx * price;
