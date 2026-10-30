@@ -137,6 +137,10 @@ async def get_setting(key: str, user: User = Depends(current_user), db: Session 
 
 @router.put("/settings/{key}")
 async def put_setting(key: str, payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    # Financial pre-cutover backups are server-managed and write-once.
+    # The legacy settings facade must not accidentally replace them.
+    if key.startswith("yield_lulo_cutover_backup_v1_") or key == "yield_loopscale_cutover_backup_v1":
+        raise HTTPException(status_code=403, detail="Accounting cutover backups are read-only.")
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
     if row:
         row.value = payload.get("value")
