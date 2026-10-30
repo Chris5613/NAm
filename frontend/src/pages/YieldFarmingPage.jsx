@@ -1260,41 +1260,44 @@ function getRollerCoinTrackerStats(
         liveTrxPrice
       : 0;
 
-  // Wallet TRX changes are the single source for today's income.
+  // Accounting: earned TRX quantity and its USD value at capture
+  // remain distinct from current wallet market valuation. A token price
+  // update must not rewrite earlier mining income.
   const walletToday = tracker?.walletDaily?.[todayKey];
   if (walletToday) todayTrx = Number(walletToday.trx) || 0;
-  /*
-   * Today's wallet increase is valued at the same synced price as the balance.
-   */
-  if (
-    liveTrxPrice > 0
-  ) {
-    todayUsd =
-      walletToday && walletToday.usd != null && Number.isFinite(Number(walletToday.usd))
-        ? Number(walletToday.usd) : todayTrx * liveTrxPrice;
-
-    monthUsd =
-      monthTrx *
-      liveTrxPrice;
-
-    /*
-     * This is the live USD value of all
-     * historically tracked earned TRX.
-     */
-    lifetimeUsd =
-      lifetimeTrx *
-      liveTrxPrice;
-  } else {
-    const referenceTrxPrice =
-      trackedLifetimeTrx > 0
-        ? lifetimeUsd /
-          trackedLifetimeTrx
-        : 0;
-
-    lifetimeUsd +=
-      ROLLERCOIN_HISTORICAL_TRX *
-      referenceTrxPrice;
+  const storedWalletEntries = Object.entries(tracker?.walletDaily || {});
+  storedWalletEntries.forEach(([date, entry]) => {
+    const mined = tracker?.daily?.[date];
+    const walletUsd = Number(entry?.usd);
+    const walletTrx = Number(entry?.trx);
+    const deltaUsd = Number.isFinite(walletUsd) ? walletUsd : 0;
+    const deltaTrx = Number.isFinite(walletTrx) ? walletTrx : 0;
+    if (mined) {
+      lifetimeUsd -= Number(mined?.usd) || 0;
+      lifetimeTrx -= Number(mined?.trx ?? mined?.sol) || 0;
+      if (date.slice(0, 7) === currentMonth) {
+        monthUsd -= Number(mined?.usd) || 0;
+        monthTrx -= Number(mined?.trx ?? mined?.sol) || 0;
+      }
+    }
+    lifetimeUsd += deltaUsd;
+    lifetimeTrx += deltaTrx;
+    if (date.slice(0, 7) === currentMonth) {
+      monthUsd += deltaUsd;
+      monthTrx += deltaTrx;
+    }
+  });
+  if (walletToday) {
+    const storedUsd = Number(walletToday?.usd);
+    todayUsd = Number.isFinite(storedUsd)
+      ? storedUsd : (Number(walletToday?.trx) || 0) * liveTrxPrice;
   }
+  // Historical pre-tracker TRX has no transaction-time USD cost basis.
+  // Keep that legacy valuation separate from today's/month's earned USD.
+  const historicalReferencePrice = trackedLifetimeTrx > 0
+    ? Math.max(0, (lifetimeUsd / trackedLifetimeTrx))
+    : liveTrxPrice;
+  lifetimeUsd += ROLLERCOIN_HISTORICAL_TRX * historicalReferencePrice;
 
   return {
     todayUsd,
