@@ -428,13 +428,13 @@ function getNetApy(
 
 export async function getLoopscaleOnycSnapshot(
   walletAddress = LOOPSCALE_WALLET,
-  { newerThan = null } = {}
+  { newerThan = null, referenceBalanceUsd = null } = {}
 ) {
   // Backend polls this public wallet while the browser is closed.
   // Use it only if newer than the local snapshot; otherwise fetch the
   // upstream Loopscale API exactly as before.
   const saved = await getFreshBackendYieldSnapshot(
-    "loopscale", walletAddress, newerThan
+    "loopscale", walletAddress, newerThan, referenceBalanceUsd
   );
   if (saved) return saved;
 
