@@ -9,6 +9,7 @@ on:
       - "frontend/src/lib/yieldFarmingAccounting.js"
       - "frontend/src/lib/yieldProviderParity*"
       - "frontend/src/lib/backendYieldSourceSnapshots*"
+      - "frontend/src/lib/mergeBackendLoopscaleHistory*"
       - "frontend/src/lib/luloYieldSync.js"
       - "frontend/src/lib/loopscaleYieldSync.js"
       - "frontend/src/lib/api.js"
