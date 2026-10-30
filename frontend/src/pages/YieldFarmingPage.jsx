@@ -1046,6 +1046,11 @@ function loadRollerCoinTracker() {
     balanceSource:
       parsed.balanceSource ||
       null,
+    walletDaily: parsed.walletDaily && typeof parsed.walletDaily === "object"
+      ? parsed.walletDaily : {},
+    walletLastObservedTrx: Number.isFinite(Number(parsed.walletLastObservedTrx))
+      ? Number(parsed.walletLastObservedTrx) : null,
+    walletLastObservedAt: parsed.walletLastObservedAt || null,
   };
 }
 
@@ -1249,9 +1254,11 @@ function getRollerCoinTrackerStats(
         liveTrxPrice
       : 0;
 
+  // Wallet TRX changes are the single source for today's income.
+  const walletToday = tracker?.walletDaily?.[todayKey];
+  if (walletToday) todayTrx = Number(walletToday.trx) || 0;
   /*
-   * Current month and today's earnings can
-   * still use the live TRX price.
+   * Today's wallet increase is valued at the same synced price as the balance.
    */
   if (
     liveTrxPrice > 0
@@ -3982,68 +3989,7 @@ export default function YieldFarmingPage() {
     ]
   );
 
-  useEffect(
-    () => {
-      let cancelled =
-        false;
-
-      const refreshPrice =
-        async () => {
-          const price =
-            await fetchLiveTrxPrice();
-
-          if (
-            cancelled ||
-            !(price > 0)
-          ) {
-            return;
-          }
-
-          setRollerCoinTracker(
-            (current) => {
-              const previousPrice =
-                Number(
-                  current?.lastTrxPrice
-                ) || 0;
-
-              if (
-                Math.abs(
-                  previousPrice -
-                    price
-                ) <
-                1e-12
-              ) {
-                return current;
-              }
-
-              return {
-                ...current,
-                lastTrxPrice:
-                  price,
-              };
-            }
-          );
-        };
-
-      refreshPrice();
-
-      const timer =
-        window.setInterval(
-          refreshPrice,
-          300000
-        );
-
-      return () => {
-        cancelled =
-          true;
-
-        window.clearInterval(
-          timer
-        );
-      };
-    },
-    []
-  );
+  // RollerCoin TRX price is supplied with each extension wallet sync.
 
   useEffect(
     () => {
@@ -4069,9 +4015,8 @@ export default function YieldFarmingPage() {
             : [];
 
         const incomingBalanceTrx =
-          Number(
-            payload?.current_balance_trx
-          );
+          payload?.current_balance_trx === null || payload?.current_balance_trx === undefined
+            ? NaN : Number(payload.current_balance_trx);
 
         const hasLiveBalance =
           Number.isFinite(
@@ -4095,21 +4040,9 @@ export default function YieldFarmingPage() {
           return;
         }
 
-        let trxPrice = 0;
-
-        try {
-          trxPrice =
-            Number(
-              await fetchLiveTrxPrice()
-            ) || 0;
-        } catch (
-          error
-        ) {
-          console.error(
-            "Could not load TRX price for RollerCoin:",
-            error
-          );
-        }
+        // Use the price accompanying this wallet snapshot. No separate
+        // website market poll should produce conflicting wallet valuations.
+        const trxPrice = Number(payload?.trx_usd_price) || 0;
 
         const affectedMonths =
           new Set();
@@ -4251,8 +4184,36 @@ export default function YieldFarmingPage() {
                       : 0
                   );
 
+            // Record each new confirmed wallet balance once, in TRX units.
+            // A price-only change or re-delivery of the same reading adds no income.
+            const snapshotAt = payload?.balance_synced_at || null;
+            const snapshotTime = Date.parse(snapshotAt || "");
+            const priorTime = Date.parse(current?.walletLastObservedAt || "");
+            const isFresh = hasLiveBalance && Number.isFinite(snapshotTime) &&
+              (!Number.isFinite(priorTime) || snapshotTime > priorTime);
+            const day = isFresh ? new Intl.DateTimeFormat("en-CA", {
+              timeZone: "America/Los_Angeles",
+              year: "numeric", month: "2-digit", day: "2-digit",
+            }).format(new Date(snapshotTime)) : null;
+            const previousObserved = current?.walletLastObservedTrx;
+            const hasPrevious = previousObserved !== null && previousObserved !== undefined &&
+              Number.isFinite(Number(previousObserved));
+            const difference = isFresh && hasPrevious
+              ? incomingBalanceTrx - Number(previousObserved) : 0;
+            const walletDaily = { ...(current?.walletDaily || {}) };
+            if (isFresh && day) {
+              const priorDay = walletDaily[day] || {};
+              walletDaily[day] = {
+                trx: Number(((Number(priorDay.trx) || 0) + difference).toFixed(8)),
+                lastSyncedAt: snapshotAt,
+              };
+            }
+
             return {
               ...current,
+              walletDaily,
+              walletLastObservedTrx: isFresh ? incomingBalanceTrx : (current?.walletLastObservedTrx ?? null),
+              walletLastObservedAt: isFresh ? snapshotAt : (current?.walletLastObservedAt || null),
 
               daily:
                 nextDaily,
@@ -7446,20 +7407,21 @@ const importSaladPayload =
   }, [todayKey, savedLoopscaleReference, currentLoopscaleReference]);
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
-    // Mining earnings are dated amounts, not a repricing of historical TRX.
-    // Keep recorded historical ledger values, but never invent today's mining
-    // earnings from yesterday's snapshots or a changing market quote.
+    // Wallet delta, not a second earnings feed, powers today's RollerCoin
+    // income. Older days retain their stored values for compatibility.
+    const walletDay = rollerCoinTracker?.walletDaily?.[key];
     const minedEntry = rollerCoinTracker?.daily?.[key];
-    if (key === todayKey) delete sources.RollerCoin;
-    if (minedEntry) {
-      const minedTrx = Number(minedEntry.trx ?? minedEntry.sol);
+    if (key === todayKey || walletDay) {
+      delete sources.RollerCoin;
+      const changeTrx = Number(walletDay?.trx) || 0;
+      const price = Number(rollerCoinTracker?.lastTrxPrice) || 0;
+      if (walletDay && price > 0 && changeTrx !== 0) {
+        sources.RollerCoin = changeTrx * price;
+      }
+    } else if (minedEntry) {
       const recordedUsd = Number(minedEntry.usd);
-      const syncedPrice = Number(minedEntry.trxPrice ?? minedEntry.solPrice);
-      const datedMiningUsd = Number.isFinite(recordedUsd) && recordedUsd > 0
-        ? recordedUsd
-        : Number.isFinite(minedTrx) && minedTrx > 0 && syncedPrice > 0
-          ? minedTrx * syncedPrice : 0;
-      if (datedMiningUsd > 0) sources.RollerCoin = datedMiningUsd;
+      if (Number.isFinite(recordedUsd) && recordedUsd > 0)
+        sources.RollerCoin = recordedUsd;
     }
     if (key === SALAD_FIXED_DAY) {
       // Preserve the verified 00:00–09:00 earnings, then take the later
