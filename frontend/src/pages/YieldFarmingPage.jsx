@@ -4220,7 +4220,35 @@ const importSaladPayload =
     .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) !== 0)
     .map(([name,amount]) => ({ name, amount: Number(amount) }))
     .sort((a,b) => b.amount - a.amount);
-  const todayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
+  const rawTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
+  const [serverDailyIncome, setServerDailyIncome] = useState(null);
+  const dailySourceSignature = JSON.stringify(dailySourceTotals);
+  useEffect(() => {
+    let active = true;
+    const sources = JSON.parse(dailySourceSignature);
+    api.put("/api/project-tracking/daily-earnings", {
+      date: todayKey, sources,
+    }).then(result => {
+      if (active && result?.complete && result?.date === todayKey) {
+        setServerDailyIncome(result);
+      }
+    }).catch(() => {
+      // The original signed total stays visible during backend outages.
+    });
+    return () => { active = false; };
+  }, [dailySourceSignature, todayKey]);
+
+  // Prefer the server calculation only while it matches the latest live
+  // source readings. Never show an old server total during a new sync.
+  const serverSources = serverDailyIncome?.sources || {};
+  const serverSourcesMatch = serverDailyIncome?.date === todayKey &&
+    Object.keys(serverSources).length === Object.keys(dailySourceTotals).length &&
+    Object.entries(dailySourceTotals).every(([source, value]) =>
+      Number.isFinite(Number(serverSources[source])) &&
+      Math.abs(Number(serverSources[source]) - Number(value)) < 0.000001
+    );
+  const todayEarnings = serverSourcesMatch && Number.isFinite(Number(serverDailyIncome?.totalUsd))
+    ? Number(serverDailyIncome.totalUsd) : rawTodayEarnings;
   // Persist the ACTUAL signed total for the daily graph, including
   // negative values and recoveries; never derive graph shape from a max.
   const [dailyEarningsObservations, setDailyEarningsObservations] = useState(
