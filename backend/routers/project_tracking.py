@@ -77,7 +77,8 @@ def validate_item(item: dict, old: dict | None, now: datetime) -> dict | None:
         "inactive": bool(item.get("inactive", False)),
         "sourceLastSyncedAt": synced_at.isoformat() if synced_at else None,
         "observedAt": now.isoformat(),
-        "stale": synced_at is None or (now - synced_at).total_seconds() > 1200,
+        "requiresLiveSync": bool(item.get("requiresLiveSync", False)),
+        "stale": bool(item.get("requiresLiveSync", False)) and (synced_at is None or (now - synced_at).total_seconds() > 1200),
     }
     for attr in ("balanceTrx", "trxUsdPrice", "lifetimeEarnedUsd"):
         val = number(item.get(attr))
@@ -135,8 +136,10 @@ async def tracking_status(user: User = Depends(current_user), db: Session = Depe
     projects = latest.get("projects") if isinstance(latest.get("projects"), list) else []
     stale = [
         p.get("id") for p in projects if
-        not timestamp(p.get("sourceLastSyncedAt")) or
-        (now - timestamp(p.get("sourceLastSyncedAt"))).total_seconds() > 1200
+        p.get("requiresLiveSync") and (
+            not timestamp(p.get("sourceLastSyncedAt")) or
+            (now - timestamp(p.get("sourceLastSyncedAt"))).total_seconds() > 1200
+        )
     ]
     return {"feedAgeSeconds": round(age) if age is not None else None,
             "staleProjects": stale, "alerts": alerts}
