@@ -21,7 +21,8 @@ from sqlalchemy import select
 
 from .db import SessionLocal
 from .models import Setting, User
-from .models import Project
+from .models import Project, ProjectTransaction
+from .schemas import project_transaction_to_dict
 from .yield_earnings_state import (
     reconcile_backend_ledgers, LULO_SERVER_LEDGER_KEY, LOOPSCALE_SERVER_LEDGER_KEY,
     LULO_LEGACY_LEDGER_KEY, LOOPSCALE_LEGACY_LEDGER_KEY,
@@ -474,9 +475,18 @@ def poll_sources_for_user(user_id: int) -> int:
             if project.get("yield_tracking") == "lulo_lending":
                 backup_key = LULO_CUTOVER_BACKUP_PREFIX + str(row.id)
                 if not _read(db, user_id, backup_key):
+                    # Keep BOTH legacy embedded transactions and any
+                    # separate relational rows, if this account uses them.
+                    typed_rows = db.scalars(select(ProjectTransaction).where(
+                        ProjectTransaction.user_id == user_id,
+                        ProjectTransaction.project_id == row.id,
+                    )).all()
                     _write(db, user_id, backup_key, {
                         "capturedAt": utc_iso(now),
                         "project": project,
+                        "projectTransactions": [
+                            project_transaction_to_dict(tx) for tx in typed_rows
+                        ],
                         "cutoverWritesEnabled": False,
                     })
             projects.append(project)
