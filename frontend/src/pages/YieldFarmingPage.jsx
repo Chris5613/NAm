@@ -7417,15 +7417,22 @@ const importSaladPayload =
     const walletDay = rollerCoinTracker?.walletDaily?.[key];
     const minedEntry = rollerCoinTracker?.daily?.[key];
     if (key === todayKey || walletDay) {
-      delete sources.RollerCoin;
+      // A new wallet tracker begins at zero *additional* TRX, not at zero
+      // earnings for the whole day. Preserve the dated earnings previously
+      // captured before wallet tracking began, then add only wallet changes
+      // observed after that baseline. Do not replace a real prior amount with
+      // an empty first wallet snapshot.
+      const priorLedgerUsd = Number(sources.RollerCoin) || 0;
+      const datedUsd = Number(minedEntry?.usd) || 0;
+      const previouslyRecordedUsd = Math.max(0, priorLedgerUsd, datedUsd);
       const changeTrx = Number(walletDay?.trx) || 0;
       const price = Number(rollerCoinTracker?.lastTrxPrice) || 0;
-      const walletEarnedUsd = walletDay?.usd != null &&
+      const walletChangeUsd = walletDay?.usd != null &&
         Number.isFinite(Number(walletDay.usd))
         ? Number(walletDay.usd) : changeTrx * price;
-      if (walletDay && walletEarnedUsd !== 0) {
-        sources.RollerCoin = walletEarnedUsd;
-      }
+      const totalUsd = previouslyRecordedUsd + (walletDay ? walletChangeUsd : 0);
+      if (totalUsd !== 0) sources.RollerCoin = totalUsd;
+      else delete sources.RollerCoin;
     } else if (minedEntry) {
       const recordedUsd = Number(minedEntry.usd);
       if (Number.isFinite(recordedUsd) && recordedUsd > 0)
