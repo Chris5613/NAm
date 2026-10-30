@@ -360,7 +360,10 @@ def merge_server_project_balances(
                     synced = synced.replace(tzinfo=timezone.utc)
                 age_seconds = (now - synced).total_seconds()
                 previous = project.get("sourceLastSyncedAt")
-                previous_at = datetime.fromisoformat(str(previous).replace("Z", "+00:00")) if previous else None
+                try:
+                    previous_at = datetime.fromisoformat(str(previous).replace("Z", "+00:00")) if previous else None
+                except ValueError:
+                    previous_at = None
                 if previous_at and previous_at.tzinfo is None:
                     previous_at = previous_at.replace(tzinfo=timezone.utc)
                 fresh = 0 <= age_seconds <= 20 * 60 and (
@@ -372,6 +375,12 @@ def merge_server_project_balances(
                     project["balanceUsd"] = value
                     project["sourceLastSyncedAt"] = utc_iso(synced)
                     project["balanceSource"] = "backend-provider-poll"
+                    # The browser's per-asset quantities were not re-fetched
+                    # together with this newer total. Never mix their stale
+                    # quantities with a fresh server valuation in recovery.
+                    if project.get("assetBalances"):
+                        project["assetBalances"] = []
+                        project["assetBalancesStale"] = True
             except (TypeError, ValueError, OverflowError):
                 pass
         normalized.append(project)
