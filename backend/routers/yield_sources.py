@@ -11,6 +11,10 @@ from ..yield_source_sync import (
     REGISTRATION_KEY, SNAPSHOTS_KEY, HISTORY_KEY,
     registered_wallets, _read, _write,
 )
+from ..yield_earnings_state import (
+    LULO_SERVER_LEDGER_KEY, LOOPSCALE_SERVER_LEDGER_KEY,
+)
+from ..yield_earnings_ledger import lulo_monthly_backfills
 
 router = APIRouter(prefix="/api/yield-sources", tags=["yield sources"])
 
@@ -58,3 +62,25 @@ async def source_history(
 ) -> dict:
     history = _read(db, user.id, HISTORY_KEY)
     return {"items": history.get("items") or [], "updatedAt": history.get("updatedAt")}
+
+
+@router.get("/earnings")
+async def backend_earnings_ledger(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Get server-reconciled history without changing the original ledger.
+
+    Values remain independent during the migration. Clients can compare
+    saved browser history against server observations before promotion.
+    """
+    lulo = _read(db, user.id, LULO_SERVER_LEDGER_KEY)
+    loopscale = _read(db, user.id, LOOPSCALE_SERVER_LEDGER_KEY)
+    source = _read(db, user.id, SNAPSHOTS_KEY)
+    return {
+        "luloMonthly": lulo,
+        "luloBackfills": lulo_monthly_backfills(lulo),
+        "loopscaleHistory": loopscale,
+        "sourceCheckedAt": source.get("checkedAt"),
+        "sourceSuccessfulAt": source.get("successfulAt"),
+        "migrationMode": "independent-server-ledger",
+    }
