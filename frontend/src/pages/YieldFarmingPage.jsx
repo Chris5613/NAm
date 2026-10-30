@@ -4285,19 +4285,15 @@ export default function YieldFarmingPage() {
                       )
                 ),
 
+              // Balance-only pushes must not masquerade as a fresh earnings sync.
               lastSyncedAt:
-                payload?.synced_at ||
-                payload?.syncedAt ||
-                new Date().toISOString(),
+                (payload?.from && payload?.to
+                  ? (payload?.synced_at || payload?.syncedAt || new Date().toISOString())
+                  : current?.lastSyncedAt) || null,
 
-              lastRange: {
-                from:
-                  payload?.from ||
-                  null,
-                to:
-                  payload?.to ||
-                  null,
-              },
+              lastRange: payload?.from && payload?.to
+                ? { from: payload.from, to: payload.to }
+                : (current?.lastRange || null),
 
               lastTrxPrice:
                 priceToUse,
@@ -9703,6 +9699,9 @@ return (
               </span>
             </div>
             <div className="mt-0.5 flex min-w-0 flex-wrap items-baseline gap-x-1.5 gap-y-0.5 tabular-nums"><span className="text-[14px] font-semibold">{formatCurrency(stats?.currentBalanceUsd)}</span><span className="text-[10px] text-muted-foreground">{Number(stats?.currentTrxBalance || 0).toFixed(2)} TRX</span></div>
+            {(!stats?.lastSyncedAt || Date.now() - Date.parse(stats.lastSyncedAt) > 2 * 60 * 60 * 1000) && (
+              <div className="mt-0.5 text-[10px] text-amber-300">Earnings sync stale · balance may be cached</div>
+            )}
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${expanded ? "rotate-90" : ""}`}/>
         </div>
