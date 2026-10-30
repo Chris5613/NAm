@@ -172,9 +172,27 @@ async def recovery_candidates(user: User = Depends(current_user),
             new_trx = number(now.get("balanceTrx"))
             price = number(now.get("trxUsdPrice"))
             if old_trx is not None and new_trx is not None and price and price > 0:
+                delta = new_trx - old_trx
+                old_price = number(earlier.get("trxUsdPrice"))
+                # This separation is accounting-only: market P/L on existing
+                # holdings must not be mixed with the new token quantity.
+                market_pnl = old_trx * (price - old_price) if old_price and old_price > 0 else None
+                reference_time = timestamp(earlier.get("sourceLastSyncedAt"))
+                recent_reference = reference_time and (
+                    datetime.now(timezone.utc) - reference_time
+                ).total_seconds() < 36 * 3600
+                # RollerCoin's user-reported baseline: 1.403988 TRX/day.
+                # Guard against large external transfers or false scraping.
+                max_possible = 1.403988 * 1.5
+                eligible = bool(
+                    earlier.get("stale") is False and recent_reference and
+                    not now.get("stale") and 0 <= delta <= max_possible
+                )
                 candidates.append({
-                    "id": now["id"], "quantityDeltaTrx": round(new_trx - old_trx, 8),
-                    "usdAtCurrentPrice": round((new_trx - old_trx) * price, 8),
+                    "id": now["id"], "quantityDeltaTrx": round(delta, 8),
+                    "usdAtCurrentPrice": round(delta * price, 8),
+                    "marketPnlOnPriorTrxUsd": round(market_pnl, 8) if market_pnl is not None else None,
+                    "eligibleForGuardedRecovery": eligible if now["id"] == "rollercoin-project" else False,
                     "status": "unverified-wallet-change",
                 })
             else:
