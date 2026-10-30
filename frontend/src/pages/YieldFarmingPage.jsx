@@ -1048,7 +1048,9 @@ function loadRollerCoinTracker() {
       null,
     walletDaily: parsed.walletDaily && typeof parsed.walletDaily === "object"
       ? parsed.walletDaily : {},
-    walletLastObservedTrx: Number.isFinite(Number(parsed.walletLastObservedTrx))
+    walletLastObservedTrx: parsed.walletLastObservedTrx !== null &&
+      parsed.walletLastObservedTrx !== undefined &&
+      Number.isFinite(Number(parsed.walletLastObservedTrx))
       ? Number(parsed.walletLastObservedTrx) : null,
     walletLastObservedAt: parsed.walletLastObservedAt || null,
   };
@@ -1306,6 +1308,7 @@ function getRollerCoinTrackerStats(
     liveTrxPrice,
 
     lastSyncedAt:
+      tracker?.balanceSyncedAt ||
       tracker?.lastSyncedAt ||
       null,
 
@@ -3115,13 +3118,14 @@ Object.values(
        * Older months stay fixed using their
        * stored USD values.
        */
-      const amount =
-        monthKey ===
-          currentMonthKey &&
-        liveTrxPrice > 0
-          ? trx *
-            liveTrxPrice
-          : storedUsd;
+      const walletMonthTrx = Object.entries(rollerCoinTracker?.walletDaily || {})
+        .filter(([day]) => day.slice(0, 7) === monthKey)
+        .reduce((sum, [, entry]) => sum + (Number(entry?.trx) || 0), 0);
+      const hasWalletMonth = Object.keys(rollerCoinTracker?.walletDaily || {})
+        .some(day => day.slice(0, 7) === monthKey);
+      const amount = hasWalletMonth && monthKey === currentMonthKey
+        ? walletMonthTrx * liveTrxPrice
+        : storedUsd;
 
       addEarning(
         monthKey,
@@ -3130,6 +3134,16 @@ Object.values(
       );
     }
   );
+
+  // When the earnings API has no dated rows, wallet observations still
+  // produce the current month's RollerCoin income.
+  const walletCurrentMonthEntries = Object.entries(rollerCoinTracker?.walletDaily || {})
+    .filter(([day]) => day.slice(0, 7) === currentMonthKey);
+  if (walletCurrentMonthEntries.length && !rollerCoinMonths[currentMonthKey]) {
+    addEarning(currentMonthKey, "RollerCoin",
+      walletCurrentMonthEntries.reduce((sum, [, entry]) =>
+        sum + (Number(entry?.trx) || 0), 0) * liveTrxPrice);
+  }
 
   const unetworkMonthTotals =
     getUnetworkMonthTotals(
