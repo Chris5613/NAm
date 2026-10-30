@@ -62,3 +62,40 @@ def portfolio_summary(projects: list[dict[str, Any]]) -> dict[str, Any]:
         "staleProjectIds": stale_ids,
         "complete": len(missing_ids) == 0 and bool(by_id),
     }
+
+
+def signed_amount(value: Any) -> Decimal | None:
+    """Signed earnings/P&L accepts losses, but never NaN or booleans."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        result = Decimal(str(value))
+    except (InvalidOperation, ValueError, TypeError):
+        return None
+    return result if result.is_finite() and abs(result) <= Decimal("100000000") else None
+
+
+def daily_income_summary(sources: dict[str, Any]) -> dict[str, Any]:
+    """Canonical signed day total from already-derived per-project accruals.
+
+    Does not reprice token holdings, invent missing earnings, or convert an
+    absent source into a zero. Returns an explicit error list for bad inputs.
+    """
+    normalized: dict[str, Decimal] = {}
+    rejected: list[str] = []
+    for raw_name, raw_value in sources.items():
+        name = str(raw_name).strip()
+        value = signed_amount(raw_value)
+        if not name or len(name) > 100 or value is None:
+            rejected.append(name or "(unnamed)")
+            continue
+        normalized[name] = value
+
+    total = sum(normalized.values(), Decimal(0))
+    to_number = lambda n: float(n.quantize(PRECISION, rounding=ROUND_HALF_UP))
+    return {
+        "totalUsd": to_number(total),
+        "sources": {name: to_number(value) for name, value in normalized.items()},
+        "rejected": rejected,
+        "complete": len(rejected) == 0,
+    }
