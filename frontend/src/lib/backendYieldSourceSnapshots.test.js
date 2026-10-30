@@ -51,6 +51,21 @@ describe("fresh backend Lulo and Loopscale snapshots", () => {
     expect(selectFreshSourceSnapshot(invalid, "lulo", wallet, null, now)).toBeNull();
   });
 
+  it("requires direct confirmation of large provider balance jumps", () => {
+    expect(selectFreshSourceSnapshot(
+      payload, "lulo", wallet, null, now, 100
+    )).toBeNull();
+    expect(selectFreshSourceSnapshot(
+      payload, "lulo", wallet, null, now, 199
+    )).toEqual(payload.lulo[wallet]);
+    expect(selectFreshSourceSnapshot(
+      payload, "loopscale", wallet, null, now, 20
+    )).toBeNull();
+    expect(selectFreshSourceSnapshot(
+      payload, "loopscale", wallet, null, now, 39
+    )).toEqual(payload.loopscale);
+  });
+
   it("accepts signed Loopscale P/L, including negative values", () => {
     const result = selectFreshSourceSnapshot(
       payload, "loopscale", wallet, null, now
