@@ -5,6 +5,7 @@ import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { useBackendProviderStats } from "@/hooks/useBackendProviderStats";
+import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { Card, CardContent } from "@/components/ui/card";
 import { Area, AreaChart, CartesianGrid, LabelList, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -3714,28 +3715,27 @@ const importSaladPayload =
       ]
     );
 
-  const liveProjectIncome =
-    useMemo(
-      () =>
-        buildProjectIncome(
-          luloProjects,
-          loopscaleHistory,
-          saladTracker,
-          monthlyBackfills,
-          rollerCoinTracker,
-          unetworkTracker,
-          kryptexTracker
-        ),
-      [
-        luloProjects,
-        loopscaleHistory,
-        saladTracker,
-        monthlyBackfills,
-        rollerCoinTracker,
-        unetworkTracker,
-        kryptexTracker,
-      ]
-    );
+  const locallyDerivedProjectIncome = useMemo(
+    () => buildProjectIncome(
+      luloProjects,
+      loopscaleHistory,
+      saladTracker,
+      monthlyBackfills,
+      rollerCoinTracker,
+      unetworkTracker,
+      kryptexTracker
+    ),
+    [
+      luloProjects, loopscaleHistory, saladTracker, monthlyBackfills,
+      rollerCoinTracker, unetworkTracker, kryptexTracker,
+    ]
+  );
+  // The backend owns extension-provider monthly accruals once their saved
+  // figures match the latest live readings; Lulo and Loopscale remain on
+  // their existing adapters until their migration can be verified.
+  const liveProjectIncome = useBackendMonthlyIncome(
+    providerTrackers, locallyDerivedProjectIncome
+  );
 
   useEffect(
     () => {
