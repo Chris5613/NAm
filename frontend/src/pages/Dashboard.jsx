@@ -2186,10 +2186,10 @@ export default function Dashboard() {
                 {todayPositive ? "+" : "−"}{formatCurrency(Math.abs(todayChange))} today
               </span>
             </div>
-            <div className="mt-2 h-[clamp(155px,19vh,190px)] w-full">
+            <div className="mt-2 h-[clamp(205px,24vh,245px)] w-full">
               {netChart.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={netChart} margin={{ top: 8, right: 2, bottom: 0, left: 2 }}>
+                  <AreaChart data={netChart} margin={{ top: 70, right: 2, bottom: 0, left: 2 }}>
                     <defs>
                       <linearGradient id="dashboardNetFill" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="0%" stopColor="#38a5df" stopOpacity={0.19} />
@@ -2198,7 +2198,7 @@ export default function Dashboard() {
                     </defs>
                     <XAxis dataKey="dateKey" type="category" axisLine={false} tickLine={false} tick={{ fill: "#78828d", fontSize: 10 }} minTickGap={30} dy={8} tickFormatter={dateKey => new Date(dateKey).toLocaleDateString("en-US", { month: "short", day: "numeric" })} />
                     <YAxis hide domain={["auto", "auto"]} />
-                    <Tooltip formatter={value => formatCurrency(value)} labelFormatter={dateKey => new Date(dateKey).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} contentStyle={chartTooltipStyle} />
+                    <Tooltip position={{ x: 8, y: 4 }} formatter={value => formatCurrency(value)} labelFormatter={dateKey => new Date(dateKey).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} contentStyle={chartTooltipStyle} />
                     <Area dataKey="value" type="monotone" stroke="#38a5df" fill="url(#dashboardNetFill)" strokeWidth={2.25} dot={netChart.length < 3 ? { r: 2.5, fill: "#38a5df" } : false} activeDot={{ r: 4 }} />
                   </AreaChart>
                 </ResponsiveContainer>
