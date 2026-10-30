@@ -140,7 +140,7 @@ async def store_daily_earnings(
     now = datetime.now(timezone.utc)
     day = str(payload.get("date") or "")
     pacific_day = now.astimezone(ZoneInfo("America/Los_Angeles")).date().isoformat()
-    if day != pacific_day or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day):
+    if day != pacific_day or not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
         raise HTTPException(status_code=422, detail="Can only update the current Pacific day.")
     sources = payload.get("sources")
     if not isinstance(sources, dict) or len(sources) > 100:
@@ -179,7 +179,7 @@ async def store_daily_earnings(
 async def read_daily_earnings(
     day: str, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> dict:
-    if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day):
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
         raise HTTPException(status_code=422, detail="Invalid date.")
     return setting(db, user.id, f"yield_server_daily_income_{day}") or {"date": day, "sources": {}, "observations": []}
 
