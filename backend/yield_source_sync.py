@@ -458,7 +458,8 @@ def poll_sources_for_user(user_id: int) -> int:
         for row in db.scalars(select(Project).where(Project.user_id == user_id)).all():
             project = dict(row.data or {})
             project["id"] = row.id
-            project["yield_tracking"] = project.get("yield_tracking")
+            project["invested"] = float(row.invested or 0)
+            project["earned"] = float(row.earned or 0)
             projects.append(project)
         result = reconcile_backend_ledgers(
             saved_lulo, saved_loopscale,
