@@ -3605,6 +3605,7 @@ const importSaladPayload =
   // readings. This feeds the nightly backup even when the browser is closed.
   // Source timestamps are retained so stale extension values cannot masquerade
   // as freshly polled external balances.
+  const [serverPortfolio, setServerPortfolio] = useState(null);
   const liveProjectFeedRef = useRef([]);
   const liveProjectFeed = sortedProgramCards.map(item => {
     const project = item.project;
@@ -3664,6 +3665,13 @@ const importSaladPayload =
           projects: liveProjectFeedRef.current,
         });
         consecutiveFailures = 0;
+        if (active && result?.portfolio?.complete &&
+            Number.isFinite(Number(result.portfolio.totalUsd))) {
+          setServerPortfolio({
+            totalUsd: Number(result.portfolio.totalUsd),
+            projectCount: Number(result.portfolio.projectCount),
+          });
+        }
         // Delayed or broken syncs are actionable, but avoid repeated toasts.
         const names = Array.isArray(result?.staleProjects)
           ? result.staleProjects.filter(Boolean) : [];
@@ -4372,28 +4380,21 @@ const summary =
           0
         );
 
-      const portfolioBalance =
+      const localPortfolioBalance =
         assetProjectBalance +
-        (
-          Number(
-            rollerCoinStats?.currentBalanceUsd
-          ) || 0
-        ) +
-        (
-          Number(
-            saladStats?.currentBalance
-          ) || 0
-        ) +
-        (
-          Number(
-            unetworkStats?.currentBalance
-          ) || 0
-        ) +
-        (
-          Number(
-            kryptexStats?.currentBalanceUsd
-          ) || 0
-        );
+        (Number(rollerCoinStats?.currentBalanceUsd) || 0) +
+        (Number(saladStats?.currentBalance) || 0) +
+        (Number(unetworkStats?.currentBalance) || 0) +
+        (Number(kryptexStats?.currentBalanceUsd) || 0);
+
+      // Transition safely to the authoritative backend sum. During sync
+      // lag or a validation disagreement, preserve the currently displayed
+      // local balance instead of suddenly showing an old server result.
+      const serverMatches = serverPortfolio?.projectCount === sortedProgramCards.length &&
+        Number.isFinite(Number(serverPortfolio?.totalUsd)) &&
+        Math.abs(Number(serverPortfolio.totalUsd) - localPortfolioBalance) < 0.01;
+      const portfolioBalance = serverMatches
+        ? Number(serverPortfolio.totalUsd) : localPortfolioBalance;
 
       /*
        * Keep Weighted APY based on the positions that
@@ -4643,6 +4644,7 @@ const summary =
       unetworkStats,
       unetworkTracker,
       kryptexStats,
+      serverPortfolio,
     ]
   );
 
