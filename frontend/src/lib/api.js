@@ -10,6 +10,7 @@ import {
 import { localStorage as storage } from "./localStorage";
 import { applyApyTransactionAccruals } from "./projectDailyReturns";
 import { applyLuloYieldSnapshot, getLuloYieldSnapshot } from "./luloYieldSync";
+import { api } from "./apiClient";
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -316,7 +317,20 @@ export const projectsApi = {
           { newerThan: project.lulo_last_synced_at,
             referenceBalanceUsd: project.lulo_total_balance_usd }
         );
-        return applyLuloYieldSnapshot(project, snapshot, now);
+        const reconciled = applyLuloYieldSnapshot(project, snapshot, now);
+        // Same-input production parity: compare the backend's independent
+        // calculation with the *actual* browser result. This does not
+        // change or delay the live financial transaction save.
+        api.post("/api/yield-sources/lulo-parity", {
+          before: project,
+          snapshot,
+          after: reconciled,
+          appliedAt: now.toISOString(),
+        }).catch(() => {
+          // Parity reporting is diagnostic; do not break income syncing
+          // while the backend endpoint is unavailable or still deploying.
+        });
+        return reconciled;
       } catch (error) {
         console.warn(`Lulo lending sync failed for ${project.name}:`, error);
         return project;
