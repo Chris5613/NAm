@@ -7,6 +7,7 @@ import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { useBackendProviderStats } from "@/hooks/useBackendProviderStats";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { Card, CardContent } from "@/components/ui/card";
 import { Area, AreaChart, CartesianGrid, LabelList, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -143,6 +144,28 @@ export default function YieldFarmingPage() {
   ] = useState(
     loadLoopscaleHistory
   );
+
+  // The server reconciles cumulative Loopscale P/L while Chrome is closed.
+  // Accept its result only when newer and compatible with saved month
+  // baselines; the legacy browser ledger remains the fallback.
+  useEffect(() => {
+    let active = true;
+    const refreshBackendHistory = async () => {
+      try {
+        const data = await api.get("/api/yield-sources/earnings");
+        if (!active || !data?.loopscaleHistory) return;
+        setLoopscaleHistory(current =>
+          mergeBackendLoopscaleHistory(current, data.loopscaleHistory)
+        );
+      } catch {
+        // The existing locally recorded history remains authoritative
+        // until a compatible server observation is available.
+      }
+    };
+    refreshBackendHistory();
+    const timer = window.setInterval(refreshBackendHistory, 60000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
 
   const [
     saladTracker,
