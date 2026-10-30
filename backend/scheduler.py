@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from .db import SessionLocal
 from .models import Asset, NetWorthSnapshot, Project, Setting, User, utcnow
-from .yield_source_sync import poll_all_users
+from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_project_balances
 
 _scheduler_task: asyncio.Task | None = None
 _last_daily_key: str | None = None
@@ -103,6 +103,19 @@ def take_project_balance_snapshots(day: str, scheduled_at: datetime | None = Non
             if not isinstance(feed, dict):
                 feed = {}
             projects = feed.get("projects") if isinstance(feed.get("projects"), list) else []
+            # Polling in the backend remains active after the browser closes.
+            # Update the SNAPSHOT COPY with verified-fresher Lulo/Loopscale
+            # readings without changing financial projects or earnings.
+            lulo_wallets = {}
+            for account in db.scalars(select(Project).where(Project.user_id == user.id)).all():
+                details = account.data or {}
+                wallet = details.get("lulo_wallet_address")
+                if details.get("yield_tracking") == "lulo_lending" and wallet:
+                    lulo_wallets[f"lulo-project-{account.id}"] = str(wallet)
+            projects = merge_server_project_balances(
+                projects, setting_value(db, user.id, SNAPSHOTS_KEY) or {},
+                lulo_wallets, now,
+            )
             received_at = feed.get("receivedAt")
             try:
                 last = datetime.fromisoformat(str(received_at).replace("Z", "+00:00"))
