@@ -1,4 +1,4 @@
-import { api } from "@/lib/apiClient";
+import { api } from "./apiClient";
 
 // PostgreSQL source snapshots can be used only when they are both recent and
 // newer than the source already applied locally. A closed-browser poll must
