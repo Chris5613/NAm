@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
+from ..project_accounting import portfolio_summary
 
 router = APIRouter(prefix="/api/project-tracking", tags=["project tracking"])
 LATEST_KEY = "yield_project_latest_balance_feed_v1"
@@ -124,7 +125,17 @@ async def receive_latest(payload: dict, user: User = Depends(current_user),
         "lastGoodFeedAt": now.isoformat(),
     })
     db.commit()
-    return {"status": "ok", "staleProjects": stale}
+    return {"status": "ok", "staleProjects": stale,
+            "portfolio": portfolio_summary(list(projects.values())),
+            "receivedAt": now.isoformat()}
+
+
+@router.get("/portfolio")
+async def portfolio_totals(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    feed = setting(db, user.id, LATEST_KEY) or {}
+    projects = feed.get("projects") if isinstance(feed, dict) else []
+    return {**portfolio_summary(projects if isinstance(projects, list) else []),
+            "receivedAt": feed.get("receivedAt") if isinstance(feed, dict) else None}
 
 
 @router.get("/status")
