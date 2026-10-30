@@ -298,3 +298,96 @@ prevents a partial migration from counting deposits as earned interest.
 
 No new visual labels, cards, controls, or historical data deletion were
 introduced by Phase 4.
+
+
+## Phase 5 — Production parity, transaction safety, and frontend simplification (2026-10-30)
+
+### What is implemented
+
+1. **Production same-input Lulo comparison:** Every browser-triggered Lulo
+   accrual can now send its *pre-reconciliation project*, fetched provider
+   snapshot, *post-reconciliation project*, and exact application time to
+   authenticated `POST /api/yield-sources/lulo-parity`. The backend runs its
+   independent Python reconciliation against those same inputs and compares
+   earned amounts, invested balance, interest offsets, interest-artifact
+   corrections, and individual transaction dates and amounts. Generated
+   client transaction IDs and equivalent UTC timestamp text formats cannot
+   cause false mismatches.
+2. **Durable parity reports:** `yield_lulo_transaction_parity_reports_v1`
+   contains bounded diagnostics (no raw transaction payload), including
+   the mismatched field names. Five *distinct*, sequential matching source
+   observations are required for diagnostic confidence; repeated or older
+   observations cannot increase that count. A match is diagnostic, **not**
+   permission to write financial transactions.
+3. **Actual saved-ledger parity:** The authenticated
+   `GET /api/yield-sources/migration-status` independently reads the REAL
+   saved PostgreSQL project and the backend preview. It distinguishes a
+   same-observation exact match, a newer browser record, a newer server
+   record, and a genuine discrepancy. It also returns source-poll freshness,
+   Lulo API-key configuration status (not its value), and outstanding
+   migration blockers.
+4. **Pre-cutover accounting backups:** On its first backend polling cycle,
+   the server writes one-time snapshots of each registered Lulo project's
+   complete legacy JSON data, typed invested/earned balance, and any
+   separately stored relational transaction rows. It also records the
+   existing Loopscale history before changing authority. Backups cannot be
+   overwritten by the generic client settings PUT endpoint.
+   `GET /api/yield-sources/cutover-backups` lists the availability and dates
+   of checkpoints; authenticated Lulo/Loopscale detail endpoints return
+   those original records for recovery. No automatic destructive restore
+   or rollback is attempted.
+5. **Closed-browser regression:** The test suite simulates server-only
+   provider polling with no frontend, Chrome, or DOM. The backend saves the
+   source observations and independent ledgers. Replaying an identical
+   provider timestamp does not duplicate earned amounts or change the
+   original Project row.
+6. **Main React component reduction:** The two original Lulo monthly
+   accrual/backfill effects were moved *without rewriting their logic*
+   into `frontend/src/hooks/useLegacyLuloMonthlyAccounting.js`.
+   `YieldFarmingPage.jsx` fell from ~5,602 to ~5,135 lines. These legacy
+   rules remain available intentionally until production parity and
+   server-write ownership are proven.
+
+### Why live transaction writes remain OFF
+
+A backend-side diagnostic is not sufficient to safely write actual income.
+The real browser project and the independently polled server can have
+different observation times. More importantly, the legacy
+`projectsApi.accrueApyTransactions` path rewrites a collection through
+`storage.setProjects` / the replace-all resource endpoint. A naive new
+backend writer could race with that mechanism and be overwritten by an
+older browser tab.
+
+Therefore the endpoint's `cutoverEnabled` and
+`eligibleForAutomaticWrites` values remain **false**.
+The backend's transaction preview never mutates `Project` or
+`ProjectTransaction`. The actual cutover must wait for the
+production-data checks AND a coordinated replacement of the existing
+client collection-write path with per-project server-owned writes and
+database concurrency controls.
+
+### Verification procedure after deployment
+
+1. Visit NAm normally after the new backend deploys so its authenticated
+   wallet registration and Lulo browser sync run.
+2. With the same signed-in session, request
+   `/api/yield-sources/migration-status`. Inspect Lulo key configuration,
+   source errors, source poll age, the per-project
+   `persistedLedgerParity` result and
+   `cutoverReadiness.blockers`.
+3. Check `/api/yield-sources/cutover-backups` to confirm one-time
+   transaction snapshots exist. The backups are READ ONLY.
+4. Compare a representative set of actual earnings periods, deposits,
+   withdrawals, and interest-correction events using parity reports.
+   Investigate mismatches before changing write ownership.
+5. Confirm independent snapshots advance across a period when NAm/Chrome
+   is closed. Unit tests alone cannot prove the deployed runtime is
+   continuously available.
+6. Only after those checks and concurrency migration are completed,
+   consider enabling backend-owned transaction writes and retiring the
+   old browser accrual code.
+
+This phase makes NO new dashboard labels or controls, and makes NO
+automatic edits to existing income or project transactions. GitHub CI
+tests compile the backend, run regression suites, and compile the React
+frontend, but they do not prove live database or external API access.
