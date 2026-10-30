@@ -7632,6 +7632,24 @@ const importSaladPayload =
   // This applies to Oct 30 only, not recurring or future dates.
   const ROLLERCOIN_OCT30_ESTIMATED_MORNING_TRX =
     Number((1.403988 * (9 * 60 + 4) / (24 * 60)).toFixed(8));
+  // Recover a missed RollerCoin interval from the previous night's
+  // confirmed token snapshot. This is a guarded display fallback, not a
+  // ledger mutation: transfers cannot reliably be inferred from a balance.
+  const [projectRecovery, setProjectRecovery] = useState(null);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const result = await api.get("/api/project-tracking/recovery");
+        if (active) setProjectRecovery(result);
+      } catch {
+        // Preserve last known candidate; no invented earnings on API failure.
+      }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 300000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     // Wallet delta, not a second earnings feed, powers today's RollerCoin
@@ -7676,7 +7694,21 @@ const importSaladPayload =
       }
       const includeWalletChange = walletDay ||
         (key === todayKey && key === ROLLERCOIN_OCT30_ANCHOR_DAY);
-      const totalUsd = previouslyRecordedUsd + (includeWalletChange ? walletChangeUsd : 0);
+      const trackedTotalUsd = previouslyRecordedUsd + (includeWalletChange ? walletChangeUsd : 0);
+      // Only use the previous night's fresh reading and a modest positive
+      // token delta. Recovered quantity is valued separately from market P/L.
+      const yesterday = new Date(todayKey + "T12:00:00Z");
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const previousDate = yesterday.toISOString().slice(0, 10);
+      const candidate = (projectRecovery?.candidates || [])
+        .find(item => item.id === "rollercoin-project" && item.eligibleForGuardedRecovery);
+      const recoveredUsd = key === todayKey &&
+        projectRecovery?.referenceDate === previousDate &&
+        candidate && Number.isFinite(Number(candidate.usdAtCurrentPrice))
+        ? Number(candidate.usdAtCurrentPrice) : 0;
+      // A snapshot recovery and live wallet deltas describe overlapping
+      // token changes; MAX avoids counting the same TRX twice.
+      const totalUsd = Math.max(trackedTotalUsd, recoveredUsd);
       if (totalUsd !== 0) sources.RollerCoin = totalUsd;
       else delete sources.RollerCoin;
     } else if (minedEntry) {
