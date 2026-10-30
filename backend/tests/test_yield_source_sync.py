@@ -5,7 +5,8 @@ from unittest.mock import patch
 
 from backend.yield_source_sync import (
     valid_wallet, registered_wallets, normalize_lulo, normalize_loopscale,
-    stamp_ms, fetch_lulo, fetch_loopscale, USDC_MINT, ONYC_MINT, USDS_MINT,
+    stamp_ms, fetch_lulo, fetch_loopscale, merge_server_project_balances,
+    USDC_MINT, ONYC_MINT, USDS_MINT,
 )
 
 LULO_WALLET = "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM"
@@ -129,6 +130,53 @@ class YieldSourceNormalizationTests(TestCase):
         result = normalize_loopscale(LULO_WALLET, payload, self.now)
         self.assertAlmostEqual(result["dailyNetYieldUsd"],
                                (15 * .09 - 10 * (83300 / 1_000_000)) / 365)
+
+    def test_nightly_backup_uses_fresher_server_reading_without_changing_projects(self):
+        base = [
+            {"id": "lulo-project-123", "balanceUsd": 100,
+             "sourceLastSyncedAt": "2026-10-30T20:00:00Z",
+             "assetBalances": [{"symbol": "USDS", "amount": 100}]},
+            {"id": "loopscale-project", "balanceUsd": 40,
+             "sourceLastSyncedAt": "2026-10-30T20:00:00Z"},
+            {"id": "rollercoin-project", "balanceUsd": 10,
+             "sourceLastSyncedAt": "2026-10-30T20:00:00Z"},
+        ]
+        snapshot = {
+            "lulo": {LULO_WALLET: {
+                "syncedAt": "2026-10-30T20:05:00Z", "totalBalanceUsd": 120,
+            }},
+            "loopscale": {
+                "syncedAt": "2026-10-30T20:05:00Z", "positionValueUsd": 42,
+            },
+        }
+        now = datetime(2026, 10, 30, 20, 6, tzinfo=timezone.utc)
+        result = merge_server_project_balances(
+            base, snapshot, {"lulo-project-123": LULO_WALLET}, now
+        )
+        self.assertEqual(result[0]["balanceUsd"], 120)
+        self.assertEqual(result[1]["balanceUsd"], 42)
+        self.assertEqual(result[2]["balanceUsd"], 10)
+        self.assertEqual(result[0]["balanceSource"], "backend-provider-poll")
+        self.assertTrue(result[0]["assetBalancesStale"])
+        self.assertEqual(result[0]["assetBalances"], [])
+        self.assertEqual(base[0]["balanceUsd"], 100)
+        self.assertEqual(base[0]["assetBalances"][0]["amount"], 100)
+
+    def test_nightly_backup_does_not_overlay_stale_or_older_readings(self):
+        base = [{"id": "loopscale-project", "balanceUsd": 40,
+                 "sourceLastSyncedAt": "2026-10-30T20:10:00Z"}]
+        saved = {"loopscale": {
+            "syncedAt": "2026-10-30T20:05:00Z", "positionValueUsd": 44,
+        }}
+        recent = datetime(2026, 10, 30, 20, 11, tzinfo=timezone.utc)
+        self.assertEqual(merge_server_project_balances(
+            base, saved, {}, recent
+        )[0]["balanceUsd"], 40)
+        saved["loopscale"]["syncedAt"] = "2026-10-30T20:00:00Z"
+        stale = datetime(2026, 10, 30, 22, 0, tzinfo=timezone.utc)
+        self.assertEqual(merge_server_project_balances(
+            base, saved, {}, stale
+        )[0]["balanceUsd"], 40)
 
     def test_lulo_missing_key_does_not_fetch(self):
         with patch.dict("os.environ", {"LULO_API_KEY": ""}):
