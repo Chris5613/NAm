@@ -48,6 +48,16 @@ describe("backend Loopscale ledger compatibility", () => {
     expect(mergeBackendLoopscaleHistory(local, server)).toBe(local);
   });
 
+  test("rejects non-finite historical baselines instead of silently overwriting", () => {
+    const local = old();
+    const server = { positions: {
+      [loan]: snapshot("2026-10-30T19:00:00Z", 1.5, {
+        monthBaselines: { "2026-10": "NaN" },
+      }),
+    }};
+    expect(mergeBackendLoopscaleHistory(local, server)).toBe(local);
+  });
+
   test("does not accept invalid or incomplete source data", () => {
     const local = old();
     expect(mergeBackendLoopscaleHistory(local, {})).toBe(local);
