@@ -4224,8 +4224,24 @@ export default function YieldFarmingPage() {
             const previousObserved = current?.walletLastObservedTrx;
             const hasPrevious = previousObserved !== null && previousObserved !== undefined &&
               Number.isFinite(Number(previousObserved));
-            const difference = isFresh && hasPrevious
-              ? incomingBalanceTrx - Number(previousObserved) : 0;
+            // Recover an opening interval from the last *timestamped*
+            // pre-upgrade RollerCoin wallet reading when the new tracker has
+            // not yet recorded its first observation. Never assume an
+            // undated balance, or treat the whole wallet as earnings.
+            const legacyBalance = current?.currentTrxBalance;
+            const legacyTime = Date.parse(current?.balanceSyncedAt || "");
+            const hasLegacyReference = !hasPrevious &&
+              legacyBalance !== null && legacyBalance !== undefined &&
+              Number.isFinite(Number(legacyBalance)) &&
+              Number(legacyBalance) >= 0 &&
+              Number.isFinite(legacyTime) &&
+              Number.isFinite(snapshotTime) &&
+              legacyTime < snapshotTime;
+            const referenceBalance = hasPrevious
+              ? Number(previousObserved)
+              : hasLegacyReference ? Number(legacyBalance) : null;
+            const difference = isFresh && referenceBalance !== null
+              ? incomingBalanceTrx - referenceBalance : 0;
             const walletDaily = { ...(current?.walletDaily || {}) };
             if (isFresh && day) {
               const priorDay = walletDaily[day] || {};
