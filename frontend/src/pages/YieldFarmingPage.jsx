@@ -7426,6 +7426,12 @@ const importSaladPayload =
     setLoopscaleFixedBaseline(initial);
     saveObject(LOOPSCALE_FIXED_BASELINE_KEY, initial);
   }, [todayKey, savedLoopscaleReference, currentLoopscaleReference]);
+  // User-confirmed RollerCoin wallet reading at 9:04 AM Pacific, Oct 30.
+  // This is an opening balance, never an earned amount. The difference
+  // from subsequent confirmed wallet readings is the post-anchor delta.
+  const ROLLERCOIN_OCT30_ANCHOR_DAY = "2026-10-30";
+  const ROLLERCOIN_OCT30_ANCHOR_TRX = 35.269272;
+  const ROLLERCOIN_OCT30_ANCHOR_AT = Date.parse("2026-10-30T16:04:00Z");
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     // Wallet delta, not a second earnings feed, powers today's RollerCoin
@@ -7443,10 +7449,27 @@ const importSaladPayload =
       const previouslyRecordedUsd = Math.max(0, priorLedgerUsd, datedUsd);
       const changeTrx = Number(walletDay?.trx) || 0;
       const price = Number(rollerCoinTracker?.lastTrxPrice) || 0;
-      const walletChangeUsd = walletDay?.usd != null &&
+      let walletChangeUsd = walletDay?.usd != null &&
         Number.isFinite(Number(walletDay.usd))
         ? Number(walletDay.usd) : changeTrx * price;
-      const totalUsd = previouslyRecordedUsd + (walletDay ? walletChangeUsd : 0);
+      // On Oct 30, use the actual user-provided wallet reference rather
+      // than a zero-initialized tracker entry. Comparing directly to the
+      // current wallet prevents double-counting repeated snapshots.
+      if (key === todayKey && key === ROLLERCOIN_OCT30_ANCHOR_DAY) {
+        const balanceTime = Date.parse(rollerCoinTracker?.balanceSyncedAt || "");
+        const confirmedBalance = Number(rollerCoinTracker?.currentTrxBalance);
+        if (Number.isFinite(balanceTime) &&
+            balanceTime >= ROLLERCOIN_OCT30_ANCHOR_AT &&
+            Number.isFinite(confirmedBalance) && confirmedBalance >= 0 &&
+            price > 0) {
+          walletChangeUsd = (confirmedBalance - ROLLERCOIN_OCT30_ANCHOR_TRX) * price;
+        } else {
+          walletChangeUsd = 0;
+        }
+      }
+      const includeWalletChange = walletDay ||
+        (key === todayKey && key === ROLLERCOIN_OCT30_ANCHOR_DAY);
+      const totalUsd = previouslyRecordedUsd + (includeWalletChange ? walletChangeUsd : 0);
       if (totalUsd !== 0) sources.RollerCoin = totalUsd;
       else delete sources.RollerCoin;
     } else if (minedEntry) {
