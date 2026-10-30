@@ -55,6 +55,26 @@ class BackendLedgerMigrationTests(unittest.TestCase):
         }}}
         self.assertEqual(seed_loopscale_history(browser, older), browser)
 
+    def test_browser_rejoin_does_not_delete_server_only_months(self):
+        backend = {"positions": {LOAN: {
+            "lastSyncedAt": "2026-10-30T17:00:00Z",
+            "monthlyEarnings": {"2026-09": 1.2, "2026-10": .4},
+            "monthBaselines": {"2026-09": .5, "2026-10": 1.0},
+            "observations": [{"syncedAt": "2026-09-30T23:00:00Z", "pnlUsd": 1.2}],
+        }}}
+        newer_browser = {"positions": {LOAN: {
+            "lastSyncedAt": "2026-10-30T18:00:00Z",
+            "monthlyEarnings": {"2026-10": .5},
+            "monthBaselines": {"2026-10": 1.1},
+            "observations": [{"syncedAt": "2026-10-30T18:00:00Z", "pnlUsd": 1.6}],
+        }}}
+        saved = seed_loopscale_history(backend, newer_browser)["positions"][LOAN]
+        self.assertEqual(saved["monthlyEarnings"]["2026-09"], 1.2)
+        self.assertEqual(saved["monthlyEarnings"]["2026-10"], .5)
+        self.assertEqual(saved["monthBaselines"]["2026-09"], .5)
+        self.assertEqual(saved["monthBaselines"]["2026-10"], 1.1)
+        self.assertEqual(len(saved["observations"]), 2)
+
     def test_loopscale_replay_updates_daily_once_and_does_not_mutate_input(self):
         legacy = {"positions": {LOAN: {
             "lastPnlUsd": 2, "lastSyncedAt": "2026-10-30T17:00:00Z",
