@@ -42,6 +42,11 @@ def finite(value: Any) -> float | None:
     return number if isfinite(number) else None
 
 
+def canonical_time(value: Any) -> Any:
+    parsed = parse_time(value)
+    return parsed.isoformat() if parsed else value
+
+
 def canonical_transactions(project: dict) -> list[dict]:
     rows = project.get("transactions")
     if not isinstance(rows, list):
@@ -57,6 +62,8 @@ def canonical_transactions(project: dict) -> list[dict]:
             val = row[name]
             if name in ("amount", "interest_from_usd", "interest_to_usd", "raw_interest_to_usd"):
                 val = finite(val)
+            if name in ("sync_to", "sync_from"):
+                val = canonical_time(val)
             item[name] = val
         normalized.append(item)
     return normalized
@@ -73,7 +80,12 @@ def compare_lulo_outputs(expected: dict, actual: dict, tolerance: float = 0.0000
         if a is None or b is None or abs(a - b) > tolerance:
             differences.append(key)
     for key in TEXT_FIELDS:
-        if (expected.get(key) or None) != (actual.get(key) or None):
+        a = expected.get(key) or None
+        b = actual.get(key) or None
+        if key.endswith("_at") and (a is not None or b is not None):
+            a = canonical_time(a)
+            b = canonical_time(b)
+        if a != b:
             differences.append(key)
 
     expected_rows = canonical_transactions(expected)
@@ -132,8 +144,12 @@ def update_parity_history(existing: Any, observation: dict) -> dict:
     if not project_id or not snapshot_at:
         return status
     previous = next((x for x in reversed(reports) if x.get("projectId") == project_id), None)
-    # Repeated processing of the same snapshot cannot increase confidence.
-    if previous and previous.get("snapshotAt") == snapshot_at:
+    # Repeated or reordered observations must never increase confidence.
+    incoming_time = parse_time(snapshot_at)
+    last_time = parse_time(previous.get("snapshotAt")) if previous else None
+    if previous and (incoming_time is None or (
+        last_time is not None and incoming_time <= last_time
+    )):
         return status
     reports = (reports + [observation])[-PARITY_HISTORY_LIMIT:]
     sequential = []
