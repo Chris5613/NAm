@@ -19,6 +19,7 @@ from .models import Asset, NetWorthSnapshot, Project, Setting, User, utcnow
 _scheduler_task: asyncio.Task | None = None
 _last_daily_key: str | None = None
 _last_project_day: str | None = None
+_last_catchup_check: str | None = None
 PACIFIC = ZoneInfo("America/Los_Angeles")
 log = logging.getLogger(__name__)
 PROJECT_FEED_KEY = "yield_project_latest_balance_feed_v1"
@@ -147,7 +148,7 @@ def scheduler_status() -> dict[str, Any]:
 
 
 async def scheduler_loop() -> None:
-    global _last_daily_key, _last_project_day
+    global _last_daily_key, _last_project_day, _last_catchup_check
     while True:
         now = datetime.now(timezone.utc)
         day = now.date().isoformat()
@@ -160,6 +161,15 @@ async def scheduler_loop() -> None:
                 _last_daily_key = day
         local_now = now.astimezone(PACIFIC)
         project_day = local_now.date().isoformat()
+        # Catch up a missed night on restart/wakeup. Keep the actual
+        # capture timestamp; do not pretend a stale feed was live at 23:58.
+        if _last_catchup_check != project_day:
+            try:
+                prior_day = (local_now.date() - timedelta(days=1)).isoformat()
+                await asyncio.to_thread(take_project_balance_snapshots, prior_day, now)
+                _last_catchup_check = project_day
+            except Exception:
+                log.exception("Prior-night project backup catch-up failed")
         if (local_now.hour, local_now.minute) >= (23, 58) and _last_project_day != project_day:
             try:
                 await asyncio.to_thread(take_project_balance_snapshots, project_day, now)
