@@ -83,6 +83,11 @@ class ClosedBrowserPollingTests(TestCase):
             first_lulo = deepcopy(storage[(1, sync.LULO_SERVER_LEDGER_KEY)])
             first_loop = deepcopy(storage[(1, sync.LOOPSCALE_SERVER_LEDGER_KEY)])
             first_preview = deepcopy(storage[(1, sync.LULO_TRANSACTION_PREVIEW_KEY)])
+            backup_key = sync.LULO_CUTOVER_BACKUP_PREFIX + "lulo-1"
+            original_project = deepcopy(storage[(1, backup_key)])
+            self.assertEqual(original_project["project"]["earned"], 10.0)
+            self.assertEqual(original_project["project"]["lulo_last_synced_at"],
+                             "2026-10-30T17:00:00Z")
             self.assertIn("lulo-1", first_lulo)
             self.assertEqual(first_loop["positions"]["loop-one"]["lastPnlUsd"], 2)
             self.assertIn("lulo-1", first_preview)
@@ -92,6 +97,7 @@ class ClosedBrowserPollingTests(TestCase):
             self.assertEqual(storage[(1, sync.LULO_SERVER_LEDGER_KEY)], first_lulo)
             self.assertEqual(storage[(1, sync.LOOPSCALE_SERVER_LEDGER_KEY)], first_loop)
             self.assertEqual(storage[(1, sync.LULO_TRANSACTION_PREVIEW_KEY)], first_preview)
+            self.assertEqual(storage[(1, backup_key)], original_project)
             self.assertEqual(project.data["lulo_last_synced_at"], "2026-10-30T17:00:00Z")
             self.assertEqual(project.earned, 10.0)
 
