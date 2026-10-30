@@ -4,18 +4,19 @@ Readings are reference data, not independently verified rewards. Currency-price
 moves and transfers must never be silently recorded as mining earnings.
 """
 from datetime import datetime, timezone
+import re
 from math import isfinite
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
-from ..project_accounting import portfolio_summary
+from ..project_accounting import portfolio_summary, daily_income_summary
 
 router = APIRouter(prefix="/api/project-tracking", tags=["project tracking"])
 LATEST_KEY = "yield_project_latest_balance_feed_v1"
@@ -128,6 +129,59 @@ async def receive_latest(payload: dict, user: User = Depends(current_user),
     return {"status": "ok", "staleProjects": stale,
             "portfolio": portfolio_summary(list(projects.values())),
             "receivedAt": now.isoformat()}
+
+
+@router.put("/daily-earnings")
+async def store_daily_earnings(
+    payload: dict, user: User = Depends(current_user),
+    db: Session = Depends(get_db)
+) -> dict:
+    """Persist authenticated, signed per-source daily totals as audit history."""
+    now = datetime.now(timezone.utc)
+    day = str(payload.get("date") or "")
+    pacific_day = now.astimezone(ZoneInfo("America/Los_Angeles")).date().isoformat()
+    if day != pacific_day or not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day):
+        raise HTTPException(status_code=422, detail="Can only update the current Pacific day.")
+    sources = payload.get("sources")
+    if not isinstance(sources, dict) or len(sources) > 100:
+        raise HTTPException(status_code=422, detail="Invalid project sources.")
+    calculated = daily_income_summary(sources)
+    if not calculated["complete"]:
+        raise HTTPException(status_code=422, detail="Invalid signed daily project amount.")
+    key = f"yield_server_daily_income_{day}"
+    existing = setting(db, user.id, key)
+    existing = existing if isinstance(existing, dict) else {}
+    history = existing.get("observations")
+    history = history if isinstance(history, list) else []
+    if (not history or
+        abs(float(history[-1].get("totalUsd") or 0) - calculated["totalUsd"]) > 0.000001 or
+        history[-1].get("sources") != calculated["sources"]):
+        history.append({
+            "observedAt": now.isoformat(),
+            "totalUsd": calculated["totalUsd"],
+            "sources": calculated["sources"],
+        })
+        history = history[-300:]
+    record = {
+        "date": day,
+        "firstRecordedAt": existing.get("firstRecordedAt") or now.isoformat(),
+        "lastRecordedAt": now.isoformat(),
+        "totalUsd": calculated["totalUsd"],
+        "sources": calculated["sources"],
+        "observations": history,
+    }
+    save_setting(db, user.id, key, record)
+    db.commit()
+    return {"date": day, **calculated, "receivedAt": now.isoformat()}
+
+
+@router.get("/daily-earnings/{day}")
+async def read_daily_earnings(
+    day: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    if not re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}", day):
+        raise HTTPException(status_code=422, detail="Invalid date.")
+    return setting(db, user.id, f"yield_server_daily_income_{day}") or {"date": day, "sources": {}, "observations": []}
 
 
 @router.get("/portfolio")
