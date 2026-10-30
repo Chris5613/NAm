@@ -146,3 +146,78 @@ They may only be removed once historical parity has been checked against
 saved production tracker records. Browser-extension authentication still
 requires Chrome while the service is active, and server-owned external API
 polling for Lulo/Loopscale remains a separate migration.
+
+## Phase 3 — independent Lulo and Loopscale polling (2026-10-30)
+
+### Server-owned upstream connections
+
+`backend/yield_source_sync.py` now polls **registered public Solana wallets**
+from the server at five-minute intervals, even with the NAm browser tab
+closed (provided the backend is running).
+
+- **Lulo:** Fetches v1 account, pools, v0 custom account, and both dated
+  performance endpoints in parallel. The backend reconstructs the same
+  regular/protected/USDS balances, weighted APY, lifetime interest,
+  and five-completed-day earnings average the browser displays.
+- **Loopscale:** Fetches the borrower loan-info endpoint using the existing
+  page-0, 25-item configuration. It selects the borrower's active ONyc
+  loop, calculates the net equity after principal and accrued interest,
+  prioritizes the protocol's UI P/L field, and derives its daily net
+  yield and net APY.
+- The scheduler stores **read-only** normalized snapshots under
+  `yield_backend_source_snapshots_v1` and bounded observation history under
+  `yield_backend_source_observations_v1`. It does **not** mutate projects,
+  transactions, monthly earnings, or historical balance corrections.
+- Endpoints `PUT /api/yield-sources/wallets`,
+  `GET /api/yield-sources/latest`, and `GET /api/yield-sources/history`
+  are authenticated. Registrations allow only base58-form public Solana
+  addresses, never private keys or arbitrary provider URLs.
+- Only wallets that have been registered from the updated frontend will be
+  polled. A user must open the deployed NAm site **at least once** after
+  rollout to persist wallet configuration.
+
+### Safe frontend transition
+
+The existing live API paths remain operational:
+
+- The page registers its known Lulo project addresses and its configured
+  Loopscale wallet with the backend.
+- Lulo and Loopscale first check for a backend snapshot newer than their
+  existing source reading and at most two minutes old.
+- Stale, invalid, future-dated, or unexpectedly large balance changes
+  fall back to the provider's existing direct API request.
+- A large difference is not silently booked as yield: existing Lulo
+  transaction anti-artifact filtering and Loopscale's original P/L history
+  remain in control of accounting.
+
+This does not change the displayed design, labels, or controls.
+
+### Nightly backups while the browser is closed
+
+At 11:58 PM Pacific the existing project backup attempts to overlay newer
+server-polled Lulo/Loopscale USD totals onto a **copy** of the last
+browser-reported project balance feed, only when the server observation is
+at most 20 minutes old and newer than the browser observation.
+
+The browser's old per-asset quantities cannot be assumed to match this
+newer total: those are marked stale and excluded from quantity-based
+recovery. Other projects retain their original source timestamps, so
+RollerCoin/Salad/Unetwork/Kryptex do not claim false server-sourced updates.
+
+### Preconditions and boundaries
+
+- The backend needs continuous runtime, PostgreSQL, and a configured
+  `LULO_API_KEY` environment variable for Lulo polling.
+- Loopscale uses its server-accessible fixed HTTPS API endpoint and the
+  user's previously configured public wallet address.
+- A browser-independent read-only balance observation is **not** an
+  independently verified earned-income transaction. Lulo's client-side
+  cash-flow/interest correction algorithm and the Loopscale observed-P/L
+  ledger are intentionally unchanged for this phase.
+- API rate limits, provider outages, and the lack of a confirmed upstream
+  production response can delay or prevent snapshots; errors are stored,
+  not replaced with fabricated zeros.
+- This phase includes regression fixtures for normalization, Pacific-day
+  timestamps, account validation, and stale-backup overlays. A live
+  end-to-end check against the deployed database and provider services is
+  still required.
