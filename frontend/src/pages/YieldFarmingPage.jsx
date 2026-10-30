@@ -33,6 +33,7 @@ const LULO_MONTHLY_BASELINE_KEY = "yield_lulo_monthly_baselines_v1";
 const MONTHLY_SNAPSHOT_KEY = "yield_monthly_snapshots_v1";
 const DAILY_BALANCE_SNAPSHOT_KEY = "yield_daily_project_balance_snapshots_v1";
 const DAILY_EARNINGS_CHART_OBSERVATIONS_KEY = "yield_daily_earnings_chart_observations_v1";
+const AUTO_RECOVERED_EARNINGS_KEY = "yield_auto_recovered_earnings_v1";
 const LOOPSCALE_HISTORY_KEY = "yield_loopscale_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
@@ -7639,6 +7640,27 @@ const importSaladPayload =
   // confirmed token snapshot. This is a guarded display fallback, not a
   // ledger mutation: transfers cannot reliably be inferred from a balance.
   const [projectRecovery, setProjectRecovery] = useState(null);
+  const [recoveredEarningsByDay, setRecoveredEarningsByDay] = useState(
+    () => readObject(AUTO_RECOVERED_EARNINGS_KEY)
+  );
+  useEffect(() => {
+    const day = getTodayKey();
+    const previous = new Date(day + "T12:00:00Z");
+    previous.setUTCDate(previous.getUTCDate() - 1);
+    const previousDay = previous.toISOString().slice(0, 10);
+    if (projectRecovery?.referenceDate !== previousDay) return;
+    const item = (projectRecovery?.candidates || []).find(
+      entry => entry.id === "rollercoin-project" && entry.eligibleForGuardedRecovery
+    );
+    const usd = Number(item?.usdAtCurrentPrice);
+    if (!item || !Number.isFinite(usd) || usd <= 0) return;
+    const existing = readObject(AUTO_RECOVERED_EARNINGS_KEY);
+    const saved = Number(existing?.[day]?.RollerCoin) || 0;
+    if (usd <= saved + 0.000001) return;
+    const next = { ...existing, [day]: { ...(existing?.[day] || {}), RollerCoin: usd } };
+    saveObject(AUTO_RECOVERED_EARNINGS_KEY, next);
+    setRecoveredEarningsByDay(next);
+  }, [projectRecovery]);
   useEffect(() => {
     let active = true;
     const refresh = async () => {
@@ -7711,7 +7733,8 @@ const importSaladPayload =
         ? Number(candidate.usdAtCurrentPrice) : 0;
       // A snapshot recovery and live wallet deltas describe overlapping
       // token changes; MAX avoids counting the same TRX twice.
-      const totalUsd = Math.max(trackedTotalUsd, recoveredUsd);
+      const persistedRecoveryUsd = Number(recoveredEarningsByDay?.[key]?.RollerCoin) || 0;
+      const totalUsd = Math.max(trackedTotalUsd, recoveredUsd, persistedRecoveryUsd);
       if (totalUsd !== 0) sources.RollerCoin = totalUsd;
       else delete sources.RollerCoin;
     } else if (minedEntry) {
