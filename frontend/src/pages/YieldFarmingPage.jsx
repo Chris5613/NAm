@@ -2216,8 +2216,8 @@ function updateLoopscaleHistoryFromSnapshot(history, snapshot) {
     : null;
   if (observationDay && previousDay &&
       Number.isFinite(previousPnl) && incomingTime > previousTime) {
-    const increase = Math.max(0, pnlUsd - previousPnl);
-    if (increase > 0) {
+    const increase = pnlUsd - previousPnl;
+    if (Math.abs(increase) > 0.000000001) {
       observedDaily[observationDay] = Number((
         (Number(observedDaily[observationDay]) || 0) + increase
       ).toFixed(8));
@@ -2247,7 +2247,7 @@ function updateLoopscaleHistoryFromSnapshot(history, snapshot) {
 
   const baseline = Number(monthBaselines[currentMonth]);
   monthlyEarnings[currentMonth] = Number(
-    Math.max(0, pnlUsd - baseline).toFixed(8)
+    (pnlUsd - baseline).toFixed(8)
   );
 
   // Record observation timestamps for reconciliation without pretending the
@@ -7422,16 +7422,14 @@ const importSaladPayload =
     });
   }, [luloMonthlyBaselines]);
 
-  // Reconcile Loopscale's timestamped positive P/L observations into the
-  // persisted daily ledger. The ledger survives temporary missing snapshots
-  // and automatic page reloads; max() avoids counting the same increase twice.
+  // Reconcile signed Loopscale daily changes, including decreases.
   useEffect(() => {
     const observedByDay = {};
     Object.values(loopscaleHistory?.positions || {}).forEach(position => {
       Object.entries(position?.observedDaily || {}).forEach(([day, raw]) => {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
+        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day)) return;
         const amount = Number(raw);
-        if (!Number.isFinite(amount) || amount <= 0) return;
+        if (!Number.isFinite(amount)) return;
         observedByDay[day] = (observedByDay[day] || 0) + amount;
       });
     });
@@ -7441,12 +7439,9 @@ const importSaladPayload =
       const days = { ...previous.days };
       for (const [day, amount] of Object.entries(observedByDay)) {
         const existing = days[day]?.sources || {};
-        const prior = Math.max(0, Number(existing.Loopscale) || 0);
-        if (amount <= prior + 0.00000001) continue;
-        days[day] = {
-          ...days[day],
-          sources: { ...existing, Loopscale: Number(amount.toFixed(8)) },
-        };
+        const net = Number(amount.toFixed(8));
+        if (Math.abs((Number(existing.Loopscale) || 0) - net) < 0.00000001) continue;
+        days[day] = { ...days[day], sources: { ...existing, Loopscale: net } };
         changed = true;
       }
       if (!changed) return previous;
@@ -7553,16 +7548,12 @@ const importSaladPayload =
         reportedLuloDaily
       );
     }
-    // A date-specific Loopscale observation can supplement the generic
-    // monthly-increase ledger. Use the larger value, never add both.
-    const observedLoopscale = Object.values(loopscaleHistory?.positions || {})
-      .reduce((sum, position) => sum +
-        Math.max(0, Number(position?.observedDaily?.[key]) || 0), 0);
-    if (observedLoopscale > 0) {
-      sources.Loopscale = Math.max(
-        Math.max(0, Number(sources.Loopscale) || 0),
-        observedLoopscale
-      );
+    // Signed daily observations override stale positive-only ledger totals.
+    const positionsForDay = Object.values(loopscaleHistory?.positions || {})
+      .filter(position => Object.prototype.hasOwnProperty.call(position?.observedDaily || {}, key));
+    if (positionsForDay.length) {
+      sources.Loopscale = positionsForDay.reduce((sum, position) =>
+        sum + (Number(position.observedDaily[key]) || 0), 0);
     }
     return sources;
   };
@@ -7596,7 +7587,7 @@ const importSaladPayload =
     return { label, note, entries, total: entries.reduce((sum,item)=>sum+item.amount,0) };
   })();
   const todayBreakdown = Object.entries(dailySourceTotals)
-    .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
+    .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) !== 0)
     .map(([name,amount]) => ({ name, amount: Number(amount) }))
     .sort((a,b) => b.amount - a.amount);
   const todayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
@@ -7608,7 +7599,7 @@ const importSaladPayload =
     const key = day.toISOString().slice(0,10);
     const sources = sourceTotalsForDay(key);
     const value = Object.keys(sources).length
-      ? Object.values(sources).reduce((sum,amount) => sum + Math.max(0,Number(amount)||0),0)
+      ? Object.values(sources).reduce((sum,amount) => sum + (Number(amount)||0),0)
       : null;
     return {
       key,
@@ -7667,7 +7658,7 @@ const importSaladPayload =
   [...fixedHours, ...observedPoints].forEach(point => {
     if (!Number.isFinite(point.x) || !Number.isFinite(point.value)) return;
     const hour = Math.max(0, Math.min(currentHour, point.x));
-    const value = Math.max(0, Math.min(todayEarnings, point.value));
+    const value = point.value;
     dailyPointsByHour.set(hour, Math.max(dailyPointsByHour.get(hour) || 0, value));
   });
   let runningTotal = 0;
@@ -7681,12 +7672,13 @@ const importSaladPayload =
   if (!lastObserved || currentHour > lastObserved.x) {
     dailyChartData.push({
       x: currentHour,
-      value: Math.max(runningTotal, todayEarnings),
+      value: todayEarnings,
     });
   } else if (lastObserved.x === currentHour) {
-    lastObserved.value = Math.max(lastObserved.value, todayEarnings);
+    lastObserved.value = todayEarnings;
   }
   const dailyChartMax = Math.max(0.1, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
+  const dailyChartMin = Math.min(0, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
   const monthlyChartData = projectIncome
     .filter(month => /^\d{4}-\d{2}$/.test(String(month.monthKey)) && Number.isFinite(Number(month.total)))
     .map(month => ({
@@ -8234,7 +8226,7 @@ const summary =
                   {currentHour < 24 && <ReferenceArea x1={currentHour} x2={24} fill="#02070d" fillOpacity={0.38} strokeOpacity={0} ifOverflow="hidden" />}
                   <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="x" type="number" domain={[0,24]} ticks={[0,4,8,12,16,20,24]} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} tickFormatter={hour => hour === 0 ? "12am" : hour === 12 ? "12pm" : hour === 24 ? "12am" : hour < 12 ? hour+"am" : (hour-12)+"pm"}/>
-                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,dailyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[dailyChartMin,dailyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
                   <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={hour => {
                     const rounded = Math.max(0, Math.min(24,Number(hour)));
                     const hours = Math.floor(rounded);
@@ -8312,7 +8304,7 @@ const summary =
         <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
           <div className="mt-4 flex flex-col items-center gap-2">
-            <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100)}%, #25313d 0)`}}>
+            <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.max(0,Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100))}%, #25313d 0)`}}>
               <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0b1017]">
                 <strong className="text-xl font-semibold tabular-nums">{formatCurrency(todayEarnings)}</strong>
                 <span className="text-[10px] text-muted-foreground">Today so far</span>
@@ -8323,14 +8315,14 @@ const summary =
           <div className="mt-4 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="text-[12px] font-semibold">Where today's earnings came from</h3>
-              <span className="text-[10px] text-muted-foreground">Tracked increases</span>
+              <span className="text-[10px] text-muted-foreground">Net daily P/L</span>
             </div>
             {todayBreakdown.length ? (
               <div className="space-y-2">
                 {todayBreakdown.map(source => (
                   <div key={source.name} className="flex items-center justify-between gap-3 text-xs">
                     <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
-                    <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{source.name === "Loopscale" && source.amount < 0.01
+                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{source.name === "Loopscale" && source.amount < 0.01
                       ? `${source.amount.toFixed(6)}`
                       : formatCurrency(source.amount)}</span>
                   </div>
