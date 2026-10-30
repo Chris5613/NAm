@@ -3891,74 +3891,7 @@ export default function YieldFarmingPage() {
     ]
   );
 
-  useEffect(() => {
-  let cancelled = false;
-
-  const refreshRollerCoinPrice =
-    async () => {
-      try {
-        const price =
-          Number(
-            await fetchLiveTrxPrice()
-          ) || 0;
-
-        if (
-          cancelled ||
-          !(price > 0)
-        ) {
-          return;
-        }
-
-        setRollerCoinTracker(
-          (current) => {
-            const previousPrice =
-              Number(
-                current?.lastTrxPrice
-              ) || 0;
-
-            if (
-              Math.abs(
-                previousPrice -
-                  price
-              ) <
-              0.00000001
-            ) {
-              return current;
-            }
-
-            return {
-              ...current,
-              lastTrxPrice:
-                price,
-            };
-          }
-        );
-      } catch (
-        error
-      ) {
-        console.error(
-          "Could not refresh RollerCoin TRX price:",
-          error
-        );
-      }
-    };
-
-  refreshRollerCoinPrice();
-
-  const timer =
-    window.setInterval(
-      refreshRollerCoinPrice,
-      60_000
-    );
-
-  return () => {
-    cancelled = true;
-
-    window.clearInterval(
-      timer
-    );
-  };
-}, []);
+  // One TRX price polling loop below (every 5 minutes) is sufficient.
 
   useEffect(
     () => {
@@ -7517,29 +7450,21 @@ const importSaladPayload =
   }, [todayKey, savedLoopscaleReference, currentLoopscaleReference]);
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
-    // Live USD value of TRX mined on this date. This can move up OR down
-    // with TRX/USD without mislabeling older months' price changes as
-    // newly mined TRX. Retain dated TRX counts across incomplete syncs.
-    delete sources.RollerCoin;
+    // Mining earnings are dated amounts, not a repricing of historical TRX.
+    // Keep recorded historical ledger values, but never invent today's mining
+    // earnings from yesterday's snapshots or a changing market quote.
     const minedEntry = rollerCoinTracker?.daily?.[key];
-    const minedTrx = Number(minedEntry?.trx ?? minedEntry?.sol);
-    const livePrice = Number(rollerCoinTracker?.lastTrxPrice) ||
-      Number(minedEntry?.trxPrice ?? minedEntry?.solPrice) || 0;
-    const datedMiningUsd = Number.isFinite(minedTrx) && minedTrx > 0 && livePrice > 0
-      ? minedTrx * livePrice
-      : 0;
-    const anchor = rollerCoinRestoredAnchors?.[key];
-    const referencePrice = Number(anchor?.trxPrice);
-    const restoredUsd = Number(anchor?.usd);
-    const repricedHistory = restoredUsd > 0 && referencePrice > 0 && livePrice > 0
-      ? restoredUsd * livePrice / referencePrice
-      : 0;
-    // Use the previously recorded daily amount when it exceeds the dated
-    // API record; do not sum them because both represent RollerCoin.
-    // This explicitly restores legacy daily figures, including any earlier
-    // month-to-date repricing that was folded into those figures.
-    const rollerCoinDailyUsd = Math.max(datedMiningUsd, repricedHistory);
-    if (rollerCoinDailyUsd > 0) sources.RollerCoin = rollerCoinDailyUsd;
+    if (key === todayKey) delete sources.RollerCoin;
+    if (minedEntry) {
+      const minedTrx = Number(minedEntry.trx ?? minedEntry.sol);
+      const recordedUsd = Number(minedEntry.usd);
+      const syncedPrice = Number(minedEntry.trxPrice ?? minedEntry.solPrice);
+      const datedMiningUsd = Number.isFinite(recordedUsd) && recordedUsd > 0
+        ? recordedUsd
+        : Number.isFinite(minedTrx) && minedTrx > 0 && syncedPrice > 0
+          ? minedTrx * syncedPrice : 0;
+      if (datedMiningUsd > 0) sources.RollerCoin = datedMiningUsd;
+    }
     if (key === SALAD_FIXED_DAY) {
       // Preserve the verified 00:00–09:00 earnings, then take the later
       // earnings from the extension's dated full-day total when available.
