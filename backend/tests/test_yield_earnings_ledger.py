@@ -24,7 +24,9 @@ def lulo_sample(interest, balance=1000, stamp="2026-10-30T18:00:00Z"):
 
 class LoopscaleLedgerTests(unittest.TestCase):
     def test_first_observation_of_existing_loan_becomes_baseline(self):
-        result = advance_loopscale_history({}, loop_sample(1.8))
+        result = advance_loopscale_history(
+            {}, loop_sample(1.8, started="2026-09-01T12:00:00Z")
+        )
         position = result["positions"][LOAN]
         self.assertEqual(position["monthBaselines"]["2026-10"], 1.8)
         self.assertEqual(position["monthlyEarnings"]["2026-10"], 0)
