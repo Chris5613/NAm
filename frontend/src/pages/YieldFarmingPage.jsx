@@ -7427,7 +7427,7 @@ const importSaladPayload =
     const observedByDay = {};
     Object.values(loopscaleHistory?.positions || {}).forEach(position => {
       Object.entries(position?.observedDaily || {}).forEach(([day, raw]) => {
-        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day)) return;
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return;
         const amount = Number(raw);
         if (!Number.isFinite(amount)) return;
         observedByDay[day] = (observedByDay[day] || 0) + amount;
@@ -7650,24 +7650,23 @@ const importSaladPayload =
         value: (isFixedSaladDay || isFixedLuloDay ? fixedIncomeAtHour(hour) : 0) + otherObserved,
       };
     });
-  // Fixed hourly estimates and observed snapshots can land at the same
-  // clock position. Combine duplicate times, then preserve a cumulative
-  // running maximum so out-of-order or corrected syncs never make the
-  // earnings line plunge and rebound.
+  // Keep actual observed net earnings, including corrections and losses.
+  // Fixed estimates provide a baseline only until an observed value exists
+  // at the same hour; never carry an old peak into later observations.
   const dailyPointsByHour = new Map();
-  [...fixedHours, ...observedPoints].forEach(point => {
+  fixedHours.forEach(point => {
     if (!Number.isFinite(point.x) || !Number.isFinite(point.value)) return;
     const hour = Math.max(0, Math.min(currentHour, point.x));
-    const value = point.value;
-    dailyPointsByHour.set(hour, Math.max(dailyPointsByHour.get(hour) || 0, value));
+    dailyPointsByHour.set(hour, point.value);
   });
-  let runningTotal = 0;
+  observedPoints.forEach(point => {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.value)) return;
+    const hour = Math.max(0, Math.min(currentHour, point.x));
+    dailyPointsByHour.set(hour, point.value);
+  });
   const dailyChartData = [...dailyPointsByHour.entries()]
     .sort(([a],[b]) => a - b)
-    .map(([x,value]) => {
-      runningTotal = Math.max(runningTotal, value);
-      return { x, value: runningTotal };
-    });
+    .map(([x,value]) => ({ x, value }));
   const lastObserved = dailyChartData[dailyChartData.length - 1];
   if (!lastObserved || currentHour > lastObserved.x) {
     dailyChartData.push({
