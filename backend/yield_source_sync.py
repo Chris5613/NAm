@@ -489,8 +489,10 @@ def poll_sources_for_user(user_id: int) -> int:
             shadow = old_previews.get(project_id)
             from_legacy = parse_time(project.get("lulo_last_synced_at"))
             from_shadow = parse_time(shadow.get("lulo_last_synced_at")) if isinstance(shadow, dict) else None
-            baseline = shadow if isinstance(shadow, dict) and from_shadow and (
-                from_legacy is None or from_shadow >= from_legacy
+            baseline = shadow if (
+                isinstance(shadow, dict) and
+                shadow.get("lulo_wallet_address") == wallet and from_shadow and
+                (from_legacy is None or from_shadow >= from_legacy)
             ) else project
             proposal = reconcile_lulo_project(baseline, snapshot)
             if proposal != baseline:
