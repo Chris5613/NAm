@@ -7741,12 +7741,41 @@ const importSaladPayload =
     ? [{ x: 0, value: -0.86 }] : [];
   const dailyChartPoints = [...observedStart, ...storedDailyChartPoints]
     .filter(point => Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.value)))
-    .map(point => ({ x: Number(point.x), value: Number(point.value) }))
+    .map(point => ({ x: Math.max(0, Math.min(24, Number(point.x))), value: Number(point.value) }))
     .sort((a, b) => a.x - b.x);
-  const dailyChartData = dailyChartPoints.length
-    ? dailyChartPoints : [{ x: 0, value: 0 }];
-  // Latest value is authoritative even if the persistence effect has not
-  // finished saving the observation yet.
+  // Several extensions can update almost simultaneously, making brief
+  // down/up corrections draw needle-like spikes. Consolidate the *visual*
+  // readings into fifteen-minute windows; the saved raw observations and
+  // real earnings totals remain untouched.
+  const chartBuckets = new Map();
+  dailyChartPoints.forEach(point => {
+    const bucket = Math.floor(point.x * 4);
+    if (!chartBuckets.has(bucket)) chartBuckets.set(bucket, []);
+    chartBuckets.get(bucket).push(point);
+  });
+  const bucketPoints = [...chartBuckets.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, points]) => {
+      const sortedValues = points.map(point => point.value).sort((a, b) => a - b);
+      const mid = Math.floor(sortedValues.length / 2);
+      const median = sortedValues.length % 2
+        ? sortedValues[mid]
+        : (sortedValues[mid - 1] + sortedValues[mid]) / 2;
+      return { x: points[points.length - 1].x, value: median };
+    });
+  // A single outlier bracketed by similar readings is an update artifact,
+  // not a sustained change. Keep actual changes and recovery trends.
+  const cleanPoints = bucketPoints.map((point, index) => {
+    if (index === 0 || index === bucketPoints.length - 1) return point;
+    const left = bucketPoints[index - 1];
+    const right = bucketPoints[index + 1];
+    const neighborDifference = Math.abs(left.value - right.value);
+    const spikeSize = Math.abs(point.value - (left.value + right.value) / 2);
+    return neighborDifference < 0.03 && spikeSize > 0.06
+      ? { ...point, value: (left.value + right.value) / 2 } : point;
+  });
+  const dailyChartData = cleanPoints.length ? [...cleanPoints] : [{ x: 0, value: 0 }];
+  // Always end at the authoritative current total, not a smoothed estimate.
   if (dailyChartData[dailyChartData.length - 1].x < currentHour) {
     dailyChartData.push({ x: currentHour, value: todayEarnings });
   } else {
@@ -8323,7 +8352,7 @@ const summary =
                     const mins = Math.floor((rounded-hours)*60);
                     return `${String(hours).padStart(2,"0")}:${String(mins).padStart(2,"0")} PT`;
                   }} formatter={value=>[formatCurrency(value),"Recorded today"]}/>
-                  <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
+                  <Area type="monotoneX" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
                 </AreaChart>
               ) : earningsChartRange === "weekly" ? (
                 <AreaChart data={weekDays} margin={{top:28,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? weekDays[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly",key:day}); }}>
