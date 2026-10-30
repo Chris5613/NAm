@@ -25,7 +25,12 @@ class FakeSession:
     def __exit__(self, *_):
         return False
 
-    def scalars(self, _stmt):
+    def scalars(self, stmt):
+        # A relational transaction query should return its independent
+        # rows rather than treating Project rows as transactions.
+        entity = stmt.column_descriptions[0].get("entity")
+        if entity is sync.ProjectTransaction:
+            return SimpleNamespace(all=lambda: [])
         return SimpleNamespace(all=lambda: self.projects)
 
     def commit(self):
