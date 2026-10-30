@@ -1,3 +1,38 @@
+// Reload an already-open RollerCoin tab every 10 minutes. No tab is opened
+// automatically, and the extension's existing content scripts resume after reload.
+const ROLLERCOIN_RELOAD_ALARM = "rollercoin-tab-reload";
+const ROLLERCOIN_RELOAD_MINUTES = 10;
+
+async function ensureRollerCoinReloadAlarm() {
+  const alarm = await chrome.alarms.get(ROLLERCOIN_RELOAD_ALARM);
+  if (!alarm) {
+    await chrome.alarms.create(ROLLERCOIN_RELOAD_ALARM, {
+      periodInMinutes: ROLLERCOIN_RELOAD_MINUTES,
+    });
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => {
+  ensureRollerCoinReloadAlarm().catch(console.error);
+});
+chrome.runtime.onStartup.addListener(() => {
+  ensureRollerCoinReloadAlarm().catch(console.error);
+});
+ensureRollerCoinReloadAlarm().catch(console.error);
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== ROLLERCOIN_RELOAD_ALARM) return;
+  try {
+    const tab = await getRollerCoinTab();
+    if (tab?.id != null) {
+      await chrome.tabs.reload(tab.id);
+      console.log("[RC BG] Automatically reloaded RollerCoin tab");
+    }
+  } catch (error) {
+    console.warn("[RC BG] Automatic RollerCoin reload failed:", error);
+  }
+});
+
 let latestRollercoinPayload = null;
 
 async function getRollerCoinTab() {
