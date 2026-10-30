@@ -21,6 +21,11 @@ from sqlalchemy import select
 
 from .db import SessionLocal
 from .models import Setting, User
+from .models import Project
+from .yield_earnings_state import (
+    reconcile_backend_ledgers, LULO_SERVER_LEDGER_KEY, LOOPSCALE_SERVER_LEDGER_KEY,
+    LULO_LEGACY_LEDGER_KEY, LOOPSCALE_LEGACY_LEDGER_KEY,
+)
 from .provider_stats import numeric
 
 log = logging.getLogger(__name__)
@@ -439,6 +444,28 @@ def poll_sources_for_user(user_id: int) -> int:
         items = (items + history_entries)[-MAX_OBSERVATIONS:]
         _write(db, user_id, HISTORY_KEY, {"items": items, "updatedAt": utc_iso(now)})
         _write(db, user_id, SNAPSHOTS_KEY, updated)
+        # Advance server-owned *shadow* earnings ledgers from the newest
+        # provider observations. Seed from the existing legacy settings,
+        # preserving all prior manual corrections and monthly baselines.
+        # Do NOT mutate project.transactions or the legacy history keys.
+        saved_lulo = _read(db, user_id, LULO_SERVER_LEDGER_KEY)
+        saved_loopscale = _read(db, user_id, LOOPSCALE_SERVER_LEDGER_KEY)
+        projects = []
+        for row in db.scalars(select(Project).where(Project.user_id == user_id)).all():
+            project = dict(row.data or {})
+            project["id"] = row.id
+            project["yield_tracking"] = project.get("yield_tracking")
+            projects.append(project)
+        result = reconcile_backend_ledgers(
+            saved_lulo, saved_loopscale,
+            _read(db, user_id, LULO_LEGACY_LEDGER_KEY),
+            _read(db, user_id, LOOPSCALE_LEGACY_LEDGER_KEY),
+            projects, updated,
+        )
+        if result["lulo"] != saved_lulo:
+            _write(db, user_id, LULO_SERVER_LEDGER_KEY, result["lulo"])
+        if result["loopscale"] != saved_loopscale:
+            _write(db, user_id, LOOPSCALE_SERVER_LEDGER_KEY, result["loopscale"])
         db.commit()
     return checked
 
