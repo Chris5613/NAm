@@ -6,7 +6,7 @@ Only a reproducible same-snapshot match may count toward cutover readiness.
 from __future__ import annotations
 
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from math import isfinite
 from typing import Any
 
@@ -105,7 +105,7 @@ def parity_observation(
         return {"status": "invalid", "reason": "invalid-project"}
     if not snapshot.get("walletAddress") or snapshot.get("walletAddress") != before.get("lulo_wallet_address"):
         return {"status": "invalid", "reason": "wallet-mismatch"}
-    if at is None or observed is None or observed > at or at > now.replace(tzinfo=timezone.utc) + __import__("datetime").timedelta(minutes=5):
+    if at is None or observed is None or observed > at + timedelta(seconds=15) or at > now + timedelta(minutes=5):
         return {"status": "invalid", "reason": "invalid-time"}
     if abs((now - at).total_seconds()) > MAX_OBSERVATION_AGE_SECONDS:
         return {"status": "invalid", "reason": "expired-application"}
