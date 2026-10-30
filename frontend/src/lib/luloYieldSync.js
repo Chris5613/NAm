@@ -256,7 +256,7 @@ function fulfilledValue(result) {
 
 export async function getLuloYieldSnapshot(
   walletAddress,
-  { newerThan = null } = {}
+  { newerThan = null, referenceBalanceUsd = null } = {}
 ) {
   if (!walletAddress) {
     throw new Error(
@@ -268,7 +268,7 @@ export async function getLuloYieldSnapshot(
   // upstream endpoints again. Keep the existing API path as a fallback,
   // and never accept a stale observation over a newer project reading.
   const persisted = await getFreshBackendYieldSnapshot(
-    "lulo", walletAddress, newerThan
+    "lulo", walletAddress, newerThan, referenceBalanceUsd
   );
   if (persisted) return persisted;
 
