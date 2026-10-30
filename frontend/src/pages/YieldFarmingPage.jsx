@@ -4668,9 +4668,7 @@ const summary =
       sortedProgramCards,
       rollerCoinStats,
       saladStats,
-      saladTracker,
       unetworkStats,
-      unetworkTracker,
       kryptexStats,
       serverPortfolio,
     ]
