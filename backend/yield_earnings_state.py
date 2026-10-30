@@ -51,17 +51,19 @@ def seed_loopscale_history(canonical: Any, legacy: Any) -> dict:
             # those periods and observation timestamps during promotion.
             combined = {**deepcopy(previous), **deepcopy(item)}
             for field in ("monthBaselines", "monthlyEarnings", "observedDaily"):
-                combined[field] = {
-                    **(previous.get(field) or {}),
-                    **(item.get(field) or {}),
-                }
-            observations = {}
-            for entry in (previous.get("observations") or []) + (item.get("observations") or []):
-                if isinstance(entry, dict) and entry.get("syncedAt"):
-                    observations[entry["syncedAt"]] = deepcopy(entry)
-            combined["observations"] = [
-                observations[key] for key in sorted(observations)
-            ][-1440:]
+                if field in previous or field in item:
+                    combined[field] = {
+                        **(previous.get(field) or {}),
+                        **(item.get(field) or {}),
+                    }
+            if "observations" in previous or "observations" in item:
+                observations = {}
+                for entry in (previous.get("observations") or []) + (item.get("observations") or []):
+                    if isinstance(entry, dict) and entry.get("syncedAt"):
+                        observations[entry["syncedAt"]] = deepcopy(entry)
+                combined["observations"] = [
+                    observations[key] for key in sorted(observations)
+                ][-1440:]
             merged[key] = combined
     saved["positions"] = merged
     return saved
