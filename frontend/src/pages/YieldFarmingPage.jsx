@@ -3,6 +3,8 @@ import { remoteStorage } from "@/lib/serverStore";
 import { projectsApi } from "@/lib/api";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { coinGeckoApi } from "@/lib/external-apis";
+import { api } from "@/lib/apiClient";
+import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Area, AreaChart, CartesianGrid, LabelList, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -7213,6 +7215,105 @@ const importSaladPayload =
     sortedProgramCards, inactiveProjectIds, rollerCoinStats,
     rollerCoinTracker, saladTracker, unetworkTracker, kryptexTracker,
   ]);
+
+  // Keep an authenticated, durable server copy of the last known project
+  // readings. This feeds the nightly backup even when the browser is closed.
+  // Source timestamps are retained so stale extension values cannot masquerade
+  // as freshly polled external balances.
+  const liveProjectFeedRef = useRef([]);
+  const liveProjectFeed = sortedProgramCards.map(item => {
+    const project = item.project;
+    const sourceTimes = {
+      rollercoin: rollerCoinTracker?.balanceSyncedAt,
+      salad: saladTracker?.lastSyncedAt,
+      unetwork: unetworkTracker?.lastSyncedAt,
+      kryptex: kryptexTracker?.lastSyncedAt,
+    };
+    const time = item.type === "project"
+      ? project?.lastSyncedAt || project?.last_synced_at || null
+      : sourceTimes[item.type] || null;
+    const base = {
+      id: String(item.key),
+      name: item.type === "project"
+        ? String(project?.name || project?.platform || item.key)
+        : item.type,
+      balanceUsd: Number(item.amount) || 0,
+      inactive: inactiveProjectIds.includes(String(item.key)),
+      sourceLastSyncedAt: time,
+      requiresLiveSync: item.type !== "project" ||
+        Boolean(project?.lastSyncedAt || project?.last_synced_at),
+    };
+    if (item.type === "rollercoin") {
+      return { ...base,
+        balanceTrx: Number(rollerCoinStats?.currentTrxBalance) || 0,
+        trxUsdPrice: Number(rollerCoinStats?.liveTrxPrice) || 0 };
+    }
+    if (item.type === "salad") return {
+      ...base, lifetimeEarnedUsd: Number(saladTracker?.lifetimeBalance) || 0,
+    };
+    if (item.type === "project") {
+      return { ...base,
+        assetBalances: Array.isArray(project?.assets)
+          ? project.assets.map(asset => ({
+              symbol: asset?.symbol || asset?.ticker || "",
+              amount: Number.isFinite(Number(asset?.balance ?? asset?.amount))
+                ? Number(asset?.balance ?? asset?.amount) : null,
+              balanceUsd: Number.isFinite(Number(asset?.valueUsd ?? asset?.value))
+                ? Number(asset?.valueUsd ?? asset?.value) : null,
+            }))
+          : [],
+      };
+    }
+    return base;
+  });
+  liveProjectFeedRef.current = liveProjectFeed;
+  useEffect(() => {
+    let active = true;
+    let lastAlertText = "";
+    let lastAlertTime = 0;
+    let consecutiveFailures = 0;
+    const report = async () => {
+      if (!active) return;
+      try {
+        const result = await api.put("/api/project-tracking/latest", {
+          projects: liveProjectFeedRef.current,
+        });
+        consecutiveFailures = 0;
+        // Delayed or broken syncs are actionable, but avoid repeated toasts.
+        const names = Array.isArray(result?.staleProjects)
+          ? result.staleProjects.filter(Boolean) : [];
+        if (names.length && document.visibilityState === "visible") {
+          const alertText = names.join(", ");
+          const now = Date.now();
+          if (alertText !== lastAlertText || now - lastAlertTime > 60 * 60 * 1000) {
+            lastAlertText = alertText;
+            lastAlertTime = now;
+            toast.warning("Project sync delayed", {
+              description: names.join(", ") + " has not reported a recent reading.",
+              duration: 6500,
+            });
+          }
+        }
+      } catch {
+        consecutiveFailures += 1;
+        if (consecutiveFailures === 3 && document.visibilityState === "visible") {
+          toast.error("Project backup unavailable", {
+            description: "The latest project balances could not reach the server.",
+            duration: 6500,
+          });
+        }
+      }
+    };
+    report();
+    const interval = window.setInterval(report, 60000);
+    const visible = () => { if (!document.hidden) report(); };
+    document.addEventListener("visibilitychange", visible);
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", visible);
+    };
+  }, []);
 
   const activeProgramCards = sortedProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key)));
   const inactiveProgramCards = sortedProgramCards.filter(item => inactiveProjectIds.includes(String(item.key)));
