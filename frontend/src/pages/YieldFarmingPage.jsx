@@ -7488,6 +7488,9 @@ const importSaladPayload =
   const LULO_FIXED_DAY = "2026-10-29";
   const LULO_FIXED_TOTAL = 0.36;
   const LULO_FIXED_END_HOUR = 14;
+  // One-day display override only; do not change saved Loopscale P/L.
+  const LOOPSCALE_FIXED_DISPLAY_DAY = "2026-10-29";
+  const LOOPSCALE_FIXED_DISPLAY_USD = 2;
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     // Live USD value of TRX mined on this date. This can move up OR down
@@ -7557,6 +7560,11 @@ const importSaladPayload =
     if (loopscalePositions.length) {
       sources.Loopscale = loopscalePositions.reduce((sum, position) =>
         sum + (Number(position.observedDaily[key]) || 0), 0);
+    }
+    // Only on Oct 29 Pacific time: include $2 in the displayed daily total.
+    // On later days (including when reviewing Oct 29 history), use real P/L.
+    if (key === todayKey && todayKey === LOOPSCALE_FIXED_DISPLAY_DAY) {
+      sources.Loopscale = LOOPSCALE_FIXED_DISPLAY_USD;
     }
     return sources;
   };
