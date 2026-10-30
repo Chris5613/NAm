@@ -5,7 +5,7 @@ import unittest
 
 from backend.yield_cutover_parity import (
     parity_observation, compare_lulo_outputs, update_parity_history,
-    REQUIRED_DISTINCT_SUCCESSES,
+    REQUIRED_DISTINCT_SUCCESSES, persisted_project_parity, source_poll_health,
 )
 from backend.lulo_transaction_reconciliation import reconcile_lulo_project
 
@@ -149,6 +149,50 @@ class LuloCutoverParityTests(unittest.TestCase):
             "snapshotAt": (NOW + timedelta(minutes=3)).isoformat(),
         })
         self.assertEqual(history["latestByProject"]["lulo-1"]["consecutiveMatches"], 0)
+
+    def test_real_persisted_ledger_parity_requires_same_observation(self):
+        current = deepcopy(self.after)
+        preview = deepcopy(self.after)
+        equal = persisted_project_parity(current, preview)
+        self.assertEqual(equal["status"], "matched")
+        self.assertTrue(equal["ready"])
+        newer = deepcopy(preview)
+        newer["lulo_last_synced_at"] = "2026-10-30T20:05:00Z"
+        self.assertEqual(persisted_project_parity(current, newer)["status"], "server-ahead")
+        older = deepcopy(preview)
+        older["lulo_last_synced_at"] = "2026-10-30T19:30:00Z"
+        self.assertEqual(persisted_project_parity(current, older)["status"], "browser-ahead")
+        self.assertFalse(persisted_project_parity(current, older)["ready"])
+
+    def test_real_ledger_disagreement_blocks_cutover(self):
+        current = deepcopy(self.after)
+        preview = deepcopy(self.after)
+        current["earned"] += 100
+        result = persisted_project_parity(current, preview)
+        self.assertEqual(result["status"], "mismatch")
+        self.assertIn("earned", result["differences"])
+        self.assertFalse(result["ready"])
+        self.assertFalse(persisted_project_parity(current, None)["ready"])
+
+    def test_backend_poll_freshness_distinguishes_cached_readings(self):
+        readings = {
+            "lulo": {
+                WALLET: {
+                    "syncedAt": (NOW - timedelta(minutes=3)).isoformat(),
+                },
+                "older": {
+                    "syncedAt": (NOW - timedelta(hours=2)).isoformat(),
+                },
+            },
+            "loopscale": {
+                "syncedAt": (NOW - timedelta(minutes=7)).isoformat(),
+            },
+        }
+        statuses = source_poll_health(readings, NOW)
+        self.assertTrue(statuses["lulo"][WALLET]["fresh"])
+        self.assertFalse(statuses["lulo"]["older"]["fresh"])
+        self.assertTrue(statuses["loopscale"]["fresh"])
+        self.assertFalse(source_poll_health({}, NOW)["loopscale"]["fresh"])
 
     def test_other_projects_do_not_affect_current_streak(self):
         a = update_parity_history({}, {
