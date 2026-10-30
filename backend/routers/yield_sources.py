@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
-from ..models import User
+from ..models import User, Project
 from ..yield_source_sync import (
     REGISTRATION_KEY, SNAPSHOTS_KEY, HISTORY_KEY,
     registered_wallets, _read, _write,
@@ -16,6 +16,7 @@ from ..yield_earnings_state import (
 )
 from ..yield_earnings_ledger import lulo_monthly_backfills
 from ..yield_source_sync import LULO_TRANSACTION_PREVIEW_KEY
+from ..yield_cutover_parity import parity_observation, update_parity_history
 
 router = APIRouter(prefix="/api/yield-sources", tags=["yield sources"])
 
@@ -96,4 +97,85 @@ async def backend_earnings_ledger(
         "sourceCheckedAt": source.get("checkedAt"),
         "sourceSuccessfulAt": source.get("successfulAt"),
         "migrationMode": "independent-server-ledger",
+    }
+
+
+PARITY_SETTINGS_KEY = "yield_lulo_transaction_parity_reports_v1"
+
+
+@router.post("/lulo-parity")
+async def record_lulo_parity(
+    payload: dict, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Compare the browser and backend against the exact SAME provider read.
+
+    This endpoint is diagnostic and can never mutate actual transactions.
+    Client-supplied output is not proof of persisted ledger correctness.
+    """
+    before = payload.get("before")
+    snapshot = payload.get("snapshot")
+    after = payload.get("after")
+    if not all(isinstance(value, dict) for value in (before, snapshot, after)):
+        raise HTTPException(status_code=422, detail="Invalid parity inputs.")
+    project_id = str(before.get("id") or "")
+    project = db.get(Project, project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Project unavailable.")
+    if (project.data or {}).get("lulo_wallet_address") != before.get("lulo_wallet_address"):
+        raise HTTPException(status_code=422, detail="Project wallet changed.")
+    if not isinstance(before.get("transactions", []), list) or len(before.get("transactions", [])) > 2000:
+        raise HTTPException(status_code=422, detail="Too many transactions to compare.")
+    if not isinstance(after.get("transactions", []), list) or len(after.get("transactions", [])) > 2000:
+        raise HTTPException(status_code=422, detail="Too many transactions to compare.")
+    observed = parity_observation(before, snapshot, after, payload.get("appliedAt"))
+    if observed["status"] == "invalid":
+        raise HTTPException(status_code=422, detail=observed["reason"])
+    previous = _read(db, user.id, PARITY_SETTINGS_KEY)
+    next_report = update_parity_history(previous, observed)
+    if next_report != previous:
+        _write(db, user.id, PARITY_SETTINGS_KEY, next_report)
+        db.commit()
+    return observed
+
+
+@router.get("/migration-status")
+async def yield_migration_status(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Live deployment diagnostics; cutover remains disabled by design."""
+    now = datetime.now(timezone.utc)
+    sources = _read(db, user.id, SNAPSHOTS_KEY)
+    latest = sources.get("successfulAt")
+    from ..yield_earnings_ledger import parse_time
+    synced_at = parse_time(latest)
+    age = max(0, (now - synced_at).total_seconds()) if synced_at else None
+    parity = _read(db, user.id, PARITY_SETTINGS_KEY)
+    previews = _read(db, user.id, LULO_TRANSACTION_PREVIEW_KEY)
+    real_projects = db.query(Project).filter(
+        Project.user_id == user.id
+    ).all()
+    project_status = {}
+    for project in real_projects:
+        if (project.data or {}).get("yield_tracking") != "lulo_lending":
+            continue
+        latest_report = (parity.get("latestByProject") or {}).get(project.id) or {}
+        preview = previews.get(project.id)
+        last_browser_sync = (project.data or {}).get("lulo_last_synced_at")
+        last_preview_sync = preview.get("lulo_last_synced_at") if isinstance(preview, dict) else None
+        project_status[project.id] = {
+            "parityMatches": latest_report.get("consecutiveMatches", 0),
+            "sameInputDiagnosticsPassed": bool(latest_report.get("diagnosticThresholdMet")),
+            "browserLastSyncedAt": last_browser_sync,
+            "backendPreviewLastSyncedAt": last_preview_sync,
+            "comparisonMode": True,
+            "eligibleForAutomaticWrites": False,
+        }
+    return {
+        "polledAt": sources.get("checkedAt"),
+        "lastSuccessfulPollAt": latest,
+        "lastSuccessfulPollAgeSeconds": round(age) if age is not None else None,
+        "providerErrors": sources.get("errors") or {},
+        "luloProjects": project_status,
+        "cutoverEnabled": False,
+        "note": "Live history parity and safe write ownership still require verification.",
     }
