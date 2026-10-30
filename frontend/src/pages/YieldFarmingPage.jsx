@@ -29,6 +29,7 @@ const LOGO_STORAGE_KEY = "yield_project_logos_v1";
 const MONTHLY_BACKFILL_KEY = "yield_monthly_earnings_backfill_v1";
 const LULO_MONTHLY_BASELINE_KEY = "yield_lulo_monthly_baselines_v1";
 const MONTHLY_SNAPSHOT_KEY = "yield_monthly_snapshots_v1";
+const DAILY_BALANCE_SNAPSHOT_KEY = "yield_daily_project_balance_snapshots_v1";
 const LOOPSCALE_HISTORY_KEY = "yield_loopscale_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
@@ -7120,6 +7121,98 @@ const importSaladPayload =
   kryptexStats,
 ]
     );
+  // At 11:58 PM America/Los_Angeles, preserve a dated copy of every
+  // project's reported balance. These are observations, not proof that
+  // a stale external integration refreshed exactly at this time.
+  const [dailyBalanceSnapshots, setDailyBalanceSnapshots] = useState(
+    () => readObject(DAILY_BALANCE_SNAPSHOT_KEY)
+  );
+  useEffect(() => {
+    const capture = () => {
+      const now = new Date();
+      const pacific = new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Los_Angeles",
+        year: "numeric", month: "2-digit", day: "2-digit",
+        hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).formatToParts(now);
+      const part = type => pacific.find(item => item.type === type)?.value || "";
+      // Store the actual observation time (never backdate a missed snapshot).
+      if (part("hour") !== "23" || part("minute") !== "58") return;
+      const day = `${part("year")}-${part("month")}-${part("day")}`;
+      const existing = readObject(DAILY_BALANCE_SNAPSHOT_KEY);
+      if (existing[day]) return;
+      const projects = sortedProgramCards.map(item => {
+        const project = item.project;
+        const projectBalance = Number(item.amount);
+        const base = {
+          id: String(item.key),
+          name: item.type === "project"
+            ? String(project?.name || project?.platform || item.key)
+            : item.type === "rollercoin" ? "RollerCoin"
+            : item.type === "salad" ? "Salad"
+            : item.type === "unetwork" ? "Unetwork"
+            : item.type === "kryptex" ? "Kryptex" : String(item.key),
+          balanceUsd: Number.isFinite(projectBalance) ? projectBalance : null,
+          inactive: inactiveProjectIds.includes(String(item.key)),
+          sourceLastSyncedAt: null,
+        };
+        if (item.type === "rollercoin") return {
+          ...base,
+          balanceTrx: Number(rollerCoinStats?.currentTrxBalance) || 0,
+          trxUsdPrice: Number(rollerCoinStats?.liveTrxPrice) || 0,
+          sourceLastSyncedAt: rollerCoinTracker?.balanceSyncedAt || null,
+          balanceSource: rollerCoinTracker?.balanceSource || null,
+        };
+        if (item.type === "salad") return {
+          ...base, sourceLastSyncedAt: saladTracker?.lastSyncedAt || null,
+          lifetimeEarnedUsd: Number(saladTracker?.lifetimeBalance) || 0,
+        };
+        if (item.type === "unetwork") return {
+          ...base, sourceLastSyncedAt: unetworkTracker?.lastSyncedAt || null,
+        };
+        if (item.type === "kryptex") return {
+          ...base, sourceLastSyncedAt: kryptexTracker?.lastSyncedAt || null,
+        };
+        return {
+          ...base,
+          assetBalances: Array.isArray(project?.assets)
+            ? project.assets.map(asset => ({
+                symbol: asset?.symbol || asset?.ticker || null,
+                balanceUsd: Number.isFinite(Number(asset?.valueUsd ?? asset?.value))
+                  ? Number(asset?.valueUsd ?? asset?.value) : null,
+                amount: Number.isFinite(Number(asset?.balance ?? asset?.amount))
+                  ? Number(asset?.balance ?? asset?.amount) : null,
+              }))
+            : [],
+          sourceLastSyncedAt: project?.lastSyncedAt || project?.last_synced_at || null,
+        };
+      });
+      const entry = {
+        date: day,
+        scheduledLocalTime: "23:58",
+        timezone: "America/Los_Angeles",
+        capturedAt: now.toISOString(),
+        projects,
+        totalUsd: projects.reduce((sum, project) => sum + (project.balanceUsd || 0), 0),
+      };
+      // Merge with the latest persisted copy to avoid losing earlier days.
+      const next = { ...existing, [day]: entry };
+      saveObject(DAILY_BALANCE_SNAPSHOT_KEY, next);
+      setDailyBalanceSnapshots(next);
+    };
+    capture();
+    const interval = window.setInterval(capture, 10_000);
+    const onVisible = () => { if (!document.hidden) capture(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [
+    sortedProgramCards, inactiveProjectIds, rollerCoinStats,
+    rollerCoinTracker, saladTracker, unetworkTracker, kryptexTracker,
+  ]);
+
   const activeProgramCards = sortedProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key)));
   const inactiveProgramCards = sortedProgramCards.filter(item => inactiveProjectIds.includes(String(item.key)));
 
