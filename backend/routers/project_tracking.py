@@ -17,6 +17,7 @@ from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
 from ..project_accounting import portfolio_summary, daily_income_summary
+from ..provider_stats import current_keys, provider_stats
 
 router = APIRouter(prefix="/api/project-tracking", tags=["project tracking"])
 LATEST_KEY = "yield_project_latest_balance_feed_v1"
@@ -182,6 +183,36 @@ async def read_daily_earnings(
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
         raise HTTPException(status_code=422, detail="Invalid date.")
     return setting(db, user.id, f"yield_server_daily_income_{day}") or {"date": day, "sources": {}, "observations": []}
+
+
+@router.get("/provider-stats")
+async def calculate_provider_stats(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Compute current provider earnings and projections from persisted trackers.
+
+    This reads PostgreSQL's durable per-provider tracker settings, not a
+    client-supplied total or a browser-timed calculation. The UI may fall back
+    to its locally newer reading until the backend has saved the latest sync.
+    """
+    today, month = current_keys()
+    keys = {
+        "salad": "project_income_salad_tracker_v1",
+        "unetwork": "project_income_unetwork_tracker_v1",
+        "kryptex": "project_income_kryptex_tracker_v1",
+        "rollercoin": "project_income_rollercoin_tracker_v2",
+    }
+    trackers = {}
+    for source, key in keys.items():
+        raw = setting(db, user.id, key)
+        trackers[source] = raw if isinstance(raw, dict) else {}
+    calculated = provider_stats(trackers, today, month)
+    return {
+        "todayKey": today,
+        "monthKey": month,
+        "calculatedAt": datetime.now(timezone.utc).isoformat(),
+        "stats": calculated,
+    }
 
 
 @router.get("/portfolio")
