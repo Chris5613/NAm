@@ -7490,6 +7490,8 @@ const importSaladPayload =
   const LULO_FIXED_DAY = "2026-10-29";
   const LULO_FIXED_TOTAL = 0.36;
   const LULO_FIXED_END_HOUR = 14;
+  // Display-only daily override; does not change Loopscale balances or saved history.
+  const LOOPSCALE_FIXED_TODAY_USD = 2;
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     // Live USD value of TRX mined on this date. This can move up OR down
@@ -7564,6 +7566,9 @@ const importSaladPayload =
         observedLoopscale
       );
     }
+    // Force Loopscale's displayed contribution for today only.
+    // Do not persist this as an earning or modify prior dates.
+    if (key === todayKey) sources.Loopscale = LOOPSCALE_FIXED_TODAY_USD;
     return sources;
   };
   const dailySourceTotals = sourceTotalsForDay(todayKey);
