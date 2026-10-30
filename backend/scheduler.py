@@ -15,11 +15,14 @@ from sqlalchemy.orm import Session
 
 from .db import SessionLocal
 from .models import Asset, NetWorthSnapshot, Project, Setting, User, utcnow
+from .yield_source_sync import poll_all_users
 
 _scheduler_task: asyncio.Task | None = None
 _last_daily_key: str | None = None
 _last_project_day: str | None = None
 _last_catchup_check: str | None = None
+_last_yield_poll: datetime | None = None
+YIELD_SYNC_INTERVAL = timedelta(minutes=5)
 PACIFIC = ZoneInfo("America/Los_Angeles")
 log = logging.getLogger(__name__)
 PROJECT_FEED_KEY = "yield_project_latest_balance_feed_v1"
@@ -144,11 +147,13 @@ def take_project_balance_snapshots(day: str, scheduled_at: datetime | None = Non
     return made
 
 def scheduler_status() -> dict[str, Any]:
-    return {"status": "running", "last_daily_key": _last_daily_key, "last_project_day": _last_project_day}
+    return {"status": "running", "last_daily_key": _last_daily_key,
+            "last_project_day": _last_project_day,
+            "last_yield_poll_at": _last_yield_poll.isoformat() if _last_yield_poll else None}
 
 
 async def scheduler_loop() -> None:
-    global _last_daily_key, _last_project_day, _last_catchup_check
+    global _last_daily_key, _last_project_day, _last_catchup_check, _last_yield_poll
     while True:
         now = datetime.now(timezone.utc)
         day = now.date().isoformat()
@@ -176,6 +181,15 @@ async def scheduler_loop() -> None:
                 _last_project_day = project_day
             except Exception:
                 log.exception("Project balance backup failed; will retry next tick")
+        # API-backed sources do not require Chrome or an open dashboard.
+        # Do not touch financial ledgers here: save read-only observations
+        # for later reconciliation by the existing accounting engine.
+        if _last_yield_poll is None or now - _last_yield_poll >= YIELD_SYNC_INTERVAL:
+            _last_yield_poll = now
+            try:
+                await asyncio.to_thread(poll_all_users)
+            except Exception:
+                log.exception("Lulo / Loopscale source polling failed")
         await asyncio.sleep(30)
 
 
