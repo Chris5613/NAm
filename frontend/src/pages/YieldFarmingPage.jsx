@@ -30,6 +30,7 @@ const MONTHLY_BACKFILL_KEY = "yield_monthly_earnings_backfill_v1";
 const LULO_MONTHLY_BASELINE_KEY = "yield_lulo_monthly_baselines_v1";
 const MONTHLY_SNAPSHOT_KEY = "yield_monthly_snapshots_v1";
 const DAILY_BALANCE_SNAPSHOT_KEY = "yield_daily_project_balance_snapshots_v1";
+const DAILY_EARNINGS_CHART_OBSERVATIONS_KEY = "yield_daily_earnings_chart_observations_v1";
 const LOOPSCALE_HISTORY_KEY = "yield_loopscale_position_history_v1";
 const SALAD_TRACKER_KEY = "project_income_salad_tracker_v1";
 const ROLLERCOIN_TRACKER_KEY = "project_income_rollercoin_tracker_v2";
@@ -7672,6 +7673,37 @@ const importSaladPayload =
     .map(([name,amount]) => ({ name, amount: Number(amount) }))
     .sort((a,b) => b.amount - a.amount);
   const todayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
+  // Persist the ACTUAL signed total for the daily graph, including
+  // negative values and recoveries; never derive graph shape from a max.
+  const [dailyEarningsObservations, setDailyEarningsObservations] = useState(
+    () => readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)
+  );
+  useEffect(() => {
+    if (!Number.isFinite(todayEarnings)) return;
+    const currentDay = getTodayKey();
+    const now = new Date();
+    const hourParts = new Intl.DateTimeFormat("en-US", {
+      timeZone: "America/Los_Angeles",
+      hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+    }).formatToParts(now);
+    const timePart = type => Number(hourParts.find(part => part.type === type)?.value || 0);
+    const hour = timePart("hour") + timePart("minute") / 60 + timePart("second") / 3600;
+    const stored = readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY);
+    const currentPoints = Array.isArray(stored[currentDay]) ? stored[currentDay] : [];
+    const previous = currentPoints[currentPoints.length - 1];
+    // Only record a change, or a heartbeat every 15 minutes.
+    if (previous &&
+        Math.abs(Number(previous.value) - todayEarnings) < 0.000001 &&
+        hour - Number(previous.x) < 0.25) return;
+    const nextPoints = [...currentPoints, { x: hour, value: Number(todayEarnings.toFixed(8)) }]
+      .filter(point => Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.value)))
+      .sort((a,b) => a.x - b.x)
+      .slice(-1500);
+    const next = { ...stored, [currentDay]: nextPoints };
+    saveObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY, next);
+    setDailyEarningsObservations(next);
+  }, [todayEarnings, earningsClock, todayKey]);
+
   const weekMonday = new Date(todayKey + "T12:00:00Z");
   weekMonday.setUTCDate(weekMonday.getUTCDate() - ((weekMonday.getUTCDay() + 6) % 7));
   const weekDays = Array.from({ length: 7 }, (_, index) => {
@@ -7698,66 +7730,36 @@ const importSaladPayload =
   }).formatToParts(new Date(earningsClock));
   const clockPart = key => Number(pacificClockParts.find(part => part.type === key)?.value || 0);
   const currentHour = clockPart("hour") + clockPart("minute") / 60;
-  const todayTimeline = Array.isArray(earningsLedger.timeline?.[todayKey])
-    ? earningsLedger.timeline[todayKey] : [];
-  const isFixedLuloDay = todayKey === LULO_FIXED_DAY;
-  const isFixedSaladDay = todayKey === SALAD_FIXED_DAY;
-  const recordedSalad = Math.max(0, Number(earningsLedger.days[todayKey]?.sources?.Salad) || 0);
-  const recordedLulo = Math.max(0, Number(earningsLedger.days[todayKey]?.sources?.Lulo) || 0);
-  const fixedIncomeAtHour = hour =>
-    (isFixedSaladDay ? SALAD_FIXED_TOTAL * Math.min(Math.max(hour, 0) / SALAD_FIXED_END_HOUR, 1) : 0) +
-    (isFixedLuloDay ? LULO_FIXED_TOTAL * Math.min(Math.max(hour, 0) / LULO_FIXED_END_HOUR, 1) : 0);
-  const fixedHours = (isFixedSaladDay || isFixedLuloDay)
-    ? [...new Set([
-        0,
-        ...Array.from({ length: Math.floor(Math.min(24,currentHour)) + 1 }, (_, hour) => hour),
-        ...(isFixedSaladDay ? [SALAD_FIXED_END_HOUR] : []),
-        ...(isFixedLuloDay ? [LULO_FIXED_END_HOUR] : []),
-      ])].filter(hour => hour <= currentHour).map(hour => ({
-        x: hour, value: fixedIncomeAtHour(hour),
-      }))
-    : [{ x: 0, value: 0 }];
-  const observedPoints = todayTimeline
-    .filter(point => Number.isFinite(Number(point.hour)) && Number.isFinite(Number(point.amount)))
-    .map(point => {
-      const hour = Math.max(0, Math.min(24, Number(point.hour)));
-      const otherObserved = Math.max(0,
-        Number(point.amount) -
-        (isFixedSaladDay ? Math.min(recordedSalad, SALAD_FIXED_TOTAL) : 0) -
-        (isFixedLuloDay ? Math.min(recordedLulo, LULO_FIXED_TOTAL) : 0)
-      );
-      return {
-        x: hour,
-        value: (isFixedSaladDay || isFixedLuloDay ? fixedIncomeAtHour(hour) : 0) + otherObserved,
-      };
-    });
-  // Intraday snapshots are incomplete and can contain stale totals.
-  // Build a stable *visual trend* from their progression, then scale the
-  // trend to the authoritative signed total shown in Today's Earnings.
-  // This never changes saved observations or the underlying P/L.
-  const dailyPointsByHour = new Map([[0, 0]]);
-  [...fixedHours, ...observedPoints].forEach(point => {
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.value)) return;
-    const hour = Math.max(0, Math.min(currentHour, point.x));
-    dailyPointsByHour.set(hour, Math.max(dailyPointsByHour.get(hour) || 0, point.value));
-  });
-  let envelope = 0;
-  const trendPoints = [...dailyPointsByHour.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([x, value]) => {
-      envelope = Math.max(envelope, value);
-      return { x, weight: envelope };
-    });
-  const peak = Math.max(0, ...trendPoints.map(point => point.weight));
-  const dailyChartData = trendPoints.map(point => ({
-    x: point.x,
-    value: peak > 0 ? (point.weight / peak) * todayEarnings : 0,
-  }));
-  const lastObserved = dailyChartData[dailyChartData.length - 1];
-  if (!lastObserved || currentHour > lastObserved.x) {
+  const pacificClockParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(earningsClock));
+  const clockPart = key => Number(pacificClockParts.find(part => part.type === key)?.value || 0);
+  const currentHour = clockPart("hour") + clockPart("minute") / 60;
+  // Show signed observed earnings. Historical positive-only intraday
+  // ledgers cannot reliably reconstruct prior losses, so only the new
+  // signed observations are used for the current chart.
+  const storedDailyChartPoints = Array.isArray(dailyEarningsObservations[todayKey])
+    ? dailyEarningsObservations[todayKey] : [];
+  // The user confirmed that Oct 30 opened at -$0.86. Use this one-time
+  // opening observation only until an earlier recorded reading exists.
+  const observedStart = todayKey === "2026-10-30"
+    ? [{ x: 0, value: -0.86 }] : [];
+  const dailyChartPoints = [...observedStart, ...storedDailyChartPoints]
+    .filter(point => Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.value)))
+    .map(point => ({ x: Number(point.x), value: Number(point.value) }))
+    .sort((a, b) => a.x - b.x);
+  const dailyChartData = dailyChartPoints.length
+    ? dailyChartPoints : [{ x: 0, value: 0 }];
+  // Latest value is authoritative even if the persistence effect has not
+  // finished saving the observation yet.
+  if (dailyChartData[dailyChartData.length - 1].x < currentHour) {
     dailyChartData.push({ x: currentHour, value: todayEarnings });
   } else {
-    lastObserved.value = todayEarnings;
+    dailyChartData[dailyChartData.length - 1] = {
+      x: dailyChartData[dailyChartData.length - 1].x,
+      value: todayEarnings,
+    };
   }
   const dailyChartMax = Math.max(0.1, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
   const dailyChartMin = Math.min(0, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
