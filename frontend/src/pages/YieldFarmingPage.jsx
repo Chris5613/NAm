@@ -7488,9 +7488,33 @@ const importSaladPayload =
   const LULO_FIXED_DAY = "2026-10-29";
   const LULO_FIXED_TOTAL = 0.36;
   const LULO_FIXED_END_HOUR = 14;
-  // One-day display override only; do not change saved Loopscale P/L.
+  // Oct 29 display starts at $2 and follows subsequent signed P/L changes.
+  // Save the reference observation once so refreshes cannot restart the baseline.
   const LOOPSCALE_FIXED_DISPLAY_DAY = "2026-10-29";
   const LOOPSCALE_FIXED_DISPLAY_USD = 2;
+  const LOOPSCALE_FIXED_BASELINE_KEY = "yield_loopscale_oct29_display_baseline_v1";
+  const [loopscaleFixedBaseline, setLoopscaleFixedBaseline] = useState(
+    () => readObject(LOOPSCALE_FIXED_BASELINE_KEY)
+  );
+  const observedLoopscaleToday = Object.values(loopscaleHistory?.positions || {})
+    .reduce((sum, position) =>
+      sum + (Number(position?.observedDaily?.[LOOPSCALE_FIXED_DISPLAY_DAY]) || 0), 0);
+  const ledgerLoopscaleToday = Number(
+    earningsLedger.days?.[LOOPSCALE_FIXED_DISPLAY_DAY]?.sources?.Loopscale
+  ) || 0;
+  const currentLoopscaleReference = Object.values(loopscaleHistory?.positions || {})
+    .some(position => Object.prototype.hasOwnProperty.call(
+      position?.observedDaily || {}, LOOPSCALE_FIXED_DISPLAY_DAY
+    )) ? observedLoopscaleToday : ledgerLoopscaleToday;
+  const savedLoopscaleReference = loopscaleFixedBaseline?.day === LOOPSCALE_FIXED_DISPLAY_DAY &&
+    Number.isFinite(Number(loopscaleFixedBaseline?.amount))
+    ? Number(loopscaleFixedBaseline.amount) : null;
+  useEffect(() => {
+    if (todayKey !== LOOPSCALE_FIXED_DISPLAY_DAY || savedLoopscaleReference !== null) return;
+    const initial = { day: LOOPSCALE_FIXED_DISPLAY_DAY, amount: currentLoopscaleReference };
+    setLoopscaleFixedBaseline(initial);
+    saveObject(LOOPSCALE_FIXED_BASELINE_KEY, initial);
+  }, [todayKey, savedLoopscaleReference, currentLoopscaleReference]);
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     // Live USD value of TRX mined on this date. This can move up OR down
@@ -7561,10 +7585,14 @@ const importSaladPayload =
       sources.Loopscale = loopscalePositions.reduce((sum, position) =>
         sum + (Number(position.observedDaily[key]) || 0), 0);
     }
-    // Only on Oct 29 Pacific time: include $2 in the displayed daily total.
-    // On later days (including when reviewing Oct 29 history), use real P/L.
+    // Only for Oct 29 while it is today: $2 opening display plus the
+    // signed change since the saved reference, never the earlier day's P/L.
     if (key === todayKey && todayKey === LOOPSCALE_FIXED_DISPLAY_DAY) {
-      sources.Loopscale = LOOPSCALE_FIXED_DISPLAY_USD;
+      const reference = savedLoopscaleReference ?? currentLoopscaleReference;
+      sources.Loopscale = Number((
+        LOOPSCALE_FIXED_DISPLAY_USD +
+        (currentLoopscaleReference - reference)
+      ).toFixed(8));
     }
     return sources;
   };
