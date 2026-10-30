@@ -15,7 +15,7 @@ function providerAmounts(months) {
   return values;
 }
 
-function matchingProviderMonths(local, server) {
+export function matchingProviderMonths(local, server) {
   const left = providerAmounts(local);
   const right = providerAmounts(server);
   if (left.size !== right.size) return false;
