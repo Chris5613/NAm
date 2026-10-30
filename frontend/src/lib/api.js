@@ -311,7 +311,10 @@ export const projectsApi = {
     accrued = await Promise.all(accrued.map(async (project) => {
       if (project.yield_tracking !== "lulo_lending") return project;
       try {
-        const snapshot = await getLuloYieldSnapshot(project.lulo_wallet_address);
+        const snapshot = await getLuloYieldSnapshot(
+          project.lulo_wallet_address,
+          { newerThan: project.lulo_last_synced_at }
+        );
         return applyLuloYieldSnapshot(project, snapshot, now);
       } catch (error) {
         console.warn(`Lulo lending sync failed for ${project.name}:`, error);
