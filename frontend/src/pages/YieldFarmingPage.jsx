@@ -3255,6 +3255,7 @@ const importSaladPayload =
     requestUnetworkLatest,
     requestKryptexLatest,
     loopscaleSnapshot?.syncedAt,
+    loopscaleSnapshot?.positionValueUsd,
   ]);
 
   // Keep polling intervals stable even when an extension pushes a new balance.
