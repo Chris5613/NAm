@@ -326,6 +326,58 @@ def _write(db, user_id: int, key: str, value: dict) -> None:
         db.add(Setting(user_id=user_id, key=key, value=value))
 
 
+def merge_server_project_balances(
+    projects: list[dict], backend_snapshots: dict,
+    lulo_wallet_by_project_id: dict[str, str], now: datetime,
+) -> list[dict]:
+    """Overlay *fresher* server provider readings onto a backup copy only.
+
+    Never mutate saved app projects or account ledgers. Browser-extension
+    projects remain as reported with their original source timestamps.
+    """
+    normalized = []
+    all_lulo = backend_snapshots.get("lulo") or {}
+    loop = backend_snapshots.get("loopscale")
+    for item in projects:
+        if not isinstance(item, dict):
+            continue
+        project = dict(item)
+        key = str(project.get("id") or "")
+        candidate = None
+        balance_key = ""
+        wallet = lulo_wallet_by_project_id.get(key)
+        if wallet and isinstance(all_lulo, dict):
+            candidate = all_lulo.get(wallet)
+            balance_key = "totalBalanceUsd"
+        elif key == "loopscale-project":
+            candidate = loop
+            balance_key = "positionValueUsd"
+        if isinstance(candidate, dict):
+            synced_at = candidate.get("syncedAt")
+            try:
+                synced = datetime.fromisoformat(str(synced_at).replace("Z", "+00:00"))
+                if synced.tzinfo is None:
+                    synced = synced.replace(tzinfo=timezone.utc)
+                age_seconds = (now - synced).total_seconds()
+                previous = project.get("sourceLastSyncedAt")
+                previous_at = datetime.fromisoformat(str(previous).replace("Z", "+00:00")) if previous else None
+                if previous_at and previous_at.tzinfo is None:
+                    previous_at = previous_at.replace(tzinfo=timezone.utc)
+                fresh = 0 <= age_seconds <= 20 * 60 and (
+                    previous_at is None or synced > previous_at
+                )
+                value = candidate.get(balance_key)
+                value = float(value) if value is not None else float("nan")
+                if fresh and isfinite(value) and value > 0:
+                    project["balanceUsd"] = value
+                    project["sourceLastSyncedAt"] = utc_iso(synced)
+                    project["balanceSource"] = "backend-provider-poll"
+            except (TypeError, ValueError, OverflowError):
+                pass
+        normalized.append(project)
+    return normalized
+
+
 def poll_sources_for_user(user_id: int) -> int:
     """Persist source observations without touching assets or earnings ledgers."""
     with SessionLocal() as db:
