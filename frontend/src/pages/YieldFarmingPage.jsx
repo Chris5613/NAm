@@ -1266,8 +1266,8 @@ function getRollerCoinTrackerStats(
     liveTrxPrice > 0
   ) {
     todayUsd =
-      todayTrx *
-      liveTrxPrice;
+      walletToday && walletToday.usd != null && Number.isFinite(Number(walletToday.usd))
+        ? Number(walletToday.usd) : todayTrx * liveTrxPrice;
 
     monthUsd =
       monthTrx *
@@ -3118,13 +3118,24 @@ Object.values(
        * Older months stay fixed using their
        * stored USD values.
        */
-      const walletMonthTrx = Object.entries(rollerCoinTracker?.walletDaily || {})
-        .filter(([day]) => day.slice(0, 7) === monthKey)
-        .reduce((sum, [, entry]) => sum + (Number(entry?.trx) || 0), 0);
+      // Preserve previously recorded monthly earnings; only replace
+      // dates with a confirmed wallet reading to avoid double counting.
+      const legacyCoveredUsd = Object.entries(rollerCoinTracker?.daily || {})
+        .filter(([date]) => date.slice(0, 7) === monthKey &&
+          !(date in (rollerCoinTracker?.walletDaily || {})) &&
+          !(monthKey === "2026-09" && date <= ROLLERCOIN_SEPTEMBER_2026_BASELINE_END))
+        .reduce((sum, [, row]) => sum + (Number(row?.usd) || 0), 0);
+      const walletUsd = Object.entries(rollerCoinTracker?.walletDaily || {})
+        .filter(([date]) => date.slice(0, 7) === monthKey)
+        .reduce((sum, [, entry]) => sum +
+          (Number.isFinite(Number(entry?.usd)) && entry?.usd != null
+            ? Number(entry.usd) : (Number(entry?.trx) || 0) * liveTrxPrice), 0);
       const hasWalletMonth = Object.keys(rollerCoinTracker?.walletDaily || {})
         .some(day => day.slice(0, 7) === monthKey);
-      const amount = hasWalletMonth && monthKey === currentMonthKey
-        ? walletMonthTrx * liveTrxPrice
+      const historicalBaselineUsd = monthKey === "2026-09"
+        ? Math.max(0, storedUsd - legacyCoveredUsd) : 0;
+      const amount = hasWalletMonth
+        ? historicalBaselineUsd + legacyCoveredUsd + walletUsd
         : storedUsd;
 
       addEarning(
@@ -3142,7 +3153,8 @@ Object.values(
   if (walletCurrentMonthEntries.length && !rollerCoinMonths[currentMonthKey]) {
     addEarning(currentMonthKey, "RollerCoin",
       walletCurrentMonthEntries.reduce((sum, [, entry]) =>
-        sum + (Number(entry?.trx) || 0), 0) * liveTrxPrice);
+        sum + (entry?.usd != null && Number.isFinite(Number(entry.usd))
+          ? Number(entry.usd) : (Number(entry?.trx) || 0) * liveTrxPrice), 0));
   }
 
   const unetworkMonthTotals =
@@ -4219,6 +4231,7 @@ export default function YieldFarmingPage() {
               const priorDay = walletDaily[day] || {};
               walletDaily[day] = {
                 trx: Number(((Number(priorDay.trx) || 0) + difference).toFixed(8)),
+                usd: Number(((Number(priorDay.usd) || 0) + difference * priceToUse).toFixed(8)),
                 lastSyncedAt: snapshotAt,
               };
             }
@@ -7407,8 +7420,11 @@ const importSaladPayload =
       delete sources.RollerCoin;
       const changeTrx = Number(walletDay?.trx) || 0;
       const price = Number(rollerCoinTracker?.lastTrxPrice) || 0;
-      if (walletDay && price > 0 && changeTrx !== 0) {
-        sources.RollerCoin = changeTrx * price;
+      const walletEarnedUsd = walletDay?.usd != null &&
+        Number.isFinite(Number(walletDay.usd))
+        ? Number(walletDay.usd) : changeTrx * price;
+      if (walletDay && walletEarnedUsd !== 0) {
+        sources.RollerCoin = walletEarnedUsd;
       }
     } else if (minedEntry) {
       const recordedUsd = Number(minedEntry.usd);
