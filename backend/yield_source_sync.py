@@ -26,6 +26,10 @@ from .yield_earnings_state import (
     reconcile_backend_ledgers, LULO_SERVER_LEDGER_KEY, LOOPSCALE_SERVER_LEDGER_KEY,
     LULO_LEGACY_LEDGER_KEY, LOOPSCALE_LEGACY_LEDGER_KEY,
 )
+from .lulo_transaction_reconciliation import reconcile_lulo_project
+from .yield_earnings_ledger import parse_time
+
+LULO_TRANSACTION_PREVIEW_KEY = "yield_backend_lulo_transaction_previews_v1"
 from .provider_stats import numeric
 
 log = logging.getLogger(__name__)
@@ -466,6 +470,32 @@ def poll_sources_for_user(user_id: int) -> int:
             _write(db, user_id, LULO_SERVER_LEDGER_KEY, result["lulo"])
         if result["loopscale"] != saved_loopscale:
             _write(db, user_id, LOOPSCALE_SERVER_LEDGER_KEY, result["loopscale"])
+
+        # Independently replay the existing Lulo transaction guards. The
+        # preview is deliberately *not* written back to financial Project
+        # records until verified against the live browser reconciliation.
+        old_previews = _read(db, user_id, LULO_TRANSACTION_PREVIEW_KEY)
+        next_previews = dict(old_previews)
+        lulo_snapshots = updated.get("lulo") or {}
+        for project in projects:
+            if project.get("yield_tracking") != "lulo_lending":
+                continue
+            project_id = str(project.get("id") or "")
+            wallet = project.get("lulo_wallet_address")
+            snapshot = lulo_snapshots.get(wallet) if isinstance(lulo_snapshots, dict) else None
+            if not project_id or not isinstance(snapshot, dict) or snapshot.get("walletAddress") != wallet:
+                continue
+            shadow = old_previews.get(project_id)
+            from_legacy = parse_time(project.get("lulo_last_synced_at"))
+            from_shadow = parse_time(shadow.get("lulo_last_synced_at")) if isinstance(shadow, dict) else None
+            baseline = shadow if isinstance(shadow, dict) and from_shadow and (
+                from_legacy is None or from_shadow >= from_legacy
+            ) else project
+            proposal = reconcile_lulo_project(baseline, snapshot)
+            if proposal != baseline:
+                next_previews[project_id] = proposal
+        if next_previews != old_previews:
+            _write(db, user_id, LULO_TRANSACTION_PREVIEW_KEY, next_previews)
         db.commit()
     return checked
 
