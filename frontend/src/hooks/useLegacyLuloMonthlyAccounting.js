@@ -352,6 +352,7 @@ export function useLegacyLuloMonthlyAccounting({
     },
     [
       luloProjects,
+      setLuloMonthlyBaselines,
     ]
   );
 
@@ -479,6 +480,7 @@ export function useLegacyLuloMonthlyAccounting({
     [
       luloProjects,
       luloMonthlyBaselines,
+      setMonthlyBackfills,
     ]
   );
 }
