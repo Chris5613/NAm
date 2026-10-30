@@ -6,6 +6,7 @@ moves and transfers must never be silently recorded as mining earnings.
 from datetime import datetime, timezone
 from math import isfinite
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import select
@@ -164,6 +165,15 @@ async def recovery_candidates(user: User = Depends(current_user),
         if not isinstance(before, list) or not before:
             continue
         candidates = []
+        captured = timestamp(snapshot.get("capturedAt"))
+        # A catch-up backup taken after midnight is useful evidence but is
+        # not a true 11:58 PM starting balance for the next day's earnings.
+        local_capture = captured.astimezone(ZoneInfo("America/Los_Angeles")) if captured else None
+        timely_night_backup = bool(
+            local_capture and local_capture.date().isoformat() == snapshot.get("date")
+            and local_capture.hour == 23 and local_capture.minute >= 58
+            and snapshot.get("incomplete") is False
+        )
         for earlier in before:
             now = current.get(earlier.get("id"))
             if not now:
@@ -185,7 +195,7 @@ async def recovery_candidates(user: User = Depends(current_user),
                 # Guard against large external transfers or false scraping.
                 max_possible = 1.403988 * 1.5
                 eligible = bool(
-                    earlier.get("stale") is False and recent_reference and
+                    timely_night_backup and earlier.get("stale") is False and recent_reference and
                     not now.get("stale") and 0 <= delta <= max_possible
                 )
                 candidates.append({
