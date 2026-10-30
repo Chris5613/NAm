@@ -3230,7 +3230,8 @@ const importSaladPayload =
         try {
           const snapshot = await getLoopscaleOnycSnapshot(
             LOOPSCALE_WALLET,
-            { newerThan: loopscaleSnapshot?.syncedAt }
+            { newerThan: loopscaleSnapshot?.syncedAt,
+              referenceBalanceUsd: loopscaleSnapshot?.positionValueUsd }
           );
           const currentAt = Date.parse(loopscaleSnapshot?.syncedAt || "");
           const incomingAt = Date.parse(snapshot?.syncedAt || "");
