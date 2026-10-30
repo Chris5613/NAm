@@ -47,9 +47,9 @@ def valid_wallet(wallet: Any) -> bool:
 def registered_wallets(lulo: Any, loopscale: Any) -> dict:
     if not isinstance(lulo, list) or len(lulo) > MAX_LULO_WALLETS:
         raise ValueError("Lulo wallet list must contain at most 8 entries.")
-    addresses = sorted(set(lulo))
-    if any(not valid_wallet(value) for value in addresses):
+    if any(not valid_wallet(value) for value in lulo):
         raise ValueError("Lulo wallet address is invalid.")
+    addresses = sorted(set(lulo))
     if loopscale is not None and not valid_wallet(loopscale):
         raise ValueError("Loopscale wallet address is invalid.")
     return {"lulo": addresses, "loopscale": loopscale}
@@ -268,7 +268,7 @@ def normalize_loopscale(wallet: str, payload: dict, now: datetime | None = None)
     position = max(0.0, collateral_usd - principal - interest)
     pnl = item.get("pnl")
     pnl_value = pnl.get("usdPnl") if isinstance(pnl, dict) else None
-    pnl_number = finite_first(pnl_value) if pnl_value is not None else numeric(item.get("pnlUsd"))
+    pnl_number = finite_first(pnl_value, item.get("pnlUsd"))
     ledgers = [l for l in item.get("ledgers") or [] if isinstance(l, dict)]
     ledger = next((l for l in ledgers if numeric(l.get("isLoop")) == 1),
                   ledgers[0] if ledgers else {})
