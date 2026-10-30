@@ -15,6 +15,7 @@ from ..yield_earnings_state import (
     LULO_SERVER_LEDGER_KEY, LOOPSCALE_SERVER_LEDGER_KEY,
 )
 from ..yield_earnings_ledger import lulo_monthly_backfills
+from ..yield_source_sync import LULO_TRANSACTION_PREVIEW_KEY
 
 router = APIRouter(prefix="/api/yield-sources", tags=["yield sources"])
 
@@ -76,9 +77,21 @@ async def backend_earnings_ledger(
     lulo = _read(db, user.id, LULO_SERVER_LEDGER_KEY)
     loopscale = _read(db, user.id, LOOPSCALE_SERVER_LEDGER_KEY)
     source = _read(db, user.id, SNAPSHOTS_KEY)
+    previews = _read(db, user.id, LULO_TRANSACTION_PREVIEW_KEY)
+    preview_status = {
+        project_id: {
+            "lastSyncedAt": value.get("lulo_last_synced_at"),
+            "projectEarnedUsd": value.get("earned"),
+            "normalizedLifetimeInterestUsd": value.get("lulo_last_interest_usd"),
+            "ignoredInterestArtifactsUsd": value.get("lulo_ignored_interest_artifact_usd"),
+            "transactionCount": len(value.get("transactions") or []),
+        }
+        for project_id, value in previews.items() if isinstance(value, dict)
+    }
     return {
         "luloMonthly": lulo,
         "luloBackfills": lulo_monthly_backfills(lulo),
+        "luloTransactionPreviewStatus": preview_status,
         "loopscaleHistory": loopscale,
         "sourceCheckedAt": source.get("checkedAt"),
         "sourceSuccessfulAt": source.get("successfulAt"),
