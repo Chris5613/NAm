@@ -221,3 +221,80 @@ RollerCoin/Salad/Unetwork/Kryptex do not claim false server-sourced updates.
   timestamps, account validation, and stale-backup overlays. A live
   end-to-end check against the deployed database and provider services is
   still required.
+
+## Phase 4 — backend earnings-ledger reconciliation (2026-10-30)
+
+### Durable reconciliation without rewriting old income
+
+This phase moves the **calculation engines** for Loopscale P/L observations and
+Lulo's month-to-date yield baseline into `backend/yield_earnings_ledger.py`.
+The existing five-minute backend polling process now:
+
+1. Loads the latest saved provider observations.
+2. Seeds versioned backend ledgers from the user's existing browser history
+   (`yield_loopscale_position_history_v1` and
+   `yield_lulo_monthly_baselines_v1`), without resetting older corrections.
+3. Rejects repeated or out-of-order provider timestamps.
+4. Adds Loopscale flow-adjusted P/L changes to the day they were **observed**
+   and preserves the original month opening-baseline rules.
+5. Applies Lulo's version-5 interest checks: meaningful principal movements
+   re-anchor the lifetime interest counter without booking cash flow as yield;
+   excessive interest spikes are rejected; the $9.05 September 2026 opening
+   correction is preserved.
+6. Saves results to separate PostgreSQL setting keys
+   `yield_backend_loopscale_pnl_ledger_v1` and
+   `yield_backend_lulo_monthly_ledger_v1`.
+
+The migration logic and seeding behavior live in
+`backend/yield_earnings_state.py`. If a browser has a newer legacy
+observation, its record is imported for that position/month instead of
+silently overwritten by an older server snapshot.
+
+### Lulo transaction reconciliation: backend comparison mode
+
+`backend/lulo_transaction_reconciliation.py` ports the original Lulo
+project transaction safeguards to a pure function. It can:
+
+- Normalize interest against the saved cash-flow correction offset.
+- Detect deposits/withdrawals and implausible raw-interest jumps.
+- Remove only previously identified impossible yield artifacts.
+- Consolidate repeated legitimate increases into one date-scoped
+  `lulo_yield` transaction, without touching manual entries.
+- Reject older snapshots so the same observation cannot be booked twice.
+
+The scheduler runs this against the existing project snapshot and the
+last backend preview, storing the independent result in
+`yield_backend_lulo_transaction_previews_v1`. The browser's real
+project transaction records **are not modified** by this preview yet:
+full cutover requires comparing the output with the live production ledger
+after several actual polling cycles.
+
+### Safe Loopscale frontend promotion
+
+The Passive Income page now reads the authenticated
+`GET /api/yield-sources/earnings` endpoint every minute. It can adopt a
+newer server-reconciled Loopscale ledger automatically when timestamps and
+existing month baselines are compatible, retaining historical months,
+observations, and other loans. Invalid, older, or conflicting server results
+are ignored. The page retains its original browser calculation fallback.
+
+Lulo's live project transactions are still managed by the existing legacy
+engine; the server version is currently **comparison-only**. This
+prevents a partial migration from counting deposits as earned interest.
+
+### Tests and production limits
+
+- Backend fixtures cover first observations, negative and positive P/L,
+  month rollover, out-of-order polls, repeated observations, historical
+  corrections, Lulo deposit/withdrawal resets, impossible interest jumps,
+  and transaction idempotence.
+- Frontend fixtures cover preserving old positions and manually corrected
+  monthly baselines when fresh server observations arrive.
+- These are source-level and regression tests. They do not verify production
+  Lulo API access, actual database migration, server availability, or
+  identical results against all saved personal historical observations.
+- The backend must be running and public wallet registrations must be saved
+  for server-only reconciliation to continue while Chrome is closed.
+
+No new visual labels, cards, controls, or historical data deletion were
+introduced by Phase 4.
