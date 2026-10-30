@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
 import { projectsApi } from "@/lib/api";
-import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
+import { getLoopscaleOnycSnapshot, LOOPSCALE_WALLET } from "@/lib/loopscaleYieldSync";
+import { useRegisteredYieldWallets } from "@/hooks/useRegisteredYieldWallets";
 import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { useBackendProviderStats } from "@/hooks/useBackendProviderStats";
@@ -131,6 +132,10 @@ export default function YieldFarmingPage() {
     loopscaleSnapshot,
     setLoopscaleSnapshot,
   ] = useState(() => readObject(PROJECT_QUICK_CACHE_KEY).loopscaleSnapshot || null);
+
+  // Register provider public wallets once, then the server continues to poll
+  // them independently of whether NAm is open.
+  useRegisteredYieldWallets(luloProjects, LOOPSCALE_WALLET);
 
   const [
     loopscaleHistory,
@@ -3223,8 +3228,14 @@ const importSaladPayload =
       })(),
       (async () => {
         try {
-          const snapshot = await getLoopscaleOnycSnapshot();
-          if (snapshot) {
+          const snapshot = await getLoopscaleOnycSnapshot(
+            LOOPSCALE_WALLET,
+            { newerThan: loopscaleSnapshot?.syncedAt }
+          );
+          const currentAt = Date.parse(loopscaleSnapshot?.syncedAt || "");
+          const incomingAt = Date.parse(snapshot?.syncedAt || "");
+          if (snapshot && Number.isFinite(incomingAt) &&
+              (!Number.isFinite(currentAt) || incomingAt >= currentAt)) {
             setLoopscaleSnapshot(snapshot);
             const cache = readObject(PROJECT_QUICK_CACHE_KEY);
             saveObject(PROJECT_QUICK_CACHE_KEY, { ...cache, loopscaleSnapshot: snapshot });
@@ -3242,6 +3253,7 @@ const importSaladPayload =
     requestSaladLatest,
     requestUnetworkLatest,
     requestKryptexLatest,
+    loopscaleSnapshot?.syncedAt,
   ]);
 
   // Keep polling intervals stable even when an extension pushes a new balance.
