@@ -131,7 +131,12 @@ def advance_lulo_monthly(monthly: dict | None, project: dict, snapshot: dict,
     state = deepcopy(monthly) if isinstance(monthly, dict) else {}
     project_id = str(project.get("id") or "")
     observation = parse_time(snapshot.get("syncedAt"))
-    interest = as_float(snapshot.get("totalInterestEarnedUsd"), None)
+    raw_interest = as_float(snapshot.get("totalInterestEarnedUsd"), None)
+    offset = as_float(project.get("lulo_interest_offset_usd"))
+    # The browser's Lulo engine records a correction offset after
+    # deposits/withdrawals or impossible interest jumps. Compare normalized
+    # lifetime interest, not the provider's possibly reset raw counter.
+    interest = max(0, raw_interest - offset) if raw_interest is not None else None
     balance = as_float(snapshot.get("totalBalanceUsd"), None)
     if not project_id or observation is None or interest is None or interest < 0 or balance is None or balance < 0:
         return state
