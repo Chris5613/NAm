@@ -25,10 +25,13 @@ export function mergeBackendLoopscaleHistory(local, incoming) {
 
     const ourBaselines = ours?.monthBaselines || {};
     const theirBaselines = value.monthBaselines || {};
-    const conflict = Object.entries(ourBaselines).some(([month, amount]) =>
-      Object.prototype.hasOwnProperty.call(theirBaselines, month) &&
-      Math.abs(Number(amount) - Number(theirBaselines[month])) > 0.000001
-    );
+    const conflict = Object.entries(ourBaselines).some(([month, amount]) => {
+      if (!Object.prototype.hasOwnProperty.call(theirBaselines, month)) return false;
+      const localAmount = Number(amount);
+      const backendAmount = Number(theirBaselines[month]);
+      return !Number.isFinite(localAmount) || !Number.isFinite(backendAmount) ||
+        Math.abs(localAmount - backendAmount) > 0.000001;
+    });
     if (conflict) continue;
 
     // Keep any months and observations not present on the server yet.
