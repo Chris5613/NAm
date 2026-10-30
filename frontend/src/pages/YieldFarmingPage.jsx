@@ -8308,7 +8308,7 @@ const summary =
         <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
           <div className="mt-4 flex flex-col items-center gap-2">
-            <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100)}%, #25313d 0)`}}>
+            <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.max(0,Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100))}%, #25313d 0)`}}>
               <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0b1017]">
                 <strong className="text-xl font-semibold tabular-nums">{formatCurrency(todayEarnings)}</strong>
                 <span className="text-[10px] text-muted-foreground">Today so far</span>
@@ -8326,14 +8326,14 @@ const summary =
                 {todayBreakdown.map(source => (
                   <div key={source.name} className="flex items-center justify-between gap-3 text-xs">
                     <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
-                    <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{source.name === "Loopscale" && source.amount < 0.01
+                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{source.name === "Loopscale" && Math.abs(source.amount) < 0.01
                       ? `${source.amount.toFixed(6)}`
                       : formatCurrency(source.amount)}</span>
                   </div>
                 ))}
                 {!todayBreakdown.some(source => source.name === "Loopscale") && (
                   <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="min-w-0 text-muted-foreground">Loopscale <span className="text-[10px] opacity-75">("awaiting increase")</span></span>
+                    <span className="min-w-0 text-muted-foreground">Loopscale <span className="text-[10px] opacity-75">("awaiting update")</span></span>
                     <span className="shrink-0 tabular-nums text-muted-foreground">$0.000000</span>
                   </div>
                 )}
