@@ -84,3 +84,65 @@ The next independent stage is to migrate each platform's accrual rules to
 backend services with fixtures from known historical entries. Do not
 auto-rewrite old dated P/L while performing that work. Chart rendering, layout,
 tooltips, and interactive editors are frontend responsibilities.
+
+## Phase 2 — provider accounting migration (2026-10-30)
+
+### Backend-owned provider statistics
+
+Four extension-dependent providers now have independent, pure backend
+calculation functions in `backend/provider_stats.py`:
+
+- **RollerCoin:** dated TRX earnings, wallet-day replacements, historical TRX
+  baseline, month-to-date recorded USD income, and live current wallet value.
+  Historic income is not repriced when TRX/USD moves.
+- **Salad:** lifetime-earned and withdrawable/current balances remain
+  separate. Projection samples use a verified 45–90 minute pair, preferring
+  the reading closest to one hour; otherwise the current-month average.
+- **Unetwork:** opening-month allocation baseline, lifetime allocation totals,
+  and completed-day daily-rate projections (not today's partial total).
+- **Kryptex:** user-established September 2026 USD baseline, current balance,
+  profitability estimates, and miner status.
+
+The authenticated `GET /api/project-tracking/provider-stats` endpoint
+calculates these from **PostgreSQL's saved tracker settings**, without
+requiring React to send a presumed dollar total in the request.
+
+`frontend/src/hooks/useBackendProviderStats.js` uses the server result
+only when each numeric field and scalar metadata match the locally
+observed provider snapshot. A recently updated browser extension may be
+ahead of PostgreSQL, so the screen continues using the live calculation
+until its matching record has been saved. On backend failure, the locally
+known latest values stay visible. No extra dashboard labels were added.
+
+### Backend-owned monthly extension history
+
+`backend/provider_monthly_income.py` mirrors the four providers' monthly
+accrual rules, preserving legacy month-opening corrections and excluding
+current wallet holdings from *earnings*. The authenticated endpoint is
+`GET /api/project-tracking/provider-monthly-income`.
+
+`frontend/src/hooks/useBackendMonthlyIncome.js` compares all recorded
+extension-provider monthly values with the existing frontend calculations.
+When equal, backend values are used in the aggregated month totals without
+changing Lulo/Loopscale figures. Missing/lagging server months cannot
+truncate or replace the existing history.
+
+### Testing / deployment
+
+`backend/tests/test_provider_stats.py` and
+`backend/tests/test_provider_monthly_income.py` verify opening baselines,
+wallet-versus-income separation, recent-hour Salad projections, Unetwork
+completed-day semantics, and Pacific timezone rollover.
+
+`frontend/src/lib/yieldProviderParity.test.js` verifies the stale-data
+fallback, signed negative values, rejection of missing/corrected values,
+and preservation of platform monthly figures. The GitHub Actions workflow
+runs Python compilation, backend unit tests, frontend Jest tests, and a
+strict production React build.
+
+The legacy frontend accounting formulas remain as a deliberate transition
+fallback, **not a second source that is summed together with backend data**.
+They may only be removed once historical parity has been checked against
+saved production tracker records. Browser-extension authentication still
+requires Chrome while the service is active, and server-owned external API
+polling for Lulo/Loopscale remains a separate migration.
