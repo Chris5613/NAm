@@ -8225,7 +8225,19 @@ const summary =
     >
 
       <header className="flex flex-wrap items-center justify-between gap-3 px-1">
-        <h1 className="text-[22px] font-semibold tracking-tight">Passive Income</h1>
+        <div>
+          <h1 className="text-[22px] font-semibold tracking-tight">Passive Income</h1>
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            Balance backup: 11:58 PM Pacific daily (while this page is open)
+            {Object.keys(dailyBalanceSnapshots).length > 0 && (
+              <span className="ml-1">
+                · Last saved: {new Date(
+                  dailyBalanceSnapshots[Object.keys(dailyBalanceSnapshots).sort().at(-1)]?.capturedAt
+                ).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}
+              </span>
+            )}
+          </div>
+        </div>
         <div className="flex flex-wrap items-center gap-3">
         {inactiveProgramCards.length > 0 && (
           <div className="shrink-0">
