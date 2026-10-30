@@ -7730,12 +7730,6 @@ const importSaladPayload =
   }).formatToParts(new Date(earningsClock));
   const clockPart = key => Number(pacificClockParts.find(part => part.type === key)?.value || 0);
   const currentHour = clockPart("hour") + clockPart("minute") / 60;
-  const pacificClockParts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(new Date(earningsClock));
-  const clockPart = key => Number(pacificClockParts.find(part => part.type === key)?.value || 0);
-  const currentHour = clockPart("hour") + clockPart("minute") / 60;
   // Show signed observed earnings. Historical positive-only intraday
   // ledgers cannot reliably reconstruct prior losses, so only the new
   // signed observations are used for the current chart.
