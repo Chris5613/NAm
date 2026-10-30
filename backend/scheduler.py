@@ -5,7 +5,9 @@ Postgres database, or move this loop to a dedicated worker when scaling out.
 """
 
 import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
+import logging
 from typing import Any
 
 from sqlalchemy import select
@@ -16,6 +18,11 @@ from .models import Asset, NetWorthSnapshot, Project, Setting, User, utcnow
 
 _scheduler_task: asyncio.Task | None = None
 _last_daily_key: str | None = None
+_last_project_day: str | None = None
+PACIFIC = ZoneInfo("America/Los_Angeles")
+log = logging.getLogger(__name__)
+PROJECT_FEED_KEY = "yield_project_latest_balance_feed_v1"
+PROJECT_SNAPSHOT_PREFIX = "yield_project_balance_backup_"
 
 
 def setting_value(db: Session, user_id: int, key: str) -> Any:
@@ -73,12 +80,74 @@ def take_daily_snapshots() -> int:
     return created
 
 
+
+def take_project_balance_snapshots(day: str, scheduled_at: datetime | None = None) -> int:
+    """Durable per-user 11:58 PM Pacific snapshot from last received readings.
+
+    Server-owned persistence works with closed browsers, but balances may be
+    stale if their external integrations depend on browser extensions.
+    """
+    now = scheduled_at or utcnow()
+    made = 0
+    with SessionLocal() as db:
+        users = db.scalars(select(User)).all()
+        for user in users:
+            key = f"{PROJECT_SNAPSHOT_PREFIX}{day}"
+            if setting_value(db, user.id, key) is not None:
+                continue
+            feed = setting_value(db, user.id, PROJECT_FEED_KEY)
+            if not isinstance(feed, dict):
+                feed = {}
+            projects = feed.get("projects") if isinstance(feed.get("projects"), list) else []
+            received_at = feed.get("receivedAt")
+            try:
+                last = datetime.fromisoformat(str(received_at).replace("Z", "+00:00"))
+                feed_age_seconds = max(0, (now - last).total_seconds())
+            except (ValueError, TypeError):
+                feed_age_seconds = None
+            saved_projects = []
+            for project in projects:
+                if not isinstance(project, dict) or not project.get("id"):
+                    continue
+                item = dict(project)
+                raw_time = item.get("sourceLastSyncedAt")
+                try:
+                    source_time = datetime.fromisoformat(str(raw_time).replace("Z", "+00:00"))
+                    age = max(0, (now - source_time).total_seconds())
+                except (ValueError, TypeError):
+                    age = None
+                item["sourceAgeSeconds"] = round(age) if age is not None else None
+                item["stale"] = age is None or age > 20 * 60
+                saved_projects.append(item)
+            snapshot = {
+                "date": day,
+                "scheduledLocalTime": "23:58",
+                "timezone": "America/Los_Angeles",
+                "capturedAt": now.isoformat(),
+                "feedReceivedAt": received_at,
+                "feedAgeSeconds": round(feed_age_seconds) if feed_age_seconds is not None else None,
+                "projects": saved_projects,
+                "source": "server-scheduler",
+                "incomplete": not saved_projects or feed_age_seconds is None or feed_age_seconds > 20 * 60,
+            }
+            set_setting(db, user.id, key, snapshot)
+            # Alerts are stored separately; no UI labels added.
+            if snapshot["incomplete"] or any(p["stale"] for p in saved_projects):
+                set_setting(db, user.id, "yield_project_sync_alerts_v1", {
+                    "lastCheckedAt": now.isoformat(),
+                    "staleProjects": [p["id"] for p in saved_projects if p["stale"]],
+                    "backupIncomplete": snapshot["incomplete"],
+                })
+            made += 1
+        db.commit()
+    return made
+
 def scheduler_status() -> dict[str, Any]:
-    return {"status": "running", "last_daily_key": _last_daily_key}
+    return {"status": "running", "last_daily_key": _last_daily_key, "last_project_day": _last_project_day}
 
 
 async def scheduler_loop() -> None:
-    global _last_daily_key
+    global _last_daily_key, _last_project_day
     while True:
         now = datetime.now(timezone.utc)
         day = now.date().isoformat()
@@ -89,7 +158,15 @@ async def scheduler_loop() -> None:
                 _last_daily_key = day
             except Exception:
                 _last_daily_key = day
-        await asyncio.sleep(60)
+        local_now = now.astimezone(PACIFIC)
+        project_day = local_now.date().isoformat()
+        if (local_now.hour, local_now.minute) >= (23, 58) and _last_project_day != project_day:
+            try:
+                await asyncio.to_thread(take_project_balance_snapshots, project_day, now)
+                _last_project_day = project_day
+            except Exception:
+                log.exception("Project balance backup failed; will retry next tick")
+        await asyncio.sleep(30)
 
 
 def start_scheduler() -> asyncio.Task:
