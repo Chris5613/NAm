@@ -30,6 +30,8 @@ from .lulo_transaction_reconciliation import reconcile_lulo_project
 from .yield_earnings_ledger import parse_time
 
 LULO_TRANSACTION_PREVIEW_KEY = "yield_backend_lulo_transaction_previews_v1"
+LULO_CUTOVER_BACKUP_PREFIX = "yield_lulo_cutover_backup_v1_"
+LOOPSCALE_CUTOVER_BACKUP_KEY = "yield_loopscale_cutover_backup_v1"
 from .provider_stats import numeric
 
 log = logging.getLogger(__name__)
@@ -454,12 +456,29 @@ def poll_sources_for_user(user_id: int) -> int:
         # Do NOT mutate project.transactions or the legacy history keys.
         saved_lulo = _read(db, user_id, LULO_SERVER_LEDGER_KEY)
         saved_loopscale = _read(db, user_id, LOOPSCALE_SERVER_LEDGER_KEY)
+        # Immutable first-pass cutover backups. Unlike balance snapshots,
+        # these include the ORIGINAL embedded transactions and corrections.
+        original_loop_history = _read(db, user_id, LOOPSCALE_LEGACY_LEDGER_KEY)
+        if original_loop_history and not _read(db, user_id, LOOPSCALE_CUTOVER_BACKUP_KEY):
+            _write(db, user_id, LOOPSCALE_CUTOVER_BACKUP_KEY, {
+                "capturedAt": utc_iso(now),
+                "history": original_loop_history,
+                "cutoverWritesEnabled": False,
+            })
         projects = []
         for row in db.scalars(select(Project).where(Project.user_id == user_id)).all():
             project = dict(row.data or {})
             project["id"] = row.id
             project["invested"] = float(row.invested or 0)
             project["earned"] = float(row.earned or 0)
+            if project.get("yield_tracking") == "lulo_lending":
+                backup_key = LULO_CUTOVER_BACKUP_PREFIX + str(row.id)
+                if not _read(db, user_id, backup_key):
+                    _write(db, user_id, backup_key, {
+                        "capturedAt": utc_iso(now),
+                        "project": project,
+                        "cutoverWritesEnabled": False,
+                    })
             projects.append(project)
         result = reconcile_backend_ledgers(
             saved_lulo, saved_loopscale,
