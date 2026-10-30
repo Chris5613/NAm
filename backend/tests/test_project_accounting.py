@@ -1,7 +1,7 @@
 """Regression tests for authoritative project portfolio accounting."""
 import unittest
 
-from backend.project_accounting import amount, portfolio_summary
+from backend.project_accounting import amount, portfolio_summary, daily_income_summary, signed_amount
 
 
 class ProjectPortfolioTests(unittest.TestCase):
@@ -47,6 +47,27 @@ class ProjectPortfolioTests(unittest.TestCase):
         self.assertFalse(result["complete"])
         self.assertEqual(result["missingProjectIds"], ["bad", "missing", "negative"])
         self.assertEqual(result["staleProjectIds"], ["good"])
+
+    def test_signed_daily_income_preserves_losses(self):
+        total = daily_income_summary({
+            "Loopscale": "-0.86", "RollerCoin": "0.60",
+            "Salad": "0.001",
+        })
+        self.assertEqual(total["totalUsd"], -0.259)
+        self.assertEqual(total["sources"]["Loopscale"], -0.86)
+        self.assertTrue(total["complete"])
+
+    def test_invalid_daily_income_is_explicitly_rejected(self):
+        total = daily_income_summary({"RollerCoin": float("inf"), "Salad": 2})
+        self.assertFalse(total["complete"])
+        self.assertEqual(total["rejected"], ["RollerCoin"])
+        self.assertEqual(total["totalUsd"], 2)
+
+    def test_daily_income_empty_is_zero_not_inferred(self):
+        total = daily_income_summary({})
+        self.assertEqual(total["totalUsd"], 0)
+        self.assertTrue(total["complete"])
+        self.assertIsNone(signed_amount(True))
 
     def test_decimal_parsing_rejects_bools_and_non_finite(self):
         self.assertIsNone(amount(True))
