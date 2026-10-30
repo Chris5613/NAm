@@ -180,6 +180,17 @@ async def yield_migration_status(
         )
         lulo_wallet = (project.data or {}).get("lulo_wallet_address")
         source_fresh = bool((provider_health["lulo"].get(lulo_wallet) or {}).get("fresh"))
+        backup = _read(db, user.id, LULO_CUTOVER_BACKUP_PREFIX + project.id)
+        backup_present = bool(backup.get("project"))
+        reasons = []
+        if not latest_report.get("diagnosticThresholdMet"):
+            reasons.append("need-more-distinct-same-input-matches")
+        if parity_result.get("status") != "matched":
+            reasons.append("persisted-ledger-needs-verification")
+        if not source_fresh:
+            reasons.append("backend-poll-not-fresh")
+        if not backup_present:
+            reasons.append("original-ledger-backup-not-yet-created")
         project_status[project.id] = {
             "parityMatches": latest_report.get("consecutiveMatches", 0),
             "sameInputDiagnosticsPassed": bool(latest_report.get("diagnosticThresholdMet")),
@@ -187,6 +198,11 @@ async def yield_migration_status(
             "browserLastSyncedAt": last_browser_sync,
             "backendPreviewLastSyncedAt": last_preview_sync,
             "independentProviderPollFresh": source_fresh,
+            "originalLedgerBackupPresent": backup_present,
+            "cutoverReadiness": {
+                "readyForManualReview": not reasons,
+                "blockers": reasons,
+            },
             "comparisonMode": True,
             "eligibleForAutomaticWrites": False,
         }
