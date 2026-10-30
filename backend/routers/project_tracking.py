@@ -206,8 +206,30 @@ async def recovery_candidates(user: User = Depends(current_user),
                           for symbol, value in new_amounts.items()
                           if value is not None and old_amounts.get(symbol) is not None}
                 if deltas:
-                    candidates.append({"id": now["id"], "assetQuantityDeltas": deltas,
-                                       "status": "unverified-asset-change"})
+                    old_assets = {a.get("symbol"): a for a in earlier.get("assetBalances", [])
+                                  if isinstance(a, dict) and a.get("symbol")}
+                    new_assets = {a.get("symbol"): a for a in now.get("assetBalances", [])
+                                  if isinstance(a, dict) and a.get("symbol")}
+                    earned_at_market = 0.0
+                    market_pnl = 0.0
+                    priced_symbols = 0
+                    for symbol, delta in deltas.items():
+                        old_qty = old_amounts.get(symbol)
+                        new_qty = new_amounts.get(symbol)
+                        old_usd = number(old_assets[symbol].get("balanceUsd"))
+                        new_usd = number(new_assets[symbol].get("balanceUsd"))
+                        if not old_qty or not new_qty or old_usd is None or new_usd is None:
+                            continue
+                        old_price, new_price = old_usd / old_qty, new_usd / new_qty
+                        earned_at_market += delta * new_price
+                        market_pnl += old_qty * (new_price - old_price)
+                        priced_symbols += 1
+                    candidates.append({
+                        "id": now["id"], "assetQuantityDeltas": deltas,
+                        "quantityChangeUsd": round(earned_at_market, 8) if priced_symbols else None,
+                        "marketPnlOnPriorHoldingsUsd": round(market_pnl, 8) if priced_symbols else None,
+                        "status": "unverified-asset-change",
+                    })
         return {"referenceDate": snapshot.get("date"),
                 "referenceCapturedAt": snapshot.get("capturedAt"),
                 "candidates": candidates}
