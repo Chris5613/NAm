@@ -15,8 +15,9 @@ LOOP_WALLET = "72eGAvpNKB8YcpbS15BjZ7fkb7Lm8GjQSyHyxEAq8YBH"
 
 
 class FakeSession:
-    def __init__(self, projects):
+    def __init__(self, projects, transaction_rows=None):
         self.projects = projects
+        self.transaction_rows = transaction_rows or []
         self.commits = 0
 
     def __enter__(self):
@@ -30,7 +31,7 @@ class FakeSession:
         # rows rather than treating Project rows as transactions.
         entity = stmt.column_descriptions[0].get("entity")
         if entity is sync.ProjectTransaction:
-            return SimpleNamespace(all=lambda: [])
+            return SimpleNamespace(all=lambda: self.transaction_rows)
         return SimpleNamespace(all=lambda: self.projects)
 
     def commit(self):
@@ -56,7 +57,13 @@ class ClosedBrowserPollingTests(TestCase):
                 "transactions": [],
             },
         )
-        session = FakeSession([project])
+        typed = SimpleNamespace(
+            id="earn-1", project_id="lulo-1", type="earning",
+            amount=0.12, occurred_at="2026-10-29",
+            note="Legacy saved interest",
+            data={"source": "lulo_yield", "source_date": "2026-10-29"},
+        )
+        session = FakeSession([project], [typed])
         lulo_snapshot = {
             "walletAddress": WALLET,
             "syncedAt": "2026-10-30T18:00:00Z",
@@ -91,6 +98,14 @@ class ClosedBrowserPollingTests(TestCase):
             backup_key = sync.LULO_CUTOVER_BACKUP_PREFIX + "lulo-1"
             original_project = deepcopy(storage[(1, backup_key)])
             self.assertEqual(original_project["project"]["earned"], 10.0)
+            self.assertEqual(len(original_project["projectTransactions"]), 1)
+            self.assertEqual(
+                original_project["projectTransactions"][0]["source_date"],
+                "2026-10-29",
+            )
+            self.assertAlmostEqual(
+                original_project["projectTransactions"][0]["amount"], .12
+            )
             self.assertEqual(original_project["project"]["lulo_last_synced_at"],
                              "2026-10-30T17:00:00Z")
             self.assertIn("lulo-1", first_lulo)
