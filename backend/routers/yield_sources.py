@@ -16,7 +16,10 @@ from ..yield_earnings_state import (
     LULO_SERVER_LEDGER_KEY, LOOPSCALE_SERVER_LEDGER_KEY,
 )
 from ..yield_earnings_ledger import lulo_monthly_backfills
-from ..yield_source_sync import LULO_TRANSACTION_PREVIEW_KEY
+from ..yield_source_sync import (
+    LULO_TRANSACTION_PREVIEW_KEY, LULO_CUTOVER_BACKUP_PREFIX,
+    LOOPSCALE_CUTOVER_BACKUP_KEY,
+)
 from ..yield_cutover_parity import (
     parity_observation, update_parity_history, persisted_project_parity, source_poll_health,
 )
@@ -198,3 +201,52 @@ async def yield_migration_status(
         "cutoverEnabled": False,
         "note": "Live history parity and safe write ownership still require verification.",
     }
+
+
+@router.get("/cutover-backups")
+async def list_cutover_backups(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Show one-time safety checkpoints before transfer of write authority."""
+    projects = db.query(Project).filter(Project.user_id == user.id).all()
+    entries = []
+    for project in projects:
+        if (project.data or {}).get("yield_tracking") != "lulo_lending":
+            continue
+        saved = _read(db, user.id, LULO_CUTOVER_BACKUP_PREFIX + project.id)
+        entries.append({
+            "projectId": project.id,
+            "capturedAt": saved.get("capturedAt"),
+            "available": bool(saved.get("project")),
+        })
+    loop = _read(db, user.id, LOOPSCALE_CUTOVER_BACKUP_KEY)
+    return {
+        "lulo": entries,
+        "loopscale": {
+            "capturedAt": loop.get("capturedAt"),
+            "available": bool(loop.get("history")),
+        },
+    }
+
+
+@router.get("/cutover-backups/lulo/{project_id}")
+async def retrieve_lulo_cutover_backup(
+    project_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    project = db.get(Project, project_id)
+    if project is None or project.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Project not found.")
+    backup = _read(db, user.id, LULO_CUTOVER_BACKUP_PREFIX + project_id)
+    if not backup.get("project"):
+        raise HTTPException(status_code=404, detail="Backup not available.")
+    return backup
+
+
+@router.get("/cutover-backups/loopscale")
+async def retrieve_loopscale_cutover_backup(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    backup = _read(db, user.id, LOOPSCALE_CUTOVER_BACKUP_KEY)
+    if not backup.get("history"):
+        raise HTTPException(status_code=404, detail="Backup not available.")
+    return backup
