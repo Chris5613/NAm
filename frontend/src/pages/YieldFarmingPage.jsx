@@ -778,11 +778,7 @@ const lastRollerCoinRangeRequestRef = useRef(0);
 const requestRollerCoinLatest =
   useCallback(
     () => {
-      // Ask the extension for the latest unified wallet snapshot.
-      // Dated income API rows are no longer required for today's RollerCoin total.
-      /*
-       * Ask the extension for its latest cached state/status.
-       */
+      // Ask the extension for its latest cached wallet, earnings, and status.
       window.postMessage(
         {
           source:
@@ -805,13 +801,21 @@ const requestRollerCoinLatest =
         window.location.origin
       );
 
-      // Request one fresh TRX wallet + price observation per ten minutes.
-      // The extension also runs a 10-minute alarm while Chrome is active.
+      // While NAm is open, ask for both wallet and today's dated earnings.
+      // This supplements the extension's own ten-minute Chrome alarm.
       const now = Date.now();
       if (now - lastRollerCoinRangeRequestRef.current >= 600000) {
         lastRollerCoinRangeRequestRef.current = now;
         window.postMessage(
           { source: "rollercoin-app", type: "SYNC_WALLET" },
+          window.location.origin
+        );
+        const today = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "America/Los_Angeles", year: "numeric",
+          month: "2-digit", day: "2-digit",
+        }).format(new Date(now));
+        window.postMessage(
+          { source: "rollercoin-app", type: "SYNC_RANGE", from: today, to: today },
           window.location.origin
         );
       }
@@ -5019,12 +5023,15 @@ if (
                 !Number.isFinite(Date.parse(item.synced)) ||
                 Date.now() - Date.parse(item.synced) > item.maxAgeMs);
               return (
-              <div key={item.name} title={item.error || undefined} className="grid grid-cols-[minmax(0,1fr)_85px_95px] items-center gap-2 border-b border-white/5 py-1 text-[10px] last:border-b-0">
-                <span className="truncate font-medium">{item.name}</span>
-                <span className="truncate text-muted-foreground">{formatCompactSyncAge(item.synced)}</span>
-                <span className={item.connected && !stale && !item.error ? "text-emerald-400" : "text-amber-300"}>
-                  ● {!item.connected ? "Not connected" : item.error ? "Sync error" : stale ? "Stale" : "Connected"}
-                </span>
+              <div key={item.name} className="border-b border-white/5 py-1 text-[10px] last:border-b-0">
+                <div className="grid grid-cols-[minmax(0,1fr)_85px_95px] items-center gap-2">
+                  <span className="truncate font-medium">{item.name}</span>
+                  <span className="truncate text-muted-foreground">{formatCompactSyncAge(item.synced)}</span>
+                  <span className={item.connected && !stale && !item.error ? "text-emerald-400" : "text-amber-300"}>
+                    ● {!item.connected ? "Not connected" : item.error ? "Sync error" : stale ? "Stale" : "Connected"}
+                  </span>
+                </div>
+                {item.error && <div className="mt-1 break-words text-amber-300">{item.error}</div>}
               </div>
               );
             })}
