@@ -13,6 +13,7 @@ import { useLegacyLuloMonthlyAccounting } from "@/hooks/useLegacyLuloMonthlyAcco
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { latestRollerCoinTimestamp, shouldAcceptRollerCoinBalance } from "@/lib/rollerCoinFreshness";
 import { Card, CardContent } from "@/components/ui/card";
+import DividendIncomeSection from "@/components/DividendIncomeSection";
 import { Area, AreaChart, CartesianGrid, LabelList, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -4608,6 +4609,8 @@ const summary =
             : ""}
         </div>
       )}
+
+      <DividendIncomeSection />
 
       <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">

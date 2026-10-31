@@ -5,6 +5,7 @@ open proxy. Responses are cached briefly to stay within upstream rate limits.
 """
 
 import asyncio
+from datetime import datetime, timezone
 import json
 import logging
 import os
@@ -40,6 +41,37 @@ def cache_result(key: str, data: Any) -> None:
     _cache[key] = (now, data)
 
 _cache: dict[str, tuple[float, Any]] = {}
+_dividend_cache: dict[str, tuple[float, Any]] = {}
+
+
+@router.get("/dividends/{symbol}")
+async def stock_dividends(symbol: str, user: User = Depends(current_user)) -> Any:
+    """Confirmed ETF distributions, sourced from Yahoo's dividend event feed."""
+    symbol = symbol.upper()
+    if symbol not in {"VTI", "VOO"}:
+        raise HTTPException(status_code=404, detail="Unknown dividend symbol.")
+    key = f"dividends:{symbol}"
+    cached = _dividend_cache.get(key)
+    if cached and time.time() - cached[0] < 6 * 3600:
+        return cached[1]
+    now = int(time.time())
+    url = (f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+           f"?period1={now - 2 * 366 * 86400}&period2={now + 86400}"
+           "&interval=1mo&events=div")
+    data = await asyncio.to_thread(_fetch, url, {})
+    chart = (data.get("chart") or {}).get("result") or []
+    if not chart:
+        raise HTTPException(status_code=502, detail="Dividend history unavailable.")
+    events = (chart[0].get("events") or {}).get("dividends") or {}
+    payments = sorted((
+        {"exDate": datetime.fromtimestamp(int(event["date"]), timezone.utc).date().isoformat(),
+         "amountPerShare": float(event["amount"])}
+        for event in events.values()
+        if float(event.get("amount") or 0) > 0 and event.get("date")
+    ), key=lambda entry: entry["exDate"], reverse=True)
+    result = {"symbol": symbol, "distributions": payments, "dateType": "ex-dividend"}
+    _dividend_cache[key] = (time.time(), result)
+    return result
 
 
 def _provider_config() -> dict[str, dict[str, Any]]:
