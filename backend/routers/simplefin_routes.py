@@ -1,5 +1,6 @@
 """SimpleFIN Bridge access URL storage and read-only sync."""
 
+import asyncio
 import base64
 import binascii
 import json
@@ -33,6 +34,39 @@ router = APIRouter(prefix="/api/simplefin", tags=["simplefin"])
 _cipher: Fernet | None = None
 
 
+# Only the official SimpleFIN Bridge production/beta hosts may receive tokens.
+SIMPLEFIN_BRIDGE_HOSTS = frozenset({"bridge.simplefin.org", "beta-bridge.simplefin.org"})
+
+
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def validate_bridge_url(url: str, *, claim: bool = False) -> str:
+    try:
+        parsed = urlsplit(url.strip())
+        port = parsed.port
+    except ValueError as error:
+        raise HTTPException(400, "Invalid SimpleFIN URL.") from error
+    if (parsed.scheme != "https" or parsed.hostname not in SIMPLEFIN_BRIDGE_HOSTS
+            or port not in (None, 443) or parsed.fragment or
+            (claim and (parsed.username is not None or parsed.password is not None or
+                        not parsed.path.startswith("/simplefin/claim/") or
+                        parsed.path == "/simplefin/claim/"))):
+        raise HTTPException(400, "The SimpleFIN URL is not an approved Bridge endpoint.")
+    return url.strip()
+
+
+def _safe_bridge_request(request: urllib.request.Request) -> bytes:
+    opener = urllib.request.build_opener(_NoRedirects())
+    with opener.open(request, timeout=30) as response:
+        payload = response.read(65537)
+        if len(payload) > 65536:
+            raise HTTPException(502, "SimpleFIN response exceeded the size limit.")
+        return payload
+
+
 def get_cipher() -> Fernet:
     global _cipher
 
@@ -56,6 +90,7 @@ def normalize_access_url(access_url: str) -> tuple[str, str | None]:
 
     Also forces SimpleFIN to include pending transactions.
     """
+    validate_bridge_url(access_url)
     parts = urlsplit(access_url.strip())
 
     if parts.scheme != "https" or not parts.hostname:
@@ -620,6 +655,7 @@ def classify_transaction(
 def fetch_simplefin(
     access_url: str,
 ) -> dict[str, Any]:
+    validate_bridge_url(access_url)
     if not access_url.startswith(
         "https://"
     ):
@@ -750,6 +786,7 @@ async def add_connection(
         get_db
     ),
 ) -> dict:
+    validate_bridge_url(request.access_url)
     connection_id = str(
         uuid4()
     )
@@ -1243,6 +1280,7 @@ async def browser_sync(
 @router.post("/claim")
 async def claim_setup_token(
     request: SetupTokenRequest,
+    user: User = Depends(current_user),
 ) -> dict:
     """
     Exchange a SimpleFIN setup token
@@ -1298,17 +1336,7 @@ async def claim_setup_token(
             ),
         ) from error
 
-    if not claim_url.startswith(
-        "https://"
-    ):
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "SimpleFIN setup token "
-                "did not contain an "
-                "HTTPS claim URL."
-            ),
-        )
+    validate_bridge_url(claim_url, claim=True)
 
     claim_request = (
         urllib.request.Request(
@@ -1330,19 +1358,8 @@ async def claim_setup_token(
     )
 
     try:
-        with urllib.request.urlopen(
-            claim_request,
-            timeout=30,
-        ) as response:
-            raw = (
-                response.read()
-                .decode("utf-8")
-                .strip()
-            )
-
-            result = {
-                "access_url": raw
-            }
+        raw = (await asyncio.to_thread(_safe_bridge_request, claim_request)).decode("utf-8").strip()
+        result = {"access_url": raw}
 
     except urllib.error.HTTPError as error:
         detail = (
@@ -1378,6 +1395,8 @@ async def claim_setup_token(
             "",
         ).strip()
     )
+
+    validate_bridge_url(access_url)
 
     if not access_url.startswith(
         "https://"

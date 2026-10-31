@@ -23,7 +23,7 @@ class PasswordReset(BaseModel):
     new_password: str = Field(min_length=8, max_length=256)
 
 
-SECURITY_ANSWER = "double"
+
 
 
 @router.get("/status")
@@ -40,7 +40,7 @@ async def setup(credentials: Credentials, response: Response, db: Session = Depe
     user = User(
         username=credentials.username.strip(),
         password_hash=hash_password(credentials.password),
-        security_answer_hash=hash_password(SECURITY_ANSWER),
+        security_answer_hash=None,
         last_login_at=utcnow(),
     )
     db.add(user)
@@ -69,17 +69,26 @@ async def login(credentials: Credentials, response: Response, db: Session = Depe
 
 
 @router.post("/reset-password")
-async def reset_password(request: PasswordReset, db: Session = Depends(get_db)) -> dict:
-    user = db.scalar(select(User).where(User.username == request.username.strip()))
-    answer_matches = request.security_answer.strip().lower() == SECURITY_ANSWER
-    if user and user.security_answer_hash:
-        answer_matches = verify_password(user.security_answer_hash, request.security_answer.strip())
-    if not user or not answer_matches:
-        raise HTTPException(status_code=401, detail="Incorrect username or security answer.")
+async def reset_password(request: PasswordReset) -> dict:
+    # Old recovery answer was public. Fail closed until secure recovery is installed.
+    raise HTTPException(410, "Self-service password recovery is disabled for account security.")
 
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=12, max_length=256)
+
+
+@router.post("/change-password")
+async def change_password(request: PasswordChange, response: Response,
+                          user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    if not verify_password(user.password_hash, request.current_password):
+        raise HTTPException(401, "Current password is incorrect.")
+    if request.current_password == request.new_password:
+        raise HTTPException(422, "Choose a different password.")
     user.password_hash = hash_password(request.new_password)
-    user.security_answer_hash = hash_password(SECURITY_ANSWER)
     db.commit()
+    set_session_cookie(response, user.id)
     return {"ok": True}
 
 
