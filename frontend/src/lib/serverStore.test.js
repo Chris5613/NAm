@@ -131,5 +131,5 @@ test("a superseded hydrate cannot overwrite a newer successful login", async () 
   finishOldSettings({ "account-label": "old" });
   await stale;
   expect(isHydrated()).toBe(true);
-  expect(JSON.parse(remoteStorage.getItem("account-label"))).toBe("new");
+  expect(remoteStorage.getItem("account-label")).toBe("new");
 });
