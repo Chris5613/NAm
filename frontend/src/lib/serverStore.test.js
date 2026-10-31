@@ -1,5 +1,5 @@
 import { resourceApi, settingsApi } from "./apiClient";
-import { hydrate, remoteStorage, flushPendingWrites, resetStore, setStoreErrorHandler, refreshCollection } from "./serverStore";
+import { hydrate, remoteStorage, flushPendingWrites, resetStore, setStoreErrorHandler, refreshCollection, isHydrated } from "./serverStore";
 
 jest.mock("./apiClient", () => ({
   resourceApi: { list: jest.fn(), patchProjects: jest.fn(), replaceAll: jest.fn() },
@@ -94,4 +94,42 @@ test("invalid duplicate project IDs stay in memory without a destructive save", 
   await flushPendingWrites();
   expect(resourceApi.patchProjects).not.toHaveBeenCalled();
   expect(resourceApi.replaceAll).not.toHaveBeenCalled();
+});
+
+test("a delayed old-account hydrate cannot refill memory after sign-out", async () => {
+  let finishSettings;
+  settingsApi.all.mockImplementationOnce(() => new Promise((resolve) => { finishSettings = resolve; }));
+  const pending = hydrate();
+  expect(isHydrated()).toBe(false);
+  resetStore();
+  finishSettings({ "sensitive-old-account-key": { amount: 123 } });
+  await pending;
+  expect(isHydrated()).toBe(false);
+  expect(remoteStorage.getItem("sensitive-old-account-key")).toBeNull();
+  expect(remoteStorage.getItem("networth_projects")).toBeNull();
+});
+
+test("late collection refresh cannot repopulate the signed-out cache", async () => {
+  let finish;
+  resourceApi.list.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  const pending = refreshCollection("networth_assets");
+  resetStore();
+  finish([{ id: "old-account-asset", manual_value: 999 }]);
+  await pending;
+  expect(remoteStorage.getItem("networth_assets")).toBeNull();
+  expect(isHydrated()).toBe(false);
+});
+
+test("a superseded hydrate cannot overwrite a newer successful login", async () => {
+  let finishOldSettings;
+  settingsApi.all
+    .mockImplementationOnce(() => new Promise((resolve) => { finishOldSettings = resolve; }))
+    .mockResolvedValueOnce({ "account-label": "new" });
+  const stale = hydrate();
+  const fresh = hydrate();
+  await fresh;
+  finishOldSettings({ "account-label": "old" });
+  await stale;
+  expect(isHydrated()).toBe(true);
+  expect(JSON.parse(remoteStorage.getItem("account-label"))).toBe("new");
 });
