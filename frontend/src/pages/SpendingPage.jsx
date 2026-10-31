@@ -471,11 +471,7 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
       let receivedCount = 0;
       let incoming = [];
       for (const connection of selected) {
-        const payload = await fetchSimplefinInBrowser(connection.access_url);
-        const result = await api.post("/api/simplefin/browser-sync", {
-          connection_id: connection.id,
-          payload,
-        });
+        const result = await api.post("/api/simplefin/sync", { connection_id: connection.id });
         accountCount += result?.accounts || 0;
         receivedCount += result?.received_transactions || 0;
         incoming = [...incoming, ...(result?.transactions || [])];
@@ -575,17 +571,14 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
   const connectSimplefin = async () => {
     setIsLinking(true);
     try {
-      let accessUrl = simplefinUrl.trim();
-      if (!accessUrl.startsWith("https://")) {
-        const claimed = await api.post("/api/simplefin/claim", { setup_token: accessUrl });
-        accessUrl = claimed.access_url;
-      }
-      const result = await api.post("/api/simplefin/connections", { access_url: accessUrl });
-      const payload = await fetchSimplefinInBrowser(accessUrl);
-      await api.post("/api/simplefin/browser-sync", { connection_id: result.id, payload });
+      const value = simplefinUrl.trim();
+      const result = value.startsWith("https://")
+        ? await api.post("/api/simplefin/connections", { access_url: value })
+        : await api.post("/api/simplefin/connect", { setup_token: value });
+      const synced = await api.post("/api/simplefin/sync", { connection_id: result.id });
       setSimplefinUrl("");
       setSimplefinDialogOpen(false);
-      toast.success(`${payload.accounts?.length || "Your"} account${payload.accounts?.length === 1 ? "" : "s"} connected`);
+      toast.success(`${synced.accounts || "Your"} account${synced.accounts === 1 ? "" : "s"} connected`);
       const refreshedAccounts = await loadAll();
       await syncNetWorthBalances(refreshedAccounts);
     } catch (error) {

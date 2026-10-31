@@ -690,7 +690,7 @@ def fetch_simplefin(
     )
 
     try:
-        with urllib.request.urlopen(
+        with urllib.request.build_opener(_NoRedirects()).open(
             request,
             timeout=30,
         ) as response:
@@ -1418,6 +1418,15 @@ async def claim_setup_token(
     }
 
 
+@router.post("/connect")
+async def connect_simplefin(request: SetupTokenRequest, user: User = Depends(current_user),
+                            db: Session = Depends(get_db)) -> dict:
+    """Claim and encrypt a setup token without disclosing the access URL to the browser."""
+    claimed = await claim_setup_token(request, user)
+    return await add_connection(ConnectionRequest(access_url=claimed["access_url"],
+                                                 label=request.label), user, db)
+
+
 def read_access_url(
     connection: SimplefinConnection,
 ) -> str:
@@ -1443,331 +1452,24 @@ def read_access_url(
 
 
 @router.post("/sync")
-async def sync_simplefin(
-    request: SyncRequest,
-    user: User = Depends(
-        current_user
-    ),
-    db: Session = Depends(
-        get_db
-    ),
-) -> dict:
-    query = select(
-        SimplefinConnection
-    ).where(
-        SimplefinConnection.user_id
-        == user.id
-    )
-
+async def sync_simplefin(request: SyncRequest, user: User = Depends(current_user),
+                         db: Session = Depends(get_db)) -> dict:
+    """Refresh bank accounts server-side; never return access credentials."""
+    query = select(SimplefinConnection).where(SimplefinConnection.user_id == user.id)
     if request.connection_id:
-        query = query.where(
-            SimplefinConnection.id
-            == request.connection_id
-        )
-
-    connections = (
-        db.scalars(
-            query
-        ).all()
-    )
-
+        query = query.where(SimplefinConnection.id == request.connection_id)
+    connections = db.scalars(query).all()
     if not connections:
-        raise HTTPException(
-            status_code=404,
-            detail=(
-                "No SimpleFIN "
-                "connections found."
-            ),
-        )
-
-    saved: list[
-        SpendingTransaction
-    ] = []
-
-    account_count = 0
-
+        raise HTTPException(404, "No SimpleFIN connections found.")
+    combined = {"accounts": 0, "received_transactions": 0, "transactions": []}
     for connection in connections:
-        payload = await asyncio.to_thread(
-            fetch_simplefin, read_access_url(connection)
-        )
-
-        for account in payload.get(
-            "accounts",
-            [],
-        ):
-            account_count += 1
-
-            account_id = str(
-                account.get("id")
-                or uuid4()
-            )
-
-            account_key = (
-                f"simplefin-{account_id}"
-            )
-
-            account_name = (
-                account.get(
-                    "name"
-                )
-                or connection.label
-                or (
-                    "SimpleFIN "
-                    "account"
-                )
-            )
-
-            account_type = (
-                account.get(
-                    "type"
-                )
-                or account.get(
-                    "subtype"
-                )
-                or ""
-            )
-
-            is_debt = (
-                looks_like_credit_card(
-                    account_type,
-                    account_name,
-                )
-            )
-
-            balance = (
-                get_simplefin_account_balance(
-                    account,
-                    is_debt=is_debt,
-                )
-            )
-
-            account_row = (
-                SpendingAccount(
-                    id=account_key,
-                    user_id=user.id,
-                    name=account_name,
-                    type=account_type,
-                    current_balance=balance,
-                    provider_account_id=(
-                        account_key
-                    ),
-                    linked_at=(
-                        connection.created_at
-                    ),
-                )
-            )
-
-            db.merge(
-                account_row
-            )
-
-            seen_txns = set()
-
-            for transaction in account.get(
-                "transactions",
-                [],
-            ):
-                transaction_id = (
-                    transaction.get(
-                        "id"
-                    )
-                    or transaction.get(
-                        "id_string"
-                    )
-                )
-
-                posted = (
-                    normalize_transaction_date(
-                        transaction.get(
-                            "posted"
-                        )
-                        or transaction.get(
-                            "transacted"
-                        )
-                        or transaction.get(
-                            "date"
-                        )
-                    )
-                )
-
-                if (
-                    not transaction_id
-                    or not posted
-                ):
-                    continue
-
-                amount = abs(
-                    float(
-                        transaction.get(
-                            "amount"
-                        )
-                        or 0
-                    )
-                )
-
-                if amount <= 0:
-                    continue
-
-                merchant = (
-                    transaction.get(
-                        "payee"
-                    )
-                    or transaction.get(
-                        "description"
-                    )
-                    or transaction.get(
-                        "memo"
-                    )
-                    or (
-                        "SimpleFIN "
-                        "transaction"
-                    )
-                )
-
-                pending = (
-                    simplefin_transaction_is_pending(
-                        transaction
-                    )
-                )
-
-                tx_key = (
-                    simplefin_transaction_key(
-                        account_key,
-                        merchant,
-                        str(posted)[:10],
-                        amount,
-                    )
-                )
-
-                if tx_key in seen_txns:
-                    continue
-
-                seen_txns.add(
-                    tx_key
-                )
-
-                existing_transaction = (
-                    db.get(
-                        SpendingTransaction,
-                        (
-                            "simplefin-"
-                            f"{transaction_id}"
-                        ),
-                    )
-                )
-
-                if (
-                    existing_transaction
-                    is None
-                ):
-                    existing_transaction = (
-                        db.scalar(
-                            select(
-                                SpendingTransaction
-                            ).where(
-                                SpendingTransaction.user_id
-                                == user.id,
-                                SpendingTransaction.account_id
-                                == account_key,
-                                SpendingTransaction.source
-                                == "simplefin",
-                                SpendingTransaction.merchant
-                                == merchant,
-                                SpendingTransaction.date
-                                == str(posted)[:10],
-                                SpendingTransaction.amount
-                                == amount,
-                            )
-                        )
-                    )
-
-                if (
-                    existing_transaction
-                    is not None
-                ):
-                    existing_transaction.merchant = (
-                        merchant
-                    )
-
-                    existing_transaction.amount = (
-                        amount
-                    )
-
-                    existing_transaction.date = (
-                        str(posted)[:10]
-                    )
-
-                    existing_transaction.account_id = (
-                        account_key
-                    )
-
-                    existing_transaction.pending = (
-                        pending
-                    )
-
-                    existing_transaction.source = (
-                        "simplefin"
-                    )
-
-                    db.add(
-                        existing_transaction
-                    )
-
-                    continue
-
-                row = (
-                    SpendingTransaction(
-                        id=(
-                            "simplefin-"
-                            f"{transaction_id}"
-                        ),
-                        user_id=user.id,
-                        merchant=merchant,
-                        amount=amount,
-                        date=(
-                            str(posted)[:10]
-                        ),
-                        category=(
-                            classify_transaction(
-                                transaction
-                            )
-                        ),
-                        account_id=(
-                            account_key
-                        ),
-                        pending=(
-                            pending
-                        ),
-                        hidden=False,
-                        source=(
-                            "simplefin"
-                        ),
-                    )
-                )
-
-                db.add(row)
-                saved.append(row)
-
-        connection.last_synced_at = (
-            utcnow()
-        )
-
-    db.commit()
-
-    return {
-        "accounts": (
-            account_count
-        ),
-        "transactions": [
-            spending_transaction_to_dict(
-                row
-            )
-            for row in saved
-        ],
-        "synced_at": (
-            utcnow().isoformat()
-        ),
-    }
+        payload = await asyncio.to_thread(fetch_simplefin, read_access_url(connection))
+        result = save_simplefin_payload(payload, connection, user, db)
+        combined["accounts"] += result["accounts"]
+        combined["received_transactions"] += result["received_transactions"]
+        combined["transactions"].extend(result["transactions"])
+    combined["synced_at"] = utcnow().isoformat()
+    return combined
 
 
 @router.get("/connections")
@@ -1794,11 +1496,7 @@ async def list_connections(
         {
             "id": row.id,
             "label": row.label,
-            "access_url": (
-                read_access_url(
-                    row
-                )
-            ),
+            "access_url": None,
             "last_synced_at": (
                 row.last_synced_at.isoformat()
                 if row.last_synced_at
