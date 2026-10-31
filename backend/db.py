@@ -3,7 +3,7 @@
 import os
 from collections.abc import Iterator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base
@@ -32,8 +32,14 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
     with engine.begin() as connection:
-        connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS security_answer_hash TEXT"))
-        connection.execute(text("ALTER TABLE spending_transactions ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE"))
+        # ADD COLUMN IF NOT EXISTS still requests an ACCESS EXCLUSIVE lock in
+        # Postgres. Repeating it on every boot can queue behind an active
+        # transaction and block all subsequent reads, including auth/health.
+        inspector = inspect(connection)
+        if "security_answer_hash" not in {column["name"] for column in inspector.get_columns("users")}:
+            connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS security_answer_hash TEXT"))
+        if "hidden" not in {column["name"] for column in inspector.get_columns("spending_transactions")}:
+            connection.execute(text("ALTER TABLE spending_transactions ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE"))
 
 
 def get_db() -> Iterator[Session]:
