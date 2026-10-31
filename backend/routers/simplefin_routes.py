@@ -20,6 +20,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
+from ..rate_limit import check_request_rate
 from ..models import (
     Asset,
     SimplefinConnection,
@@ -1286,6 +1287,7 @@ async def claim_setup_token(
     Exchange a SimpleFIN setup token
     for the HTTPS access URL.
     """
+    check_request_rate("simplefin-claim", str(user.id), max_attempts=12, seconds=3600)
     setup_token = (
         request.setup_token.strip()
     )

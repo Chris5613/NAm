@@ -1,12 +1,13 @@
 """Authentication and account setup routes."""
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..auth import clear_session_cookie, current_user, hash_password, set_session_cookie, verify_password
 from ..db import get_db
+from ..rate_limit import check_request_rate
 from ..models import User, utcnow
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -50,7 +51,9 @@ async def setup(credentials: Credentials, response: Response, db: Session = Depe
 
 
 @router.post("/login")
-async def login(credentials: Credentials, response: Response, db: Session = Depends(get_db)) -> dict:
+async def login(credentials: Credentials, response: Response, request: Request,
+                db: Session = Depends(get_db)) -> dict:
+    check_request_rate("login", credentials.username.strip(), max_attempts=20, seconds=600)
     try:
         user = db.scalar(select(User).where(User.username == credentials.username.strip()))
         # Same message either way so the response cannot probe for valid usernames.
