@@ -57,6 +57,12 @@ jobs:
         run: python -m pip install -r backend/requirements.txt
       - name: Validate PostgreSQL multi-connection project conflicts
         run: python -m unittest discover -s backend/tests -p 'test_phase7_postgres_locks.py' -v
+      - name: Rehearse safe schema baseline on disposable CI PostgreSQL
+        run: |
+          DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -c "from backend.db import init_db; init_db()"
+          DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -m alembic upgrade head
+          DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -m alembic current
+
 
 
   frontend:
