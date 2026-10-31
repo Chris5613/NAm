@@ -19,6 +19,8 @@ FastAPI backend, and PostgreSQL persistence.
   backend-calculated RollerCoin, Salad, Unetwork, and Kryptex statistics.
 - `backend/yield_source_sync.py` and `backend/routers/yield_sources.py` —
   read-only server polling and durable Lulo/Loopscale observations.
+- `docs/phase-7-production-verification.md` — production cutover gates and
+  Phase 7 server-owned accounting evidence safeguards.
 - `backend/scheduler.py` — server-owned daily net-worth and project-balance
   snapshots, including 11:58 PM Pacific project backups.
 - `docs/passive-income-backend-migration.md` — migration details, safety
