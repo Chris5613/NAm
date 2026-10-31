@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
+from ..input_validation import finite_money, iso_day
 from ..db import get_db
 from ..models import SpendingAccount, SpendingTransaction, User
 from ..schemas import spending_account_to_dict, spending_transaction_to_dict
@@ -38,7 +39,7 @@ async def upsert_account(payload: dict[str, Any], user: User = Depends(current_u
         user_id=user.id,
         name=payload.get("name") or "Account",
         type=payload.get("type"),
-        current_balance=payload.get("currentBalance"),
+        current_balance=finite_money(payload.get("currentBalance"), "currentBalance") if payload.get("currentBalance") is not None else None,
         provider_account_id=payload.get("providerAccountId"),
         linked_at=_parse_linked_at(payload.get("linkedAt")),
     )
@@ -91,8 +92,8 @@ def _transaction_row(payload: dict[str, Any], user_id: int) -> SpendingTransacti
         id=str(payload.get("id") or uuid4()),
         user_id=user_id,
         merchant=payload.get("merchant") or "Unknown merchant",
-        amount=float(payload.get("amount") or 0),
-        date=str(payload.get("date") or "")[:10],
+        amount=finite_money(payload.get("amount"), "amount"),
+        date=iso_day(payload.get("date")),
         category=payload.get("category") or "Other",
         account_id=payload.get("accountId"),
         pending=bool(payload.get("pending", False)),
@@ -129,9 +130,9 @@ async def patch_transaction(
     if "merchant" in payload:
         row.merchant = payload["merchant"]
     if "amount" in payload:
-        row.amount = float(payload["amount"] or 0)
+        row.amount = finite_money(payload["amount"], "amount")
     if "date" in payload:
-        row.date = str(payload["date"])[:10]
+        row.date = iso_day(payload["date"])
     if "accountId" in payload:
         row.account_id = payload["accountId"]
     if "hidden" in payload:
@@ -162,7 +163,7 @@ async def get_budget(user: User = Depends(current_user), db: Session = Depends(g
 async def set_budget(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     from ..models import Setting
 
-    amount = max(float(payload.get("budget") or 0), 0)
+    amount = max(finite_money(payload.get("budget"), "budget"), 0)
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == "spending_budget"))
     if row:
         row.value = {"amount": amount}

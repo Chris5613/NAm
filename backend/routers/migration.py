@@ -147,9 +147,11 @@ async def import_dump(payload: dict[str, Any], user: User = Depends(current_user
             record_names = exact_name_candidates(record)
             if record_id and record_id in existing_ids:
                 continue
-            if record_names and record_names & existing_names:
+            # Stable IDs distinguish legitimate same-named records.
+            # Name/signature fallback is only safe when the source has no ID.
+            if not record_id and record_names and record_names & existing_names:
                 continue
-            if sig in existing_signatures:
+            if not record_id and sig in existing_signatures:
                 continue
             columns, extra = dict_to_columns(record, fields)
             db.merge(model(id=str(record.get("id") or uuid4()), user_id=user.id, data=extra, **columns))
