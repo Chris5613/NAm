@@ -17,6 +17,7 @@ load_dotenv(Path(__file__).with_name(".env"))
 
 from .auth import current_user  # noqa: E402
 from .db import init_db  # noqa: E402  (imported after load_dotenv so DATABASE_URL is set)
+from .loop_watchdog import start_watchdog, stop_watchdog  # noqa: E402
 from .scheduler import scheduler_status, start_scheduler, stop_scheduler  # noqa: E402
 from .routers import auth_routes, market, migration, resources, simplefin_routes, spending, project_tracking, yield_sources  # noqa: E402
 
@@ -72,11 +73,13 @@ app.include_router(yield_sources.router)
 @app.on_event("startup")
 async def on_startup() -> None:
     init_db()
+    start_watchdog()
     start_scheduler()
 
 
 @app.on_event("shutdown")
 async def on_shutdown() -> None:
+    stop_watchdog()
     stop_scheduler()
 
 

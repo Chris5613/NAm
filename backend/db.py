@@ -17,7 +17,15 @@ if DATABASE_URL.startswith("postgres://"):
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, future=True)
+# A synchronous ORM call inside an async route can otherwise hold the sole
+# request loop indefinitely while PostgreSQL waits on a lock or a dead socket.
+# Keep each wait bounded so Render's health checks can recover.
+connection_options = (
+    {"connect_timeout": 5, "options": "-c statement_timeout=8000 -c lock_timeout=3000"}
+    if DATABASE_URL.startswith("postgresql") else {}
+)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_timeout=5,
+                       connect_args=connection_options, future=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 

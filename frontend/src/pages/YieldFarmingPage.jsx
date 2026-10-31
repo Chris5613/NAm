@@ -2851,7 +2851,9 @@ const importSaladPayload =
     };
     fullRefresh();
     const fullTimer = window.setInterval(fullRefresh, 60000);
-    const quickTimer = window.setInterval(quickRefresh, 3000);
+    // Extension pushes still update immediately; the fallback refresh does
+    // not need to re-read projects and write trackers every three seconds.
+    const quickTimer = window.setInterval(quickRefresh, 15000);
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         quickRefresh();
