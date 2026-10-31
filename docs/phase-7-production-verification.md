@@ -1,6 +1,8 @@
 # Phase 7 — production verification and cutover gates
 
-> Status: **verification only**. Do not enable backend-owned Lulo financial writes in this phase. Phase 6 adds conflict-safe project persistence but does not establish production parity.
+> Status: **Phase 7 implementation closed with owner-accepted verification exceptions** (October 30, 2026, Pacific). The production cutover checklist below is retained as a **fail-closed safety standard**, not a claim that all gates passed. **Backend-owned Lulo financial writes remain disabled.** See [Phase 7 closure record](phase-7-closure.md).
+
+> Completion here covers the monitoring/sync implementation and existing automated tests. Production two-browser conflict/replay checks, persisted-ledger identical-snapshot parity, and a full isolated PostgreSQL restoration were explicitly skipped by the owner. The skipped gates must be reconsidered before any future transfer of accounting write authority.
 
 ## Preconditions
 

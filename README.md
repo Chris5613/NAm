@@ -26,6 +26,12 @@ FastAPI backend, and PostgreSQL persistence.
 - `docs/passive-income-backend-migration.md` — migration details, safety
   assumptions, and remaining work.
 
+## Phase status
+
+- **Phase 7: Complete with accepted verification exceptions** (owner decision, October 30, 2026, Pacific). Production Lulo/Loopscale monitoring, UTC allocation, protected accounting diagnostics, and automated validation are implemented and deployed.
+- The live two-tab conflict check, identical-snapshot persisted Lulo parity, and full disposable-PostgreSQL backup restore rehearsal were **waived, not passed**. See [Phase 7 closure record](docs/phase-7-closure.md).
+- **Automatic backend financial transaction writes remain disabled.** Completion of the monitoring phase does **not** authorize an accounting-writer cutover. Release gates in `phase7-release-evidence.template.json` and `tools/phase7_release_gate.py` remain fail-closed.
+
 ## Validation
 
 The `NAm source validation` GitHub Actions workflow checks the Python
