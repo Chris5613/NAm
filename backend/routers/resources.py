@@ -12,6 +12,7 @@ from ..auth import current_user
 from ..db import get_db
 from ..models import NetWorthSnapshot, Setting, User, Project
 from ..project_writes import plan_project_changes, ProjectConflict
+from ..server_owned_settings import is_server_owned_setting
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
@@ -197,10 +198,10 @@ async def get_setting(key: str, user: User = Depends(current_user), db: Session 
 
 @router.put("/settings/{key}")
 async def put_setting(key: str, payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    # Financial pre-cutover backups are server-managed and write-once.
-    # The legacy settings facade must not accidentally replace them.
-    if key.startswith("yield_lulo_cutover_backup_v1_") or key == "yield_loopscale_cutover_backup_v1":
-        raise HTTPException(status_code=403, detail="Accounting cutover backups are read-only.")
+    # Phase 7: generic settings writes must not impersonate server-owned
+    # source observations, parity evidence, or immutable backups.
+    if is_server_owned_setting(key):
+        raise HTTPException(status_code=403, detail="Server-owned accounting settings are read-only.")
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
     if row:
         row.value = payload.get("value")
