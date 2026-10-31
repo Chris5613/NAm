@@ -104,3 +104,18 @@ disabled; no server preview has permission to change real earnings.
 Passing disposable CI database checks reduces the locking risk but does not
 prove the production deployment, running workers, Lulo API health, backups, or
 historical accounting parity. **Backend income transaction writes stay OFF.**
+
+## Phase 7 asynchronous session isolation
+
+- A new `hydrate()` invalidates older in-flight hydrations and project writes,
+  clears prior in-memory account data, and publishes fetched settings/resources
+  only if its session generation is still current.
+- `refreshCollection()` checks the session generation after each asynchronous
+  boundary so a response from an old signed-out account cannot repopulate cache.
+- Jest tests exercise sign-out while settings are loading, sign-out during a
+  collection refresh, and overlapping old/new login hydrations.
+- This protects the browser's in-memory financial view; it does **not** cancel
+  HTTP requests already sent to the server. Existing authenticated session
+  controls still govern those requests.
+
+Production financial transaction cutover remains disabled.
