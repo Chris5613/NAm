@@ -1,12 +1,13 @@
 import asyncio
 import unittest
+from unittest.mock import MagicMock
 from fastapi import HTTPException
 from sqlalchemy import create_engine, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session
 from backend.models import User, Asset, Setting
-from backend.routers.resources import patch_resource_records, patch_setting, replace_collection, put_setting
+from backend.routers.resources import patch_resource_records, patch_setting, replace_collection, put_setting, lock_setting_key
 
 @compiles(JSONB, "sqlite")
 def sqlite_json(element, compiler, **kwargs): return "JSON"
@@ -22,6 +23,15 @@ class GuardedResourceTests(unittest.TestCase):
         self.db.commit()
 
     def tearDown(self): self.db.close(); self.engine.dispose()
+
+    def test_settings_use_distinct_postgres_transaction_locks_per_key(self):
+        db = MagicMock()
+        db.get_bind.return_value.dialect.name = "postgresql"
+        lock_setting_key(db, 1, "tracker-one")
+        lock_setting_key(db, 1, "tracker-two")
+        first, second = [call.args[1]["lock_id"] for call in db.execute.call_args_list]
+        self.assertNotEqual(first, second)
+        db.scalar.assert_not_called()
 
     def test_independent_asset_edits_and_stale_rejection(self):
         from backend.schemas import row_to_dict, RESOURCES

@@ -1,11 +1,12 @@
 """Generic CRUD for record collections, plus the key/value settings store."""
 
 from typing import Any
+import hashlib
 from math import isfinite
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
@@ -16,6 +17,17 @@ from ..server_owned_settings import is_server_owned_setting
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
+
+
+def lock_setting_key(db: Session, user_id: int, key: str) -> None:
+    """Serialize creation and CAS for one setting without blocking other keys."""
+    if db.get_bind().dialect.name == "postgresql":
+        digest = hashlib.sha256(f"nam-setting:{user_id}:{key}".encode()).hexdigest()
+        db.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"),
+                   {"lock_id": int(digest[:15], 16)})
+    else:
+        # SQLite test databases do not support PostgreSQL advisory locks.
+        db.scalar(select(User).where(User.id == user_id).with_for_update())
 
 
 def _resource(name: str):
@@ -251,7 +263,7 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
         raise HTTPException(403, "Server-owned accounting settings are read-only.")
     if not all(field in payload for field in ("before", "after")):
         raise HTTPException(422, "Expected before and after values.")
-    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    lock_setting_key(db, user.id, key)
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
     current = row.value if row else None
     if current != payload["before"] and current != payload["after"]:
