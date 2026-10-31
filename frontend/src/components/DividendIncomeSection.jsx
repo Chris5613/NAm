@@ -5,6 +5,20 @@ import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { formatCurrency, getTodayKey } from "@/lib/yieldFarmingAccounting";
 
 const SYMBOLS = ["VTI", "VOO"];
+// Vanguard's published 2026 schedule; these are payable dates, not ex-dates.
+const SCHEDULED_PAYMENTS = {
+  VTI: [{ exDate: "2026-12-22", payableDate: "2026-12-24" }],
+  VOO: [{ exDate: "2026-12-21", payableDate: "2026-12-23" }],
+};
+
+function nextPayment(symbol, today) {
+  return SCHEDULED_PAYMENTS[symbol]?.find(row => row.payableDate >= today) || null;
+}
+
+function shortDate(date) {
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" })
+    .format(new Date(`${date}T12:00:00Z`));
+}
 
 function holdings() {
   try {
@@ -22,7 +36,8 @@ export default function DividendIncomeSection() {
   const [history, setHistory] = useState({});
   const [error, setError] = useState("");
   const [selected, setSelected] = useState(null);
-  const year = getTodayKey().slice(0, 4);
+  const today = getTodayKey();
+  const year = today.slice(0, 4);
 
   useEffect(() => subscribe(key => {
     if (key === "networth_assets") setShares(holdings());
@@ -70,7 +85,8 @@ export default function DividendIncomeSection() {
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
         {SYMBOLS.map(symbol => {
-          const { rows, daily } = details(symbol);
+          const { rows } = details(symbol);
+          const next = nextPayment(symbol, today);
           return (
             <button key={symbol} type="button" onClick={() => setSelected(symbol)}
               className="flex w-full min-w-0 items-start gap-2 rounded-2xl border border-border/60 bg-[#0e1218] px-3.5 py-2.5 text-left shadow-sm transition-all duration-200 hover:border-border hover:bg-[#151e28]"
@@ -81,8 +97,8 @@ export default function DividendIncomeSection() {
                   <span className="truncate text-[12px] font-semibold">{symbol}</span>
                   <span className={`shrink-0 text-[9px] ${rows.length ? "text-emerald-400" : "text-amber-300"}`}>● {rows.length ? "Updated" : "Waiting"}</span>
                 </span>
-                <span className="mt-0.5 block truncate text-[14px] font-semibold tabular-nums">{daily == null ? "—" : `${formatCurrency(daily)}/day`}</span>
-                <span className="block truncate text-[10px] text-muted-foreground">{shares[symbol]} shares · dividend estimate</span>
+                <span className="mt-0.5 block truncate text-[14px] font-semibold tabular-nums">{next ? shortDate(next.payableDate) : "Date pending"}</span>
+                <span className="block truncate text-[10px] text-muted-foreground">Next dividend payment · {shares[symbol]} shares</span>
               </span>
               <ChevronRight className="mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             </button>
@@ -100,6 +116,7 @@ export default function DividendIncomeSection() {
               <button type="button" onClick={() => setSelected(null)} aria-label="Close dividend details" className="rounded-lg p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"><X className="h-4 w-4" /></button>
             </div>
             <div className="space-y-3 p-4">
+              {nextPayment(selected, today) && <p className="text-xs text-muted-foreground">Next scheduled payment: <span className="font-semibold text-foreground">{shortDate(nextPayment(selected, today).payableDate)}</span> · ex-dividend {shortDate(nextPayment(selected, today).exDate)}</p>}
               <div className="grid grid-cols-3 gap-2">
                 {[["Daily estimate", active.daily == null ? null : active.daily], [`${year} per share`, active.rows.length ? active.annualPerShare : null], [`${year} at current shares`, active.rows.length ? active.annualPerShare * shares[selected] : null]].map(([label, value]) => (
                   <div key={label} className="min-w-0 rounded-lg bg-white/[0.03] p-2"><p className="text-[10px] text-muted-foreground">{label}</p><p className="mt-1 truncate text-xs font-semibold tabular-nums">{value == null ? "—" : formatCurrency(value)}</p></div>
@@ -109,7 +126,7 @@ export default function DividendIncomeSection() {
                 <p className="mb-2 font-semibold">Recent distributions</p>
                 {active.rows.length ? active.rows.slice(0, 4).map(row => <div key={row.exDate} className="flex justify-between gap-2 py-1 text-muted-foreground"><span>Ex-dividend {row.exDate}</span><span className="tabular-nums text-foreground">{formatCurrency(Number(row.amountPerShare))}/share</span></div>) : <p className="text-muted-foreground">Confirmed distributions are unavailable.</p>}
               </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">Estimates use today's shares and the last four distributions. Past share counts and brokerage deposits are unavailable. Ex-dividend dates determine eligibility; payment dates may differ.</p>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">Payment dates follow <a href="https://investor.vanguard.com/investor-resources-education/taxes/funds-tax-information" target="_blank" rel="noreferrer" className="underline">Vanguard's 2026 schedule</a> and may change. When no future scheduled date is available, the card says Date pending. Estimates use today's shares and the last four distributions; past share counts and brokerage deposits are unavailable.</p>
             </div>
           </div>
         </div>
