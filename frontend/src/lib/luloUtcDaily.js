@@ -57,3 +57,54 @@ export function withCurrentLuloUtcEarnings(sources, lulo, isLiveDay) {
   if (lulo.status === 'ready' && lulo.amount > 0) next.Lulo = lulo.amount;
   return next;
 }
+
+/**
+ * Lulo's provider date is authoritative. For completed UTC days, look up
+ * that day's confirmed performance bucket rather than reusing a Pacific-day
+ * month-to-date delta. Cached completed days remain visible after rollover.
+ */
+export function completedLuloUtcDaily(projects, utcDay) {
+  if (!DATE_KEY.test(String(utcDay || '')) || !Array.isArray(projects) || !projects.length) {
+    return null;
+  }
+  let total = 0;
+  for (const project of projects) {
+    if (!Array.isArray(project?.lulo_daily_performance)) return null;
+    let amount = null;
+    for (const row of project.lulo_daily_performance) {
+      if (!row || row.date !== utcDay) continue;
+      const value = row.amount == null ? NaN : Number(row.amount);
+      if (!Number.isFinite(value) || value < 0) continue;
+      // One cumulative daily bucket per project; duplicate deliveries
+      // must not produce duplicated earnings.
+      amount = amount === null ? value : Math.max(amount, value);
+    }
+    if (amount === null) return null;
+    total += amount;
+  }
+  return Number(total.toFixed(8));
+}
+
+/**
+ * Use UTC-day Lulo earnings for the day label, without moving other
+ * platforms' Pacific-day amounts. A newly started UTC day may be tomorrow
+ * in California; its Lulo amount must not be assigned to today in California.
+ */
+export function luloSourcesForChartDay(sources, projects, dateKey, pacificToday, currentUtc) {
+  const utcToday = currentUtc?.utcDay;
+  if (!DATE_KEY.test(String(dateKey || '')) || !utcToday || dateKey > utcToday) return {};
+  const next = dateKey > pacificToday ? {} : { ...sources };
+  if (!Array.isArray(projects) || !projects.length) return next;
+
+  if (dateKey === utcToday) {
+    return withCurrentLuloUtcEarnings(next, currentUtc, true);
+  }
+  const closedDayAmount = completedLuloUtcDaily(projects, dateKey);
+  if (closedDayAmount !== null) {
+    if (closedDayAmount > 0) next.Lulo = closedDayAmount;
+    else delete next.Lulo;
+  }
+  // If the provider's completed-day bucket is not available yet, keep
+  // the historical ledger as a fallback rather than delete prior earnings.
+  return next;
+}
