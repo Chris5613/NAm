@@ -166,15 +166,25 @@ export async function flushPendingWrites() {
 }
 
 export async function hydrate() {
-  const settings = await settingsApi.all();
+  // A sign-out or newer hydration invalidates any earlier async response.
+  // Do not allow an old account's delayed network results into a new session.
+  const generation = ++storeGeneration;
+  pendingTimers.forEach((timer) => clearTimeout(timer));
+  pendingTimers.clear();
+  savedProjects = [];
+  projectConflict = false;
+  hydrated = false;
   cache.clear();
-  Object.entries(settings || {}).forEach(([key, value]) => cache.set(key, value));
 
+  const settings = await settingsApi.all();
+  if (generation !== storeGeneration) return;
   const resources = await Promise.all(
     Object.entries(COLLECTION_RESOURCES).map(async ([key, resource]) => [key, await resourceApi.list(resource)])
   );
-  resources.forEach(([key, records]) => cache.set(key, records || []));
+  if (generation !== storeGeneration) return;
 
+  Object.entries(settings || {}).forEach(([key, value]) => cache.set(key, value));
+  resources.forEach(([key, records]) => cache.set(key, records || []));
   savedProjects = JSON.parse(JSON.stringify(cache.get("networth_projects") || []));
   projectConflict = false;
   hydrated = true;
@@ -195,12 +205,15 @@ export function resetStore() {
 export async function refreshCollection(key) {
   const resource = COLLECTION_RESOURCES[key];
   if (!resource) return;
+  const generation = storeGeneration;
   if (key === "networth_projects") {
     await pushProjects();
+    if (generation !== storeGeneration) return;
     // Never erase unsaved changes (including a conflict) during a refresh.
     if (projectChanges(savedProjects, cache.get(key) || []).length) return;
   }
   const records = await resourceApi.list(resource);
+  if (generation !== storeGeneration) return;
   if (key === "networth_projects") {
     // A local edit may have occurred while the GET was in flight.
     if (projectChanges(savedProjects, cache.get(key) || []).length) return;
