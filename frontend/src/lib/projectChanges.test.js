@@ -19,3 +19,24 @@ test("remote updates and local edits during a save both survive", () => {
 test("explicit deletion survives a save response", () => {
   expect(rebaseProjects([{ id: "a" }], [], [{ id: "a" }, { id: "b" }])).toEqual([{ id: "b" }]);
 });
+
+test("distinct project IDs are never collapsed merely for having identical names", () => {
+  const original = [{ id: "one", name: "Lulo", category: "DeFi", earned: 1 }];
+  const edited = [
+    original[0],
+    { id: "two", name: "Lulo", category: "DeFi", earned: 8 },
+  ];
+  expect(projectChanges(original, edited)).toEqual([
+    { id: "two", before: null, after: edited[1] },
+  ]);
+});
+
+test("duplicate IDs or missing IDs fail safely before making a financial save", () => {
+  const first = { id: "one", earned: 1 };
+  expect(() => projectChanges([], [first, { ...first, earned: 999 }]))
+    .toThrow("unique, nonempty string IDs");
+  expect(() => projectChanges([], [{ name: "No ID", earned: 999 }]))
+    .toThrow("unique, nonempty string IDs");
+  expect(() => rebaseProjects([first], [first, { ...first, earned: 999 }], [first]))
+    .toThrow("unique, nonempty string IDs");
+});
