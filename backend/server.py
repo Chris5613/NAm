@@ -1,10 +1,11 @@
 """Backend entrypoint: auth, database-backed resources, and third-party proxies."""
 
+import asyncio
 import json
 import os
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+from urllib.request import Request as UrlRequest, urlopen
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -106,11 +107,12 @@ def read_kryptex(path: str):
 
 @app.get("/api/kryptex/status")
 async def kryptex_status() -> dict:
-    return {
-        "balance": read_kryptex("balance"),
-        "devices": read_kryptex("devices"),
-        "currency_rates": read_kryptex("currency-rates"),
-    }
+    balance, devices, rates = await asyncio.gather(
+        asyncio.to_thread(read_kryptex, "balance"),
+        asyncio.to_thread(read_kryptex, "devices"),
+        asyncio.to_thread(read_kryptex, "currency-rates"),
+    )
+    return {"balance": balance, "devices": devices, "currency_rates": rates}
 
 
 @app.get("/api/jupiter/fluid-pnl")
@@ -120,7 +122,8 @@ async def jupiter_fluid_pnl(vault_id: int, position_id: int) -> dict:
         f"vaults/{vault_id}/nfts/{position_id}/pnl"
     )
 
-    request = Request(
+    # FastAPI Request is for inbound ASGI calls; UrlRequest is for outbound HTTP.
+    request = UrlRequest(
         url,
         headers={
             "User-Agent": (
@@ -134,8 +137,11 @@ async def jupiter_fluid_pnl(vault_id: int, position_id: int) -> dict:
     )
 
     try:
-        with urlopen(request, timeout=10) as response:
-            return json.load(response)
+        def fetch_pnl():
+            with urlopen(request, timeout=10) as response:
+                return json.load(response)
+
+        return await asyncio.to_thread(fetch_pnl)
 
     except HTTPError as error:
         body = error.read().decode("utf-8", errors="replace")
