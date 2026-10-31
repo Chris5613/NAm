@@ -90,6 +90,9 @@ class IndependentSessionProjectTests(unittest.TestCase):
         second = self.snapshot(self.tab_b)["p2"]
         self.patch(self.tab_a, first, {**first, "name": "A only"})
         self.patch(self.tab_b, second, {**second, "name": "B only"})
+        # Session A previously loaded p2; expire its identity map so this
+        # assertion checks fresh persisted rows, not its old ORM cache.
+        self.tab_a.expire_all()
         resulting = self.snapshot(self.tab_a)
         self.assertEqual(resulting["p1"]["name"], "A only")
         self.assertEqual(resulting["p2"]["name"], "B only")
