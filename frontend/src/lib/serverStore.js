@@ -57,6 +57,10 @@ function exactText(value) {
 
 function dedupeCollection(key, value) {
   if (!Array.isArray(value)) return value;
+  // Financial project rows must never be silently dropped because two
+  // different IDs happen to have the same display name/category. Preserve
+  // all entries and let projectChanges reject invalid duplicate IDs.
+  if (key === "networth_projects") return value;
 
   const seen = new Set();
   const deduped = [];
@@ -110,9 +114,9 @@ async function pushProjects() {
   projectWrite = projectWrite.catch(() => {}).then(async () => {
     if (generation !== storeGeneration || projectConflict) return;
     const sent = JSON.parse(JSON.stringify(cache.get("networth_projects") || []));
-    const changes = projectChanges(savedProjects, sent);
-    if (!changes.length) return;
     try {
+      const changes = projectChanges(savedProjects, sent);
+      if (!changes.length) return;
       const saved = await resourceApi.patchProjects(changes);
       if (generation !== storeGeneration) return;
       savedProjects = saved;
@@ -120,7 +124,7 @@ async function pushProjects() {
       notify("networth_projects");
     } catch (error) {
       if (generation !== storeGeneration) return;
-      if (error.status === 409) projectConflict = true;
+      if (error.status === 409 || error.code === "INVALID_PROJECT_IDS") projectConflict = true;
       onError(`Could not save projects: ${error.message}`);
     }
   });
