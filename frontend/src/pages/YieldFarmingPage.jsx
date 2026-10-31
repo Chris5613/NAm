@@ -3786,8 +3786,10 @@ const importSaladPayload =
       .sort((a,b) => b.amount-a.amount);
     return { label, note, entries, total: entries.reduce((sum,item)=>sum+item.amount,0) };
   })();
-  const todayBreakdown = Object.entries(dailySourceTotals)
-    .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) !== 0)
+  // Keep Kryptex visible before its first recorded increase today. A zero
+  // display row does not add projected income or change the source ledger.
+  const todayBreakdown = Object.entries({ Kryptex: 0, ...dailySourceTotals })
+    .filter(([name,amount]) => Number.isFinite(Number(amount)) && (name === "Kryptex" || Number(amount) !== 0))
     .map(([name,amount]) => ({ name, amount: Number(amount) }))
     .sort((a,b) => b.amount - a.amount);
   const rawTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
