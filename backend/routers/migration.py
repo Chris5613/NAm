@@ -12,6 +12,7 @@ from ..auth import current_user
 from ..db import get_db
 from ..models import NetWorthSnapshot, Setting, SpendingAccount, SpendingTransaction, User
 from ..schemas import RESOURCES, dict_to_columns
+from ..server_owned_settings import is_server_owned_setting
 
 router = APIRouter(prefix="/api/migration", tags=["migration"])
 
@@ -230,7 +231,9 @@ async def import_dump(payload: dict[str, Any], user: User = Depends(current_user
 
     settings_saved = 0
     for key, value in payload.items():
-        if key in SKIP_KEYS:
+        # Phase 7: legacy imports cannot replace server-owned diagnostic,
+        # reconciliation, or cutover-backup records.
+        if key in SKIP_KEYS or is_server_owned_setting(key):
             continue
         row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
         if row:
