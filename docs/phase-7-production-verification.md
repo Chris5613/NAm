@@ -57,3 +57,25 @@ Only after all gates pass should a *separate*, reviewed change propose one autho
 ## Rollback approach
 
 For a failed frontend/backend rollout, disable new financial write behavior (currently already disabled), restore matching application revisions, and retain database history and checkpoint records. Do not automatically replace live financial rows with old backup snapshots; reconcile differences and obtain approval for any targeted data repair.
+
+## Implementation progress — Phase 7 safety hardening
+
+This part has been committed **directly to `main`**:
+
+- `backend/server_owned_settings.py` lists backend-owned reconciliation,
+  source-snapshot, parity, registration, daily-income, and checkpoint keys.
+- `PUT /api/settings/{key}` rejects generic client writes to those reserved
+  records (HTTP 403), even if the key has not been created yet.
+- `POST /api/migration/import` skips server-owned keys rather than allowing a
+  legacy localStorage dump to replace authoritative diagnostic evidence.
+- Normal preferences and the existing legacy Lulo/Loopscale browser histories
+  remain writable through their original settings/import paths.
+- Regression tests cover both write-bypass routes, and independent SQLite
+  sessions simulate stale-tab rejection, exact replays, unrelated-project
+  saves, and retention of relational transaction rows.
+
+**Still outstanding:** PostgreSQL multi-worker lock contention, authenticated
+live-provider parity, backed-up production history review, real closed-browser
+polling, and the deployed two-tab test. SQLite regression tests do *not*
+establish these conditions. Automatic backend Lulo transaction writes remain
+disabled; no server preview has permission to change real earnings.
