@@ -676,6 +676,10 @@ def fetch_simplefin(
 
     headers = {
         "Accept": "application/json",
+        # Cloudflare Browser Integrity Check may reject urllib's default
+        # Python-urllib/* identifier with Error 1010. Use a descriptive
+        # application identity without impersonating a browser.
+        "User-Agent": "NAm/1.0 (SimpleFIN account synchronization)",
     }
 
     if credentials:
@@ -724,11 +728,21 @@ def fetch_simplefin(
             )[:300]
         )
 
+        # Display a readable error instead of leaking an entire Cloudflare
+        # response page into the Spending toast.
+        if error.code == 403 and ("error code 1010" in detail.lower() or '"error_code":1010' in detail.lower()):
+            raise HTTPException(
+                status_code=502,
+                detail=(
+                    "SimpleFIN blocked NAm's server request (Cloudflare 1010). "
+                    "The service may be blocking this server's request signature."
+                ),
+            ) from error
         raise HTTPException(
             status_code=error.code,
             detail=(
-                "SimpleFIN rejected "
-                f"the access URL: {detail}"
+                "SimpleFIN rejected the request. "
+                f"HTTP {error.code}."
             ),
         ) from error
 
