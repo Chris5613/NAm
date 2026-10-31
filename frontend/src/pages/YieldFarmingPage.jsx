@@ -11,6 +11,7 @@ import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { currentLuloUtcDaily, luloSourcesForChartDay } from "@/lib/luloUtcDaily";
 import { useLegacyLuloMonthlyAccounting } from "@/hooks/useLegacyLuloMonthlyAccounting";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
+import { latestRollerCoinTimestamp, shouldAcceptRollerCoinBalance } from "@/lib/rollerCoinFreshness";
 import { Card, CardContent } from "@/components/ui/card";
 import { Area, AreaChart, CartesianGrid, LabelList, ReferenceArea, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
@@ -251,6 +252,8 @@ export default function YieldFarmingPage() {
     rollerCoinOpen,
     setRollerCoinOpen,
   ] = useState(false);
+
+  const [rollerCoinEarningsStatus, setRollerCoinEarningsStatus] = useState(null);
 
   const [
     rollerCoinSyncing,
@@ -501,6 +504,9 @@ export default function YieldFarmingPage() {
 
         setRollerCoinTracker(
           (current) => {
+            // Cached earnings/status messages can arrive after a newer wallet
+            // observation. Never let them rewind the wallet or its sync time.
+            const acceptBalance = shouldAcceptRollerCoinBalance(current, payload);
             const nextDaily = {
               ...(
                 current?.daily ||
@@ -509,8 +515,7 @@ export default function YieldFarmingPage() {
             };
 
             const priceToUse =
-              trxPrice >
-              0
+              trxPrice > 0 && (acceptBalance || !Number(current?.lastTrxPrice))
                 ? trxPrice
                 : (
                     Number(
@@ -626,7 +631,7 @@ export default function YieldFarmingPage() {
               );
 
             const currentTrxBalance =
-              hasLiveBalance
+              acceptBalance
                 ? incomingBalanceTrx
                 : (
                     Number.isFinite(
@@ -638,7 +643,7 @@ export default function YieldFarmingPage() {
 
             // Record each new confirmed wallet balance once, in TRX units.
             // A price-only change or re-delivery of the same reading adds no income.
-            const snapshotAt = payload?.balance_synced_at || null;
+            const snapshotAt = acceptBalance ? payload?.balance_synced_at || null : null;
             const snapshotTime = Date.parse(snapshotAt || "");
             const priorTime = Date.parse(current?.walletLastObservedAt || "");
             const isFresh = hasLiveBalance && Number.isFinite(snapshotTime) &&
@@ -690,35 +695,25 @@ export default function YieldFarmingPage() {
               currentTrxBalance,
 
               balanceSyncedAt:
-                payload?.balance_synced_at ||
-                (
-                  hasLiveBalance
-                    ? (
-                        payload?.synced_at ||
-                        payload?.syncedAt ||
-                        new Date().toISOString()
-                      )
-                    : (
-                        current?.balanceSyncedAt ||
-                        null
-                      )
-                ),
+                acceptBalance
+                  ? (payload?.balance_synced_at || payload?.synced_at ||
+                    payload?.syncedAt || new Date().toISOString())
+                  : latestRollerCoinTimestamp(
+                    current?.balanceSyncedAt, current?.walletLastObservedAt
+                  ),
 
               balanceSource:
-                payload?.balance_source ||
-                (
-                  hasLiveBalance
-                    ? "extension"
-                    : (
-                        current?.balanceSource ||
-                        null
-                      )
-                ),
+                acceptBalance
+                  ? (payload?.balance_source || "extension")
+                  : (current?.balanceSource || null),
 
               // Balance-only pushes must not masquerade as a fresh earnings sync.
               lastSyncedAt:
                 (payload?.from && payload?.to
-                  ? (payload?.synced_at || payload?.syncedAt || new Date().toISOString())
+                  ? latestRollerCoinTimestamp(
+                    current?.lastSyncedAt,
+                    payload?.synced_at || payload?.syncedAt || new Date().toISOString()
+                  )
                   : current?.lastSyncedAt) || null,
 
               lastRange: payload?.from && payload?.to
@@ -948,6 +943,8 @@ const requestRollerCoinLatest =
                 data.payload?.rollercoinOpen
               )
             );
+
+            setRollerCoinEarningsStatus(data.payload?.earningsStatus || null);
 
             if (
               data.payload?.lastPayload
@@ -5012,19 +5009,25 @@ if (
           </div>
           <div className="space-y-1.5">
             {[
-              {name:"RollerCoin", connected:rollerCoinConnected, synced:rollerCoinTracker?.balanceSyncedAt || rollerCoinTracker?.lastSyncedAt},
+              {name:"RollerCoin wallet", connected:rollerCoinConnected, synced:latestRollerCoinTimestamp(rollerCoinTracker?.balanceSyncedAt, rollerCoinTracker?.walletLastObservedAt), maxAgeMs:25*60*1000},
+              {name:"RollerCoin earnings", connected:rollerCoinConnected, synced:rollerCoinTracker?.lastSyncedAt, maxAgeMs:25*60*1000, error:rollerCoinEarningsStatus?.error},
               {name:"Loopscale", connected:Boolean(loopscaleSnapshot), synced:loopscaleSnapshot?.lastSyncedAt || loopscaleSnapshot?.syncedAt},
               {name:"Salad", connected:saladConnected, synced:saladTracker?.lastSyncedAt},
               {name:"Unetwork", connected:unetworkConnected, synced:unetworkTracker?.lastSyncedAt},
-            ].map(item => (
-              <div key={item.name} className="grid grid-cols-[minmax(0,1fr)_85px_95px] items-center gap-2 border-b border-white/5 py-1 text-[10px] last:border-b-0">
+            ].map(item => {
+              const stale = item.maxAgeMs && (!item.synced ||
+                !Number.isFinite(Date.parse(item.synced)) ||
+                Date.now() - Date.parse(item.synced) > item.maxAgeMs);
+              return (
+              <div key={item.name} title={item.error || undefined} className="grid grid-cols-[minmax(0,1fr)_85px_95px] items-center gap-2 border-b border-white/5 py-1 text-[10px] last:border-b-0">
                 <span className="truncate font-medium">{item.name}</span>
                 <span className="truncate text-muted-foreground">{formatCompactSyncAge(item.synced)}</span>
-                <span className={item.connected ? "text-emerald-400" : "text-amber-300"}>
-                  ● {item.connected ? "Connected" : "Not connected"}
+                <span className={item.connected && !stale && !item.error ? "text-emerald-400" : "text-amber-300"}>
+                  ● {!item.connected ? "Not connected" : item.error ? "Sync error" : stale ? "Stale" : "Connected"}
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       </div>
