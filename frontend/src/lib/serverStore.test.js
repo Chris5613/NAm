@@ -19,6 +19,17 @@ beforeEach(async () => {
 });
 afterEach(() => resetStore());
 
+test("saving an unchanged settings value does not repeat an API write", async () => {
+  remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
+  await flushPendingWrites();
+  expect(settingsApi.set).toHaveBeenCalledTimes(1);
+  settingsApi.set.mockClear();
+
+  remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
+  await flushPendingWrites();
+  expect(settingsApi.set).not.toHaveBeenCalled();
+});
+
 test("overlapping flushes serialize writes and preserve newer local edits", async () => {
   let finish;
   const first = new Promise((resolve) => { finish = resolve; });

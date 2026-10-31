@@ -80,8 +80,8 @@ export default function ImportDataDialog({ open, onOpenChange }) {
         <DialogHeader>
           <DialogTitle>Import data</DialogTitle>
           <DialogDescription>
-            Load a backup file, or pull data still saved in this browser. Importing is safe to repeat — records are matched by
-            id and updated rather than duplicated.
+            Import a legacy browser backup or data still saved in this browser. Already-present record IDs are skipped,
+            not overwritten. Importing can change server data, so review the file first.
           </DialogDescription>
         </DialogHeader>
 
@@ -95,10 +95,10 @@ export default function ImportDataDialog({ open, onOpenChange }) {
           {localCount > 0 && (
             <div className="rounded-md border border-border/60 p-3">
               <p className="text-sm font-medium">This browser has {localCount} saved entries</p>
-              <p className="mt-1 text-xs text-muted-foreground">Left over from before the server move. Your local copy is not deleted.</p>
+              <p className="mt-1 text-xs text-muted-foreground">Left over from before the server move. This browser-only download is not a backup of your PostgreSQL data. Your local copy is not deleted.</p>
               <div className="mt-3 flex gap-2">
                 <Button size="sm" variant="outline" onClick={downloadBackup}>
-                  <Download className="h-4 w-4" /> Download
+                  <Download className="h-4 w-4" /> Download browser data
                 </Button>
                 <Button size="sm" variant="outline" disabled={busy} onClick={() => applyDump(collectLocalData(), "this browser")}>
                   Import from browser
