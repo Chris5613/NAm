@@ -110,6 +110,8 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
 @router.post("/import")
 async def import_dump(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     """Accepts `{ "<localStorage key>": <value> }`; values may be raw JSON strings. Safe to re-run."""
+    # Coordinate legacy first-time imports with conflict-safe project saves.
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     payload = {key: decode(value) for key, value in payload.items()}
     imported: dict[str, int] = {}
     skipped_samples = 0
@@ -136,6 +138,10 @@ async def import_dump(payload: dict[str, Any], user: User = Depends(current_user
                 skipped_samples += 1
                 continue
             record_id = str(record.get("id") or "")
+            if resource == "projects" and record_id:
+                existing_project = db.get(model, record_id)
+                if existing_project is not None and existing_project.user_id != user.id:
+                    continue
             sig = record_signature(resource, record)
             record_names = exact_name_candidates(record)
             if record_id and record_id in existing_ids:

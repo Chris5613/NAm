@@ -62,6 +62,7 @@ export const authApi = {
 };
 
 export const resourceApi = {
+  patchProjects: (changes) => api.patch("/api/project-records", { changes }),
   list: (name) => api.get(`/api/resources/${name}`),
   create: (name, record) => api.post(`/api/resources/${name}`, record),
   update: (name, id, record) => api.put(`/api/resources/${name}/${id}`, record),

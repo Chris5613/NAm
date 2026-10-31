@@ -214,6 +214,8 @@ async def yield_migration_status(
         "providerFreshness": provider_health,
         "luloApiKeyConfigured": bool(os.getenv("LULO_API_KEY")),
         "luloProjects": project_status,
+        "projectWriteProtocol": "per-project-compare-and-swap-v1",
+        "legacyProjectReplacementBlocked": True,
         "cutoverEnabled": False,
         "note": "Live history parity and safe write ownership still require verification.",
     }

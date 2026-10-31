@@ -391,3 +391,55 @@ This phase makes NO new dashboard labels or controls, and makes NO
 automatic edits to existing income or project transactions. GitHub CI
 tests compile the backend, run regression suites, and compile the React
 frontend, but they do not prove live database or external API access.
+
+## Phase 6 — Conflict-safe project persistence (2026-10-30)
+
+### Delivered
+
+- The storage facade now derives per-project changes from the last successfully
+  loaded/saved server snapshot. `PATCH /api/project-records` accepts explicit
+  `before` / `after` records, including deliberate creation and deletion.
+- The server locks the user's database row with PostgreSQL `FOR UPDATE`, reads
+  current projects, validates the entire batch, then updates existing rows in
+  place. It never deletes/recreates the project collection. Relational
+  transaction rows survive ordinary project saves.
+- A stale before-image rejects the whole batch with HTTP 409. Exact replays are
+  accepted, unrelated project changes are retained, and conflicting financial
+  histories are never silently merged. Cross-user IDs cannot be overwritten.
+- Legacy generic project POST/PUT/DELETE writes now return 409 so an old tab
+  cannot bypass the protocol. Other resource collections retain their existing
+  behavior. First-time legacy imports acquire the same user lock and continue
+  to skip existing projects.
+- Project requests are serialized within each tab. Edits made during a request
+  are retained and included in the next save. Conflict errors use the existing
+  save-error notification and stop further automatic project writes until
+  reload; the current unsaved tab state stays in memory. Refresh does not erase
+  pending/conflicting edits. Late save responses after logout are ignored.
+- Migration status reports the write protocol and blocked legacy replacement.
+  There are no new dashboard controls, labels, or visual changes.
+
+### Deployment and remaining cutover gates
+
+Deploy backend and frontend together, then reload all open NAm tabs. Old tabs
+will show a save error rather than overwrite newer records. Before reloading a
+conflicted tab, retain any manual edits you need to reapply; unsaved edits are
+not durably persisted by this protocol. This is conflict detection, not an
+automatic historical-data merge or a durable offline queue.
+
+Backend Lulo transaction writes remain **OFF**, and the existing browser accrual
+fallback remains. A future authoritative writer must acquire the SAME per-user
+lock and update projects in place. The new protocol removes the known
+replace-all race but does not prove real Lulo income parity, deployed uptime,
+or closed-browser provider access. Those still require authenticated production
+checks, a configured backend `LULO_API_KEY`, existing backup confirmation, and
+multiple distinct matching observations from Phase 5.
+
+### Validation
+
+Backend tests cover atomic stale-batch rejection, create/replay, stale deletes,
+ID collisions, cross-user ownership, transaction-row preservation, and legacy
+write rejection. Frontend tests cover per-record differences, serialized
+requests, edits during saves, conflict blocking, and logout races, alongside
+the existing parity suites. The Python route tests use SQLite for persistence;
+they do not prove PostgreSQL multi-worker lock contention. A deployed two-tab
+conflicting-write check is still required before transaction-writing cutover.

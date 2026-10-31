@@ -1,6 +1,7 @@
 """Generic CRUD for record collections, plus the key/value settings store."""
 
 from typing import Any
+from math import isfinite
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -9,7 +10,8 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
-from ..models import NetWorthSnapshot, Setting, User
+from ..models import NetWorthSnapshot, Setting, User, Project
+from ..project_writes import plan_project_changes, ProjectConflict
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
@@ -56,6 +58,8 @@ async def list_records(name: str, user: User = Depends(current_user), db: Sessio
 @router.post("/resources/{name}")
 async def create_record(name: str, payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     model, fields = _resource(name)
+    if name == "projects":
+        raise HTTPException(409, "Refresh NAm to use conflict-safe project saves.")
     columns, extra = dict_to_columns(payload, fields)
 
     identity = _exact_identity(name, payload)
@@ -76,6 +80,8 @@ async def update_record(
     name: str, record_id: str, payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> dict:
     model, fields = _resource(name)
+    if name == "projects":
+        raise HTTPException(409, "Refresh NAm to use conflict-safe project saves.")
     row = db.get(model, record_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Record not found.")
@@ -91,6 +97,8 @@ async def update_record(
 @router.delete("/resources/{name}/{record_id}")
 async def delete_record(name: str, record_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     model, _ = _resource(name)
+    if name == "projects":
+        raise HTTPException(409, "Refresh NAm to use conflict-safe project saves.")
     row = db.get(model, record_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Record not found.")
@@ -105,6 +113,8 @@ async def replace_collection(
 ) -> list[dict]:
     """Replaces the whole collection; mirrors how the old localStorage arrays were written."""
     model, fields = _resource(name)
+    if name == "projects":
+        raise HTTPException(409, "Refresh NAm to use conflict-safe project saves.")
     db.execute(delete(model).where(model.user_id == user.id))
     rows = []
     seen = set()
@@ -120,6 +130,56 @@ async def replace_collection(
         db.add(row)
         rows.append(row)
     db.commit()
+    return [row_to_dict(row, fields) for row in rows]
+
+
+@router.patch("/project-records")
+async def patch_projects(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:
+    changes = payload.get("changes")
+    if not isinstance(changes, list) or not all(isinstance(item, dict) for item in changes):
+        raise HTTPException(422, "Expected a project changes array.")
+    defaults = {"name": None, "category": None, "invested": 0, "earned": 0, "inactive": False}
+    normalized = []
+    for item in changes:
+        after = item.get("after")
+        if isinstance(after, dict):
+            columns, extra = dict_to_columns({**defaults, **after}, RESOURCES["projects"][1])
+            if any(columns[field] is None or not isfinite(columns[field]) for field in ("invested", "earned")):
+                raise HTTPException(422, "Project balances must be finite numbers.")
+            after = {**extra, **columns, "id": after.get("id")}
+        normalized.append({**item, "after": after})
+    changes = normalized
+    # Serializes creation as well as updates/deletes across tabs and workers.
+    # Future authoritative writers must acquire this same lock.
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    fields = RESOURCES["projects"][1]
+    rows = db.scalars(select(Project).where(Project.user_id == user.id).execution_options(populate_existing=True)).all()
+    by_id = {row.id: row for row in rows}
+    try:
+        planned = plan_project_changes({row.id: row_to_dict(row, fields) for row in rows}, changes)
+    except ProjectConflict:
+        raise HTTPException(409, "Project changed in another session. Reload before saving; no changes were applied.")
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+    # IDs are globally unique; never merge onto another user's row.
+    for project_id, after in planned.items():
+        if after is not None and project_id not in by_id and db.get(Project, project_id) is not None:
+            raise HTTPException(409, "Project ID unavailable.")
+    for project_id, after in planned.items():
+        row = by_id.get(project_id)
+        if after is None:
+            if row is not None:
+                db.delete(row)
+        else:
+            columns, extra = dict_to_columns(after, fields)
+            if row is None:
+                row = Project(id=project_id, user_id=user.id)
+                db.add(row)
+            for field, value in columns.items():
+                setattr(row, field, value)
+            row.data = extra
+    db.commit()
+    rows = db.scalars(select(Project).where(Project.user_id == user.id)).all()
     return [row_to_dict(row, fields) for row in rows]
 
 

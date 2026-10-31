@@ -5,6 +5,7 @@
 // synchronous call sites intact while making every value persist across devices.
 
 import { resourceApi, settingsApi } from "./apiClient";
+import { projectChanges, rebaseProjects } from "./projectChanges";
 
 // Keys whose values are record collections with their own tables.
 const COLLECTION_RESOURCES = {
@@ -21,6 +22,10 @@ const cache = new Map();
 const pendingTimers = new Map();
 const listeners = new Set();
 let hydrated = false;
+let savedProjects = [];
+let projectWrite = Promise.resolve();
+let projectConflict = false;
+let storeGeneration = 0;
 let onError = (message) => console.warn(message);
 
 export function setStoreErrorHandler(handler) {
@@ -100,7 +105,30 @@ function dedupeCollection(key, value) {
   return deduped;
 }
 
+async function pushProjects() {
+  const generation = storeGeneration;
+  projectWrite = projectWrite.catch(() => {}).then(async () => {
+    if (generation !== storeGeneration || projectConflict) return;
+    const sent = JSON.parse(JSON.stringify(cache.get("networth_projects") || []));
+    const changes = projectChanges(savedProjects, sent);
+    if (!changes.length) return;
+    try {
+      const saved = await resourceApi.patchProjects(changes);
+      if (generation !== storeGeneration) return;
+      savedProjects = saved;
+      cache.set("networth_projects", rebaseProjects(sent, cache.get("networth_projects") || [], saved));
+      notify("networth_projects");
+    } catch (error) {
+      if (generation !== storeGeneration) return;
+      if (error.status === 409) projectConflict = true;
+      onError(`Could not save projects: ${error.message}`);
+    }
+  });
+  return projectWrite;
+}
+
 async function pushKey(key) {
+  if (key === "networth_projects") return pushProjects();
   const value = cache.get(key);
   const resource = COLLECTION_RESOURCES[key];
   try {
@@ -130,6 +158,7 @@ export async function flushPendingWrites() {
   keys.forEach((key) => clearTimeout(pendingTimers.get(key)));
   pendingTimers.clear();
   await Promise.all(keys.map(pushKey));
+  await projectWrite;
 }
 
 export async function hydrate() {
@@ -142,11 +171,16 @@ export async function hydrate() {
   );
   resources.forEach(([key, records]) => cache.set(key, records || []));
 
+  savedProjects = JSON.parse(JSON.stringify(cache.get("networth_projects") || []));
+  projectConflict = false;
   hydrated = true;
   notify(null);
 }
 
 export function resetStore() {
+  storeGeneration += 1;
+  savedProjects = [];
+  projectConflict = false;
   cache.clear();
   pendingTimers.forEach((timer) => clearTimeout(timer));
   pendingTimers.clear();
@@ -157,7 +191,18 @@ export function resetStore() {
 export async function refreshCollection(key) {
   const resource = COLLECTION_RESOURCES[key];
   if (!resource) return;
+  if (key === "networth_projects") {
+    await pushProjects();
+    // Never erase unsaved changes (including a conflict) during a refresh.
+    if (projectChanges(savedProjects, cache.get(key) || []).length) return;
+  }
   const records = await resourceApi.list(resource);
+  if (key === "networth_projects") {
+    // A local edit may have occurred while the GET was in flight.
+    if (projectChanges(savedProjects, cache.get(key) || []).length) return;
+    savedProjects = JSON.parse(JSON.stringify(records || []));
+    projectConflict = false;
+  }
   cache.set(key, records || []);
   notify(key);
 }
