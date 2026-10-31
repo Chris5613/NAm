@@ -25,7 +25,8 @@ test("change-password requests include credentials and do not put password in th
   const [url, options] = global.fetch.mock.calls[0];
   expect(url).toContain("/api/auth/change-password");
   expect(options.credentials).toBe("include");
-  expect(url).not.toContain("password");
+  expect(url).not.toContain("old-test-only-password");
+  expect(url).not.toContain("new-test-only-password");
   expect(JSON.parse(options.body)).toEqual({
     current_password: "old-test-only-password",
     new_password: "new-test-only-password",
