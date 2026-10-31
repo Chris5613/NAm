@@ -49,6 +49,9 @@ class PostgreSQLProjectLockTests(unittest.TestCase):
         self.tx_id = "tx-" + uuid4().hex[:18]
         with Session(self.engine) as db:
             db.add(User(id=self.uid, username="phase7-ci", password_hash="not-a-real-password"))
+            # Project has a user_id FK but no ORM User relationship. Explicitly
+            # flush the parent first so PostgreSQL never sees an orphan insert.
+            db.flush()
             db.add(Project(
                 id=self.project_id, user_id=self.uid, name="Opening",
                 invested=100.0, earned=4.0, inactive=False,
