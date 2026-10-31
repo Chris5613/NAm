@@ -79,3 +79,28 @@ live-provider parity, backed-up production history review, real closed-browser
 polling, and the deployed two-tab test. SQLite regression tests do *not*
 establish these conditions. Automatic backend Lulo transaction writes remain
 disabled; no server preview has permission to change real earnings.
+
+## Additional Phase 7 regressions — PostgreSQL and project identity
+
+- GitHub Actions now provisions an **ephemeral PostgreSQL 16 service** and
+  runs `backend/tests/test_phase7_postgres_locks.py`. It tests two independent
+  database connections contending on the same user's `FOR UPDATE` lock.
+  A delayed stale patch must receive HTTP 409 after the first patch commits,
+  while the original embedded and relational transaction history survives.
+- The PostgreSQL test is opt-in locally through
+  `PHASE7_POSTGRES_TEST_URL` and **refuses to run against a database not named
+  `nam_phase7_ci`**. It creates/drops test tables and must never point at a
+  real financial database.
+- The React storage facade no longer deduplicates projects by display
+  name/category. Two different project IDs may legitimately share those
+  labels; neither can be silently removed from an in-memory save.
+- The project change calculator now rejects missing or duplicated project IDs
+  instead of silently coalescing records in a JavaScript Map. Invalid
+  collections remain in the local cache and block further automatic project
+  writes until the session is rehydrated. No new visual controls are added.
+- Jest regression tests cover same-name project preservation and duplicate-ID
+  rejection before any network save.
+
+Passing disposable CI database checks reduces the locking risk but does not
+prove the production deployment, running workers, Lulo API health, backups, or
+historical accounting parity. **Backend income transaction writes stay OFF.**
