@@ -23,6 +23,17 @@ const pendingTimers = new Map();
 const listeners = new Set();
 let hydrated = false;
 let savedProjects = [];
+const savedValues = new Map();
+const writes = new Map();
+const conflicts = new Set();
+const JOURNAL_PREFIX = "nam_unsaved_v1:";
+let journalOwner = "default";
+const journalKey = key => `${JOURNAL_PREFIX}${journalOwner}:${key}`;
+const clone = value => value === undefined ? null : JSON.parse(JSON.stringify(value));
+function journal(key, before, after) {
+  try { window.sessionStorage.setItem(journalKey(key), JSON.stringify({ before: clone(before), after: clone(after) })); } catch {}
+}
+function clearJournal(key) { try { window.sessionStorage.removeItem(journalKey(key)); } catch {} }
 let projectWrite = Promise.resolve();
 let projectConflict = false;
 let storeGeneration = 0;
@@ -60,7 +71,7 @@ function dedupeCollection(key, value) {
   // Financial project rows must never be silently dropped because two
   // different IDs happen to have the same display name/category. Preserve
   // all entries and let projectChanges reject invalid duplicate IDs.
-  if (key === "networth_projects") return value;
+  if (COLLECTION_RESOURCES[key]) return value;
 
   const seen = new Set();
   const deduped = [];
@@ -121,6 +132,8 @@ async function pushProjects() {
       if (generation !== storeGeneration) return;
       savedProjects = saved;
       cache.set("networth_projects", rebaseProjects(sent, cache.get("networth_projects") || [], saved));
+      if (JSON.stringify(savedProjects) === JSON.stringify(cache.get("networth_projects"))) clearJournal("networth_projects");
+      else journal("networth_projects", savedProjects, cache.get("networth_projects"));
       notify("networth_projects");
     } catch (error) {
       if (generation !== storeGeneration) return;
@@ -133,17 +146,38 @@ async function pushProjects() {
 
 async function pushKey(key) {
   if (key === "networth_projects") return pushProjects();
-  const value = cache.get(key);
-  const resource = COLLECTION_RESOURCES[key];
-  try {
-    if (resource) {
-      await resourceApi.replaceAll(resource, Array.isArray(value) ? value : []);
-    } else {
-      await settingsApi.set(key, value === undefined ? null : value);
+  const generation = storeGeneration;
+  const previous = writes.get(key) || Promise.resolve();
+  const job = previous.catch(() => {}).then(async () => {
+    if (generation !== storeGeneration || conflicts.has(key)) return;
+    const sent = clone(cache.get(key));
+    const before = clone(savedValues.get(key));
+    const resource = COLLECTION_RESOURCES[key];
+    try {
+      if (resource) {
+        const changes = projectChanges(before || [], sent || []);
+        if (!changes.length) return;
+        const saved = await resourceApi.patchRecords(resource, changes);
+        if (generation !== storeGeneration) return;
+        savedValues.set(key, clone(saved));
+        cache.set(key, rebaseProjects(sent || [], cache.get(key) || [], saved));
+      } else {
+        if (JSON.stringify(before) === JSON.stringify(sent)) return;
+        const saved = await settingsApi.patch(key, before, sent);
+        if (generation !== storeGeneration) return;
+        savedValues.set(key, clone(saved));
+      }
+      if (JSON.stringify(savedValues.get(key)) === JSON.stringify(cache.get(key))) clearJournal(key);
+      else journal(key, savedValues.get(key), cache.get(key));
+      notify(key);
+    } catch (error) {
+      if (generation !== storeGeneration) return;
+      if (error.status === 409 || error.code === "INVALID_PROJECT_IDS") conflicts.add(key);
+      onError(`Could not save "${key}": ${error.message}. Your edit is retained in this tab.`);
     }
-  } catch (error) {
-    onError(`Could not save "${key}": ${error.message}`);
-  }
+  });
+  writes.set(key, job);
+  return job;
 }
 
 function scheduleWrite(key) {
@@ -163,16 +197,20 @@ export async function flushPendingWrites() {
   pendingTimers.clear();
   await Promise.all(keys.map(pushKey));
   await projectWrite;
+  await Promise.all([...writes.values()]);
 }
 
-export async function hydrate() {
+export async function hydrate(ownerId = journalOwner) {
   // A sign-out or newer hydration invalidates any earlier async response.
   // Do not allow an old account's delayed network results into a new session.
   const generation = ++storeGeneration;
+  journalOwner = String(ownerId);
+  projectConflict = false;
   pendingTimers.forEach((timer) => clearTimeout(timer));
   pendingTimers.clear();
   savedProjects = [];
-  projectConflict = false;
+  savedValues.clear();
+  conflicts.clear();
   hydrated = false;
   cache.clear();
 
@@ -185,8 +223,27 @@ export async function hydrate() {
 
   Object.entries(settings || {}).forEach(([key, value]) => cache.set(key, value));
   resources.forEach(([key, records]) => cache.set(key, records || []));
-  savedProjects = JSON.parse(JSON.stringify(cache.get("networth_projects") || []));
-  projectConflict = false;
+  savedProjects = clone(cache.get("networth_projects") || []);
+  savedValues.clear();
+  for (const [key, value] of cache) savedValues.set(key, clone(value));
+  // Restore unsaved tab edits only against the exact server version they came from.
+  // A changed server version stays blocked for manual review.
+  try {
+    for (let i = 0; i < window.sessionStorage.length; i++) {
+      const journalKey = window.sessionStorage.key(i);
+      if (!journalKey?.startsWith(`${JOURNAL_PREFIX}${journalOwner}:`)) continue;
+      const key = journalKey.slice(`${JOURNAL_PREFIX}${journalOwner}:`.length);
+      const { before, after } = JSON.parse(window.sessionStorage.getItem(journalKey));
+      if (JSON.stringify(before) !== JSON.stringify(savedValues.get(key) ?? null)) {
+        conflicts.add(key);
+        onError(`Could not restore "${key}" automatically because it changed on the server. Your edit is retained in this tab.`);
+      }
+      cache.set(key, after);
+      if (key === "networth_projects") projectConflict = conflicts.has(key);
+      if (!conflicts.has(key)) scheduleWrite(key);
+    }
+  } catch { /* unavailable session storage leaves server values intact */ }
+  projectConflict ||= conflicts.has("networth_projects");
   hydrated = true;
   notify(null);
 }
@@ -194,6 +251,8 @@ export async function hydrate() {
 export function resetStore() {
   storeGeneration += 1;
   savedProjects = [];
+  savedValues.clear();
+  conflicts.clear();
   projectConflict = false;
   cache.clear();
   pendingTimers.forEach((timer) => clearTimeout(timer));
@@ -206,21 +265,21 @@ export async function refreshCollection(key) {
   const resource = COLLECTION_RESOURCES[key];
   if (!resource) return;
   const generation = storeGeneration;
-  if (key === "networth_projects") {
-    await pushProjects();
-    if (generation !== storeGeneration) return;
-    // Never erase unsaved changes (including a conflict) during a refresh.
-    if (projectChanges(savedProjects, cache.get(key) || []).length) return;
-  }
+  await pushKey(key);
+  if (generation !== storeGeneration) return;
+  const hasLocalChanges = () => JSON.stringify(key === "networth_projects" ? savedProjects : savedValues.get(key))
+    !== JSON.stringify(cache.get(key));
+  // Never erase unsaved edits or a conflict during a refresh.
+  if (hasLocalChanges() || conflicts.has(key) || (key === "networth_projects" && projectConflict)) return;
   const records = await resourceApi.list(resource);
   if (generation !== storeGeneration) return;
+  if (hasLocalChanges() || conflicts.has(key) || (key === "networth_projects" && projectConflict)) return;
   if (key === "networth_projects") {
-    // A local edit may have occurred while the GET was in flight.
-    if (projectChanges(savedProjects, cache.get(key) || []).length) return;
     savedProjects = JSON.parse(JSON.stringify(records || []));
     projectConflict = false;
   }
   cache.set(key, records || []);
+  savedValues.set(key, clone(records || []));
   notify(key);
 }
 
@@ -253,12 +312,14 @@ export const remoteStorage = {
     // Identical telemetry/preferences should not trigger repeated network PUTs.
     if (JSON.stringify(cache.get(key)) === JSON.stringify(parsed)) return;
     cache.set(key, parsed);
+    journal(key, key === "networth_projects" ? savedProjects : savedValues.get(key), parsed);
     scheduleWrite(key);
     notify(key);
   },
   removeItem(key) {
     if (cache.get(key) === null || !cache.has(key)) return;
     cache.set(key, null);
+    journal(key, key === "networth_projects" ? savedProjects : savedValues.get(key), null);
     scheduleWrite(key);
     notify(key);
   },

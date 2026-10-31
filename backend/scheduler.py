@@ -1,8 +1,4 @@
-"""Server-owned scheduled jobs.
-
-The worker is deliberately process-local for now; run one backend process per
-Postgres database, or move this loop to a dedicated worker when scaling out.
-"""
+"""Server-owned scheduled jobs, with one Postgres advisory-lock leader."""
 
 import asyncio
 from datetime import datetime, timezone, timedelta
@@ -10,14 +6,16 @@ from zoneinfo import ZoneInfo
 import logging
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from .db import SessionLocal
+from .db import SessionLocal, engine
 from .models import Asset, NetWorthSnapshot, Project, Setting, User, utcnow
 from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_project_balances
 
 _scheduler_task: asyncio.Task | None = None
+_leader = False
+SCHEDULER_LOCK_ID = 0x4E414D5F53434844
 _last_daily_key: str | None = None
 _last_daily_attempt: datetime | None = None
 _last_project_day: str | None = None
@@ -161,53 +159,88 @@ def take_project_balance_snapshots(day: str, scheduled_at: datetime | None = Non
     return made
 
 def scheduler_status() -> dict[str, Any]:
-    return {"status": "running", "last_daily_key": _last_daily_key,
+    return {"status": "leader" if _leader else "standby", "last_daily_key": _last_daily_key,
             "last_project_day": _last_project_day,
             "last_yield_poll_at": _last_yield_poll.isoformat() if _last_yield_poll else None}
 
 
 async def scheduler_loop() -> None:
-    global _last_daily_key, _last_daily_attempt, _last_project_day, _last_catchup_check, _last_yield_poll
-    while True:
-        now = datetime.now(timezone.utc)
-        day = now.date().isoformat()
-        # Daily job runs after midnight UTC, independently of browser tabs.
-        if _last_daily_key != day and ( _last_daily_attempt is None or now - _last_daily_attempt >= timedelta(minutes=5)):
-            _last_daily_attempt = now
+    global _last_daily_key, _last_daily_attempt, _last_project_day, _last_catchup_check, _last_yield_poll, _leader
+    connection = None
+    try:
+        while True:
+            if engine.dialect.name == "postgresql":
+                try:
+                    if connection is None:
+                        candidate = engine.connect()
+                        acquired = candidate.scalar(text("SELECT pg_try_advisory_lock(:lock_id)"), {"lock_id": SCHEDULER_LOCK_ID})
+                        candidate.rollback()
+                        if acquired:
+                            connection = candidate
+                        else:
+                            candidate.close()
+                    else:
+                        connection.execute(text("SELECT 1"))
+                        connection.rollback()
+                except Exception:
+                    log.exception("Scheduler leader connection failed; retrying")
+                    if connection is not None:
+                        connection.invalidate()
+                        connection.close()
+                    connection = None
+                _leader = connection is not None
+                if not _leader:
+                    await asyncio.sleep(30)
+                    continue
+            else:
+                _leader = True
+            now = datetime.now(timezone.utc)
+            day = now.date().isoformat()
+            # Daily job runs after midnight UTC, independently of browser tabs.
+            if _last_daily_key != day and ( _last_daily_attempt is None or now - _last_daily_attempt >= timedelta(minutes=5)):
+                _last_daily_attempt = now
+                try:
+                    await asyncio.to_thread(take_daily_snapshots)
+                    _last_daily_key = day
+                except Exception:
+                    # Do not silently mark an unsuccessful daily snapshot complete.
+                    # Retry after the bounded delay, leaving yesterday/history intact.
+                    log.exception("Daily net-worth snapshot failed; will retry")
+            local_now = now.astimezone(PACIFIC)
+            project_day = local_now.date().isoformat()
+            # Catch up a missed night on restart/wakeup. Keep the actual
+            # capture timestamp; do not pretend a stale feed was live at 23:58.
+            if _last_catchup_check != project_day:
+                try:
+                    prior_day = (local_now.date() - timedelta(days=1)).isoformat()
+                    await asyncio.to_thread(take_project_balance_snapshots, prior_day, now)
+                    _last_catchup_check = project_day
+                except Exception:
+                    log.exception("Prior-night project backup catch-up failed")
+            if (local_now.hour, local_now.minute) >= (23, 58) and _last_project_day != project_day:
+                try:
+                    await asyncio.to_thread(take_project_balance_snapshots, project_day, now)
+                    _last_project_day = project_day
+                except Exception:
+                    log.exception("Project balance backup failed; will retry next tick")
+            # API-backed sources do not require Chrome or an open dashboard.
+            # Do not touch financial ledgers here: save read-only observations
+            # for later reconciliation by the existing accounting engine.
+            if _last_yield_poll is None or now - _last_yield_poll >= YIELD_SYNC_INTERVAL:
+                _last_yield_poll = now
+                try:
+                    await asyncio.to_thread(poll_all_users)
+                except Exception:
+                    log.exception("Lulo / Loopscale source polling failed")
+            await asyncio.sleep(30)
+    finally:
+        _leader = False
+        if connection is not None:
             try:
-                await asyncio.to_thread(take_daily_snapshots)
-                _last_daily_key = day
-            except Exception:
-                # Do not silently mark an unsuccessful daily snapshot complete.
-                # Retry after the bounded delay, leaving yesterday/history intact.
-                log.exception("Daily net-worth snapshot failed; will retry")
-        local_now = now.astimezone(PACIFIC)
-        project_day = local_now.date().isoformat()
-        # Catch up a missed night on restart/wakeup. Keep the actual
-        # capture timestamp; do not pretend a stale feed was live at 23:58.
-        if _last_catchup_check != project_day:
-            try:
-                prior_day = (local_now.date() - timedelta(days=1)).isoformat()
-                await asyncio.to_thread(take_project_balance_snapshots, prior_day, now)
-                _last_catchup_check = project_day
-            except Exception:
-                log.exception("Prior-night project backup catch-up failed")
-        if (local_now.hour, local_now.minute) >= (23, 58) and _last_project_day != project_day:
-            try:
-                await asyncio.to_thread(take_project_balance_snapshots, project_day, now)
-                _last_project_day = project_day
-            except Exception:
-                log.exception("Project balance backup failed; will retry next tick")
-        # API-backed sources do not require Chrome or an open dashboard.
-        # Do not touch financial ledgers here: save read-only observations
-        # for later reconciliation by the existing accounting engine.
-        if _last_yield_poll is None or now - _last_yield_poll >= YIELD_SYNC_INTERVAL:
-            _last_yield_poll = now
-            try:
-                await asyncio.to_thread(poll_all_users)
-            except Exception:
-                log.exception("Lulo / Loopscale source polling failed")
-        await asyncio.sleep(30)
+                connection.execute(text("SELECT pg_advisory_unlock(:lock_id)"), {"lock_id": SCHEDULER_LOCK_ID})
+                connection.rollback()
+            finally:
+                connection.close()
 
 
 def start_scheduler() -> asyncio.Task:

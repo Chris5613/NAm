@@ -2,8 +2,8 @@ import { resourceApi, settingsApi } from "./apiClient";
 import { hydrate, remoteStorage, flushPendingWrites, resetStore, setStoreErrorHandler, refreshCollection, isHydrated } from "./serverStore";
 
 jest.mock("./apiClient", () => ({
-  resourceApi: { list: jest.fn(), patchProjects: jest.fn(), replaceAll: jest.fn() },
-  settingsApi: { all: jest.fn(), set: jest.fn() },
+  resourceApi: { list: jest.fn(), patchProjects: jest.fn(), patchRecords: jest.fn(), replaceAll: jest.fn() },
+  settingsApi: { all: jest.fn(), set: jest.fn(), patch: jest.fn((key, before, after) => Promise.resolve(after)) },
 }));
 const key = "networth_projects";
 const initial = [{ id: "p", earned: 1 }, { id: "q", earned: 2 }];
@@ -12,6 +12,7 @@ const write = (rows) => remoteStorage.setItem(key, JSON.stringify(rows));
 
 beforeEach(async () => {
   resetStore();
+  window.sessionStorage.clear();
   jest.clearAllMocks();
   settingsApi.all.mockResolvedValue({});
   resourceApi.list.mockImplementation(async (name) => name === "projects" ? initial : []);
@@ -22,12 +23,12 @@ afterEach(() => resetStore());
 test("saving an unchanged settings value does not repeat an API write", async () => {
   remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
   await flushPendingWrites();
-  expect(settingsApi.set).toHaveBeenCalledTimes(1);
-  settingsApi.set.mockClear();
+  expect(settingsApi.patch).toHaveBeenCalledTimes(1);
+  settingsApi.patch.mockClear();
 
   remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
   await flushPendingWrites();
-  expect(settingsApi.set).not.toHaveBeenCalled();
+  expect(settingsApi.patch).not.toHaveBeenCalled();
 });
 
 test("overlapping flushes serialize writes and preserve newer local edits", async () => {
@@ -124,6 +125,7 @@ test("late collection refresh cannot repopulate the signed-out cache", async () 
   let finish;
   resourceApi.list.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
   const pending = refreshCollection("networth_assets");
+  while (!finish) await new Promise((resolve) => setTimeout(resolve, 0));
   resetStore();
   finish([{ id: "old-account-asset", manual_value: 999 }]);
   await pending;
@@ -143,4 +145,43 @@ test("a superseded hydrate cannot overwrite a newer successful login", async () 
   await stale;
   expect(isHydrated()).toBe(true);
   expect(remoteStorage.getItem("account-label")).toBe("new");
+});
+
+test("other collections send only changed records", async () => {
+  resourceApi.patchRecords.mockResolvedValue([{ id: "asset", name: "New" }]);
+  remoteStorage.setItem("networth_assets", JSON.stringify([{ id: "asset", name: "New" }]));
+  await flushPendingWrites();
+  expect(resourceApi.patchRecords).toHaveBeenCalledWith("assets", [
+    { id: "asset", before: null, after: { id: "asset", name: "New" } },
+  ]);
+  expect(resourceApi.replaceAll).not.toHaveBeenCalled();
+});
+
+test("unsaved setting survives hydration in this tab and retries against same base", async () => {
+  settingsApi.patch.mockRejectedValueOnce(new Error("offline")).mockImplementation((key, before, after) => Promise.resolve(after));
+  remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
+  await flushPendingWrites();
+  expect(window.sessionStorage.getItem("nam_unsaved_v1:default:networth_prefs")).not.toBeNull();
+  resetStore();
+  await hydrate();
+  await flushPendingWrites();
+  expect(settingsApi.patch).toHaveBeenCalledTimes(2);
+  expect(window.sessionStorage.getItem("nam_unsaved_v1:default:networth_prefs")).toBeNull();
+});
+
+test("a different account does not restore another account's unsaved journal", async () => {
+  await hydrate(1);
+  remoteStorage.setItem("networth_prefs", JSON.stringify({ private: "first" }));
+  resetStore();
+  await hydrate(2);
+  expect(remoteStorage.getItem("networth_prefs")).toBeNull();
+  expect(window.sessionStorage.getItem("nam_unsaved_v1:1:networth_prefs")).not.toBeNull();
+});
+
+test("refresh preserves unsaved asset edits after a failed save", async () => {
+  resourceApi.patchRecords.mockRejectedValueOnce(new Error("offline"));
+  remoteStorage.setItem("networth_assets", JSON.stringify([{ id: "asset", name: "Mine" }]));
+  await flushPendingWrites();
+  await refreshCollection("networth_assets");
+  expect(JSON.parse(remoteStorage.getItem("networth_assets"))[0].name).toBe("Mine");
 });

@@ -8,13 +8,14 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request as UrlRequest, urlopen
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
 from urllib.parse import urlsplit
 from fastapi.middleware.cors import CORSMiddleware
 
 load_dotenv(Path(__file__).with_name(".env"))
 
+from .auth import current_user  # noqa: E402
 from .db import init_db  # noqa: E402  (imported after load_dotenv so DATABASE_URL is set)
 from .scheduler import scheduler_status, start_scheduler, stop_scheduler  # noqa: E402
 from .routers import auth_routes, market, migration, resources, simplefin_routes, spending, project_tracking, yield_sources  # noqa: E402
@@ -106,7 +107,7 @@ def read_kryptex(path: str):
 
 
 @app.get("/api/kryptex/status")
-async def kryptex_status() -> dict:
+async def kryptex_status(_user = Depends(current_user)) -> dict:
     balance, devices, rates = await asyncio.gather(
         asyncio.to_thread(read_kryptex, "balance"),
         asyncio.to_thread(read_kryptex, "devices"),
@@ -116,7 +117,7 @@ async def kryptex_status() -> dict:
 
 
 @app.get("/api/jupiter/fluid-pnl")
-async def jupiter_fluid_pnl(vault_id: int, position_id: int) -> dict:
+async def jupiter_fluid_pnl(vault_id: int, position_id: int, _user = Depends(current_user)) -> dict:
     url = (
         "https://api.solana.fluid.io/v2/main/borrowing/"
         f"vaults/{vault_id}/nfts/{position_id}/pnl"

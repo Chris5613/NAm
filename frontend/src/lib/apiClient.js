@@ -61,6 +61,7 @@ export const authApi = {
 };
 
 export const resourceApi = {
+  patchRecords: (name, changes) => api.patch(`/api/resource-records/${name}`, { changes }),
   patchProjects: (changes) => api.patch("/api/project-records", { changes }),
   list: (name) => api.get(`/api/resources/${name}`),
   create: (name, record) => api.post(`/api/resources/${name}`, record),
@@ -72,6 +73,7 @@ export const resourceApi = {
 export const settingsApi = {
   all: () => api.get("/api/settings"),
   get: (key) => api.get(`/api/settings/${key}`).then((row) => row?.value ?? null),
+  patch: (key, before, after) => api.patch(`/api/settings/${encodeURIComponent(key)}`, { before, after }).then((row) => row.value),
   set: (key, value) => api.put(`/api/settings/${key}`, { value }),
 };
 

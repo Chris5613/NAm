@@ -1,3 +1,4 @@
+import { kryptexIncrease } from "../lib/kryptexEarnings";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
 import { projectsApi } from "@/lib/api";
@@ -1844,12 +1845,8 @@ const importSaladPayload =
                 ? previousBalance
                 : KRYPTEX_OPENING_BALANCE_USD;
 
-            const positiveDelta =
-              Math.max(
-                0,
-                currentBalance -
-                  baselineBalance
-              );
+            const { earned: positiveDelta, peak: peakBalance } =
+              kryptexIncrease(currentBalance, baselineBalance, current?.peakBalance);
 
             const monthKey =
               getCurrentMonthKey();
@@ -1904,6 +1901,7 @@ const importSaladPayload =
               currentBalance,
               lastBalance:
                 currentBalance,
+              peakBalance,
               openingBalanceUsd:
                 KRYPTEX_OPENING_BALANCE_USD,
               lifetimeEarnedUsd:

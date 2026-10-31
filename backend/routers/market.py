@@ -27,6 +27,18 @@ router = APIRouter(
 logger = logging.getLogger(__name__)
 
 CACHE_TTL_SECONDS = 45
+CACHE_MAX_ENTRIES = 512
+
+
+def cache_result(key: str, data: Any) -> None:
+    now = time.time()
+    for old_key, (created, _) in list(_cache.items()):
+        if now - created >= CACHE_TTL_SECONDS:
+            _cache.pop(old_key, None)
+    if key not in _cache and len(_cache) >= CACHE_MAX_ENTRIES:
+        _cache.pop(min(_cache, key=lambda entry: _cache[entry][0]))
+    _cache[key] = (now, data)
+
 _cache: dict[str, tuple[float, Any]] = {}
 
 
@@ -214,7 +226,7 @@ async def public_mlb_proxy(
 
     cache_key = f"mlb:{url}"
 
-    cached = _cache.get(cache_key)
+    cached = _cache.get(cache_key) if request.method == "GET" else None
 
     if (
         cached
@@ -235,10 +247,8 @@ async def public_mlb_proxy(
         body,
     )
 
-    _cache[cache_key] = (
-        time.time(),
-        data,
-    )
+    if request.method == "GET":
+        cache_result(cache_key, data)
 
     return data
 
@@ -327,7 +337,7 @@ async def proxy(
 
     cache_key = f"{provider}:{url}"
 
-    cached = _cache.get(cache_key)
+    cached = _cache.get(cache_key) if request.method == "GET" else None
 
     if provider == "lulo":
         logger.info(
@@ -467,10 +477,8 @@ async def proxy(
             rows if rows is not None else "n/a",
         )
 
-    _cache[cache_key] = (
-        time.time(),
-        data,
-    )
+    if request.method == "GET":
+        cache_result(cache_key, data)
 
     return data
 

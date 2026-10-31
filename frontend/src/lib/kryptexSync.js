@@ -1,3 +1,4 @@
+import { kryptexIncrease } from "./kryptexEarnings";
 import { projectsApi } from "./api";
 import { localStorage as storage } from "./localStorage";
 
@@ -43,7 +44,7 @@ export function summarizeKryptexStatus(payload) {
 }
 
 export async function getKryptexStatus() {
-  const response = await fetch(`${BACKEND_URL}/api/kryptex/status`);
+  const response = await fetch(`${BACKEND_URL}/api/kryptex/status`, { credentials: "include" });
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
     throw new Error(body.detail || "Kryptex local service is unavailable");
@@ -72,19 +73,22 @@ async function findOrCreateProject(name) {
 
 // Shared reconciliation: applies a status snapshot (from either the local
 // backend proxy or the browser-extension bridge) against the stored balance
-// baseline. Only positive deltas post an earning transaction; drops just
-// reset the baseline (payout), never negative income.
+// baseline and high-water mark. A payout or recovery below the old peak
+// updates telemetry without creating an earning transaction.
 export async function reconcileKryptexStatus(status, { initialize = false } = {}) {
   const config = storage.getKryptexConfig();
   if (!config?.enabled) throw new Error("Kryptex integration is not enabled");
 
   const now = new Date().toISOString();
-  const hasBaseline = Number.isFinite(Number(config.baseline_balance_usd));
+  const hasBaseline = config.baseline_balance_usd != null && Number.isFinite(Number(config.baseline_balance_usd));
   const baselineBefore = hasBaseline ? Number(config.baseline_balance_usd) : status.balance_usd;
-  const delta = Number((status.balance_usd - baselineBefore).toFixed(6));
+  const observedDelta = Number((status.balance_usd - baselineBefore).toFixed(6));
+  const { earned, peak } = kryptexIncrease(status.balance_usd, baselineBefore, config.peak_balance_usd);
+  const delta = Number(earned.toFixed(6));
   const nextConfig = {
     ...config,
     baseline_balance_usd: status.balance_usd,
+    peak_balance_usd: peak,
     latest_status: status,
     last_synced_at: now,
   };
@@ -105,18 +109,25 @@ export async function reconcileKryptexStatus(status, { initialize = false } = {}
     kryptex_last_synced_at: now,
   };
 
-  if (initialize || !hasBaseline || Math.abs(delta) < AMOUNT_EPSILON) {
+  if (initialize || !hasBaseline) {
     storage.setKryptexConfig(nextConfig);
     await projectsApi.update(project.id, telemetryPatch);
     window.dispatchEvent(new CustomEvent("kryptex-sync-complete"));
-    return { action: initialize || !hasBaseline ? "initialized" : "no_change", delta_usd: 0, status, project_id: project.id };
+    return { action: "initialized", delta_usd: 0, status, project_id: project.id };
   }
 
-  if (delta < 0) {
+  if (observedDelta < 0 || (observedDelta > 0 && delta < AMOUNT_EPSILON)) {
     storage.setKryptexConfig(nextConfig);
     await projectsApi.update(project.id, telemetryPatch);
     window.dispatchEvent(new CustomEvent("kryptex-sync-complete"));
-    return { action: "withdrawal", delta_usd: delta, status, project_id: project.id };
+    return { action: observedDelta < 0 ? "withdrawal" : "recovery", delta_usd: observedDelta, status, project_id: project.id };
+  }
+
+  if (delta < AMOUNT_EPSILON) {
+    storage.setKryptexConfig(nextConfig);
+    await projectsApi.update(project.id, telemetryPatch);
+    window.dispatchEvent(new CustomEvent("kryptex-sync-complete"));
+    return { action: "no_change", delta_usd: 0, status, project_id: project.id };
   }
 
   const category = config.label || "GPU Mining";

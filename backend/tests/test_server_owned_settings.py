@@ -10,7 +10,7 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session
 
 from backend.models import Setting, User
-from backend.routers.resources import put_setting
+from backend.routers.resources import put_setting, patch_setting
 from backend.server_owned_settings import is_server_owned_setting
 
 
@@ -79,7 +79,7 @@ class AccountingSettingsWriteProtectionTests(unittest.TestCase):
             with self.subTest(key=key):
                 self.assertFalse(is_server_owned_setting(key))
                 value = {"note": "user setting"}
-                result = asyncio.run(put_setting(key, {"value": value}, self.user, self.db))
+                result = asyncio.run(patch_setting(key, {"before": None, "after": value}, self.user, self.db))
                 self.assertEqual(result["value"], value)
                 self.assertEqual(
                     self.db.scalar(select(Setting).where(

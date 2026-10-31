@@ -59,8 +59,8 @@ async def list_records(name: str, user: User = Depends(current_user), db: Sessio
 @router.post("/resources/{name}")
 async def create_record(name: str, payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     model, fields = _resource(name)
-    if name == "projects":
-        raise HTTPException(409, "Refresh NAm to use conflict-safe project saves.")
+    if name in {"projects", "assets", "wallets", "phones", "bets"}:
+        raise HTTPException(409, "Refresh NAm to use conflict-safe record saves.")
     columns, extra = dict_to_columns(payload, fields)
 
     identity = _exact_identity(name, payload)
@@ -81,8 +81,8 @@ async def update_record(
     name: str, record_id: str, payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> dict:
     model, fields = _resource(name)
-    if name == "projects":
-        raise HTTPException(409, "Refresh NAm to use conflict-safe project saves.")
+    if name in {"projects", "assets", "wallets", "phones", "bets"}:
+        raise HTTPException(409, "Refresh NAm to use conflict-safe record saves.")
     row = db.get(model, record_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Record not found.")
@@ -98,8 +98,8 @@ async def update_record(
 @router.delete("/resources/{name}/{record_id}")
 async def delete_record(name: str, record_id: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     model, _ = _resource(name)
-    if name == "projects":
-        raise HTTPException(409, "Refresh NAm to use conflict-safe project saves.")
+    if name in {"projects", "assets", "wallets", "phones", "bets"}:
+        raise HTTPException(409, "Refresh NAm to use conflict-safe record saves.")
     row = db.get(model, record_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Record not found.")
@@ -114,8 +114,8 @@ async def replace_collection(
 ) -> list[dict]:
     """Replaces the whole collection; mirrors how the old localStorage arrays were written."""
     model, fields = _resource(name)
-    if name == "projects":
-        raise HTTPException(409, "Refresh NAm to use conflict-safe project saves.")
+    if name in {"projects", "assets", "wallets", "phones", "bets"}:
+        raise HTTPException(409, "Refresh NAm to use conflict-safe record saves.")
     db.execute(delete(model).where(model.user_id == user.id))
     rows = []
     seen = set()
@@ -184,6 +184,45 @@ async def patch_projects(payload: dict[str, Any], user: User = Depends(current_u
     return [row_to_dict(row, fields) for row in rows]
 
 
+@router.patch("/resource-records/{name}")
+async def patch_resource_records(name: str, payload: dict[str, Any],
+                                 user: User = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:
+    if name not in {"assets", "wallets", "phones", "bets"}:
+        raise HTTPException(404, "Unknown guarded collection.")
+    model, fields = _resource(name)
+    changes = payload.get("changes")
+    if not isinstance(changes, list) or not all(isinstance(item, dict) for item in changes):
+        raise HTTPException(422, "Expected a changes array.")
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    rows = db.scalars(select(model).where(model.user_id == user.id).execution_options(populate_existing=True)).all()
+    by_id = {row.id: row for row in rows}
+    try:
+        planned = plan_project_changes({row.id: row_to_dict(row, fields) for row in rows}, changes)
+    except ProjectConflict:
+        raise HTTPException(409, "Record changed in another session. No changes were applied.")
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+    for record_id, after in planned.items():
+        if after is not None and record_id not in by_id and db.get(model, record_id) is not None:
+            raise HTTPException(409, "Record ID unavailable.")
+    for record_id, after in planned.items():
+        row = by_id.get(record_id)
+        if after is None:
+            if row is not None:
+                db.delete(row)
+            continue
+        columns, extra = dict_to_columns(after, fields)
+        if row is None:
+            row = model(id=record_id, user_id=user.id, data=extra, **columns)
+            db.add(row)
+        else:
+            for field, value in columns.items():
+                setattr(row, field, value)
+            row.data = extra
+    db.commit()
+    return [row_to_dict(row, fields) for row in db.scalars(select(model).where(model.user_id == user.id)).all()]
+
+
 @router.get("/settings")
 async def all_settings(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     rows = db.scalars(select(Setting).where(Setting.user_id == user.id)).all()
@@ -202,13 +241,28 @@ async def put_setting(key: str, payload: dict[str, Any], user: User = Depends(cu
     # source observations, parity evidence, or immutable backups.
     if is_server_owned_setting(key):
         raise HTTPException(status_code=403, detail="Server-owned accounting settings are read-only.")
+    raise HTTPException(409, "Refresh NAm to use guarded settings saves.")
+
+
+@router.patch("/settings/{key}")
+async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(current_user),
+                        db: Session = Depends(get_db)) -> dict:
+    if is_server_owned_setting(key):
+        raise HTTPException(403, "Server-owned accounting settings are read-only.")
+    if not all(field in payload for field in ("before", "after")):
+        raise HTTPException(422, "Expected before and after values.")
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
-    if row:
-        row.value = payload.get("value")
-    else:
-        db.add(Setting(user_id=user.id, key=key, value=payload.get("value")))
-    db.commit()
-    return {"key": key, "value": payload.get("value")}
+    current = row.value if row else None
+    if current != payload["before"] and current != payload["after"]:
+        raise HTTPException(409, "Setting changed in another session. No changes were applied.")
+    if current != payload["after"]:
+        if row:
+            row.value = payload["after"]
+        else:
+            db.add(Setting(user_id=user.id, key=key, value=payload["after"]))
+        db.commit()
+    return {"key": key, "value": payload["after"]}
 
 
 @router.get("/net-worth/history")

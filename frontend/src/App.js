@@ -166,7 +166,7 @@ function AuthGate() {
         toast.error(message)
     );
 
-    hydrate()
+    hydrate(user.id)
       .then(() => {
         try {
           seedProjectCryptoCache();

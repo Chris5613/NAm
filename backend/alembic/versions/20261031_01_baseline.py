@@ -20,7 +20,8 @@ depends_on = None
 def upgrade():
     inspector = inspect(op.get_bind())
     found = set(inspector.get_table_names())
-    expected = set(Base.metadata.tables.keys())
+    # Keep the baseline fixed as the pre-migration schema as models grow.
+    expected = set(Base.metadata.tables.keys()) - {"rate_limit_buckets"}
     missing_tables = sorted(expected - found)
     if missing_tables:
         raise RuntimeError("Existing NAm schema is missing tables: " + ", ".join(missing_tables))

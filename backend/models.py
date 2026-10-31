@@ -47,6 +47,16 @@ class Setting(Base, TimestampMixin):
     value: Mapped[dict] = mapped_column(JSONB, default=dict)
 
 
+class RateLimitBucket(Base):
+    """Shared login and claim attempt windows across backend processes."""
+
+    __tablename__ = "rate_limit_buckets"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    hits: Mapped[list] = mapped_column(JSONB, default=list)
+    expires_at: Mapped[float] = mapped_column(Float, index=True)
+
+
 class Asset(Base, TimestampMixin):
     __tablename__ = "assets"
 
