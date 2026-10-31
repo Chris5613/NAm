@@ -1487,10 +1487,8 @@ async def sync_simplefin(
     account_count = 0
 
     for connection in connections:
-        payload = fetch_simplefin(
-            read_access_url(
-                connection
-            )
+        payload = await asyncio.to_thread(
+            fetch_simplefin, read_access_url(connection)
         )
 
         for account in payload.get(

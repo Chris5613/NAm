@@ -250,11 +250,14 @@ export const remoteStorage = {
     if (Array.isArray(parsed)) {
       parsed = dedupeCollection(key, parsed);
     }
+    // Identical telemetry/preferences should not trigger repeated network PUTs.
+    if (JSON.stringify(cache.get(key)) === JSON.stringify(parsed)) return;
     cache.set(key, parsed);
     scheduleWrite(key);
     notify(key);
   },
   removeItem(key) {
+    if (cache.get(key) === null || !cache.has(key)) return;
     cache.set(key, null);
     scheduleWrite(key);
     notify(key);

@@ -19,6 +19,7 @@ from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_proje
 
 _scheduler_task: asyncio.Task | None = None
 _last_daily_key: str | None = None
+_last_daily_attempt: datetime | None = None
 _last_project_day: str | None = None
 _last_catchup_check: str | None = None
 _last_yield_poll: datetime | None = None
@@ -166,17 +167,20 @@ def scheduler_status() -> dict[str, Any]:
 
 
 async def scheduler_loop() -> None:
-    global _last_daily_key, _last_project_day, _last_catchup_check, _last_yield_poll
+    global _last_daily_key, _last_daily_attempt, _last_project_day, _last_catchup_check, _last_yield_poll
     while True:
         now = datetime.now(timezone.utc)
         day = now.date().isoformat()
         # Daily job runs after midnight UTC, independently of browser tabs.
-        if _last_daily_key != day:
+        if _last_daily_key != day and ( _last_daily_attempt is None or now - _last_daily_attempt >= timedelta(minutes=5)):
+            _last_daily_attempt = now
             try:
                 await asyncio.to_thread(take_daily_snapshots)
                 _last_daily_key = day
             except Exception:
-                _last_daily_key = day
+                # Do not silently mark an unsuccessful daily snapshot complete.
+                # Retry after the bounded delay, leaving yesterday/history intact.
+                log.exception("Daily net-worth snapshot failed; will retry")
         local_now = now.astimezone(PACIFIC)
         project_day = local_now.date().isoformat()
         # Catch up a missed night on restart/wakeup. Keep the actual

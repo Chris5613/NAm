@@ -4,19 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - "frontend/src/pages/YieldFarmingPage.jsx"
-      - "frontend/src/components/YieldFarmingComponents.jsx"
-      - "frontend/src/lib/yieldFarmingAccounting.js"
-      - "frontend/src/lib/yieldProviderParity*"
-      - "frontend/src/lib/backendYieldSourceSnapshots*"
-      - "frontend/src/lib/mergeBackendLoopscaleHistory*"
-      - "frontend/src/lib/luloYieldSync.js"
-      - "frontend/src/lib/loopscaleYieldSync.js"
-      - "frontend/src/lib/api.js"
-      - "frontend/src/lib/apiClient.js"
-      - "frontend/src/lib/serverStore*"
-      - "frontend/src/lib/projectChanges*"
-      - "frontend/src/hooks/**"
+      - "frontend/src/**"
+      - "frontend/package*.json"
+      - "frontend/scripts/**"
+      - "frontend/craco.config.js"
+      - "frontend/postcss.config.js"
+      - "frontend/tailwind.config.js"
       - "backend/**"
       - ".github/workflows/source-validation.yml"
   workflow_dispatch:

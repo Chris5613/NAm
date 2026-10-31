@@ -4,6 +4,7 @@ Each provider is an explicit allowlist entry with a fixed host, so this is not a
 open proxy. Responses are cached briefly to stay within upstream rate limits.
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -228,7 +229,7 @@ async def public_mlb_proxy(
         else None
     )
 
-    data = _fetch(
+    data = await asyncio.to_thread(_fetch,
         url,
         config.get("headers", {}),
         body,
@@ -370,7 +371,7 @@ async def proxy(
         ] = "application/json"
 
     try:
-        data = _fetch(
+        data = await asyncio.to_thread(_fetch,
             url,
             headers,
             body,
@@ -501,7 +502,7 @@ async def solana_rpc(
         "https://api.mainnet-beta.solana.com",
     )
 
-    return _fetch(
+    return await asyncio.to_thread(_fetch,
         endpoint,
         {
             "Content-Type": "application/json",
