@@ -4560,26 +4560,6 @@ const summary =
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
-          {luloProjects.length > 0 && (
-            <p className="mt-1 text-[10px] text-muted-foreground">
-              Lulo follows UTC dates (resets 00:00 UTC / 5 PM PDT / 4 PM PST).
-              {currentLuloUtc.utcDay > todayKey
-                ? ` Completed Lulo earnings remain on ${todayKey}; new interest belongs to ${currentLuloUtc.utcDay}.`
-                : ` Current Lulo UTC day: ${currentLuloUtc.utcDay}.`}
-              {" "}Other providers use Pacific dates.
-            </p>
-          )}
-          {luloProjects.length > 0 && currentLuloUtc.utcDay > todayKey && (
-            <div className="mt-2 rounded-md border border-border/50 px-3 py-2 text-xs text-muted-foreground">
-              <span className="font-medium text-foreground">Lulo {currentLuloUtc.utcDay} (new UTC day): </span>
-              {currentLuloUtc.status === "ready"
-                ? formatCurrency(currentLuloUtc.amount)
-                : currentLuloUtc.status === "awaiting-utc-reading"
-                  ? "Awaiting first confirmed interest reading"
-                  : "Waiting for a fresh provider reading"}
-              <span className="ml-1">— tracked under {currentLuloUtc.utcDay}, not today's Pacific total</span>
-            </div>
-          )}
           <div className="mt-4 flex flex-col items-center gap-2">
             <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.max(0,Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100))}%, #25313d 0)`}}>
               <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0b1017]">
