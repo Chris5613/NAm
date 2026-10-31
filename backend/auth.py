@@ -1,6 +1,8 @@
 """Single-user authentication: Argon2 password hashing over signed session cookies."""
 
 import os
+import hmac
+import hashlib
 import secrets
 from datetime import timedelta
 
@@ -47,13 +49,18 @@ def is_secure_cookie() -> bool:
     return os.getenv("COOKIE_SECURE", "true").lower() != "false"
 
 
-def set_session_cookie(response: Response, user_id: int) -> None:
+def session_password_version(password_hash: str) -> str:
+    # Signed session carries a keyed password-version tag, not the Argon2 hash.
+    return hmac.new(_secret_key().encode(), password_hash.encode(), hashlib.sha256).hexdigest()
+
+
+def set_session_cookie(response: Response, user_id: int, password_hash: str) -> None:
     same_site = os.getenv("COOKIE_SAMESITE", "none").lower()
     if same_site not in {"lax", "strict", "none"}:
         same_site = "none"
     response.set_cookie(
         key=SESSION_COOKIE,
-        value=_serializer().dumps({"uid": user_id, "csrf": secrets.token_urlsafe(16)}),
+        value=_serializer().dumps({"uid": user_id, "csrf": secrets.token_urlsafe(16), "pv": session_password_version(password_hash)}),
         max_age=SESSION_MAX_AGE,
         httponly=True,
         secure=is_secure_cookie(),
@@ -80,6 +87,6 @@ def current_user(
         raise HTTPException(status_code=401, detail="Invalid session.") from error
 
     user = db.scalar(select(User).where(User.id == payload.get("uid")))
-    if not user:
-        raise HTTPException(status_code=401, detail="Not signed in.")
+    if not user or not hmac.compare_digest(str(payload.get("pv") or ""), session_password_version(user.password_hash)):
+        raise HTTPException(status_code=401, detail="Session expired. Sign in again.")
     return user

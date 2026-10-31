@@ -45,7 +45,7 @@ async def setup(credentials: Credentials, response: Response, db: Session = Depe
     )
     db.add(user)
     db.commit()
-    set_session_cookie(response, user.id)
+    set_session_cookie(response, user.id, user.password_hash)
     return {"username": user.username}
 
 
@@ -59,7 +59,7 @@ async def login(credentials: Credentials, response: Response, db: Session = Depe
 
         user.last_login_at = utcnow()
         db.commit()
-        set_session_cookie(response, user.id)
+        set_session_cookie(response, user.id, user.password_hash)
         return {"username": user.username}
     except HTTPException:
         raise
@@ -88,7 +88,7 @@ async def change_password(request: PasswordChange, response: Response,
         raise HTTPException(422, "Choose a different password.")
     user.password_hash = hash_password(request.new_password)
     db.commit()
-    set_session_cookie(response, user.id)
+    set_session_cookie(response, user.id, user.password_hash)
     return {"ok": True}
 
 
