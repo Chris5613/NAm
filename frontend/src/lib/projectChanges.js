@@ -7,9 +7,24 @@ export function stableJson(value) {
   return JSON.stringify(value);
 }
 
+function indexedProjects(records) {
+  const rows = new Map();
+  for (const row of records) {
+    // A duplicate ID may represent a conflicting financial record. Never
+    // collapse it via Map or silently choose whichever occurrence came last.
+    if (!row || typeof row.id !== "string" || !row.id.trim() || rows.has(row.id)) {
+      const error = new Error("Projects require unique, nonempty string IDs; no changes were saved.");
+      error.code = "INVALID_PROJECT_IDS";
+      throw error;
+    }
+    rows.set(row.id, row);
+  }
+  return rows;
+}
+
 export function projectChanges(before, after) {
-  const old = new Map(before.map((row) => [row.id, row]));
-  const next = new Map(after.map((row) => [row.id, row]));
+  const old = indexedProjects(before);
+  const next = indexedProjects(after);
   return [...new Set([...old.keys(), ...next.keys()])].flatMap((id) => {
     const a = old.get(id) ?? null;
     const b = next.get(id) ?? null;
