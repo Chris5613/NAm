@@ -1001,7 +1001,10 @@ function RollerCoinProjectCard({
   ] = useState(false);
 
 
-  const dailyIncome = 1;
+  const observedToday = Number(todayUsd);
+  const dailyIncome = Number.isFinite(observedToday)
+    ? Math.max(0, observedToday)
+    : 0;
 
 const monthlyIncome =
   dailyIncome * 30.4375;
