@@ -83,9 +83,8 @@ export default function DividendIncomeSection() {
         <h2 className="text-[15px] font-semibold">Stock dividends (2)</h2>
         <span className="text-[11px] text-muted-foreground">VTI · VOO</span>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
         {SYMBOLS.map(symbol => {
-          const { rows } = details(symbol);
           const next = nextPayment(symbol, today);
           return (
             <button key={symbol} type="button" onClick={() => setSelected(symbol)}
@@ -95,10 +94,9 @@ export default function DividendIncomeSection() {
               <span className="min-w-0 flex-1">
                 <span className="flex items-center justify-between gap-1">
                   <span className="truncate text-[12px] font-semibold">{symbol}</span>
-                  <span className={`shrink-0 text-[9px] ${rows.length ? "text-emerald-400" : "text-amber-300"}`}>● {rows.length ? "Updated" : "Waiting"}</span>
+                  <span className={`shrink-0 text-[9px] ${next ? "text-emerald-400" : "text-amber-300"}`}>● {next ? "Scheduled" : "Pending"}</span>
                 </span>
                 <span className="mt-0.5 block truncate text-[14px] font-semibold tabular-nums">{next ? shortDate(next.payableDate) : "Date pending"}</span>
-                <span className="block truncate text-[10px] text-muted-foreground">Next dividend payment · {shares[symbol]} shares</span>
               </span>
               <ChevronRight className="mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
             </button>
