@@ -253,8 +253,6 @@ export default function YieldFarmingPage() {
     setRollerCoinOpen,
   ] = useState(false);
 
-  const [rollerCoinEarningsStatus, setRollerCoinEarningsStatus] = useState(null);
-
   const [
     rollerCoinSyncing,
     setRollerCoinSyncing,
@@ -772,13 +770,13 @@ export default function YieldFarmingPage() {
       []
     );
 
-// Keep cheap cached updates frequent, but fetch the full RollerCoin
-// monthly history no more than once per minute.
-const lastRollerCoinRangeRequestRef = useRef(0);
+// The dashboard reads cached wallet observations frequently and asks for a
+// fresh wallet reading at most once every ten minutes while it is open.
+const lastRollerCoinWalletRequestRef = useRef(0);
 const requestRollerCoinLatest =
   useCallback(
     () => {
-      // Ask the extension for its latest cached wallet, earnings, and status.
+      // Ask the extension for its latest cached wallet and status.
       window.postMessage(
         {
           source:
@@ -801,21 +799,13 @@ const requestRollerCoinLatest =
         window.location.origin
       );
 
-      // While NAm is open, ask for both wallet and today's dated earnings.
-      // This supplements the extension's own ten-minute Chrome alarm.
+      // Today's total uses observed wallet changes. The dated earnings API
+      // can return zero while the wallet changes, so it is not polled here.
       const now = Date.now();
-      if (now - lastRollerCoinRangeRequestRef.current >= 600000) {
-        lastRollerCoinRangeRequestRef.current = now;
+      if (now - lastRollerCoinWalletRequestRef.current >= 600000) {
+        lastRollerCoinWalletRequestRef.current = now;
         window.postMessage(
           { source: "rollercoin-app", type: "SYNC_WALLET" },
-          window.location.origin
-        );
-        const today = new Intl.DateTimeFormat("en-CA", {
-          timeZone: "America/Los_Angeles", year: "numeric",
-          month: "2-digit", day: "2-digit",
-        }).format(new Date(now));
-        window.postMessage(
-          { source: "rollercoin-app", type: "SYNC_RANGE", from: today, to: today },
           window.location.origin
         );
       }
@@ -947,8 +937,6 @@ const requestRollerCoinLatest =
                 data.payload?.rollercoinOpen
               )
             );
-
-            setRollerCoinEarningsStatus(data.payload?.earningsStatus || null);
 
             if (
               data.payload?.lastPayload
@@ -5014,7 +5002,6 @@ if (
           <div className="space-y-1.5">
             {[
               {name:"RollerCoin wallet", connected:rollerCoinConnected, synced:latestRollerCoinTimestamp(rollerCoinTracker?.balanceSyncedAt, rollerCoinTracker?.walletLastObservedAt), maxAgeMs:25*60*1000},
-              {name:"RollerCoin earnings", connected:rollerCoinConnected, synced:rollerCoinTracker?.lastSyncedAt, maxAgeMs:25*60*1000, error:rollerCoinEarningsStatus?.error},
               {name:"Loopscale", connected:Boolean(loopscaleSnapshot), synced:loopscaleSnapshot?.lastSyncedAt || loopscaleSnapshot?.syncedAt},
               {name:"Salad", connected:saladConnected, synced:saladTracker?.lastSyncedAt},
               {name:"Unetwork", connected:unetworkConnected, synced:unetworkTracker?.lastSyncedAt},
