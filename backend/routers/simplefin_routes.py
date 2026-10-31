@@ -113,7 +113,11 @@ def normalize_access_url(access_url: str) -> tuple[str, str | None]:
     else:
         host = parts.netloc
 
-    path = parts.path.rstrip("/") or "/accounts"
+    # A SimpleFIN access URL points to the Bridge API root, not the
+    # accounts endpoint. The previously working browser sync appended
+    # /accounts. Preserve an already-complete /accounts endpoint too.
+    base_path = parts.path.rstrip("/")
+    path = base_path if base_path.endswith("/accounts") else f"{base_path}/accounts"
 
     query_params = dict(
         parse_qsl(

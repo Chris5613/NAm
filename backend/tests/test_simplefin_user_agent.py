@@ -26,6 +26,29 @@ class SimplefinUserAgentTests(unittest.TestCase):
             self.assertNotIn("Python-urllib", sent_request.get_header("User-agent"))
             self.assertTrue(sent_request.get_header("Authorization").startswith("Basic "))
 
+    def test_account_request_uses_bridge_accounts_endpoint(self):
+        # The access URL itself may end at /simplefin. In the old browser
+        # flow, /accounts was appended before making the request.
+        for access, expected_path in (
+            ("https://user:pass@bridge.simplefin.org/simplefin", "/simplefin/accounts"),
+            ("https://user:pass@bridge.simplefin.org/simplefin/", "/simplefin/accounts"),
+            ("https://user:pass@bridge.simplefin.org/simplefin/accounts", "/simplefin/accounts"),
+            ("https://user:pass@bridge.simplefin.org/simplefin/accounts/", "/simplefin/accounts"),
+        ):
+            with self.subTest(access=access.rsplit("@", 1)[-1]):
+                with patch("backend.routers.simplefin_routes.urllib.request.build_opener") as factory:
+                    factory.return_value.open.return_value = FakeResponse(b'{"accounts":[]}')
+                    fetch_simplefin(access)
+                    sent_request = factory.return_value.open.call_args.args[0]
+                    from urllib.parse import urlsplit, parse_qs
+                    url = urlsplit(sent_request.full_url)
+                    self.assertEqual(url.scheme, "https")
+                    self.assertEqual(url.hostname, "bridge.simplefin.org")
+                    self.assertEqual(url.path, expected_path)
+                    self.assertEqual(parse_qs(url.query).get("version"), ["2"])
+                    self.assertEqual(parse_qs(url.query).get("pending"), ["1"])
+                    self.assertNotIn("user:pass", sent_request.full_url)
+
     def test_cloudflare_1010_is_reported_without_html_response(self):
         error_body = b'{"error_code":1010,"detail":"Error 1010: Access denied"}'
         with patch("backend.routers.simplefin_routes.urllib.request.build_opener") as factory:

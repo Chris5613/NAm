@@ -21,6 +21,7 @@ class SecurityHardeningTests(unittest.TestCase):
     def test_stored_access_url_approved_host(self):
         normalized, credentials = normalize_access_url("https://user:pass@bridge.simplefin.org/simplefin")
         self.assertNotIn("pass", normalized)
+        self.assertTrue(normalized.split("?")[0].endswith("/simplefin/accounts"))
         self.assertIsNotNone(credentials)
         with self.assertRaises(HTTPException):
             normalize_access_url("https://user:pass@127.0.0.1/simplefin")
