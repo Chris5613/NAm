@@ -7,6 +7,7 @@ import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { useBackendProviderStats } from "@/hooks/useBackendProviderStats";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+import { currentLuloUtcDaily, withCurrentLuloUtcEarnings } from "@/lib/luloUtcDaily";
 import { useLegacyLuloMonthlyAccounting } from "@/hooks/useLegacyLuloMonthlyAccounting";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { Card, CardContent } from "@/components/ui/card";
@@ -3624,6 +3625,8 @@ const importSaladPayload =
     const timer = window.setInterval(refresh, 300000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
+  // This is the Lulo provider day (UTC), not NAm's Pacific calendar day.
+  const currentLuloUtc = currentLuloUtcDaily(luloProjects, new Date(earningsClock));
   const sourceTotalsForDay = key => {
     const sources = { ...(earningsLedger.days[key]?.sources || {}) };
     // Wallet delta, not a second earnings feed, powers today's RollerCoin
@@ -3712,22 +3715,33 @@ const importSaladPayload =
     if (key === LULO_FIXED_DAY) {
       sources.Lulo = Math.max(LULO_FIXED_TOTAL, Number(sources.Lulo) || 0);
     }
-    // Lulo's existing performance API provides dated yield observations.
-    // Prefer the reported daily amount when present; never add it to the
-    // monthly-delta ledger, which may describe the same interest.
-    // Keep the existing ledger as a fallback if performance is unavailable.
-    const reportedLuloDaily = (luloProjects || []).reduce((total, project) => {
-      const matching = (Array.isArray(project?.lulo_daily_performance)
-        ? project.lulo_daily_performance : [])
-        .filter(row => row?.date === key)
-        .reduce((sum, row) => sum + Math.max(0, Number(row?.amount) || 0), 0);
-      return total + matching;
-    }, 0);
-    if (reportedLuloDaily > 0) {
-      sources.Lulo = Math.max(
-        Math.max(0, Number(sources.Lulo) || 0),
-        reportedLuloDaily
-      );
+    // Lulo performance rows are UTC calendar-day buckets. During the live
+    // Pacific day, display ONLY the currently active UTC Lulo bucket, even if
+    // it is smaller than the prior bucket. Never carry yesterday's interest
+    // forward with Math.max(), or count it again after 00:00 UTC.
+    if (key === todayKey) {
+      const activeUtcSources = withCurrentLuloUtcEarnings(sources, currentLuloUtc, true);
+      if (Object.prototype.hasOwnProperty.call(activeUtcSources, "Lulo")) {
+        sources.Lulo = activeUtcSources.Lulo;
+      } else {
+        // No verified current UTC-day amount: show awaiting/stale in the UI
+        // instead of incorrectly relabeling the old UTC day as today's yield.
+        delete sources.Lulo;
+      }
+    } else {
+      // Historical Pacific daily entries are compatibility records. Their
+      // UTC performance rows cannot be reallocated to Pacific days without
+      // subdaily source observations; preserve existing history unmodified.
+      const reportedLuloDaily = (luloProjects || []).reduce((total, project) => {
+        const matching = (Array.isArray(project?.lulo_daily_performance)
+          ? project.lulo_daily_performance : [])
+          .filter(row => row?.date === key)
+          .reduce((sum, row) => sum + Math.max(0, Number(row?.amount) || 0), 0);
+        return total + matching;
+      }, 0);
+      if (reportedLuloDaily > 0) {
+        sources.Lulo = Math.max(Math.max(0, Number(sources.Lulo) || 0), reportedLuloDaily);
+      }
     }
     // Signed daily observations are authoritative when available.
     const loopscalePositions = Object.values(loopscaleHistory?.positions || {})
@@ -3766,9 +3780,11 @@ const importSaladPayload =
       if (selection.key > todayKey) return null;
       sources = sourceTotalsForDay(selection.key);
       label = selection.key;
-      note = selection.range === "daily"
-        ? "Daily project totals currently available; intraday per-project snapshots were not saved"
-        : "Recorded earnings for this day";
+      note = selection.key === todayKey && luloProjects.length
+        ? "Lulo: active UTC accounting day; other sources: Pacific day. Historical values are unchanged."
+        : selection.range === "daily"
+          ? "Daily project totals currently available; intraday per-project snapshots were not saved"
+          : "Recorded earnings for this day";
     }
     const entries = Object.entries(sources)
       .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) !== 0)
@@ -4550,6 +4566,15 @@ const summary =
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
+          {luloProjects.length > 0 && (
+            <p className="mt-1 text-[10px] text-muted-foreground">
+              Lulo: {currentLuloUtc.utcDay} UTC day (resets 00:00 UTC / 5 PM PDT / 4 PM PST).
+              {currentLuloUtc.status === "awaiting-utc-reading" ? " Awaiting new-day interest reading." :
+               currentLuloUtc.status === "stale" ? " Source reading is stale; not counted." :
+               currentLuloUtc.status === "unavailable" ? " Provider data unavailable." : ""}
+              {" "}Other providers use Pacific days; totals mix provider day boundaries.
+            </p>
+          )}
           <div className="mt-4 flex flex-col items-center gap-2">
             <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.max(0,Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100))}%, #25313d 0)`}}>
               <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0b1017]">
