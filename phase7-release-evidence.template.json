@@ -1,0 +1,23 @@
+{
+  "reviewedCommit": "c6be121e000a5d80e6ebdbd951355b6ffb416009",
+  "financialWritesEnabled": false,
+  "verified": {
+    "source_reviewed_against_current_main": false,
+    "complete_backend_test_suite_passed": false,
+    "frontend_jest_suite_passed": false,
+    "frontend_production_build_passed": false,
+    "disposable_postgres_row_lock_test_passed": false,
+    "production_scheduler_verified": false,
+    "browser_closed_provider_observations_advanced": false,
+    "all_financial_backups_verified": false,
+    "same_input_lulo_parity_verified": false,
+    "persisted_lulo_history_parity_verified": false,
+    "two_real_tabs_conflicts_rejected": false,
+    "unrelated_project_updates_preserved": false,
+    "relational_transaction_rows_unchanged": false,
+    "replayed_updates_idempotent": false,
+    "legacy_project_replace_all_blocked": false,
+    "backend_accounting_write_boundary_confirmed": false,
+    "rollback_and_restore_procedure_reviewed": false
+  }
+}

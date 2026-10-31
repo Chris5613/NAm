@@ -29,6 +29,7 @@ from .yield_earnings_state import (
 )
 from .lulo_transaction_reconciliation import reconcile_lulo_project
 from .yield_earnings_ledger import parse_time
+from .yield_poll_merge import merge_poll_observations, same_wallet_registration
 
 LULO_TRANSACTION_PREVIEW_KEY = "yield_backend_lulo_transaction_previews_v1"
 LULO_CUTOVER_BACKUP_PREFIX = "yield_lulo_cutover_backup_v1_"
@@ -403,21 +404,20 @@ def poll_sources_for_user(user_id: int) -> int:
     """Persist source observations without touching assets or earnings ledgers."""
     with SessionLocal() as db:
         registration = _read(db, user_id, REGISTRATION_KEY)
-        previous = _read(db, user_id, SNAPSHOTS_KEY)
     lulo = registration.get("lulo") or []
     loop_wallet = registration.get("loopscale")
     if not lulo and not loop_wallet:
         return 0
     now = datetime.now(timezone.utc)
-    updated = {**previous, "checkedAt": utc_iso(now),
-               "lulo": {**(previous.get("lulo") or {})}}
+    fetched_lulo = {}
+    fetched_loop = None
     checked = 0
     errors = {}
     history_entries = []
     for wallet in lulo:
         try:
             snapshot = fetch_lulo(wallet, now)
-            updated["lulo"][wallet] = snapshot
+            fetched_lulo[wallet] = snapshot
             history_entries.append({"provider": "lulo", "wallet": wallet,
                                     "capturedAt": snapshot["syncedAt"],
                                     "balanceUsd": snapshot["totalBalanceUsd"],
@@ -429,7 +429,7 @@ def poll_sources_for_user(user_id: int) -> int:
     if loop_wallet:
         try:
             snap = fetch_loopscale(loop_wallet, now)
-            updated["loopscale"] = snap
+            fetched_loop = snap
             history_entries.append({"provider": "loopscale", "wallet": loop_wallet,
                                     "capturedAt": snap["syncedAt"],
                                     "balanceUsd": snap["positionValueUsd"],
@@ -438,19 +438,34 @@ def poll_sources_for_user(user_id: int) -> int:
         except Exception as exc:
             errors["loopscale"] = type(exc).__name__
             log.warning("Loopscale scheduled sync failed (%s)", type(exc).__name__)
-    updated["errors"] = errors
-    updated["successfulAt"] = utc_iso(now) if checked else previous.get("successfulAt")
     with SessionLocal() as db:
-        # An outdated in-flight response must not overwrite a newer snapshot
-        # recorded after registration or another worker run.
-        existing = _read(db, user_id, SNAPSHOTS_KEY)
-        if existing.get("checkedAt", "") > updated["checkedAt"]:
+        # Serialize provider publication with project PATCH and wallet changes.
+        # An older polling worker may not overwrite a newer reading.
+        locked_user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+        if locked_user is None:
             return 0
-        history = _read(db, user_id, HISTORY_KEY)
-        items = history.get("items") if isinstance(history.get("items"), list) else []
-        items = (items + history_entries)[-MAX_OBSERVATIONS:]
-        _write(db, user_id, HISTORY_KEY, {"items": items, "updatedAt": utc_iso(now)})
-        _write(db, user_id, SNAPSHOTS_KEY, updated)
+        current_registration = _read(db, user_id, REGISTRATION_KEY)
+        if not same_wallet_registration(registration, current_registration):
+            # Wallet rotation (even change-and-change-back) invalidates
+            # observations fetched under the previous revision.
+            return 0
+        existing = _read(db, user_id, SNAPSHOTS_KEY)
+        updated, accepted = merge_poll_observations(
+            existing, checked_at=utc_iso(now), lulo=fetched_lulo,
+            loopscale=fetched_loop, loopscale_wallet=loop_wallet, errors=errors,
+        )
+        accepted_wallets = set(accepted["lulo"])
+        accepted_entries = [entry for entry in history_entries if (
+            (entry["provider"] == "lulo" and entry["wallet"] in accepted_wallets) or
+            (entry["provider"] == "loopscale" and accepted["loopscale"])
+        )]
+        if accepted_entries:
+            history = _read(db, user_id, HISTORY_KEY)
+            items = history.get("items") if isinstance(history.get("items"), list) else []
+            items = (items + accepted_entries)[-MAX_OBSERVATIONS:]
+            _write(db, user_id, HISTORY_KEY, {"items": items, "updatedAt": utc_iso(now)})
+        if updated != existing:
+            _write(db, user_id, SNAPSHOTS_KEY, updated)
         # Advance server-owned *shadow* earnings ledgers from the newest
         # provider observations. Seed from the existing legacy settings,
         # preserving all prior manual corrections and monthly baselines.
@@ -529,7 +544,9 @@ def poll_sources_for_user(user_id: int) -> int:
         if next_previews != old_previews:
             _write(db, user_id, LULO_TRANSACTION_PREVIEW_KEY, next_previews)
         db.commit()
-    return checked
+    # Count only new, admitted observations. Replays/invalid snapshots
+    # are not successes, and may not advance accounting shadow state.
+    return len(accepted["lulo"]) + int(bool(accepted["loopscale"]))
 
 
 def poll_all_users() -> dict:

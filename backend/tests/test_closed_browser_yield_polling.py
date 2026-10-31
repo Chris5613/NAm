@@ -26,6 +26,10 @@ class FakeSession:
     def __exit__(self, *_):
         return False
 
+    def scalar(self, stmt):
+        # Mock PostgreSQL per-user row lock for browser-free orchestration.
+        return SimpleNamespace(id=1)
+
     def scalars(self, stmt):
         # A relational transaction query should return its independent
         # rows rather than treating Project rows as transactions.
@@ -111,7 +115,7 @@ class ClosedBrowserPollingTests(TestCase):
             self.assertIn("lulo-1", first_lulo)
             self.assertEqual(first_loop["positions"]["loop-one"]["lastPnlUsd"], 2)
             self.assertIn("lulo-1", first_preview)
-            self.assertEqual(sync.poll_sources_for_user(1), 2)
+            self.assertEqual(sync.poll_sources_for_user(1), 0)
             # Two identical source sync timestamps can produce more raw
             # observations but may NEVER book the same earned delta twice.
             self.assertEqual(storage[(1, sync.LULO_SERVER_LEDGER_KEY)], first_lulo)
@@ -120,6 +124,33 @@ class ClosedBrowserPollingTests(TestCase):
             self.assertEqual(storage[(1, backup_key)], original_project)
             self.assertEqual(project.data["lulo_last_synced_at"], "2026-10-30T17:00:00Z")
             self.assertEqual(project.earned, 10.0)
+
+    def test_registration_change_during_fetch_drops_old_observation(self):
+        storage = {(1, sync.REGISTRATION_KEY): {"lulo": [WALLET], "loopscale": None}}
+        calls = {"registrations": 0, "writes": []}
+        session = FakeSession([])
+        def read(_db, uid, key):
+            if key == sync.REGISTRATION_KEY:
+                calls["registrations"] += 1
+                return {"lulo": [WALLET], "loopscale": None} if calls["registrations"] == 1 else {
+                    "lulo": [], "loopscale": LOOP_WALLET,
+                }
+            return deepcopy(storage.get((uid, key), {}))
+        def write(_db, uid, key, value):
+            calls["writes"].append(key)
+            storage[(uid, key)] = deepcopy(value)
+        with (
+            patch.object(sync, "SessionLocal", return_value=session),
+            patch.object(sync, "_read", side_effect=read),
+            patch.object(sync, "_write", side_effect=write),
+            patch.object(sync, "fetch_lulo", return_value={
+                "walletAddress": WALLET, "syncedAt": sync.utc_iso(),
+                "totalBalanceUsd": 50, "totalInterestEarnedUsd": 1,
+            }),
+        ):
+            self.assertEqual(sync.poll_sources_for_user(1), 0)
+        self.assertEqual(calls["registrations"], 2)
+        self.assertEqual(calls["writes"], [])
 
 
 if __name__ == "__main__":

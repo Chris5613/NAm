@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 import os
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+from ..yield_poll_merge import filter_registered_source_snapshots
 
 from ..auth import current_user
 from ..db import get_db
@@ -36,6 +38,8 @@ async def register_wallets(
         wallets = registered_wallets(payload.get("lulo", []), payload.get("loopscale"))
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # Same per-user row lock as scheduled polls and project PATCH.
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     current = _read(db, user.id, REGISTRATION_KEY)
     if current.get("lulo") == wallets["lulo"] and current.get("loopscale") == wallets["loopscale"]:
         return {"registered": True, **wallets}
@@ -43,7 +47,15 @@ async def register_wallets(
         **wallets,
         "registeredAt": current.get("registeredAt") or datetime.now(timezone.utc).isoformat(),
         "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "revision": (current.get("revision") if type(current.get("revision")) is int
+                     and current.get("revision") >= 0 else 0) + 1,
     }
+    # Only the live cache is cleared on rotation; durable history and
+    # original cutover backups remain untouched.
+    prior_snapshots = _read(db, user.id, SNAPSHOTS_KEY)
+    fresh_snapshots = filter_registered_source_snapshots(prior_snapshots, wallets)
+    if fresh_snapshots != prior_snapshots:
+        _write(db, user.id, SNAPSHOTS_KEY, fresh_snapshots)
     _write(db, user.id, REGISTRATION_KEY, value)
     db.commit()
     return {"registered": True, **wallets}
@@ -124,6 +136,8 @@ async def record_lulo_parity(
     if not all(isinstance(value, dict) for value in (before, snapshot, after)):
         raise HTTPException(status_code=422, detail="Invalid parity inputs.")
     project_id = str(before.get("id") or "")
+    # Prevent concurrent parity reports from losing distinct observations.
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     project = db.get(Project, project_id)
     if project is None or project.user_id != user.id:
         raise HTTPException(status_code=404, detail="Project unavailable.")
