@@ -78,12 +78,12 @@ export default function DividendIncomeSection() {
   const active = selected ? details(selected) : null;
 
   return (
-    <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5" aria-label="Stock dividends">
+    <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5" aria-label="Stock dividends">
       <div className="flex items-center justify-between gap-2 px-1">
         <h2 className="text-[15px] font-semibold">Stock dividends (2)</h2>
         <span className="text-[11px] text-muted-foreground">VTI · VOO</span>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         {SYMBOLS.map(symbol => {
           const next = nextPayment(symbol, today);
           return (
