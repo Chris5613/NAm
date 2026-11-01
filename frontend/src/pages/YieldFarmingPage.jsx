@@ -3916,7 +3916,7 @@ const importSaladPayload =
     return neighborDifference < 0.03 && spikeSize > 0.06
       ? { ...point, value: (left.value + right.value) / 2 } : point;
   });
-  const dailyChartData = cleanPoints.length ? [...cleanPoints] : [{ x: 0, value: 0 }];
+  const dailyChartData = cleanPoints.length ? [...cleanPoints] : [{ x: currentHour, value: todayEarnings }];
   // Always end at the authoritative current total, not a smoothed estimate.
   if (dailyChartData[dailyChartData.length - 1].x < currentHour) {
     dailyChartData.push({ x: currentHour, value: todayEarnings });
@@ -3926,10 +3926,18 @@ const importSaladPayload =
       value: todayEarnings,
     };
   }
+  // Draw an explicitly labeled display baseline until the first reading.
+  // This makes the line visible from midnight without changing saved earnings.
+  const firstReadingHour = cleanPoints[0]?.x ?? currentHour;
+  if (firstReadingHour > 0) {
+    const baselineEnd = Math.max(0, firstReadingHour - 1 / 60);
+    dailyChartData.unshift(...(baselineEnd > 0
+      ? [{ x: 0, value: 0, displayBaseline: true }, { x: baselineEnd, value: 0, displayBaseline: true }]
+      : [{ x: 0, value: 0, displayBaseline: true }]));
+  }
   const dailyChartMax = Math.max(0.1, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
   const dailyChartMin = Math.min(0, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
   // Show the whole day from midnight while ending at the present hour.
-  // Do not invent readings before the first observation.
   const dailyChartEnd = Math.max(1, Math.min(24, Math.ceil(currentHour)));
   const dailyChartTicks = Array.from({ length: 25 }, (_, hour) => hour)
     .filter(hour => hour <= dailyChartEnd && (hour === 0 || hour === dailyChartEnd || hour % 4 === 0));
@@ -4489,7 +4497,7 @@ const summary =
                     const hours = Math.floor(rounded);
                     const mins = Math.floor((rounded-hours)*60);
                     return `${String(hours).padStart(2,"0")}:${String(mins).padStart(2,"0")} PT`;
-                  }} formatter={value=>[formatCurrency(value),"Recorded today"]}/>
+                  }} formatter={(value, name, item)=>[formatCurrency(value), item?.payload?.displayBaseline ? "Display baseline · no reading" : "Recorded today"]}/>
                   <Area type="monotoneX" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
                 </AreaChart>
               ) : earningsChartRange === "weekly" ? (
@@ -4559,8 +4567,8 @@ const summary =
           </div>
           {earningsChartRange === "daily" && cleanPoints.length > 0 && cleanPoints[0].x > 0 && (
             <p className="px-2 pb-1 text-[11px] text-muted-foreground">
-              First saved reading: {new Intl.DateTimeFormat("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" })
-                .format(new Date(Date.UTC(2026, 0, 1, Math.floor(cleanPoints[0].x), Math.round((cleanPoints[0].x % 1) * 60))))} PT. Earlier hours have no recorded data.
+              The flat $0 line is a display baseline until the first saved reading at {new Intl.DateTimeFormat("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" })
+                .format(new Date(Date.UTC(2026, 0, 1, Math.floor(cleanPoints[0].x), Math.round((cleanPoints[0].x % 1) * 60))))} PT. Earlier earnings were not recorded.
             </p>
           )}
         </section>
