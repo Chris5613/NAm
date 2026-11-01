@@ -97,6 +97,10 @@ export default function IncomeHistoryPage() {
   const topSource = Object.entries(current?.sources || {}).sort((a, b) => b[1] - a[1])[0];
   const chartData = visibleMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
   const chartMax = Math.max(1, ...chartData.map(month => month.value || 0));
+  const lastTwelveMonths = Array.from({length: 12}, (_, index) => {
+    const monthKey = shiftMonth(currentMonth, index - 11);
+    return monthMap.get(monthKey) || {monthKey, total: null};
+  });
   const compared = current && prior && prior.total > 0 ? (current.total / prior.total - 1) * 100 : null;
 
   return <div className="min-w-0 space-y-3 pb-7" data-testid="income-history-page">
@@ -167,6 +171,33 @@ export default function IncomeHistoryPage() {
           : <p className="mt-8 text-sm text-muted-foreground">No income recorded for this period yet.</p>}
       </section>
     </div>
+    <section className={`${panel} p-4`} aria-label="Last 12 months of income">
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+        <h2 className="text-base font-semibold">Last 12 months</h2>
+        <span className="text-[11px] text-muted-foreground">Select a recorded month to see its sources</span>
+      </div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+        {lastTwelveMonths.map(month => {
+          const recorded = month.total != null;
+          const active = selected?.monthKey === month.monthKey;
+          return <button key={month.monthKey} type="button" disabled={!recorded} aria-pressed={recorded ? active : undefined}
+            aria-label={`${monthLabel(month.monthKey)}: ${recorded ? formatCurrency(month.total) : "no recorded income"}`}
+            onClick={() => { if (month.monthKey < firstMonth) setRange(12); setSelectedMonth(month.monthKey); }}
+            className={`min-w-0 rounded-xl border px-3 py-3 text-left transition-colors ${active
+              ? "border-emerald-500/60 bg-emerald-500/[0.08]"
+              : recorded ? "border-[#2b3848] bg-[#0e141c] hover:border-[#4a6674] hover:bg-[#14202a]"
+                : "border-[#25313d] bg-[#0c1219] opacity-60"}`}>
+            <span className="block text-[11px] font-medium text-[#a7bbcf]">{monthLabel(month.monthKey)}</span>
+            <span className={`mt-3 block text-[18px] font-semibold leading-none tabular-nums ${recorded ? "text-white" : "text-[#677b90]"}`}>
+              {recorded ? formatCurrency(month.total) : "—"}
+            </span>
+            <span className={`mt-2 block text-[10px] ${active ? "text-emerald-400" : "text-muted-foreground"}`}>
+              {active ? "Selected" : recorded ? month.monthKey === currentMonth ? "This month" : "View sources" : "No record"}
+            </span>
+          </button>;
+        })}
+      </div>
+    </section>
     {(visibleMonths.some(month => month.stocks > 0) || legacy.undated.length > 0) && <div className="space-y-1 px-1 text-[10px] text-muted-foreground">
       {visibleMonths.some(month => month.stocks > 0) && <p>Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
       {legacy.undated.length > 0 && <p className="text-amber-300">
