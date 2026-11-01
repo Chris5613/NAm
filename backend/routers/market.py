@@ -6,6 +6,7 @@ open proxy. Responses are cached briefly to stay within upstream rate limits.
 
 import asyncio
 from datetime import datetime, timezone
+from io import BytesIO
 import json
 import logging
 import os
@@ -16,6 +17,8 @@ import urllib.request
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from pypdf import PdfReader
+import re
 
 from ..auth import current_user
 from ..models import User
@@ -42,6 +45,70 @@ def cache_result(key: str, data: Any) -> None:
 
 _cache: dict[str, tuple[float, Any]] = {}
 _dividend_cache: dict[str, tuple[float, Any]] = {}
+_schedule_cache: dict[int, tuple[float, list[dict[str, str]]]] = {}
+
+
+def _parse_vanguard_schedule(pdf: bytes, year: int) -> list[dict[str, str]]:
+    """Read date triples (record, ex, payable) after each ETF ticker."""
+    schedule = []
+    date_pattern = re.compile(r"\b\d{2}/\d{2}/\d{2}\b")
+    for page in PdfReader(BytesIO(pdf)).pages:
+        text = page.extract_text()
+        for match in re.finditer(r"\b(?:VTI|VOO)\b", text):
+            symbol = match.group()
+            # Each fund has at most monthly distributions. Stop at the next
+            # fund name/ticker; the two funds here have quarterly rows.
+            dates = date_pattern.findall(text[match.end():match.end() + 270])
+            last_ex_date = None
+            for index in range(0, min(len(dates) // 3, 5) * 3, 3):
+                try:
+                    ex_date = datetime.strptime(dates[index + 1], "%m/%d/%y").date()
+                    payable_date = datetime.strptime(dates[index + 2], "%m/%d/%y").date()
+                except ValueError:
+                    continue
+                if last_ex_date is not None and ex_date <= last_ex_date:
+                    break
+                if ex_date.year == year and ex_date <= payable_date and (payable_date - ex_date).days <= 10:
+                    schedule.append({"symbol": symbol, "exDate": ex_date.isoformat(), "payableDate": payable_date.isoformat()})
+                    last_ex_date = ex_date
+    return schedule
+
+
+def _fetch_vanguard_schedule(year: int) -> list[dict[str, str]]:
+    url = f"https://investor.vanguard.com/content/dam/retail/us/en/pdfs/taxes/DIVDAT_{year}.pdf"
+    request = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0", "Accept": "application/pdf"})
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            pdf = response.read(12 * 1024 * 1024 + 1)
+    except (TimeoutError, urllib.error.URLError):
+        return []
+    if len(pdf) > 12 * 1024 * 1024 or not pdf.startswith(b"%PDF"):
+        return []
+    try:
+        return _parse_vanguard_schedule(pdf, year)
+    except Exception:
+        logger.exception("Could not parse Vanguard dividend schedule for %s", year)
+        return []
+
+
+@router.get("/dividend-schedule")
+async def dividend_schedule(user: User = Depends(current_user)) -> Any:
+    """Published Vanguard ETF payment dates, refreshing as new years appear."""
+    today = datetime.now(timezone.utc).date()
+    year = today.year
+    rows = []
+    years = ([year - 1] if today.month == 1 else []) + [year, year + 1]
+    stale = [item for item in years if item not in _schedule_cache
+             or time.time() - _schedule_cache[item][0] >= 24 * 3600]
+    fetched = await asyncio.gather(*(asyncio.to_thread(_fetch_vanguard_schedule, item) for item in stale))
+    for schedule_year, payments in zip(stale, fetched):
+        cached = _schedule_cache.get(schedule_year)
+        _schedule_cache[schedule_year] = (time.time(), payments or (cached[1] if cached else []))
+    for schedule_year in years:
+        rows.extend(_schedule_cache[schedule_year][1])
+    return {"payments": sorted({(row["symbol"], row["exDate"]): row for row in rows}.values(),
+                               key=lambda row: row["payableDate"]),
+            "source": "https://investor.vanguard.com/investor-resources-education/taxes/funds-tax-information"}
 
 
 @router.get("/dividends/{symbol}")

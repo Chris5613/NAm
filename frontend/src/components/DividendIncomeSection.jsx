@@ -1,18 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { api } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { formatCurrency, getTodayKey } from "@/lib/yieldFarmingAccounting";
 
 const SYMBOLS = ["VTI", "VOO"];
-// Vanguard's published 2026 schedule; these are payable dates, not ex-dates.
+// Fall back to the published 2026 schedule while the annual feed is unavailable.
 const SCHEDULED_PAYMENTS = {
-  VTI: [{ exDate: "2026-12-22", payableDate: "2026-12-24" }],
-  VOO: [{ exDate: "2026-12-21", payableDate: "2026-12-23" }],
+  VTI: [{ exDate: "2026-12-22", payableDate: "2026-12-24" }, { exDate: "2026-12-30", payableDate: "2027-01-04" }],
+  VOO: [{ exDate: "2026-12-21", payableDate: "2026-12-23" }, { exDate: "2026-12-30", payableDate: "2027-01-04" }],
 };
 
-function nextPayment(symbol, today) {
-  return SCHEDULED_PAYMENTS[symbol]?.find(row => row.payableDate >= today) || null;
+function nextPayment(schedule, symbol, today) {
+  return schedule[symbol]?.find(row => row.payableDate >= today) || null;
 }
 
 function shortDate(date) {
@@ -31,10 +31,11 @@ function holdings() {
   }
 }
 
-export default function DividendIncomeSection() {
+export default function DividendIncomeSection({ onEstimateChange }) {
   const [shares, setShares] = useState(holdings);
   const [history, setHistory] = useState({});
   const [error, setError] = useState("");
+  const [publishedPayments, setPublishedPayments] = useState([]);
   const [selected, setSelected] = useState(null);
   const today = getTodayKey();
   const year = today.slice(0, 4);
@@ -61,6 +62,33 @@ export default function DividendIncomeSection() {
   }, []);
 
   useEffect(() => {
+    let active = true;
+    async function refreshSchedule() {
+      try {
+        const response = await api.get("/api/market/dividend-schedule");
+        if (active) setPublishedPayments(Array.isArray(response.payments) ? response.payments : []);
+      } catch { /* Keep the last published dates available offline. */ }
+    }
+    refreshSchedule();
+    const timer = window.setInterval(refreshSchedule, 24 * 3600 * 1000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  const schedule = useMemo(() => Object.fromEntries(SYMBOLS.map(symbol => [symbol,
+    [...SCHEDULED_PAYMENTS[symbol], ...publishedPayments.filter(row => row.symbol === symbol)]
+      .filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row.exDate) && /^\d{4}-\d{2}-\d{2}$/.test(row.payableDate))
+      .sort((a, b) => a.payableDate.localeCompare(b.payableDate))
+  ])), [publishedPayments]);
+
+  useEffect(() => {
+    if (!onEstimateChange) return;
+    const ready = SYMBOLS.every(symbol => (history[symbol] || []).length >= 4);
+    const annual = ready ? SYMBOLS.reduce((sum, symbol) => sum +
+      history[symbol].slice(0, 4).reduce((total, row) => total + Number(row.amountPerShare || 0), 0) * shares[symbol], 0) : null;
+    onEstimateChange(Number.isFinite(annual) ? annual : null);
+  }, [history, shares, onEstimateChange]);
+
+  useEffect(() => {
     if (!selected) return;
     const closeOnEscape = event => { if (event.key === "Escape") setSelected(null); };
     window.addEventListener("keydown", closeOnEscape);
@@ -85,7 +113,7 @@ export default function DividendIncomeSection() {
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         {SYMBOLS.map(symbol => {
-          const next = nextPayment(symbol, today);
+          const next = nextPayment(schedule, symbol, today);
           return (
             <button key={symbol} type="button" onClick={() => setSelected(symbol)}
               className="flex w-full min-w-0 items-start gap-2 rounded-2xl border border-border/60 bg-[#0e1218] px-3.5 py-2.5 text-left shadow-sm transition-all duration-200 hover:border-border hover:bg-[#151e28]"
@@ -114,7 +142,7 @@ export default function DividendIncomeSection() {
               <button type="button" onClick={() => setSelected(null)} aria-label="Close dividend details" className="rounded-lg p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"><X className="h-4 w-4" /></button>
             </div>
             <div className="space-y-3 p-4">
-              {nextPayment(selected, today) && <p className="text-xs text-muted-foreground">Next scheduled payment: <span className="font-semibold text-foreground">{shortDate(nextPayment(selected, today).payableDate)}</span> · ex-dividend {shortDate(nextPayment(selected, today).exDate)}</p>}
+              {nextPayment(schedule, selected, today) && <p className="text-xs text-muted-foreground">Next scheduled payment: <span className="font-semibold text-foreground">{shortDate(nextPayment(schedule, selected, today).payableDate)}</span> · ex-dividend {shortDate(nextPayment(schedule, selected, today).exDate)}</p>}
               <div className="grid grid-cols-3 gap-2">
                 {[["Daily estimate", active.daily == null ? null : active.daily], [`${year} per share`, active.rows.length ? active.annualPerShare : null], [`${year} at current shares`, active.rows.length ? active.annualPerShare * shares[selected] : null]].map(([label, value]) => (
                   <div key={label} className="min-w-0 rounded-lg bg-white/[0.03] p-2"><p className="text-[10px] text-muted-foreground">{label}</p><p className="mt-1 truncate text-xs font-semibold tabular-nums">{value == null ? "—" : formatCurrency(value)}</p></div>
@@ -124,7 +152,7 @@ export default function DividendIncomeSection() {
                 <p className="mb-2 font-semibold">Recent distributions</p>
                 {active.rows.length ? active.rows.slice(0, 4).map(row => <div key={row.exDate} className="flex justify-between gap-2 py-1 text-muted-foreground"><span>Ex-dividend {row.exDate}</span><span className="tabular-nums text-foreground">{formatCurrency(Number(row.amountPerShare))}/share</span></div>) : <p className="text-muted-foreground">Confirmed distributions are unavailable.</p>}
               </div>
-              <p className="text-[11px] leading-relaxed text-muted-foreground">Payment dates follow <a href="https://investor.vanguard.com/investor-resources-education/taxes/funds-tax-information" target="_blank" rel="noreferrer" className="underline">Vanguard's 2026 schedule</a> and may change. When no future scheduled date is available, the card says Date pending. Estimates use today's shares and the last four distributions; past share counts and brokerage deposits are unavailable.</p>
+              <p className="text-[11px] leading-relaxed text-muted-foreground">Payment dates follow <a href="https://investor.vanguard.com/investor-resources-education/taxes/funds-tax-information" target="_blank" rel="noreferrer" className="underline">Vanguard's published schedule</a> and may change. New years refresh when Vanguard publishes them; until then, the card says Date pending. Estimates use today's shares and the last four distributions; past share counts and brokerage deposits are unavailable.</p>
             </div>
           </div>
         </div>

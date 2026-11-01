@@ -80,6 +80,10 @@ import {
 } from "@/components/YieldFarmingComponents";
 
 export default function YieldFarmingPage() {
+  const [estimatedStockDividendsAnnual, setEstimatedStockDividendsAnnual] = useState(null);
+  const updateStockDividendEstimate = useCallback(value => {
+    setEstimatedStockDividendsAnnual(previous => previous === value ? previous : value);
+  }, []);
   const [
     manualPositions,
     setManualPositions,
@@ -4553,6 +4557,12 @@ const summary =
               )}
             </ResponsiveContainer>
           </div>
+          {earningsChartRange === "daily" && cleanPoints.length > 0 && cleanPoints[0].x > 0 && (
+            <p className="px-2 pb-1 text-[11px] text-muted-foreground">
+              First saved reading: {new Intl.DateTimeFormat("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" })
+                .format(new Date(Date.UTC(2026, 0, 1, Math.floor(cleanPoints[0].x), Math.round((cleanPoints[0].x % 1) * 60))))} PT. Earlier hours have no recorded data.
+            </p>
+          )}
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
@@ -4615,7 +4625,7 @@ const summary =
       )}
 
       <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <DividendIncomeSection />
+        <DividendIncomeSection onEstimateChange={updateStockDividendEstimate} />
       <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
@@ -4977,13 +4987,14 @@ if (
 
       </section>
         <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017] px-4 py-3">
-          <h2 className="mb-3 text-[13px] font-semibold">Projections</h2>
+          <h2 className="text-[13px] font-semibold">Projections</h2>
+          <p className="mb-3 text-[10px] text-muted-foreground">{estimatedStockDividendsAnnual == null ? "Project estimates · stock dividends pending market data" : `Includes ${formatCurrency(estimatedStockDividendsAnnual / 365)}/day estimated VTI and VOO dividends from current shares and recent distributions`}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
-              {label:"Daily",amount:summary.annualYield/365,symbol:"D"},
-              {label:"Weekly",amount:summary.annualYield/52.1775,symbol:"W"},
-              {label:"Monthly",amount:summary.monthlyYield,symbol:"M"},
-              {label:"Yearly",amount:summary.annualYield,symbol:"Y"},
+              {label:"Daily",amount:(summary.annualYield+(estimatedStockDividendsAnnual || 0))/365,symbol:"D"},
+              {label:"Weekly",amount:(summary.annualYield+(estimatedStockDividendsAnnual || 0))/52.1775,symbol:"W"},
+              {label:"Monthly",amount:summary.monthlyYield+(estimatedStockDividendsAnnual || 0)/12,symbol:"M"},
+              {label:"Yearly",amount:summary.annualYield+(estimatedStockDividendsAnnual || 0),symbol:"Y"},
             ].map(item => (
               <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-2.5">
                 <div className="flex items-center gap-2">
