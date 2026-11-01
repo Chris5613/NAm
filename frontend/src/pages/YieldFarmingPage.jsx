@@ -4471,16 +4471,6 @@ const summary =
       <header className="flex flex-wrap items-center justify-between gap-3 px-1">
         <div>
           <h1 className="text-[22px] font-semibold tracking-tight">Passive Income</h1>
-          <div className="mt-1 text-[11px] text-muted-foreground">
-            Balance backup: 11:58 PM Pacific daily (while this page is open)
-            {Object.keys(dailyBalanceSnapshots).length > 0 && (
-              <span className="ml-1">
-                · Last saved: {new Date(
-                  dailyBalanceSnapshots[Object.keys(dailyBalanceSnapshots).sort().at(-1)]?.capturedAt
-                ).toLocaleString("en-US", { timeZone: "America/Los_Angeles" })}
-              </span>
-            )}
-          </div>
         </div>
         <div className="flex flex-wrap items-center gap-3">
         {inactiveProgramCards.length > 0 && (
@@ -4625,12 +4615,6 @@ const summary =
               )}
             </ResponsiveContainer>
           </div>
-          {earningsChartRange === "daily" && cleanPoints.length > 0 && cleanPoints[0].x > 0 && (
-            <p className="px-2 pb-1 text-[11px] text-muted-foreground">
-              The flat $0 line is a display baseline until the first saved reading at {new Intl.DateTimeFormat("en-US", { timeZone: "UTC", hour: "numeric", minute: "2-digit" })
-                .format(new Date(Date.UTC(2026, 0, 1, Math.floor(cleanPoints[0].x), Math.round((cleanPoints[0].x % 1) * 60))))} PT. Earlier earnings were not recorded.
-            </p>
-          )}
         </section>
         <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
@@ -5058,7 +5042,6 @@ if (
       </section>
         <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017] px-4 py-3">
           <h2 className="text-[13px] font-semibold">Projections</h2>
-          <p className="mb-3 text-[10px] text-muted-foreground">{estimatedStockDividendsAnnual == null ? "Project estimates · stock dividends pending market data" : `Includes ${formatCurrency(estimatedStockDividendsAnnual / 365)}/day estimated VTI and VOO dividends from current shares and recent distributions`}</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {[
               {label:"Daily",amount:(summary.annualYield+(estimatedStockDividendsAnnual || 0))/365,symbol:"D"},
