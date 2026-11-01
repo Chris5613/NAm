@@ -4615,32 +4615,8 @@ const summary =
       )}
 
       <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="flex min-w-0 flex-col gap-3">
-          <DividendIncomeSection />
-        <section className="min-w-0 flex-1 rounded-2xl border border-[#263342] bg-[#0b1017] px-4 py-3">
-          <h2 className="mb-3 text-[13px] font-semibold">Projections</h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              {label:"Daily",amount:summary.annualYield/365,symbol:"D"},
-              {label:"Weekly",amount:summary.annualYield/52.1775,symbol:"W"},
-              {label:"Monthly",amount:summary.monthlyYield,symbol:"M"},
-              {label:"Yearly",amount:summary.annualYield,symbol:"Y"},
-            ].map(item => (
-              <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#23364b] text-[11px] font-bold text-[#a5c3d7]">{item.symbol}</span>
-                  <div className="min-w-0">
-                    <div className="text-[10px] text-muted-foreground">{item.label}</div>
-                    <div className="truncate text-[clamp(13px,1.2vw,19px)] font-semibold tabular-nums" title={formatCurrency(item.amount)}>{formatCurrency(item.amount)}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-        </div>
-        <div className="min-w-0 space-y-3">
-          <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
+        <DividendIncomeSection />
+      <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
           <span className="text-[11px] text-muted-foreground">Sorted by balance · {activeProgramCards.length} projects</span>
@@ -5000,6 +4976,27 @@ if (
         )}
 
       </section>
+        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017] px-4 py-3">
+          <h2 className="mb-3 text-[13px] font-semibold">Projections</h2>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {[
+              {label:"Daily",amount:summary.annualYield/365,symbol:"D"},
+              {label:"Weekly",amount:summary.annualYield/52.1775,symbol:"W"},
+              {label:"Monthly",amount:summary.monthlyYield,symbol:"M"},
+              {label:"Yearly",amount:summary.annualYield,symbol:"Y"},
+            ].map(item => (
+              <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#23364b] text-[11px] font-bold text-[#a5c3d7]">{item.symbol}</span>
+                  <div className="min-w-0">
+                    <div className="text-[10px] text-muted-foreground">{item.label}</div>
+                    <div className="truncate text-[clamp(13px,1.2vw,19px)] font-semibold tabular-nums" title={formatCurrency(item.amount)}>{formatCurrency(item.amount)}</div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
         <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017] px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-[13px] font-semibold">Connection Status</h2>
@@ -5030,7 +5027,6 @@ if (
             })}
           </div>
         </section>
-        </div>
       </div>
       {selectedBreakdown && earningsChartRange !== "daily" && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
