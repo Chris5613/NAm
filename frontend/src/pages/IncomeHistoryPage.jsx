@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
@@ -87,6 +87,8 @@ export default function IncomeHistoryPage() {
   }
   const selected = monthMap.get(selectedMonth) && selectedMonth >= firstMonth
     ? monthMap.get(selectedMonth) : monthMap.get(currentMonth) || [...visibleMonths].reverse().find(month => month.total != null);
+  const recordedVisible = visibleMonths.filter(month => month.total != null);
+  const selectedIndex = recordedVisible.findIndex(month => month.monthKey === selected?.monthKey);
   const current = monthMap.get(currentMonth);
   const prior = monthMap.get(shiftMonth(currentMonth, -1));
   const trailingTotal = months.filter(month => month.monthKey >= shiftMonth(currentMonth, -11))
@@ -146,7 +148,17 @@ export default function IncomeHistoryPage() {
         </div>
       </section>
       <section className={`${panel} p-4`}>
-        <h2 className="text-base font-semibold">{selected ? `${monthLabel(selected.monthKey)} by source` : "Income by source"}</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-base font-semibold">{selected ? `${monthLabel(selected.monthKey)} by source` : "Income by source"}</h2>
+          <div className="flex shrink-0 gap-1">
+            <button type="button" aria-label="Previous recorded month" disabled={selectedIndex <= 0}
+              onClick={() => setSelectedMonth(recordedVisible[selectedIndex - 1].monthKey)}
+              className="rounded-md border border-[#2b3848] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronLeft className="h-4 w-4"/></button>
+            <button type="button" aria-label="Next recorded month" disabled={selectedIndex < 0 || selectedIndex >= recordedVisible.length - 1}
+              onClick={() => setSelectedMonth(recordedVisible[selectedIndex + 1].monthKey)}
+              className="rounded-md border border-[#2b3848] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronRight className="h-4 w-4"/></button>
+          </div>
+        </div>
         <p className="text-[11px] text-muted-foreground">Recorded project earnings and stock payouts</p>
         {sources.length ? <div className="mt-5 space-y-5">{sources.map(([name, amount]) => <div key={name}>
           <div className="flex justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{backgroundColor:sourceColor(name)}}/><span className="truncate">{name}</span></span><strong className="tabular-nums">{formatCurrency(amount)}</strong></div>
@@ -155,39 +167,11 @@ export default function IncomeHistoryPage() {
           : <p className="mt-8 text-sm text-muted-foreground">No income recorded for this period yet.</p>}
       </section>
     </div>
-    <section className={`${panel} p-4`}>
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div><h2 className="text-base font-semibold">Income timeline</h2>
-          <p className="mt-1 text-[11px] text-muted-foreground">Each bar shows the sources that made up that month</p></div>
-        <span className="text-[10px] text-muted-foreground">Select a month for details ↑</span>
-      </div>
-      {visibleMonths.some(month => month.total != null) ? <div className="mt-4 max-h-[490px] space-y-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
-        {[...visibleMonths].reverse().filter(month => month.total != null).map(month => {
-          const parts = Object.entries(month.sources).filter(([, amount]) => amount > 0).sort((a, b) => b[1] - a[1]);
-          const active = selected?.monthKey === month.monthKey;
-          return <button key={month.monthKey} type="button" aria-pressed={active} onClick={() => setSelectedMonth(month.monthKey)}
-            aria-label={`${monthLabel(month.monthKey)}, ${formatCurrency(month.total)}, ${parts.length} sources`}
-            className={`group w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 ${active ? "bg-white/[0.055]" : ""}`}>
-            <div className="flex items-center gap-3 sm:gap-5">
-              <div className="w-[104px] shrink-0 sm:w-[150px]">
-                <div className="text-xs font-semibold">{monthLabel(month.monthKey)}</div>
-                <div className="mt-1 text-[10px] text-muted-foreground">{month.monthKey === currentMonth ? "In progress" : `${parts.length} ${parts.length === 1 ? "source" : "sources"}`}</div>
-              </div>
-              <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden rounded-full bg-[#253441] p-0.5" aria-hidden="true">
-                {parts.length ? parts.map(([name, amount]) => <div key={name} title={`${name}: ${formatCurrency(amount)}`}
-                  className="h-3 min-w-[2px] rounded-full" style={{width:`${amount / Math.max(month.total, 0.01) * 100}%`,backgroundColor:sourceColor(name)}}/>)
-                  : <div className="h-3 w-full rounded-full bg-[#415467]"/>}
-              </div>
-              <span className="w-[78px] shrink-0 text-right text-sm font-semibold tabular-nums text-emerald-400 sm:w-[95px]">{formatCurrency(month.total)}</span>
-              <ChevronRight className={`hidden h-4 w-4 shrink-0 sm:block ${active ? "text-emerald-400" : "text-[#587083] group-hover:text-white"}`}/>
-            </div>
-          </button>;
-        })}
-      </div> : <p className="mt-4 text-sm text-muted-foreground">No monthly income has been recorded yet.</p>}
-      {visibleMonths.some(month => month.stocks > 0) && <p className="mt-4 text-[10px] text-muted-foreground">Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
-      {legacy.undated.length > 0 && <p className="mt-1 text-[10px] text-amber-300">
+    {(visibleMonths.some(month => month.stocks > 0) || legacy.undated.length > 0) && <div className="space-y-1 px-1 text-[10px] text-muted-foreground">
+      {visibleMonths.some(month => month.stocks > 0) && <p>Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
+      {legacy.undated.length > 0 && <p className="text-amber-300">
         {formatCurrency(legacy.undated.reduce((sum, row) => sum + row.amount, 0))} in older project earnings has no transaction date and cannot be assigned to the 12-month total ({[...new Set(legacy.undated.map(row => row.name))].join(", ")}).
       </p>}
-    </section>
+    </div>}
   </div>;
 }
