@@ -31,14 +31,21 @@ function holdings() {
   }
 }
 
-export default function DividendIncomeSection({ onEstimateChange }) {
+export default function DividendIncomeSection({ onEstimateChange, payouts = {}, onRecordPayout, onRemovePayout }) {
   const [shares, setShares] = useState(holdings);
   const [history, setHistory] = useState({});
   const [error, setError] = useState("");
   const [publishedPayments, setPublishedPayments] = useState([]);
   const [selected, setSelected] = useState(null);
   const today = getTodayKey();
+  const [payoutDate, setPayoutDate] = useState(today);
+  const [payoutAmount, setPayoutAmount] = useState("");
   const year = today.slice(0, 4);
+
+  useEffect(() => {
+    const amount = payouts?.[`${selected}:${payoutDate}`]?.amount;
+    setPayoutAmount(amount == null ? "" : String(amount));
+  }, [selected, payoutDate, payouts]);
 
   useEffect(() => subscribe(key => {
     if (key === "networth_assets") setShares(holdings());
@@ -115,7 +122,7 @@ export default function DividendIncomeSection({ onEstimateChange }) {
         {SYMBOLS.map(symbol => {
           const next = nextPayment(schedule, symbol, today);
           return (
-            <button key={symbol} type="button" onClick={() => setSelected(symbol)}
+            <button key={symbol} type="button" onClick={() => { setPayoutDate(getTodayKey()); setSelected(symbol); }}
               className="flex w-full min-w-0 items-start gap-2 rounded-2xl border border-border/60 bg-[#0e1218] px-3.5 py-2.5 text-left shadow-sm transition-all duration-200 hover:border-border hover:bg-[#151e28]"
               aria-label={`View ${symbol} dividend details`}>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#a52b32] text-xs font-bold text-white">V</span>
@@ -136,7 +143,7 @@ export default function DividendIncomeSection({ onEstimateChange }) {
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/75 p-3 backdrop-blur-sm sm:p-5"
           onMouseDown={event => { if (event.target === event.currentTarget) setSelected(null); }}>
           <div role="dialog" aria-modal="true" aria-label={`${selected} dividend details`}
-            className="w-full max-w-[520px] overflow-hidden rounded-xl border border-border/70 bg-card shadow-2xl">
+            className="max-h-[90dvh] w-full max-w-[520px] overflow-y-auto rounded-xl border border-border/70 bg-card shadow-2xl">
             <div className="flex items-center justify-between border-b border-border/50 px-4 py-3">
               <div><h3 className="text-base font-semibold">{selected} dividends</h3><p className="text-[11px] text-muted-foreground">{shares[selected]} shares from Home</p></div>
               <button type="button" onClick={() => setSelected(null)} aria-label="Close dividend details" className="rounded-lg p-2 text-muted-foreground hover:bg-white/10 hover:text-foreground"><X className="h-4 w-4" /></button>
@@ -152,6 +159,26 @@ export default function DividendIncomeSection({ onEstimateChange }) {
                 <p className="mb-2 font-semibold">Recent distributions</p>
                 {active.rows.length ? active.rows.slice(0, 4).map(row => <div key={row.exDate} className="flex justify-between gap-2 py-1 text-muted-foreground"><span>Ex-dividend {row.exDate}</span><span className="tabular-nums text-foreground">{formatCurrency(Number(row.amountPerShare))}/share</span></div>) : <p className="text-muted-foreground">Confirmed distributions are unavailable.</p>}
               </div>
+              <form className="space-y-2 rounded-lg border border-border/50 p-3 text-xs" onSubmit={event => {
+                event.preventDefault();
+                onRecordPayout?.(selected, payoutDate, Number(payoutAmount));
+              }}>
+                <p className="font-semibold">Record a received dividend</p>
+                <p className="text-[11px] text-muted-foreground">Enter the actual amount after it appears in your brokerage. Scheduled dates and estimated shares do not confirm a payout.</p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex min-w-[130px] flex-1 flex-col gap-1 text-muted-foreground">Payment date
+                    <input type="date" required max={today} value={payoutDate} onChange={event => setPayoutDate(event.target.value)} className="h-9 rounded-md border border-border/70 bg-[#0e141c] px-2 text-foreground" />
+                  </label>
+                  <label className="flex min-w-[110px] flex-1 flex-col gap-1 text-muted-foreground">Amount received (USD)
+                    <input type="number" required min="0.01" step="0.01" value={payoutAmount} onChange={event => setPayoutAmount(event.target.value)} className="h-9 rounded-md border border-border/70 bg-[#0e141c] px-2 text-foreground" />
+                  </label>
+                  <button type="submit" className="h-9 rounded-md bg-emerald-500 px-3 font-semibold text-black hover:bg-emerald-400">{payouts?.[`${selected}:${payoutDate}`] ? "Update payout" : "Record payout"}</button>
+                </div>
+                {payouts?.[`${selected}:${payoutDate}`] && <div className="flex items-center justify-between gap-2 text-[11px] text-emerald-400">
+                  <span>Recorded under Stocks for {payoutDate === today ? "today" : payoutDate}.</span>
+                  <button type="button" onClick={() => onRemovePayout?.(selected, payoutDate)} className="text-rose-300 underline">Remove</button>
+                </div>}
+              </form>
               <p className="text-[11px] leading-relaxed text-muted-foreground">Payment dates follow <a href="https://investor.vanguard.com/investor-resources-education/taxes/funds-tax-information" target="_blank" rel="noreferrer" className="underline">Vanguard's published schedule</a> and may change. New years refresh when Vanguard publishes them; until then, the card says Date pending. Estimates use today's shares and the last four distributions; past share counts and brokerage deposits are unavailable.</p>
             </div>
           </div>

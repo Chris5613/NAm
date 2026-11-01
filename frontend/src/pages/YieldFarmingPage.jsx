@@ -1,6 +1,7 @@
 import { kryptexIncrease } from "../lib/kryptexEarnings";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { remoteStorage } from "@/lib/serverStore";
+import { remoteStorage, subscribe } from "@/lib/serverStore";
+import { STOCK_DIVIDEND_PAYOUTS_KEY, stockPayoutTotal } from "@/lib/stockDividendPayouts";
 import { projectsApi } from "@/lib/api";
 import { getLoopscaleOnycSnapshot, LOOPSCALE_WALLET } from "@/lib/loopscaleYieldSync";
 import { useRegisteredYieldWallets } from "@/hooks/useRegisteredYieldWallets";
@@ -80,6 +81,24 @@ import {
 } from "@/components/YieldFarmingComponents";
 
 export default function YieldFarmingPage() {
+  const [stockPayouts, setStockPayouts] = useState(() => readObject(STOCK_DIVIDEND_PAYOUTS_KEY));
+  useEffect(() => subscribe(key => {
+    if (key == null || key === STOCK_DIVIDEND_PAYOUTS_KEY) setStockPayouts(readObject(STOCK_DIVIDEND_PAYOUTS_KEY));
+  }), []);
+  const recordStockPayout = useCallback((symbol, date, amount) => {
+    if (!["VTI", "VOO"].includes(symbol) || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+        date > getTodayKey() || !Number.isFinite(amount) || amount < 0.01 || amount > 100000000) return;
+    const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
+      [`${symbol}:${date}`]: { symbol, date, amount: Number(amount.toFixed(2)) } };
+    saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
+    setStockPayouts(next);
+  }, []);
+  const removeStockPayout = useCallback((symbol, date) => {
+    const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY) };
+    delete next[`${symbol}:${date}`];
+    saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
+    setStockPayouts(next);
+  }, []);
   const [estimatedStockDividendsAnnual, setEstimatedStockDividendsAnnual] = useState(null);
   const updateStockDividendEstimate = useCallback(value => {
     setEstimatedStockDividendsAnnual(previous => previous === value ? previous : value);
@@ -3736,6 +3755,9 @@ const importSaladPayload =
       sources.Loopscale = loopscalePositions.reduce((sum, position) =>
         sum + (Number(position.observedDaily[key]) || 0), 0);
     }
+    const paidStocks = stockPayoutTotal(stockPayouts, key);
+    if (paidStocks > 0) sources.Stocks = paidStocks;
+    else delete sources.Stocks;
     // Only for Oct 29 while it is today: $2 opening display plus the
     // signed change since the saved reference, never the earlier day's P/L.
     if (key === todayKey && todayKey === LOOPSCALE_FIXED_DISPLAY_DAY) {
@@ -3756,12 +3778,14 @@ const importSaladPayload =
     let note = "";
     if (selection.range === "monthly") {
       const month = projectIncome.find(item => item.monthKey === selection.key);
-      if (!month) return null;
-      sources = Object.fromEntries((month.platforms || [])
+      sources = Object.fromEntries((month?.platforms || [])
         .filter(item => Number.isFinite(Number(item.amount)))
         .map(item => [String(item.platform), Number(item.amount)]));
+      const paidStocks = stockPayoutTotal(stockPayouts, selection.key);
+      if (paidStocks > 0) sources.Stocks = paidStocks;
+      if (!month && !paidStocks) return null;
       label = selection.key;
-      note = "Recorded monthly project totals";
+      note = "Recorded monthly project totals and received stock payouts";
     } else {
       if (selection.key > todayKey && selection.key !== currentLuloUtc.utcDay) return null;
       sources = sourceTotalsForDay(selection.key);
@@ -3941,14 +3965,20 @@ const importSaladPayload =
   const dailyChartEnd = Math.max(1, Math.min(24, Math.ceil(currentHour)));
   const dailyChartTicks = Array.from({ length: 25 }, (_, hour) => hour)
     .filter(hour => hour <= dailyChartEnd && (hour === 0 || hour === dailyChartEnd || hour % 4 === 0));
-  const monthlyChartData = projectIncome
-    .filter(month => /^\d{4}-\d{2}$/.test(String(month.monthKey)) && Number.isFinite(Number(month.total)))
-    .map(month => ({
-      monthKey: month.monthKey,
-      label: new Intl.DateTimeFormat("en-US",{month:"short",year:"2-digit",timeZone:"UTC"}).format(new Date(month.monthKey+"-15T12:00:00Z")),
-      value: Math.max(0,Number(month.total)),
-      expenses: Math.max(0,Number(projectExpenses[month.monthKey]) || 0),
-    }))
+  const monthlyChartData = [...new Set([
+    ...projectIncome.filter(month => /^\d{4}-\d{2}$/.test(String(month.monthKey)))
+      .map(month => month.monthKey),
+    ...Object.values(stockPayouts).filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row?.date || ""))
+      .map(row => row.date.slice(0, 7)),
+  ])].map(monthKey => {
+    const month = projectIncome.find(item => item.monthKey === monthKey);
+    return {
+      monthKey,
+      label: new Intl.DateTimeFormat("en-US",{month:"short",year:"2-digit",timeZone:"UTC"}).format(new Date(monthKey+"-15T12:00:00Z")),
+      value: Math.max(0,Number(month?.total) || 0) + stockPayoutTotal(stockPayouts, monthKey),
+      expenses: Math.max(0,Number(projectExpenses[monthKey]) || 0),
+    };
+  })
     .sort((a,b) => a.monthKey.localeCompare(b.monthKey));
   const thisMonthEarned = monthlyChartData.find(month => month.monthKey === getCurrentMonthKey())?.value || 0;
   const monthlyChartMax = Math.max(0.1,...monthlyChartData.map(month => month.value))*1.15;
@@ -4633,7 +4663,8 @@ const summary =
       )}
 
       <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <DividendIncomeSection onEstimateChange={updateStockDividendEstimate} />
+        <DividendIncomeSection onEstimateChange={updateStockDividendEstimate} payouts={stockPayouts}
+          onRecordPayout={recordStockPayout} onRemovePayout={removeStockPayout} />
       <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
