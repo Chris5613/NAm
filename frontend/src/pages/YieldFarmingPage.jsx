@@ -15,6 +15,8 @@ import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory
 import { latestRollerCoinTimestamp, shouldAcceptRollerCoinBalance } from "@/lib/rollerCoinFreshness";
 import { Card, CardContent } from "@/components/ui/card";
 import DividendIncomeSection from "@/components/DividendIncomeSection";
+import EarningsConsistencyMatrix from "@/components/EarningsConsistencyMatrix";
+import { buildEarningsConsistency } from "@/lib/earningsConsistency";
 import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -3869,6 +3871,7 @@ const importSaladPayload =
     );
   const todayEarnings = serverSourcesMatch && Number.isFinite(Number(serverDailyIncome?.totalUsd))
     ? Number(serverDailyIncome.totalUsd) : rawTodayEarnings;
+  const earningsConsistency = buildEarningsConsistency(todayKey, sourceTotalsForDay, todayEarnings);
   // Persist the ACTUAL signed total for the daily graph, including
   // negative values and recoveries; never derive graph shape from a max.
   const [dailyEarningsObservations, setDailyEarningsObservations] = useState(
@@ -4691,6 +4694,8 @@ const summary =
             : ""}
         </div>
       )}
+
+      <EarningsConsistencyMatrix matrix={earningsConsistency} />
 
       <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <DividendIncomeSection onEstimateChange={updateStockDividendEstimate} payouts={stockPayouts}
