@@ -3924,12 +3924,11 @@ const importSaladPayload =
   }
   const dailyChartMax = Math.max(0.1, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
   const dailyChartMin = Math.min(0, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
-  // Scale the live chart to the hours with actual readings. A fixed midnight
-  // to midnight axis leaves most of the chart empty before and after a partial day.
-  const dailyChartStart = cleanPoints.length ? Math.max(0, Math.floor(cleanPoints[0].x) - 1) : 0;
-  const dailyChartEnd = Math.max(dailyChartStart + 1, Math.min(24, Math.ceil(currentHour)));
+  // Show the whole day from midnight while ending at the present hour.
+  // Do not invent readings before the first observation.
+  const dailyChartEnd = Math.max(1, Math.min(24, Math.ceil(currentHour)));
   const dailyChartTicks = Array.from({ length: 25 }, (_, hour) => hour)
-    .filter(hour => hour >= dailyChartStart && hour <= dailyChartEnd && (hour === dailyChartStart || hour === dailyChartEnd || hour % 2 === 0));
+    .filter(hour => hour <= dailyChartEnd && (hour === 0 || hour === dailyChartEnd || hour % 4 === 0));
   const monthlyChartData = projectIncome
     .filter(month => /^\d{4}-\d{2}$/.test(String(month.monthKey)) && Number.isFinite(Number(month.total)))
     .map(month => ({
@@ -4479,7 +4478,7 @@ const summary =
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
-                  <XAxis dataKey="x" type="number" domain={[dailyChartStart,dailyChartEnd]} ticks={dailyChartTicks} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} tickFormatter={hour => hour === 0 ? "12am" : hour === 12 ? "12pm" : hour === 24 ? "12am" : hour < 12 ? hour+"am" : (hour-12)+"pm"}/>
+                  <XAxis dataKey="x" type="number" domain={[0,dailyChartEnd]} ticks={dailyChartTicks} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} tickFormatter={hour => hour === 0 ? "12am" : hour === 12 ? "12pm" : hour === 24 ? "12am" : hour < 12 ? hour+"am" : (hour-12)+"pm"}/>
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[dailyChartMin,dailyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
                   <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={hour => {
                     const rounded = Math.max(0, Math.min(24,Number(hour)));
