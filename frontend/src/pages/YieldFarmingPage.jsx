@@ -89,15 +89,45 @@ export default function YieldFarmingPage() {
     if (!["VTI", "VOO"].includes(symbol) || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
         date > getTodayKey() || !Number.isFinite(amount) || amount < 0.01 || amount > 100000000) return;
     const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
-      [`${symbol}:${date}`]: { symbol, date, amount: Number(amount.toFixed(2)) } };
+      [`${symbol}:${date}`]: { symbol, date, amount: Number(amount.toFixed(2)), source: "manual" } };
+    // A brokerage may post the cash after Vanguard's payable date. The
+    // corrected receipt replaces that nearby calculation, not adds to it.
+    for (const [key, payout] of Object.entries(next)) {
+      if (key !== `${symbol}:${date}` && payout?.symbol === symbol && payout?.source === "announced" &&
+          Math.abs(Date.parse(payout.date) - Date.parse(date)) <= 3 * 86400000) delete next[key];
+    }
     saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
     setStockPayouts(next);
   }, []);
   const removeStockPayout = useCallback((symbol, date) => {
     const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY) };
+    next[`${symbol}:${date}`] = { symbol, date, amount: 0, source: "excluded" };
+    saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
+    setStockPayouts(next);
+  }, []);
+  const restoreStockPayout = useCallback((symbol, date) => {
+    const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY) };
     delete next[`${symbol}:${date}`];
     saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
     setStockPayouts(next);
+  }, []);
+  const recordAnnouncedStockPayouts = useCallback(candidates => {
+    const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY) };
+    let changed = false;
+    for (const [key, payout] of Object.entries(candidates)) {
+      if (Object.prototype.hasOwnProperty.call(next, key)) continue;
+      // An actual amount already entered near the announced payment date
+      // takes precedence, even if a brokerage posted it one day later.
+      if (Object.values(next).some(saved => saved?.symbol === payout.symbol &&
+          saved?.source !== "announced" && Number(saved?.amount) > 0 &&
+          Math.abs(Date.parse(saved.date) - Date.parse(payout.date)) <= 3 * 86400000)) continue;
+      next[key] = payout;
+      changed = true;
+    }
+    if (changed) {
+      saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
+      setStockPayouts(next);
+    }
   }, []);
   const [estimatedStockDividendsAnnual, setEstimatedStockDividendsAnnual] = useState(null);
   const updateStockDividendEstimate = useCallback(value => {
@@ -4616,7 +4646,7 @@ const summary =
           <div className="mt-4 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <h3 className="text-[12px] font-semibold">Where today's earnings came from</h3>
-              <span className="text-[10px] text-muted-foreground">Net daily P/L</span>
+              <span className="text-[10px] text-muted-foreground">Daily earnings and payouts</span>
             </div>
             {todayBreakdown.length ? (
               <div className="space-y-2">
@@ -4664,7 +4694,8 @@ const summary =
 
       <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <DividendIncomeSection onEstimateChange={updateStockDividendEstimate} payouts={stockPayouts}
-          onRecordPayout={recordStockPayout} onRemovePayout={removeStockPayout} />
+          onRecordPayout={recordStockPayout} onRemovePayout={removeStockPayout}
+          onRestorePayout={restoreStockPayout} onAnnouncedPayouts={recordAnnouncedStockPayouts} />
       <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>

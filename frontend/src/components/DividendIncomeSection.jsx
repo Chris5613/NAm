@@ -3,6 +3,7 @@ import { ChevronRight, X } from "lucide-react";
 import { api } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { formatCurrency, getTodayKey } from "@/lib/yieldFarmingAccounting";
+import { announcedStockPayouts } from "@/lib/stockDividendPayouts";
 
 const SYMBOLS = ["VTI", "VOO"];
 // Fall back to the published 2026 schedule while the annual feed is unavailable.
@@ -31,7 +32,7 @@ function holdings() {
   }
 }
 
-export default function DividendIncomeSection({ onEstimateChange, payouts = {}, onRecordPayout, onRemovePayout }) {
+export default function DividendIncomeSection({ onEstimateChange, payouts = {}, onRecordPayout, onRemovePayout, onRestorePayout, onAnnouncedPayouts }) {
   const [shares, setShares] = useState(holdings);
   const [history, setHistory] = useState({});
   const [error, setError] = useState("");
@@ -44,11 +45,11 @@ export default function DividendIncomeSection({ onEstimateChange, payouts = {}, 
 
   useEffect(() => {
     const amount = payouts?.[`${selected}:${payoutDate}`]?.amount;
-    setPayoutAmount(amount == null ? "" : String(amount));
+    setPayoutAmount(amount == null || amount <= 0 ? "" : String(amount));
   }, [selected, payoutDate, payouts]);
 
   useEffect(() => subscribe(key => {
-    if (key === "networth_assets") setShares(holdings());
+    if (key == null || key === "networth_assets") setShares(holdings());
   }), []);
 
   useEffect(() => {
@@ -87,6 +88,13 @@ export default function DividendIncomeSection({ onEstimateChange, payouts = {}, 
       .sort((a, b) => a.payableDate.localeCompare(b.payableDate))
   ])), [publishedPayments]);
 
+  const announced = useMemo(() => announcedStockPayouts(schedule, history, shares, today),
+    [schedule, history, shares, today]);
+  useEffect(() => {
+    if (onAnnouncedPayouts && Object.keys(announced).some(key =>
+        !Object.prototype.hasOwnProperty.call(payouts, key))) onAnnouncedPayouts(announced);
+  }, [announced, payouts, onAnnouncedPayouts]);
+
   useEffect(() => {
     if (!onEstimateChange) return;
     const ready = SYMBOLS.every(symbol => (history[symbol] || []).length >= 4);
@@ -111,6 +119,9 @@ export default function DividendIncomeSection({ onEstimateChange, payouts = {}, 
     return { rows, annualPerShare, daily: rows.length >= 4 ? trailingYearPerShare * shares[symbol] / 365 : null };
   };
   const active = selected ? details(selected) : null;
+  const selectedPayout = payouts?.[`${selected}:${payoutDate}`];
+  const recentPayouts = Object.values(payouts).filter(row => row?.symbol === selected && Number(row.amount) > 0)
+    .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
   return (
     <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5" aria-label="Stock dividends">
@@ -163,21 +174,27 @@ export default function DividendIncomeSection({ onEstimateChange, payouts = {}, 
                 event.preventDefault();
                 onRecordPayout?.(selected, payoutDate, Number(payoutAmount));
               }}>
-                <p className="font-semibold">Record a received dividend</p>
-                <p className="text-[11px] text-muted-foreground">Enter the actual amount after it appears in your brokerage. Scheduled dates and estimated shares do not confirm a payout.</p>
+                <p className="font-semibold">Stock payout</p>
+                <p className="text-[11px] text-muted-foreground">NAm adds a payout automatically on its published payment date once the per-share amount is confirmed. It uses your current shares from Home, so correct the amount here if your eligible shares or brokerage payment differ.</p>
+                {recentPayouts.length > 0 && <div className="flex flex-wrap gap-1">
+                  {recentPayouts.map(row => <button key={row.date} type="button" onClick={() => setPayoutDate(row.date)}
+                    className="rounded-md border border-border/60 px-2 py-1 text-[11px] text-emerald-400">{shortDate(row.date)} · {formatCurrency(row.amount)}</button>)}
+                </div>}
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="flex min-w-[130px] flex-1 flex-col gap-1 text-muted-foreground">Payment date
                     <input type="date" required max={today} value={payoutDate} onChange={event => setPayoutDate(event.target.value)} className="h-9 rounded-md border border-border/70 bg-[#0e141c] px-2 text-foreground" />
                   </label>
-                  <label className="flex min-w-[110px] flex-1 flex-col gap-1 text-muted-foreground">Amount received (USD)
+                  <label className="flex min-w-[110px] flex-1 flex-col gap-1 text-muted-foreground">Correct amount (USD)
                     <input type="number" required min="0.01" step="0.01" value={payoutAmount} onChange={event => setPayoutAmount(event.target.value)} className="h-9 rounded-md border border-border/70 bg-[#0e141c] px-2 text-foreground" />
                   </label>
-                  <button type="submit" className="h-9 rounded-md bg-emerald-500 px-3 font-semibold text-black hover:bg-emerald-400">{payouts?.[`${selected}:${payoutDate}`] ? "Update payout" : "Record payout"}</button>
+                  <button type="submit" className="h-9 rounded-md bg-emerald-500 px-3 font-semibold text-black hover:bg-emerald-400">{selectedPayout?.amount > 0 ? "Correct payout" : "Record payout"}</button>
                 </div>
-                {payouts?.[`${selected}:${payoutDate}`] && <div className="flex items-center justify-between gap-2 text-[11px] text-emerald-400">
-                  <span>Recorded under Stocks for {payoutDate === today ? "today" : payoutDate}.</span>
-                  <button type="button" onClick={() => onRemovePayout?.(selected, payoutDate)} className="text-rose-300 underline">Remove</button>
+                {selectedPayout?.source === "announced" && <p className="text-[11px] text-muted-foreground">Calculated: ${Number(selectedPayout.perShare).toFixed(6)}/share × {selectedPayout.shares} shares = {formatCurrency(selectedPayout.amount)}. Brokerage receipt not verified.</p>}
+                {selectedPayout?.amount > 0 && <div className="flex items-center justify-between gap-2 text-[11px] text-emerald-400">
+                  <span>Included under Stocks for {payoutDate === today ? "today" : payoutDate}.</span>
+                  <button type="button" onClick={() => onRemovePayout?.(selected, payoutDate)} className="text-rose-300 underline">Exclude</button>
                 </div>}
+                {selectedPayout?.source === "excluded" && <button type="button" onClick={() => onRestorePayout?.(selected, payoutDate)} className="text-[11px] text-emerald-400 underline">Restore automatic calculation</button>}
               </form>
               <p className="text-[11px] leading-relaxed text-muted-foreground">Payment dates follow <a href="https://investor.vanguard.com/investor-resources-education/taxes/funds-tax-information" target="_blank" rel="noreferrer" className="underline">Vanguard's published schedule</a> and may change. New years refresh when Vanguard publishes them; until then, the card says Date pending. Estimates use today's shares and the last four distributions; past share counts and brokerage deposits are unavailable.</p>
             </div>
