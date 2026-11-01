@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { subscribe } from "@/lib/serverStore";
+import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildIncomeHistory, shiftMonth } from "@/lib/incomeHistory";
+import { buildIncomeHistory, legacyProjectIncome, shiftMonth } from "@/lib/incomeHistory";
 import {
   buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome,
   loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots,
@@ -20,7 +20,13 @@ const shortMonth = key => new Intl.DateTimeFormat("en-US", { month: "short", tim
   .format(new Date(`${key}-15T12:00:00Z`));
 
 function readHistory() {
+  let legacyProjects = [];
+  try {
+    const saved = JSON.parse(remoteStorage.getItem("networth_projects") || "[]");
+    if (Array.isArray(saved)) legacyProjects = saved;
+  } catch { /* The rest of the saved income remains available. */ }
   return {
+    legacyProjects,
     luloProjects: (readObject(PROJECT_QUICK_CACHE_KEY).projects || []).filter(project => project?.yield_tracking === "lulo_lending"),
     loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(),
     unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(),
@@ -65,7 +71,8 @@ export default function IncomeHistoryPage() {
   ), [history]);
   const liveMonths = useBackendMonthlyIncome(trackers, localMonths);
   const projectMonths = useMemo(() => getEffectiveProjectIncome(liveMonths, history.snapshots), [liveMonths, history.snapshots]);
-  const months = useMemo(() => buildIncomeHistory(projectMonths, history.payouts, currentMonth), [projectMonths, history.payouts, currentMonth]);
+  const legacy = useMemo(() => legacyProjectIncome(history.legacyProjects), [history.legacyProjects]);
+  const months = useMemo(() => buildIncomeHistory(projectMonths, history.payouts, currentMonth, legacy), [projectMonths, history.payouts, currentMonth, legacy]);
   const monthMap = new Map(months.map(month => [month.monthKey, month]));
   const oldest = months[0]?.monthKey;
   const firstMonth = range === "all" ? (oldest || currentMonth) : shiftMonth(currentMonth, 1 - range);
@@ -99,7 +106,7 @@ export default function IncomeHistoryPage() {
       {[
         { label: "This month", value: current ? formatCurrency(current.total) : "—", detail: compared == null ? "No comparable prior month" : `${compared >= 0 ? "+" : ""}${compared.toFixed(1)}% vs last month` },
         { label: "Last month", value: prior ? formatCurrency(prior.total) : "—", detail: monthLabel(shiftMonth(currentMonth, -1)) },
-        { label: "12-month total", value: months.length ? formatCurrency(trailingTotal) : "—", detail: "Recorded income" },
+        { label: "12-month total", value: months.length ? formatCurrency(trailingTotal) : "—", detail: "Recorded income, including dated past projects" },
         { label: "Top source this month", value: topSource?.[0] || "—", detail: topSource ? formatCurrency(topSource[1]) : "No source recorded yet" },
       ].map(card => <section key={card.label} className={`${panel} min-h-[104px] p-4`}>
         <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#829bb5]">{card.label}</h2>
@@ -151,6 +158,9 @@ export default function IncomeHistoryPage() {
           <td className="py-3 text-right font-semibold tabular-nums text-emerald-400">{formatCurrency(month.total)}</td></tr>)}</tbody>
       </table></div> : <p className="mt-4 text-sm text-muted-foreground">No monthly income has been recorded yet.</p>}
       <p className="mt-4 text-[10px] text-muted-foreground">Stock payouts are calculated from announced distributions and saved share counts; check your brokerage for actual cash received.</p>
+      {legacy.undated.length > 0 && <p className="mt-1 text-[10px] text-amber-300">
+        {formatCurrency(legacy.undated.reduce((sum, row) => sum + row.amount, 0))} in older project earnings has no transaction date and cannot be assigned to the 12-month total ({[...new Set(legacy.undated.map(row => row.name))].join(", ")}).
+      </p>}
     </section>
   </div>;
 }
