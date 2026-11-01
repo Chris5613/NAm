@@ -4695,8 +4695,6 @@ const summary =
         </div>
       )}
 
-      <EarningsConsistencyMatrix matrix={earningsConsistency} />
-
       <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
         <DividendIncomeSection onEstimateChange={updateStockDividendEstimate} payouts={stockPayouts}
           onRecordPayout={recordStockPayout} onRemovePayout={removeStockPayout}
@@ -5114,6 +5112,7 @@ if (
           </div>
         </section>
       </div>
+      <EarningsConsistencyMatrix matrix={earningsConsistency} />
       {selectedBreakdown && earningsChartRange !== "daily" && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
           onMouseDown={event => { if (event.target === event.currentTarget) setSelectedEarningsPoint(null); }}>
