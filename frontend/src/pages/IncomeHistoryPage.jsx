@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { ChevronRight } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
@@ -90,6 +91,7 @@ export default function IncomeHistoryPage() {
   const topSource = Object.entries(current?.sources || {}).sort((a, b) => b[1] - a[1])[0];
   const chartData = visibleMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
   const chartMax = Math.max(1, ...chartData.map(month => month.value || 0));
+  const visiblePeak = Math.max(0.01, ...visibleMonths.map(month => month.total || 0));
   const compared = current && prior && prior.total > 0 ? (current.total / prior.total - 1) * 100 : null;
 
   return <div className="min-w-0 space-y-3 pb-7" data-testid="income-history-page">
@@ -151,17 +153,28 @@ export default function IncomeHistoryPage() {
       </section>
     </div>
     <section className={`${panel} p-4`}>
-      <h2 className="text-base font-semibold">Monthly details</h2>
-      <p className="mt-1 text-[11px] text-muted-foreground">Recorded months only · select a row to see its sources</p>
-      {visibleMonths.some(month => month.total != null) ? <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[560px] text-left text-xs">
-        <thead className="border-b border-white/10 text-[10px] uppercase tracking-widest text-muted-foreground"><tr><th className="py-3 font-medium">Month</th><th className="py-3 font-medium">Top source</th><th className="py-3 font-medium">Stock payouts</th><th className="py-3 text-right font-medium">Total</th></tr></thead>
-        <tbody>{[...visibleMonths].reverse().filter(month => month.total != null).map(month => <tr key={month.monthKey} onClick={() => setSelectedMonth(month.monthKey)}
-          className="cursor-pointer border-b border-white/5 hover:bg-white/5"><td className="py-3 font-medium">{monthLabel(month.monthKey)}</td>
-          <td className="py-3 text-muted-foreground">{Object.entries(month.sources).sort((a, b) => b[1] - a[1])[0]?.[0] || "—"}</td>
-          <td className="py-3 tabular-nums text-muted-foreground">{formatCurrency(month.stocks)}</td>
-          <td className="py-3 text-right font-semibold tabular-nums text-emerald-400">{formatCurrency(month.total)}</td></tr>)}</tbody>
-      </table></div> : <p className="mt-4 text-sm text-muted-foreground">No monthly income has been recorded yet.</p>}
-      <p className="mt-4 text-[10px] text-muted-foreground">Stock payouts are calculated from announced distributions and saved share counts; check your brokerage for actual cash received.</p>
+      <h2 className="text-base font-semibold">Month by month</h2>
+      <p className="mt-1 text-[11px] text-muted-foreground">Select a month to see its sources above</p>
+      {visibleMonths.some(month => month.total != null) ? <div className="mt-4 grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+        {[...visibleMonths].reverse().filter(month => month.total != null).map(month => {
+          const top = Object.entries(month.sources).sort((a, b) => b[1] - a[1])[0];
+          const active = selected?.monthKey === month.monthKey;
+          return <button key={month.monthKey} type="button" aria-pressed={active} onClick={() => setSelectedMonth(month.monthKey)}
+            className={`min-w-0 rounded-xl border p-4 text-left transition-colors ${active ? "border-emerald-500/60 bg-emerald-500/[0.07]" : "border-[#2b3848] bg-[#0e141c] hover:border-[#446174] hover:bg-[#131e29]"}`}>
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[13px] font-semibold">{monthLabel(month.monthKey)}</span>
+              <span className="flex shrink-0 items-center gap-1 text-[10px] text-[#8aa4c3]">{month.monthKey === currentMonth ? "In progress" : "View sources"}<ChevronRight className="h-3.5 w-3.5"/></span>
+            </div>
+            <div className="mt-3 text-[25px] font-semibold leading-none tabular-nums text-emerald-400">{formatCurrency(month.total)}</div>
+            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#263545]"><div className="h-full rounded-full bg-emerald-400" style={{width:`${Math.max(1, Math.min(100, month.total / visiblePeak * 100))}%`}}/></div>
+            <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-[11px]">
+              <span className="min-w-0 truncate text-muted-foreground">Top source <span className="font-medium text-white">{top?.[0] || "—"}</span></span>
+              {month.stocks > 0 && <span className="shrink-0 text-[#a8c2d4]">Stocks {formatCurrency(month.stocks)}</span>}
+            </div>
+          </button>;
+        })}
+      </div> : <p className="mt-4 text-sm text-muted-foreground">No monthly income has been recorded yet.</p>}
+      {visibleMonths.some(month => month.stocks > 0) && <p className="mt-4 text-[10px] text-muted-foreground">Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
       {legacy.undated.length > 0 && <p className="mt-1 text-[10px] text-amber-300">
         {formatCurrency(legacy.undated.reduce((sum, row) => sum + row.amount, 0))} in older project earnings has no transaction date and cannot be assigned to the 12-month total ({[...new Set(legacy.undated.map(row => row.name))].join(", ")}).
       </p>}
