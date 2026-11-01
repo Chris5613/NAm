@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import InvestmentOverview from "@/pages/InvestmentOverview";
 import CloudPage from "@/pages/CloudPage";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
+import IncomeHistoryPage from "@/pages/IncomeHistoryPage";
 import { Toaster } from "@/components/ui/sonner";
 import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
 import SpendingPage from "@/pages/SpendingPage";
@@ -100,6 +101,8 @@ function App() {
                   <YieldFarmingPage />
                 }
               />
+
+              <Route path="/income-history" element={<IncomeHistoryPage />} />
 
               <Route
   path="/doordash"
