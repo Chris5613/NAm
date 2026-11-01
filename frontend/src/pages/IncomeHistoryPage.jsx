@@ -96,11 +96,15 @@ export default function IncomeHistoryPage() {
     <header className="flex flex-wrap items-start justify-between gap-3 px-1">
       <div><h1 className="text-[22px] font-semibold tracking-tight">Income History</h1>
         <p className="mt-1 text-xs text-muted-foreground">Monthly earnings and payouts from your recorded sources</p></div>
-      <select aria-label="History range" value={range} onChange={event => { setRange(event.target.value === "all" ? "all" : Number(event.target.value)); setSelectedMonth(null); }}
-        className="rounded-lg border border-[#304051] bg-[#101925] px-3 py-2 text-xs text-white">
-        <option value={3}>Last 3 months</option><option value={6}>Last 6 months</option>
-        <option value={12}>Last 12 months</option><option value="all">All history</option>
-      </select>
+      <div className="flex items-center rounded-lg border border-[#304051] bg-[#101925] p-0.5" role="group" aria-label="History range">
+        {[[3, "3M"], [6, "6M"], [12, "1Y"], ["all", "All"]].map(([value, label]) => (
+          <button key={value} type="button" aria-pressed={range === value}
+            onClick={() => { setRange(value); setSelectedMonth(null); }}
+            className={`min-w-10 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${range === value ? "bg-[#293747] text-white" : "text-muted-foreground hover:text-white"}`}>
+            {label}
+          </button>
+        ))}
+      </div>
     </header>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {[
