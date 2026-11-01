@@ -19,6 +19,10 @@ const monthLabel = key => new Intl.DateTimeFormat("en-US", { month: "long", year
   .format(new Date(`${key}-15T12:00:00Z`));
 const shortMonth = key => new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" })
   .format(new Date(`${key}-15T12:00:00Z`));
+const sourceColors = ["#34d399", "#60a5fa", "#a78bfa", "#fbbf24", "#f472b6", "#38bdf8"];
+const sourceColor = name => name === "Stocks" ? "#60a5fa" : sourceColors[
+  [...name].reduce((hash, character) => hash + character.charCodeAt(0), 0) % sourceColors.length
+];
 
 function readHistory() {
   let legacyProjects = [];
@@ -91,7 +95,6 @@ export default function IncomeHistoryPage() {
   const topSource = Object.entries(current?.sources || {}).sort((a, b) => b[1] - a[1])[0];
   const chartData = visibleMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
   const chartMax = Math.max(1, ...chartData.map(month => month.value || 0));
-  const visiblePeak = Math.max(0.01, ...visibleMonths.map(month => month.total || 0));
   const compared = current && prior && prior.total > 0 ? (current.total / prior.total - 1) * 100 : null;
 
   return <div className="min-w-0 space-y-3 pb-7" data-testid="income-history-page">
@@ -146,30 +149,37 @@ export default function IncomeHistoryPage() {
         <h2 className="text-base font-semibold">{selected ? `${monthLabel(selected.monthKey)} by source` : "Income by source"}</h2>
         <p className="text-[11px] text-muted-foreground">Recorded project earnings and stock payouts</p>
         {sources.length ? <div className="mt-5 space-y-5">{sources.map(([name, amount]) => <div key={name}>
-          <div className="flex justify-between gap-3 text-xs"><span className="truncate">{name}</span><strong className="tabular-nums">{formatCurrency(amount)}</strong></div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#233341]"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.max(1, Math.min(100, amount / Math.max(selected.total, 0.01) * 100))}%` }}/></div>
+          <div className="flex justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{backgroundColor:sourceColor(name)}}/><span className="truncate">{name}</span></span><strong className="tabular-nums">{formatCurrency(amount)}</strong></div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#233341]"><div className="h-full rounded-full" style={{ width: `${Math.max(1, Math.min(100, amount / Math.max(selected.total, 0.01) * 100))}%`, backgroundColor:sourceColor(name) }}/></div>
         </div>)}<div className="flex justify-between border-t border-white/10 pt-3 text-sm font-semibold"><span>Total</span><span className="tabular-nums text-emerald-400">{formatCurrency(selected.total)}</span></div></div>
           : <p className="mt-8 text-sm text-muted-foreground">No income recorded for this period yet.</p>}
       </section>
     </div>
     <section className={`${panel} p-4`}>
-      <h2 className="text-base font-semibold">Month by month</h2>
-      <p className="mt-1 text-[11px] text-muted-foreground">Select a month to see its sources above</p>
-      {visibleMonths.some(month => month.total != null) ? <div className="mt-4 grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div><h2 className="text-base font-semibold">Income timeline</h2>
+          <p className="mt-1 text-[11px] text-muted-foreground">Each bar shows the sources that made up that month</p></div>
+        <span className="text-[10px] text-muted-foreground">Select a month for details ↑</span>
+      </div>
+      {visibleMonths.some(month => month.total != null) ? <div className="mt-4 max-h-[490px] space-y-1 overflow-y-auto pr-1 [scrollbar-width:thin]">
         {[...visibleMonths].reverse().filter(month => month.total != null).map(month => {
-          const top = Object.entries(month.sources).sort((a, b) => b[1] - a[1])[0];
+          const parts = Object.entries(month.sources).filter(([, amount]) => amount > 0).sort((a, b) => b[1] - a[1]);
           const active = selected?.monthKey === month.monthKey;
           return <button key={month.monthKey} type="button" aria-pressed={active} onClick={() => setSelectedMonth(month.monthKey)}
-            className={`min-w-0 rounded-xl border p-4 text-left transition-colors ${active ? "border-emerald-500/60 bg-emerald-500/[0.07]" : "border-[#2b3848] bg-[#0e141c] hover:border-[#446174] hover:bg-[#131e29]"}`}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-[13px] font-semibold">{monthLabel(month.monthKey)}</span>
-              <span className="flex shrink-0 items-center gap-1 text-[10px] text-[#8aa4c3]">{month.monthKey === currentMonth ? "In progress" : "View sources"}<ChevronRight className="h-3.5 w-3.5"/></span>
-            </div>
-            <div className="mt-3 text-[25px] font-semibold leading-none tabular-nums text-emerald-400">{formatCurrency(month.total)}</div>
-            <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-[#263545]"><div className="h-full rounded-full bg-emerald-400" style={{width:`${Math.max(1, Math.min(100, month.total / visiblePeak * 100))}%`}}/></div>
-            <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-[11px]">
-              <span className="min-w-0 truncate text-muted-foreground">Top source <span className="font-medium text-white">{top?.[0] || "—"}</span></span>
-              {month.stocks > 0 && <span className="shrink-0 text-[#a8c2d4]">Stocks {formatCurrency(month.stocks)}</span>}
+            aria-label={`${monthLabel(month.monthKey)}, ${formatCurrency(month.total)}, ${parts.length} sources`}
+            className={`group w-full rounded-lg px-3 py-3 text-left transition-colors hover:bg-white/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400 ${active ? "bg-white/[0.055]" : ""}`}>
+            <div className="flex items-center gap-3 sm:gap-5">
+              <div className="w-[104px] shrink-0 sm:w-[150px]">
+                <div className="text-xs font-semibold">{monthLabel(month.monthKey)}</div>
+                <div className="mt-1 text-[10px] text-muted-foreground">{month.monthKey === currentMonth ? "In progress" : `${parts.length} ${parts.length === 1 ? "source" : "sources"}`}</div>
+              </div>
+              <div className="flex min-w-0 flex-1 items-center gap-0.5 overflow-hidden rounded-full bg-[#253441] p-0.5" aria-hidden="true">
+                {parts.length ? parts.map(([name, amount]) => <div key={name} title={`${name}: ${formatCurrency(amount)}`}
+                  className="h-3 min-w-[2px] rounded-full" style={{width:`${amount / Math.max(month.total, 0.01) * 100}%`,backgroundColor:sourceColor(name)}}/>)
+                  : <div className="h-3 w-full rounded-full bg-[#415467]"/>}
+              </div>
+              <span className="w-[78px] shrink-0 text-right text-sm font-semibold tabular-nums text-emerald-400 sm:w-[95px]">{formatCurrency(month.total)}</span>
+              <ChevronRight className={`hidden h-4 w-4 shrink-0 sm:block ${active ? "text-emerald-400" : "text-[#587083] group-hover:text-white"}`}/>
             </div>
           </button>;
         })}
