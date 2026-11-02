@@ -176,7 +176,7 @@ export default function IncomeHistoryPage() {
         <h2 className="text-base font-semibold">Last 12 months</h2>
         <span className="text-[11px] text-muted-foreground">Select a recorded month to see its sources</span>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+      <div className="grid grid-flow-col auto-cols-[minmax(112px,1fr)] gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
         {lastTwelveMonths.map(month => {
           const recorded = month.total != null;
           const active = selected?.monthKey === month.monthKey;
@@ -187,7 +187,7 @@ export default function IncomeHistoryPage() {
               ? "border-emerald-500/60 bg-emerald-500/[0.08]"
               : recorded ? "border-[#2b3848] bg-[#0e141c] hover:border-[#4a6674] hover:bg-[#14202a]"
                 : "border-[#25313d] bg-[#0c1219] opacity-60"}`}>
-            <span className="block text-[11px] font-medium text-[#a7bbcf]">{monthLabel(month.monthKey)}</span>
+            <span className="block text-[11px] font-medium text-[#a7bbcf]">{shortMonth(month.monthKey)} '{month.monthKey.slice(2, 4)}</span>
             <span className={`mt-3 block text-[18px] font-semibold leading-none tabular-nums ${recorded ? "text-white" : "text-[#677b90]"}`}>
               {recorded ? formatCurrency(month.total) : "—"}
             </span>
