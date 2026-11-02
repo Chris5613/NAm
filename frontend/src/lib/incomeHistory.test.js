@@ -1,4 +1,4 @@
-import { buildIncomeHistory, legacyProjectIncome, shiftMonth } from "./incomeHistory";
+import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMonth } from "./incomeHistory";
 
 test("combines project totals and stock payouts once while preserving unrecorded months", () => {
   const months = buildIncomeHistory([
@@ -27,5 +27,34 @@ test("dated past projects enter their months; current tracked sources and undate
   expect(months).toEqual([
     { monthKey: "2026-04", sources: { COIN: 40 }, projectTotal: 40, stocks: 0, total: 40 },
     { monthKey: "2026-05", sources: { Salad: 10, COIN: 60, GoMining: 25 }, projectTotal: 95, stocks: 0, total: 95 },
+  ]);
+});
+
+test("restores backend Lulo interest without adding the same local earnings twice", () => {
+  const months = reconcileLuloIncome([
+    { monthKey: "2026-10", total: 25, platforms: [
+      { platform: "Kryptex", amount: 20 }, { platform: "Lulo", amount: 5 },
+    ] },
+  ], { "lulo-a": { "2026-10": 5, "2026-11": 0.2 } }, {
+    "lulo-a": { "2026-10": 6, "2026-11": 0.1 },
+    "lulo-b": { "2026-10": 2, "2026-12": 4 },
+  }, "2026-11");
+
+  expect(months).toEqual([
+    { monthKey: "2026-10", total: 28, platforms: [
+      { platform: "Kryptex", amount: 20 }, { platform: "Lulo", amount: 8 },
+    ] },
+    { monthKey: "2026-11", total: 0.2, platforms: [{ platform: "Lulo", amount: 0.2 }] },
+  ]);
+  expect(buildIncomeHistory(months, {}, "2026-11")[0].sources.Lulo).toBe(8);
+});
+
+test("a locked total with unlabelled income does not count Lulo a second time", () => {
+  const months = reconcileLuloIncome([
+    { monthKey: "2026-09", total: 19, platforms: [{ platform: "Kryptex", amount: 10 }] },
+  ], {}, { "lulo-a": { "2026-09": 9 } }, "2026-11");
+  expect(months[0].total).toBe(19);
+  expect(months[0].platforms).toEqual([
+    { platform: "Kryptex", amount: 10 }, { platform: "Lulo", amount: 9 },
   ]);
 });

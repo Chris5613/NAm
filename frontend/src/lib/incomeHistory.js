@@ -45,6 +45,55 @@ export function shiftMonth(monthKey, offset) {
   return date.toISOString().slice(0, 7);
 }
 
+// The backend's accepted Lulo interest can arrive after a monthly snapshot
+// has been locked, or when the Passive Income page has not populated its
+// quick project cache yet. Treat local and backend month totals as alternate
+// records of the same interest, never as amounts to add together.
+export function reconcileLuloIncome(months, localBackfills, backendBackfills, currentMonth) {
+  const projects = new Map();
+  for (const source of [localBackfills, backendBackfills]) {
+    for (const [projectId, records] of Object.entries(source || {})) {
+      if (!records || typeof records !== "object" || Array.isArray(records)) continue;
+      const project = projects.get(projectId) || {};
+      for (const [month, rawAmount] of Object.entries(records)) {
+        const amount = Number(rawAmount);
+        if (!/^\d{4}-\d{2}$/.test(month) || month > currentMonth ||
+          !Number.isFinite(amount) || amount < 0) continue;
+        project[month] = Math.max(project[month] || 0, amount);
+      }
+      projects.set(projectId, project);
+    }
+  }
+
+  const expected = new Map();
+  for (const records of projects.values()) {
+    for (const [month, amount] of Object.entries(records)) {
+      expected.set(month, (expected.get(month) || 0) + amount);
+    }
+  }
+
+  const byMonth = new Map((months || []).map(month => [month.monthKey, month]));
+  for (const [monthKey, amount] of expected) {
+    if (amount <= 0) continue;
+    const month = byMonth.get(monthKey) || { monthKey, total: 0, platforms: [] };
+    const current = (month.platforms || []).reduce((sum, row) =>
+      sum + (row.platform === "Lulo" ? Number(row.amount) || 0 : 0), 0);
+    if (current >= amount - 0.000001) continue;
+    const platforms = (month.platforms || []).filter(row => row.platform !== "Lulo");
+    platforms.push({ platform: "Lulo", amount });
+    const listedBefore = (month.platforms || []).reduce((sum, row) =>
+      sum + (Number(row.amount) || 0), 0);
+    const unlisted = Math.max(0, (Number(month.total) || 0) - listedBefore);
+    // An older snapshot may already include Lulo in its total without a
+    // source label. Use that unassigned amount before increasing the total.
+    byMonth.set(monthKey, {
+      ...month, platforms,
+      total: Number(((Number(month.total) || 0) + Math.max(0, amount - current - unlisted)).toFixed(6)),
+    });
+  }
+  return [...byMonth.values()].sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+}
+
 export function buildIncomeHistory(projectMonths, payouts, currentMonth, legacy = {}) {
   const months = new Map();
   for (const month of projectMonths || []) {

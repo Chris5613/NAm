@@ -7,7 +7,7 @@ import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildIncomeHistory, legacyProjectIncome, shiftMonth } from "@/lib/incomeHistory";
+import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMonth } from "@/lib/incomeHistory";
 import {
   buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome,
   loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots,
@@ -56,6 +56,7 @@ function readHistory() {
     backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(),
     payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
     manualIncome: {},
+    luloBackfills: {},
   };
 }
 
@@ -63,7 +64,9 @@ export default function IncomeHistoryPage() {
   const [history, setHistory] = useState(readHistory);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [clock, setClock] = useState(Date.now());
-  useEffect(() => subscribe(() => setHistory(current => ({ ...readHistory(), manualIncome: current.manualIncome }))), []);
+  useEffect(() => subscribe(() => setHistory(current => ({
+    ...readHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills,
+  }))), []);
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 60000);
     return () => window.clearInterval(timer);
@@ -76,6 +79,8 @@ export default function IncomeHistoryPage() {
         if (active && result) setHistory(current => ({
           ...current, loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory),
           manualIncome: result.manualIncomeHistory || current.manualIncome,
+          luloBackfills: result.luloBackfills && typeof result.luloBackfills === "object"
+            ? result.luloBackfills : current.luloBackfills,
         }));
       } catch { /* Retain saved history if the provider is unavailable. */ }
     };
@@ -94,7 +99,10 @@ export default function IncomeHistoryPage() {
     history.rollercoin, history.unetwork, history.kryptex,
   ), [history]);
   const liveMonths = useBackendMonthlyIncome(trackers, localMonths);
-  const projectMonths = useMemo(() => getEffectiveProjectIncome(liveMonths, history.snapshots), [liveMonths, history.snapshots]);
+  const projectMonths = useMemo(() => reconcileLuloIncome(
+    getEffectiveProjectIncome(liveMonths, history.snapshots),
+    history.backfills, history.luloBackfills, currentMonth,
+  ), [liveMonths, history.snapshots, history.backfills, history.luloBackfills, currentMonth]);
   const legacy = useMemo(() => legacyProjectIncome(history.legacyProjects), [history.legacyProjects]);
   const manualMonths = history.manualIncome?.monthly;
   const months = useMemo(() => {
