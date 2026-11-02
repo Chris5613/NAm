@@ -121,7 +121,6 @@ export default function IncomeHistoryPage() {
     .reduce((sum, month) => sum + month.total, 0);
   const ytdTotal = ytdMonths.reduce((sum, month) => sum + (month.total || 0), 0);
   const sources = Object.entries(selected?.sources || {}).sort((a, b) => b[1] - a[1]);
-  const topSource = sources[0];
   const chartData = ytdMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
   const chartMax = Math.max(1, ...chartData.map(month => month.value || 0));
   const lastTwelveMonths = Array.from({length: 12}, (_, index) => {
@@ -130,8 +129,7 @@ export default function IncomeHistoryPage() {
   });
   return <div className="min-w-0 space-y-3 pb-7" data-testid="income-history-page">
     <header className="px-1">
-      <div><h1 className="text-[22px] font-semibold tracking-tight">Income History</h1>
-        <p className="mt-1 text-xs text-muted-foreground">Monthly earnings and payouts from your recorded sources</p></div>
+      <h1 className="text-[22px] font-semibold tracking-tight">Income History</h1>
     </header>
     <section className={`${panel} p-4`} aria-label="Last 12 months of income">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -178,7 +176,6 @@ export default function IncomeHistoryPage() {
         <div className="my-5 border-t border-[#263747]"/>
         {sources.length ? <>
           <h3 className="text-sm font-semibold">{sources.length} income {sources.length === 1 ? "source" : "sources"}</h3>
-          {topSource?.[1] > 0 && <p className="mt-1 text-xs text-muted-foreground">{topSource[0]} contributes the most this month.</p>}
           <div className="mt-5 flex h-2.5 overflow-hidden rounded-full bg-[#233341]" aria-hidden="true">
             {sources.map(([name, amount]) => <span key={name} style={{ width: `${selected.total > 0 ? Math.max(0, amount) / selected.total * 100 : 0}%`, backgroundColor: sourceColor(name) }}/>) }
           </div>

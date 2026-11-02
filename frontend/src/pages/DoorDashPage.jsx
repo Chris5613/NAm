@@ -435,7 +435,6 @@ const customWeeks = Array.from(
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Delivery</h1>
-          <p className="mt-1 text-xs text-muted-foreground">Earnings and expenses from your logged delivery work</p>
         </div>
         <Button onClick={() => setAddOpen(true)} className="bg-[#32d99b] font-semibold text-[#061910] hover:bg-[#2ac28b]">
           <Plus className="mr-2 h-4 w-4" />
