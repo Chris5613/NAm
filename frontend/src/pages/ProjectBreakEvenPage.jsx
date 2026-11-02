@@ -53,7 +53,7 @@ export default function ProjectBreakEvenPage() {
   }), [data.rows]);
   const inProgress = ranked.filter(row => !isRecovered(row));
   const recoveredProjects = ranked.filter(isRecovered);
-  const selected = ranked.find(row => row.id === selectedId) || ranked[0];
+  const selected = ranked.find(row => row.id === selectedId) || null;
   const configured = ranked.filter(row => row.spent > 0);
   const totalSpent = configured.reduce((sum, row) => sum + row.spent, 0);
   const totalEarned = configured.reduce((sum, row) => sum + Math.max(0, Number(row.earned) || 0), 0);
@@ -66,7 +66,7 @@ export default function ProjectBreakEvenPage() {
     setEditing(true);
   }
   function selectProject(id) {
-    setSelectedId(id);
+    setSelectedId(current => current === id ? null : id);
     setEditing(false);
   }
   function saveSpent(event) {
@@ -85,9 +85,9 @@ export default function ProjectBreakEvenPage() {
     const ratio = row.spent > 0 ? Math.max(0, row.earned) / row.spent * 100 : 0;
     const color = colors[row.name] || "#38bdf8";
     const noCostSalad = row.id === "salad-project" && !row.spent && row.earned > 0;
-    return <button key={row.id} type="button" onClick={() => selectProject(row.id)}
+    return <div key={row.id}><button type="button" onClick={() => selectProject(row.id)}
       className={`w-full rounded-xl border p-3 text-left transition-colors sm:p-4 ${selected?.id === row.id ? "border-[#3ba580] bg-[#12231f]" : "border-[#263342] bg-[#101922] hover:border-[#3c5267]"}`}
-      aria-pressed={selected?.id === row.id}>
+      aria-expanded={selected?.id === row.id} aria-controls={`break-even-detail-${row.id}`}>
       <div className="flex items-center gap-3">
         <span className="text-[11px] font-semibold tabular-nums text-[#91a4b8]">{String(index + 1).padStart(2, "0")}</span>
         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
@@ -97,7 +97,18 @@ export default function ProjectBreakEvenPage() {
       </div>
       <p className="mt-2 text-xs tabular-nums text-[#91a4b8]">{row.spent ? `${money(row.earned)} earned of ${money(row.spent)} spent` : `${money(row.earned)} recorded earnings`}</p>
       <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full transition-[width]" style={{ width: `${noCostSalad ? 100 : Math.min(100, ratio)}%`, backgroundColor: color }} /></div>
-    </button>;
+    </button>
+      {selected?.id === row.id && <div id={`break-even-detail-${row.id}`} className="mt-2 rounded-xl border border-[#3c5267] bg-[#101922] p-4 text-sm">
+        <div className="flex justify-between gap-3 border-b border-[#263342] pb-3"><span className="text-[#91a4b8]">{selectedStats?.remaining === 0 ? "Above entered cost" : "Still to recover"}</span><strong className="tabular-nums">{selectedStats?.configured ? money(selectedStats.remaining === 0 ? Math.max(0, selectedStats.pnl) : selectedStats.remaining) : "—"}</strong></div>
+        <p className="mt-3 text-xs text-[#c8d3df]">{noCostSalad ? "Salad has recorded earnings and no entered cost to recover." : !selectedStats?.configured ? "Enter a cost to estimate recovery." : selectedStats.remaining === 0 ? "Entered costs recovered." : selectedStats.daysToProfit != null ? `About ${selectedStats.daysToProfit.toLocaleString()} days to recover at the current earnings pace.` : "No reliable daily pace available."}</p>
+        {selectedStats?.configured && selectedStats.remaining > 0 && <p className="mt-1 text-[11px] text-[#91a4b8]">Forecast only; earnings can change.</p>}
+        {editing ? <form onSubmit={saveSpent} className="mt-4 space-y-2">
+          <label htmlFor="break-even-spent" className="text-xs text-[#c8d3df]">Total spent (USD)</label>
+          <input id="break-even-spent" autoFocus type="number" min="0" step="0.01" value={draft} onChange={event => setDraft(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-[#3c5267] bg-[#111b25] px-3 py-2 text-sm outline-none focus:border-[#32d99b]" />
+          <div className="flex gap-2"><button type="submit" className="flex-1 rounded-lg bg-[#32d99b] px-3 py-2 text-xs font-semibold text-[#082019]">Save</button><button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-[#3c5267] px-3 py-2 text-xs">Cancel</button></div>
+        </form> : <button type="button" onClick={startEdit} className="mt-4 w-full rounded-lg border border-[#3c5267] bg-[#192936] px-3 py-2.5 text-xs font-semibold hover:bg-[#203447]">Edit total spent</button>}
+      </div>}
+    </div>;
   }
 
   return <div className="min-w-0 space-y-3 pb-7 text-white" data-testid="project-break-even-page">
@@ -144,30 +155,6 @@ export default function ProjectBreakEvenPage() {
           : <p className="mt-4 rounded-xl border border-[#263342] bg-[#101922] px-4 py-6 text-center text-sm text-[#91a4b8]">Projects move here automatically as their recorded earnings cover their entered costs.</p>}
       </section>
     </div>
-
-    <section className={`${panel} min-w-0 p-4 sm:p-5`} aria-label="Selected project recovery">
-        {selected ? <>
-          <h2 className="text-lg font-semibold">{selected.name}</h2>
-          <p className="mt-0.5 text-[11px] text-[#91a4b8]">Earnings-only recovery</p>
-          <strong className="mt-7 block text-[42px] leading-none tracking-tight">{selected.spent ? percent(Math.max(0, selected.earned) / selected.spent * 100) : "—"}</strong>
-          <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full" style={{ width: `${selected.spent ? Math.min(100, Math.max(0, selected.earned) / selected.spent * 100) : 0}%`, backgroundColor: colors[selected.name] || "#38bdf8" }} /></div>
-          <dl className="mt-5 divide-y divide-[#263342] border-t border-[#263342]">
-            <div className="flex justify-between gap-3 py-3"><dt className="text-xs text-[#91a4b8]">Total spent</dt><dd className="font-semibold tabular-nums">{selected.spent ? money(selected.spent) : "Not entered"}</dd></div>
-            <div className="flex justify-between gap-3 py-3"><dt className="text-xs text-[#91a4b8]">Lifetime earned</dt><dd className="font-semibold tabular-nums">{money(selected.earned)}</dd></div>
-            <div className="flex justify-between gap-3 py-3"><dt className="text-xs text-[#91a4b8]">{selectedStats?.remaining === 0 ? "Above entered cost" : "Still to recover"}</dt><dd className={`font-semibold tabular-nums ${selectedStats?.remaining === 0 ? "text-[#32d99b]" : "text-[#fbbf24]"}`}>{selectedStats?.configured ? money(selectedStats.remaining === 0 ? Math.max(0, selectedStats.pnl) : selectedStats.remaining) : "—"}</dd></div>
-          </dl>
-          <div className="mt-3 rounded-xl border border-[#276751] bg-[#12221e] p-3.5">
-            <p className="text-xs text-[#91a4b8]">At current earnings pace</p>
-            <p className="mt-1 text-sm font-semibold">{selected.id === "salad-project" && !selected.spent && selected.earned > 0 ? "Salad has recorded earnings and no entered cost to recover" : !selectedStats?.configured ? "Enter a cost to estimate recovery" : selectedStats.remaining === 0 ? "Entered costs recovered" : selectedStats.daysToProfit != null ? `About ${selectedStats.daysToProfit.toLocaleString()} days to recover` : "No reliable daily pace available"}</p>
-            <p className="mt-1 text-[11px] text-[#91a4b8]">Forecast only; earnings can change.</p>
-          </div>
-          {editing ? <form onSubmit={saveSpent} className="mt-4 space-y-2">
-            <label htmlFor="break-even-spent" className="text-xs text-[#c8d3df]">Total spent (USD)</label>
-            <input id="break-even-spent" autoFocus type="number" min="0" step="0.01" value={draft} onChange={event => setDraft(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-[#3c5267] bg-[#111b25] px-3 py-2 text-sm outline-none focus:border-[#32d99b]" />
-            <div className="flex gap-2"><button type="submit" className="flex-1 rounded-lg bg-[#32d99b] px-3 py-2 text-xs font-semibold text-[#082019]">Save</button><button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-[#3c5267] px-3 py-2 text-xs">Cancel</button></div>
-          </form> : <button type="button" onClick={startEdit} className="mt-4 w-full rounded-lg border border-[#3c5267] bg-[#192936] px-3 py-2.5 text-xs font-semibold hover:bg-[#203447]">Edit total spent</button>}
-        </> : <p className="text-sm text-[#91a4b8]">No projects available yet.</p>}
-    </section>
 
     <p className="px-1 text-[11px] text-[#91a4b8]">Recovery compares recorded lifetime earnings with costs you enter. It excludes current balances and does not represent realized profit.</p>
   </div>;
