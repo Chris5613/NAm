@@ -53,7 +53,6 @@ function readHistory() {
 
 export default function IncomeHistoryPage() {
   const [history, setHistory] = useState(readHistory);
-  const [range, setRange] = useState(12);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [clock, setClock] = useState(Date.now());
   useEffect(() => subscribe(() => setHistory(readHistory())), []);
@@ -90,39 +89,28 @@ export default function IncomeHistoryPage() {
   const legacy = useMemo(() => legacyProjectIncome(history.legacyProjects), [history.legacyProjects]);
   const months = useMemo(() => buildIncomeHistory(projectMonths, history.payouts, currentMonth, legacy), [projectMonths, history.payouts, currentMonth, legacy]);
   const monthMap = new Map(months.map(month => [month.monthKey, month]));
-  const oldest = months[0]?.monthKey;
-  const firstMonth = range === "all" ? (oldest || currentMonth) : shiftMonth(currentMonth, 1 - range);
-  const visibleMonths = [];
-  for (let key = firstMonth; key <= currentMonth; key = shiftMonth(key, 1)) {
-    visibleMonths.push(monthMap.get(key) || { monthKey: key, total: null, sources: {}, stocks: 0 });
+  const ytdMonths = [];
+  for (let key = `${currentMonth.slice(0, 4)}-01`; key <= currentMonth; key = shiftMonth(key, 1)) {
+    ytdMonths.push(monthMap.get(key) || { monthKey: key, total: null, sources: {}, stocks: 0 });
   }
-  const selected = monthMap.get(selectedMonth) && selectedMonth >= firstMonth
-    ? monthMap.get(selectedMonth) : monthMap.get(currentMonth) || [...visibleMonths].reverse().find(month => month.total != null);
-  const recordedVisible = visibleMonths.filter(month => month.total != null);
+  const selected = monthMap.get(selectedMonth) || monthMap.get(currentMonth) || months.at(-1);
+  const recordedVisible = months;
   const selectedIndex = recordedVisible.findIndex(month => month.monthKey === selected?.monthKey);
   const trailingTotal = months.filter(month => month.monthKey >= shiftMonth(currentMonth, -11))
     .reduce((sum, month) => sum + month.total, 0);
+  const ytdTotal = ytdMonths.reduce((sum, month) => sum + (month.total || 0), 0);
   const sources = Object.entries(selected?.sources || {}).sort((a, b) => b[1] - a[1]);
   const topSource = sources[0];
-  const chartData = visibleMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
+  const chartData = ytdMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
   const chartMax = Math.max(1, ...chartData.map(month => month.value || 0));
   const lastTwelveMonths = Array.from({length: 12}, (_, index) => {
     const monthKey = shiftMonth(currentMonth, index - 11);
     return monthMap.get(monthKey) || {monthKey, total: null};
   });
   return <div className="min-w-0 space-y-3 pb-7" data-testid="income-history-page">
-    <header className="flex flex-wrap items-start justify-between gap-3 px-1">
+    <header className="px-1">
       <div><h1 className="text-[22px] font-semibold tracking-tight">Income History</h1>
         <p className="mt-1 text-xs text-muted-foreground">Monthly earnings and payouts from your recorded sources</p></div>
-      <div className="flex items-center rounded-lg border border-[#304051] bg-[#101925] p-0.5" role="group" aria-label="History range">
-        {[[3, "3M"], [6, "6M"], [12, "1Y"], ["all", "All"]].map(([value, label]) => (
-          <button key={value} type="button" aria-pressed={range === value}
-            onClick={() => { setRange(value); setSelectedMonth(null); }}
-            className={`min-w-10 rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${range === value ? "bg-[#293747] text-white" : "text-muted-foreground hover:text-white"}`}>
-            {label}
-          </button>
-        ))}
-      </div>
     </header>
     <section className={`${panel} p-4`} aria-label="Last 12 months of income">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
@@ -135,7 +123,7 @@ export default function IncomeHistoryPage() {
           const active = selected?.monthKey === month.monthKey;
           return <button key={month.monthKey} type="button" disabled={!recorded} aria-pressed={recorded ? active : undefined}
             aria-label={`${monthLabel(month.monthKey)}: ${recorded ? formatCurrency(month.total) : "no recorded income"}`}
-            onClick={() => { if (month.monthKey < firstMonth) setRange(12); setSelectedMonth(month.monthKey); }}
+            onClick={() => setSelectedMonth(month.monthKey)}
             className={`min-w-0 rounded-xl border px-3 py-3 text-left transition-colors ${active
               ? "border-emerald-500/60 bg-emerald-500/[0.08]"
               : recorded ? "border-[#2b3848] bg-[#0e141c] hover:border-[#4a6674] hover:bg-[#14202a]"
@@ -182,8 +170,11 @@ export default function IncomeHistoryPage() {
         </> : <p className="text-sm text-muted-foreground">No income recorded for this period yet.</p>}
       </section>
       <section className={`${panel} min-h-[360px] p-5 sm:p-6`}>
-        <h2 className="text-base font-semibold">Income over time</h2>
-        <p className="text-[11px] text-muted-foreground">Recorded month totals · {months.length ? `${formatCurrency(trailingTotal)} in the last 12 months` : "No recorded income yet"}</p>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-semibold">Income over time</h2>
+          <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold tracking-wide text-emerald-300">YTD</span>
+        </div>
+        <p className="text-[11px] text-muted-foreground">{currentMonth.slice(0, 4)} YTD {formatCurrency(ytdTotal)} · Last 12 months {formatCurrency(trailingTotal)}</p>
         <div className="mt-5 h-[280px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 15, right: 12, bottom: 0, left: -6 }}
@@ -203,8 +194,8 @@ export default function IncomeHistoryPage() {
         </div>
       </section>
     </div>
-    {(visibleMonths.some(month => month.stocks > 0) || legacy.undated.length > 0) && <div className="space-y-1 px-1 text-[10px] text-muted-foreground">
-      {visibleMonths.some(month => month.stocks > 0) && <p>Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
+    {(ytdMonths.some(month => month.stocks > 0) || selected?.stocks > 0 || legacy.undated.length > 0) && <div className="space-y-1 px-1 text-[10px] text-muted-foreground">
+      {(ytdMonths.some(month => month.stocks > 0) || selected?.stocks > 0) && <p>Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
       {legacy.undated.length > 0 && <p className="text-amber-300">
         {formatCurrency(legacy.undated.reduce((sum, row) => sum + row.amount, 0))} in older project earnings has no transaction date and cannot be assigned to the 12-month total ({[...new Set(legacy.undated.map(row => row.name))].join(", ")}).
       </p>}
