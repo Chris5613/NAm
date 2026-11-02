@@ -100,20 +100,16 @@ export default function IncomeHistoryPage() {
     ? monthMap.get(selectedMonth) : monthMap.get(currentMonth) || [...visibleMonths].reverse().find(month => month.total != null);
   const recordedVisible = visibleMonths.filter(month => month.total != null);
   const selectedIndex = recordedVisible.findIndex(month => month.monthKey === selected?.monthKey);
-  const current = monthMap.get(currentMonth);
-  const prior = monthMap.get(shiftMonth(currentMonth, -1));
   const trailingTotal = months.filter(month => month.monthKey >= shiftMonth(currentMonth, -11))
     .reduce((sum, month) => sum + month.total, 0);
   const sources = Object.entries(selected?.sources || {}).sort((a, b) => b[1] - a[1]);
-  const topSource = Object.entries(current?.sources || {}).sort((a, b) => b[1] - a[1])[0];
+  const topSource = sources[0];
   const chartData = visibleMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
   const chartMax = Math.max(1, ...chartData.map(month => month.value || 0));
   const lastTwelveMonths = Array.from({length: 12}, (_, index) => {
     const monthKey = shiftMonth(currentMonth, index - 11);
     return monthMap.get(monthKey) || {monthKey, total: null};
   });
-  const compared = current && prior && prior.total > 0 ? (current.total / prior.total - 1) * 100 : null;
-
   return <div className="min-w-0 space-y-3 pb-7" data-testid="income-history-page">
     <header className="flex flex-wrap items-start justify-between gap-3 px-1">
       <div><h1 className="text-[22px] font-semibold tracking-tight">Income History</h1>
@@ -128,63 +124,9 @@ export default function IncomeHistoryPage() {
         ))}
       </div>
     </header>
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      {[
-        { label: "This month", value: current ? formatCurrency(current.total) : "—", detail: compared == null ? "No comparable prior month" : `${compared >= 0 ? "+" : ""}${compared.toFixed(1)}% vs last month` },
-        { label: "Last month", value: prior ? formatCurrency(prior.total) : "—", detail: monthLabel(shiftMonth(currentMonth, -1)) },
-        { label: "12-month total", value: months.length ? formatCurrency(trailingTotal) : "—", detail: "Recorded income, including dated past projects" },
-        { label: "Top source this month", value: topSource?.[0] || "—", detail: topSource ? formatCurrency(topSource[1]) : "No source recorded yet" },
-      ].map(card => <section key={card.label} className={`${panel} min-h-[104px] p-4`}>
-        <h2 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#829bb5]">{card.label}</h2>
-        <p className="mt-3 truncate text-[24px] font-semibold tabular-nums" title={card.value}>{card.value}</p>
-        <p className="mt-1 text-[11px] text-muted-foreground">{card.detail}</p>
-      </section>)}
-    </div>
-    <div className="grid gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-      <section className={`${panel} p-4`}>
-        <h2 className="text-base font-semibold">Monthly income</h2>
-        <p className="text-[11px] text-muted-foreground">Select a recorded month for its sources</p>
-        <div className="mt-4 h-[285px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 15, right: 12, bottom: 0, left: -6 }}
-              onClick={event => { const month = event?.activePayload?.[0]?.payload; if (month?.value != null) setSelectedMonth(month.monthKey); }}>
-              <defs><linearGradient id="incomeHistoryFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#30d991" stopOpacity={0.27}/><stop offset="100%" stopColor="#30d991" stopOpacity={0}/></linearGradient></defs>
-              <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
-              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#91a1b2" }} minTickGap={16}/>
-              <YAxis axisLine={false} tickLine={false} width={52} tick={{ fontSize: 10, fill: "#91a1b2" }} domain={[0, chartMax * 1.15]} tickFormatter={value => `$${value.toFixed(0)}`}/>
-              <Tooltip contentStyle={{ background: "#111b27", border: "1px solid #33465a", borderRadius: 10, fontSize: 12 }}
-                labelFormatter={(_, items) => items?.[0]?.payload?.monthKey ? monthLabel(items[0].payload.monthKey) : ""}
-                formatter={value => [formatCurrency(value), "Recorded income"]}/>
-              <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} fill="url(#incomeHistoryFill)" connectNulls={false}
-                dot={point => point?.payload?.value == null ? null : <circle cx={point.cx} cy={point.cy} r={3} fill="#30e69b"/>}
-                activeDot={{ r: 5 }} isAnimationActive={false}/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-      <section className={`${panel} p-4`}>
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-base font-semibold">{selected ? `${monthLabel(selected.monthKey)} by source` : "Income by source"}</h2>
-          <div className="flex shrink-0 gap-1">
-            <button type="button" aria-label="Previous recorded month" disabled={selectedIndex <= 0}
-              onClick={() => setSelectedMonth(recordedVisible[selectedIndex - 1].monthKey)}
-              className="rounded-md border border-[#2b3848] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronLeft className="h-4 w-4"/></button>
-            <button type="button" aria-label="Next recorded month" disabled={selectedIndex < 0 || selectedIndex >= recordedVisible.length - 1}
-              onClick={() => setSelectedMonth(recordedVisible[selectedIndex + 1].monthKey)}
-              className="rounded-md border border-[#2b3848] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronRight className="h-4 w-4"/></button>
-          </div>
-        </div>
-        <p className="text-[11px] text-muted-foreground">Recorded project earnings and stock payouts</p>
-        {sources.length ? <div className="mt-5 space-y-5">{sources.map(([name, amount]) => <div key={name}>
-          <div className="flex justify-between gap-3 text-xs"><span className="flex min-w-0 items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{backgroundColor:sourceColor(name)}}/><span className="truncate">{name}</span></span><strong className="tabular-nums">{formatCurrency(amount)}</strong></div>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#233341]"><div className="h-full rounded-full" style={{ width: `${Math.max(1, Math.min(100, amount / Math.max(selected.total, 0.01) * 100))}%`, backgroundColor:sourceColor(name) }}/></div>
-        </div>)}<div className="flex justify-between border-t border-white/10 pt-3 text-sm font-semibold"><span>Total</span><span className="tabular-nums text-emerald-400">{formatCurrency(selected.total)}</span></div></div>
-          : <p className="mt-8 text-sm text-muted-foreground">No income recorded for this period yet.</p>}
-      </section>
-    </div>
     <section className={`${panel} p-4`} aria-label="Last 12 months of income">
       <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold">Last 12 months</h2>
+        <h2 className="text-base font-semibold">Choose a month</h2>
         <span className="text-[11px] text-muted-foreground">Select a recorded month to see its sources</span>
       </div>
       <div className="grid grid-flow-col auto-cols-[minmax(112px,1fr)] gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
@@ -209,6 +151,58 @@ export default function IncomeHistoryPage() {
         })}
       </div>
     </section>
+    <div className="grid gap-3 lg:grid-cols-[minmax(320px,5fr)_minmax(0,7fr)]">
+      <section className={`${panel} min-h-[360px] p-5 sm:p-6`} aria-label="Selected month income">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-[#91a6ba]">{selected ? monthLabel(selected.monthKey) : "No recorded month"}</h2>
+          <div className="flex shrink-0 gap-1">
+            <button type="button" aria-label="Previous recorded month" disabled={selectedIndex <= 0}
+              onClick={() => setSelectedMonth(recordedVisible[selectedIndex - 1].monthKey)}
+              className="rounded-md border border-[#2b3848] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronLeft className="h-4 w-4"/></button>
+            <button type="button" aria-label="Next recorded month" disabled={selectedIndex < 0 || selectedIndex >= recordedVisible.length - 1}
+              onClick={() => setSelectedMonth(recordedVisible[selectedIndex + 1].monthKey)}
+              className="rounded-md border border-[#2b3848] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronRight className="h-4 w-4"/></button>
+          </div>
+        </div>
+        <p className="mt-3 text-4xl font-semibold tracking-tight tabular-nums sm:text-[40px]">{selected ? formatCurrency(selected.total) : "—"}</p>
+        <p className="mt-1 text-xs text-muted-foreground">Recorded income</p>
+        <div className="my-5 border-t border-[#263747]"/>
+        {sources.length ? <>
+          <h3 className="text-sm font-semibold">{sources.length} income {sources.length === 1 ? "source" : "sources"}</h3>
+          {topSource?.[1] > 0 && <p className="mt-1 text-xs text-muted-foreground">{topSource[0]} contributes the most this month.</p>}
+          <div className="mt-5 flex h-2.5 overflow-hidden rounded-full bg-[#233341]" aria-hidden="true">
+            {sources.map(([name, amount]) => <span key={name} style={{ width: `${selected.total > 0 ? Math.max(0, amount) / selected.total * 100 : 0}%`, backgroundColor: sourceColor(name) }}/>) }
+          </div>
+          <div className="mt-5 space-y-3">
+            {sources.map(([name, amount]) => <div key={name} className="flex items-center justify-between gap-3 text-sm">
+              <span className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: sourceColor(name) }}/><span className="truncate">{name}</span></span>
+              <strong className="tabular-nums">{formatCurrency(amount)}</strong>
+            </div>)}
+          </div>
+        </> : <p className="text-sm text-muted-foreground">No income recorded for this period yet.</p>}
+      </section>
+      <section className={`${panel} min-h-[360px] p-5 sm:p-6`}>
+        <h2 className="text-base font-semibold">Income over time</h2>
+        <p className="text-[11px] text-muted-foreground">Recorded month totals · {months.length ? `${formatCurrency(trailingTotal)} in the last 12 months` : "No recorded income yet"}</p>
+        <div className="mt-5 h-[280px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 15, right: 12, bottom: 0, left: -6 }}
+              onClick={event => { const month = event?.activePayload?.[0]?.payload; if (month?.value != null) setSelectedMonth(month.monthKey); }}>
+              <defs><linearGradient id="incomeHistoryFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#30d991" stopOpacity={0.27}/><stop offset="100%" stopColor="#30d991" stopOpacity={0}/></linearGradient></defs>
+              <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+              <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#91a1b2" }} minTickGap={16}/>
+              <YAxis axisLine={false} tickLine={false} width={52} tick={{ fontSize: 10, fill: "#91a1b2" }} domain={[0, chartMax * 1.15]} tickFormatter={value => `$${value.toFixed(0)}`}/>
+              <Tooltip contentStyle={{ background: "#111b27", border: "1px solid #33465a", borderRadius: 10, fontSize: 12 }}
+                labelFormatter={(_, items) => items?.[0]?.payload?.monthKey ? monthLabel(items[0].payload.monthKey) : ""}
+                formatter={value => [formatCurrency(value), "Recorded income"]}/>
+              <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} fill="url(#incomeHistoryFill)" connectNulls={false}
+                dot={point => point?.payload?.value == null ? null : <circle cx={point.cx} cy={point.cy} r={3} fill="#30e69b"/>}
+                activeDot={{ r: 5 }} isAnimationActive={false}/>
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </section>
+    </div>
     {(visibleMonths.some(month => month.stocks > 0) || legacy.undated.length > 0) && <div className="space-y-1 px-1 text-[10px] text-muted-foreground">
       {visibleMonths.some(month => month.stocks > 0) && <p>Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
       {legacy.undated.length > 0 && <p className="text-amber-300">
