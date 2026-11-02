@@ -153,7 +153,7 @@ export default function IncomeHistoryPage() {
       </div>
     </section>
     <div className="grid gap-3 lg:grid-cols-[minmax(320px,5fr)_minmax(0,7fr)]">
-      <section className={`${panel} min-h-[360px] p-5 sm:p-6`} aria-label="Selected month income">
+      <section className={`${panel} min-h-[470px] p-5 sm:p-6`} aria-label="Selected month income">
         <div className="flex items-center justify-between gap-2">
           <h2 className="text-xs font-bold uppercase tracking-[0.12em] text-[#91a6ba]">{selected ? monthLabel(selected.monthKey) : "No recorded month"}</h2>
           <div className="flex shrink-0 gap-1">
@@ -182,13 +182,13 @@ export default function IncomeHistoryPage() {
           </div>
         </> : <p className="text-sm text-muted-foreground">No income recorded for this period yet.</p>}
       </section>
-      <section className={`${panel} min-h-[360px] p-5 sm:p-6`}>
+      <section className={`${panel} min-h-[470px] p-5 sm:p-6`}>
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-base font-semibold">Income over time</h2>
           <span className="rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold tracking-wide text-emerald-300">YTD</span>
         </div>
         <p className="text-[11px] text-muted-foreground">{currentMonth.slice(0, 4)} YTD {formatCurrency(ytdTotal)} · Last 12 months {formatCurrency(trailingTotal)}</p>
-        <div className="mt-5 h-[280px] w-full">
+        <div className="mt-5 h-[365px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 15, right: 12, bottom: 0, left: -6 }}
               onClick={event => { const month = event?.activePayload?.[0]?.payload; if (month?.value != null) setSelectedMonth(month.monthKey); }}>
