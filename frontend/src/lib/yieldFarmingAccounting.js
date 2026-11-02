@@ -2555,16 +2555,20 @@ function loadKryptexTracker() {
       ),
 
     currentBalance:
-      Number(
-        parsed.currentBalance
-      ) ||
-      KRYPTEX_OPENING_BALANCE_USD,
+      parsed.currentBalance != null && Number.isFinite(Number(parsed.currentBalance))
+        ? Number(parsed.currentBalance) : KRYPTEX_OPENING_BALANCE_USD,
 
     lastBalance:
-      Number(
-        parsed.lastBalance
-      ) ||
-      KRYPTEX_OPENING_BALANCE_USD,
+      parsed.lastBalance != null && Number.isFinite(Number(parsed.lastBalance))
+        ? Number(parsed.lastBalance) : KRYPTEX_OPENING_BALANCE_USD,
+
+    peakBalance:
+      parsed.peakBalance != null && Number.isFinite(Number(parsed.peakBalance))
+        ? Number(parsed.peakBalance) : undefined,
+
+    dailyBalanceDays:
+      parsed.dailyBalanceDays && typeof parsed.dailyBalanceDays === "object"
+        ? parsed.dailyBalanceDays : {},
 
     openingBalanceUsd:
       KRYPTEX_OPENING_BALANCE_USD,
@@ -2618,10 +2622,8 @@ function getKryptexStats(
   tracker
 ) {
   const currentBalanceUsd =
-    Number(
-      tracker?.currentBalance
-    ) ||
-    KRYPTEX_OPENING_BALANCE_USD;
+    tracker?.currentBalance != null && Number.isFinite(Number(tracker.currentBalance))
+      ? Number(tracker.currentBalance) : KRYPTEX_OPENING_BALANCE_USD;
 
   const dailyUsd =
     Number(

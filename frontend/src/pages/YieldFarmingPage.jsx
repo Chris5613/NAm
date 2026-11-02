@@ -1,4 +1,5 @@
 import { kryptexIncrease } from "../lib/kryptexEarnings";
+import { recordKryptexDailyBalance, withKryptexDailyBalance } from "../lib/kryptexDailyBalance";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { STOCK_DIVIDEND_PAYOUTS_KEY, stockPayoutTotal } from "@/lib/stockDividendPayouts";
@@ -1892,6 +1893,10 @@ const importSaladPayload =
             const { earned: positiveDelta, peak: peakBalance } =
               kryptexIncrease(currentBalance, baselineBalance, current?.peakBalance);
 
+            const day = getTodayKey();
+            const recordedToday = Number(readObject("yield_daily_earnings_by_source_v2")?.days?.[day]?.sources?.Kryptex) || 0;
+            const dailyBalanceDays = recordKryptexDailyBalance(current, currentBalance, day, recordedToday);
+
             const monthKey =
               getCurrentMonthKey();
 
@@ -1946,6 +1951,7 @@ const importSaladPayload =
               lastBalance:
                 currentBalance,
               peakBalance,
+              dailyBalanceDays,
               openingBalanceUsd:
                 KRYPTEX_OPENING_BALANCE_USD,
               lifetimeEarnedUsd:
@@ -3681,8 +3687,10 @@ const importSaladPayload =
         ? luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc)
         : {};
     }
-    const sources = withUnetworkDatedEarnings(
-      { ...(earningsLedger.days[key]?.sources || {}) }, unetworkTracker, key
+    const sources = withKryptexDailyBalance(
+      withUnetworkDatedEarnings(
+        { ...(earningsLedger.days[key]?.sources || {}) }, unetworkTracker, key
+      ), kryptexTracker, key
     );
     // Wallet delta, not a second earnings feed, powers today's RollerCoin
     // income. Older days retain their stored values for compatibility.
