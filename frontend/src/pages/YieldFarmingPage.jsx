@@ -13,6 +13,7 @@ import { currentLuloUtcDaily, luloSourcesForChartDay } from "@/lib/luloUtcDaily"
 import { useLegacyLuloMonthlyAccounting } from "@/hooks/useLegacyLuloMonthlyAccounting";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { latestRollerCoinTimestamp, shouldAcceptRollerCoinBalance } from "@/lib/rollerCoinFreshness";
+import { withUnetworkDatedEarnings } from "@/lib/unetworkDailyIncome";
 import { Card, CardContent } from "@/components/ui/card";
 import DividendIncomeSection from "@/components/DividendIncomeSection";
 import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -3443,7 +3444,9 @@ const importSaladPayload =
         // RollerCoin's month-to-date USD valuation changes with the TRX
         // market price. Those changes are P/L, not newly mined rewards.
         // Actual dated mining income is rendered from RollerCoin daily rows.
-        if (name === "RollerCoin") {
+        // Unetwork's saved daily rows use the Pacific posting day; its
+        // month-to-date increase can arrive after a month-boundary baseline.
+        if (name === "RollerCoin" || name === "Unetwork") {
           lastSources[name] = amount;
           continue;
         }
@@ -3678,7 +3681,9 @@ const importSaladPayload =
         ? luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc)
         : {};
     }
-    const sources = { ...(earningsLedger.days[key]?.sources || {}) };
+    const sources = withUnetworkDatedEarnings(
+      { ...(earningsLedger.days[key]?.sources || {}) }, unetworkTracker, key
+    );
     // Wallet delta, not a second earnings feed, powers today's RollerCoin
     // income. Older days retain their stored values for compatibility.
     const walletDay = rollerCoinTracker?.walletDaily?.[key];
