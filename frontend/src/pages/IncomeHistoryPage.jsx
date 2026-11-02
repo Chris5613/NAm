@@ -97,7 +97,6 @@ export default function IncomeHistoryPage() {
   const projectMonths = useMemo(() => getEffectiveProjectIncome(liveMonths, history.snapshots), [liveMonths, history.snapshots]);
   const legacy = useMemo(() => legacyProjectIncome(history.legacyProjects), [history.legacyProjects]);
   const manualMonths = history.manualIncome?.monthly;
-  const archived2025 = history.manualIncome?.annual2025 || {};
   const months = useMemo(() => {
     const recorded = buildIncomeHistory(projectMonths, history.payouts, currentMonth, legacy);
     return mergeManualIncome(recorded, manualMonths || {}, currentMonth);
@@ -113,7 +112,6 @@ export default function IncomeHistoryPage() {
   const trailingTotal = months.filter(month => month.monthKey >= shiftMonth(currentMonth, -11))
     .reduce((sum, month) => sum + month.total, 0);
   const ytdTotal = ytdMonths.reduce((sum, month) => sum + (month.total || 0), 0);
-  const archived2025Total = Object.values(archived2025).reduce((sum, amount) => sum + amount, 0);
   const sources = Object.entries(selected?.sources || {}).sort((a, b) => b[1] - a[1]);
   const topSource = sources[0];
   const chartData = ytdMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
@@ -209,21 +207,6 @@ export default function IncomeHistoryPage() {
         </div>
       </section>
     </div>
-    {Object.keys(archived2025).length > 0 && <section className={`${panel} p-4`} aria-label="2025 annual income archive">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div>
-          <h2 className="text-base font-semibold">2025 archive</h2>
-          <p className="text-[11px] text-muted-foreground">Annual figures without monthly dates</p>
-        </div>
-        <strong className="text-lg tabular-nums text-emerald-400">{formatCurrency(archived2025Total)}</strong>
-      </div>
-      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
-        {Object.entries(archived2025).map(([name, amount]) => <div key={name} className="flex items-center justify-between gap-3 rounded-xl border border-[#263342] bg-[#0e141c] px-3 py-3 text-xs">
-          <span className="flex min-w-0 items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: sourceColor(name) }}/><span className="truncate">{name}</span></span>
-          <strong className="tabular-nums">{formatCurrency(amount)}</strong>
-        </div>)}
-      </div>
-    </section>}
     {(ytdMonths.some(month => month.stocks > 0) || selected?.stocks > 0 || legacy.undated.length > 0) && <div className="space-y-1 px-1 text-[10px] text-muted-foreground">
       {(ytdMonths.some(month => month.stocks > 0) || selected?.stocks > 0) && <p>Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
       {legacy.undated.length > 0 && <p className="text-amber-300">
