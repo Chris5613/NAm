@@ -4,10 +4,10 @@ import { authApi } from "@/lib/apiClient";
 import { NavLink } from "react-router-dom";
 import ImportDataDialog from "@/components/ImportDataDialog";
 import { useAuth } from "@/lib/AuthContext";
-import { Home, CreditCard, CalendarDays, ChartNoAxesCombined, Bike, Download, LogOut, KeyRound } from "lucide-react";
+import { Home, CreditCard, CalendarDays, ChartNoAxesCombined, Bike, Target, Download, LogOut, KeyRound } from "lucide-react";
 
 const mainLinks = [{ to: "/", label: "Home", Icon: Home }, { to: "/spending", label: "Spending", Icon: CreditCard }];
-const financeLinks = [{ to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/income-history", label: "Income History", Icon: ChartNoAxesCombined }, { to: "/doordash", label: "Delivery", Icon: Bike }];
+const financeLinks = [{ to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/income-history", label: "Income History", Icon: ChartNoAxesCombined }, { to: "/doordash", label: "Delivery", Icon: Bike }, { to: "/project-break-even", label: "Project Break-Even", Icon: Target }];
 
 export default function Sidebar() {
   const [importOpen, setImportOpen] = useState(false);
