@@ -58,6 +58,8 @@ export default function ProjectBreakEvenPage() {
     if (!a.spent || !b.spent) return Number(Boolean(b.spent)) - Number(Boolean(a.spent));
     return b.earned / b.spent - a.earned / a.spent;
   }), [data.rows]);
+  const inProgress = ranked.filter(row => !row.spent || row.earned < row.spent);
+  const recoveredProjects = ranked.filter(row => row.spent > 0 && row.earned >= row.spent);
   const selected = ranked.find(row => row.id === selectedId) || ranked[0];
   const configured = ranked.filter(row => row.spent > 0);
   const totalSpent = configured.reduce((sum, row) => sum + row.spent, 0);
@@ -84,6 +86,24 @@ export default function ProjectBreakEvenPage() {
     saveProjectPayback(next);
     setData(readProjects());
     setEditing(false);
+  }
+
+  function projectRow(row, index) {
+    const ratio = row.spent > 0 ? Math.max(0, row.earned) / row.spent * 100 : 0;
+    const color = colors[row.name] || "#38bdf8";
+    return <button key={row.id} type="button" onClick={() => selectProject(row.id)}
+      className={`w-full rounded-xl border p-3 text-left transition-colors sm:p-4 ${selected?.id === row.id ? "border-[#3ba580] bg-[#12231f]" : "border-[#263342] bg-[#101922] hover:border-[#3c5267]"}`}
+      aria-pressed={selected?.id === row.id}>
+      <div className="flex items-center gap-3">
+        <span className="text-[11px] font-semibold tabular-nums text-[#91a4b8]">{String(index + 1).padStart(2, "0")}</span>
+        <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
+        <span className="min-w-0 flex-1 truncate text-sm font-semibold">{row.name}</span>
+        <span className={`text-lg font-semibold tabular-nums ${ratio >= 100 ? "text-[#32d99b]" : "text-white"}`}>{row.spent ? percent(ratio) : "Add cost"}</span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-[#91a4b8]" />
+      </div>
+      <p className="mt-2 text-xs tabular-nums text-[#91a4b8]">{row.spent ? `${money(row.earned)} earned of ${money(row.spent)} spent` : `${money(row.earned)} recorded earnings`}</p>
+      <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full transition-[width]" style={{ width: `${Math.min(100, ratio)}%`, backgroundColor: color }} /></div>
+    </button>;
   }
 
   return <div className="min-w-0 space-y-3 pb-7 text-white" data-testid="project-break-even-page">
@@ -114,27 +134,12 @@ export default function ProjectBreakEvenPage() {
     </section>
 
     <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1.45fr)_minmax(320px,1fr)]">
-      <section className={`${panel} min-w-0 p-4 sm:p-5`} aria-label="Recovery ranking">
-        <h2 className="text-base font-semibold">Recovery ranking</h2>
-        <p className="mt-0.5 text-[11px] text-[#91a4b8]">Select a project to inspect its numbers</p>
+      <section className={`${panel} min-w-0 p-4 sm:p-5`} aria-label="Still in progress">
+        <div className="flex items-baseline justify-between gap-2"><h2 className="text-base font-semibold">Still in progress</h2><span className="text-xs text-[#91a4b8]">{inProgress.length} projects</span></div>
+        <p className="mt-0.5 text-[11px] text-[#91a4b8]">Updates from your Passive Income earnings and saved costs</p>
         <div className="mt-4 space-y-2">
-          {ranked.map((row, index) => {
-            const ratio = row.spent > 0 ? Math.max(0, row.earned) / row.spent * 100 : 0;
-            const color = colors[row.name] || "#38bdf8";
-            return <button key={row.id} type="button" onClick={() => selectProject(row.id)}
-              className={`w-full rounded-xl border p-3 text-left transition-colors sm:p-4 ${selected?.id === row.id ? "border-[#3ba580] bg-[#12231f]" : "border-[#263342] bg-[#101922] hover:border-[#3c5267]"}`}
-              aria-pressed={selected?.id === row.id}>
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold tabular-nums text-[#91a4b8]">{String(index + 1).padStart(2, "0")}</span>
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold">{row.name}</span>
-                <span className={`text-lg font-semibold tabular-nums ${ratio >= 100 ? "text-[#32d99b]" : "text-white"}`}>{row.spent ? percent(ratio) : "Add cost"}</span>
-                <ChevronRight className="h-4 w-4 shrink-0 text-[#91a4b8]" />
-              </div>
-              <p className="mt-2 text-xs tabular-nums text-[#91a4b8]">{row.spent ? `${money(row.earned)} earned of ${money(row.spent)} spent` : `${money(row.earned)} recorded earnings`}</p>
-              <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full transition-[width]" style={{ width: `${Math.min(100, ratio)}%`, backgroundColor: color }} /></div>
-            </button>;
-          })}
+          {inProgress.map(projectRow)}
+          {!inProgress.length && <p className="rounded-xl border border-[#263342] bg-[#101922] px-4 py-6 text-center text-sm text-[#91a4b8]">All projects with entered costs have recovered them.</p>}
         </div>
       </section>
 
@@ -162,6 +167,13 @@ export default function ProjectBreakEvenPage() {
         </> : <p className="text-sm text-[#91a4b8]">No projects available yet.</p>}
       </section>
     </div>
+
+    <section className={`${panel} min-w-0 p-4 sm:p-5`} aria-label="Recovered projects">
+      <div className="flex items-baseline justify-between gap-2"><h2 className="text-base font-semibold">Recovered</h2><span className="text-xs text-[#91a4b8]">{recoveredProjects.length} projects</span></div>
+      <p className="mt-0.5 text-[11px] text-[#91a4b8]">Recorded earnings have reached or exceeded the total spent you entered</p>
+      {recoveredProjects.length ? <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">{recoveredProjects.map(projectRow)}</div>
+        : <p className="mt-4 rounded-xl border border-[#263342] bg-[#101922] px-4 py-6 text-center text-sm text-[#91a4b8]">Projects will move here automatically once their recorded earnings cover their entered costs.</p>}
+    </section>
 
     {data.savings.length > 0 && <section className={`${panel} p-4 sm:p-5`} aria-label="Balances that remain yours">
       <h2 className="text-sm font-semibold">Balances that remain yours</h2>
