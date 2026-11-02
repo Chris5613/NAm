@@ -37,6 +37,12 @@ import {
 
 const STORAGE_KEY = "doordash_earnings_v1";
 const APPS = ["DoorDash", "Uber Eats", "Instacart", "Shipt"];
+const APP_STYLES = {
+  DoorDash: { icon: Bike, color: "#32d99b" },
+  "Uber Eats": { icon: Car, color: "#60a5fa" },
+  Instacart: { icon: ShoppingCart, color: "#ffbc57" },
+  Shipt: { icon: Package, color: "#b291fa" },
+};
 
 function readEntries() {
   try {
@@ -145,16 +151,16 @@ function getApp(entry) {
   return "DoorDash";
 }
 
-function Metric({ icon: Icon, label, value, detail }) {
+function Metric({ icon: Icon, label, value, detail, tone = "text-foreground" }) {
   return (
-    <Card className="flex min-h-[122px] flex-col justify-center rounded-[15px] border-[#25272c] bg-[#101114]">
-      <CardContent className="px-3.5 py-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Icon className="h-4 w-4" />
+    <Card className="flex min-h-[122px] min-w-0 flex-col justify-center rounded-[15px] border-[#29394a] bg-[#0d151e]">
+      <CardContent className="px-4 py-4">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          <Icon className="h-4 w-4 shrink-0" />
           <span>{label}</span>
         </div>
-        <div className="mt-1.5 text-[21px] font-semibold tracking-tight">{value}</div>
-        <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
+        <div className={`mt-2 text-[clamp(21px,2vw,28px)] font-bold tracking-tight tabular-nums ${tone}`}>{value}</div>
+        <div className="mt-1 text-[11px] text-muted-foreground">{detail}</div>
       </CardContent>
     </Card>
   );
@@ -216,6 +222,12 @@ export default function DoorDashPage() {
   const allTimeGross = entries.reduce((sum, entry) => sum + getEarnings(entry), 0);
   const allTimeExpenses = entries.reduce((sum, entry) => sum + getExpenses(entry), 0);
   const allTimeNet = entries.reduce((sum, entry) => sum + getNet(entry), 0);
+  const thisWeekEntries = entries.filter((entry) => {
+    const date = String(entry?.date || "").slice(0, 10);
+    return date >= currentWeekStart && date <= addDaysKey(currentWeekStart, 6);
+  });
+  const thisWeekGross = thisWeekEntries.reduce((sum, entry) => sum + getEarnings(entry), 0);
+  const thisWeekExpenses = thisWeekEntries.reduce((sum, entry) => sum + getExpenses(entry), 0);
 
   const appTotals = useMemo(() => {
     const totals = { DoorDash: 0, "Uber Eats": 0, Instacart: 0, Shipt: 0 };
@@ -343,6 +355,7 @@ const customWeeks = Array.from(
   }, [entries, selectedWeekStart]);
 
   const chartData = chartView === "weekly" ? weeklyChartData : monthlyChartData;
+  const hasChartActivity = chartData.some((day) => day.Earnings !== 0 || day.Expenses !== 0);
 
   const formEarnings = Math.max(0, Number(form.earnings) || 0);
   const formExpenses = Math.max(0, Number(form.expenses) || 0);
@@ -418,87 +431,59 @@ const customWeeks = Array.from(
   }
 
   return (
-    <div className="space-y-3" data-testid="doordash-page">
-      <div className="flex justify-end">
-        <Button onClick={() => setAddOpen(true)}>
+    <div className="space-y-3.5" data-testid="doordash-page">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Delivery</h1>
+          <p className="mt-1 text-xs text-muted-foreground">Earnings and expenses from your logged delivery work</p>
+        </div>
+        <Button onClick={() => setAddOpen(true)} className="bg-[#32d99b] font-semibold text-[#061910] hover:bg-[#2ac28b]">
           <Plus className="mr-2 h-4 w-4" />
           Add earnings
         </Button>
       </div>
 
-      <div className="grid gap-[14px] md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,2fr)]">
+      <div className="grid gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <Metric
           icon={WalletCards}
-          label="All Time"
+          label="This week net"
+          value={money(thisWeekGross - thisWeekExpenses)}
+          detail={`Gross ${money(thisWeekGross)} · Expenses ${money(thisWeekExpenses)}`}
+          tone="text-emerald-400"
+        />
+        <Metric
+          icon={WalletCards}
+          label={selectedMonth === currentMonth ? "This month net" : `${monthLabel(selectedMonth)} net`}
+          value={money(monthNet)}
+          detail={`Gross ${money(monthGross)} · Expenses ${money(monthExpenses)}`}
+          tone="text-emerald-400"
+        />
+        <Metric
+          icon={WalletCards}
+          label="All-time net"
           value={money(allTimeNet)}
           detail={`Gross ${money(allTimeGross)} · Expenses ${money(allTimeExpenses)}`}
         />
-
         <Metric
-          icon={WalletCards}
-          label="This Month"
-          value={money(monthNet)}
-          detail={`Gross ${money(monthGross)} · Expenses ${money(monthExpenses)}`}
+          icon={ReceiptText}
+          label="Expenses this month"
+          value={money(monthExpenses)}
+          detail={`${monthLabel(selectedMonth)} · all delivery apps`}
+          tone="text-rose-400"
         />
-
-        <Card className="rounded-[15px] border-[#25272c] bg-[#101114] md:col-span-2 xl:col-span-1">
-          <CardContent className="px-3.5 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium">Apps this month</p>
-                <p className="mt-1 text-xs text-muted-foreground">Gross earnings by delivery app</p>
-              </div>
-              <ReceiptText className="h-4 w-4 text-muted-foreground" />
-            </div>
-
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-              <div className="rounded-lg border border-border/50 bg-muted/15 p-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Bike className="h-3.5 w-3.5" />
-                  DoorDash
-                </div>
-                <div className="mt-1 text-[14px] font-semibold tabular-nums">{money(appTotals.DoorDash)}</div>
-              </div>
-
-              <div className="rounded-lg border border-border/50 bg-muted/15 p-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Car className="h-3.5 w-3.5" />
-                  Uber Eats
-                </div>
-                <div className="mt-1 text-[14px] font-semibold tabular-nums">{money(appTotals["Uber Eats"])}</div>
-              </div>
-
-              <div className="rounded-lg border border-border/50 bg-muted/15 p-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <ShoppingCart className="h-3.5 w-3.5" />
-                  Instacart
-                </div>
-                <div className="mt-1 text-[14px] font-semibold tabular-nums">{money(appTotals.Instacart)}</div>
-              </div>
-
-              <div className="rounded-lg border border-border/50 bg-muted/15 p-2">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Package className="h-3.5 w-3.5" />
-                  Shipt
-                </div>
-                <div className="mt-1 text-[14px] font-semibold tabular-nums">{money(appTotals.Shipt)}</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
       </div>
 
-      <div className="grid items-stretch gap-[14px] xl:grid-cols-[minmax(0,1.9fr)_minmax(345px,1fr)]">
-      <Card className="flex h-full min-w-0 flex-col overflow-hidden rounded-[15px] border-[#25272c] bg-[#101114]">
+      <div className="grid items-stretch gap-3.5 xl:grid-cols-[minmax(0,1.9fr)_minmax(320px,1fr)]">
+      <Card className="flex min-h-[430px] min-w-0 flex-col overflow-hidden rounded-[15px] border-[#29394a] bg-[#0d151e]">
         <CardContent className="flex h-full min-h-0 flex-col p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-[15px] font-semibold">
+              <h2 className="text-[17px] font-semibold">
                 {chartView === "weekly" ? "Weekly Activity" : "Monthly Activity"}
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
                 {chartView === "weekly"
-                  ? weekRangeLabel(selectedWeekStart)
+                  ? `Earnings and expenses · ${weekRangeLabel(selectedWeekStart)}`
                   : monthLabel(selectedMonth)}
               </p>
             </div>
@@ -583,8 +568,8 @@ const customWeeks = Array.from(
             </div>
           </div>
 
-          <div className="mt-4 min-h-[300px] flex-1">
-            {chartData.length ? (
+          <div className="mt-4 min-h-[320px] flex-1">
+            {hasChartActivity ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={chartData}
@@ -683,30 +668,30 @@ const customWeeks = Array.from(
               </ResponsiveContainer>
             ) : (
               <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-border/60 text-sm text-muted-foreground">
-                No delivery earnings logged for this month yet.
+                No delivery earnings logged for this {chartView === "weekly" ? "week" : "month"} yet.
               </div>
             )}
           </div>
         </CardContent>
       </Card>
 
-      <Card className="min-w-0 overflow-hidden rounded-[15px] border-[#25272c] bg-[#101114]">
+      <Card className="min-h-[430px] min-w-0 overflow-hidden rounded-[15px] border-[#29394a] bg-[#0d151e]">
         <CardContent className="p-0">
-          <div className="flex items-center gap-2 border-b border-[#25272c] px-4 py-4">
-            <ReceiptText className="h-5 w-5" />
+          <div className="flex items-center gap-2 border-b border-[#29394a] px-4 py-4">
+            <ReceiptText className="h-5 w-5 text-muted-foreground" />
             <div>
-              <h2 className="font-semibold">Recent Earnings</h2>
-              <p className="mt-0.5 text-xs text-muted-foreground">Grouped by week</p>
+              <h2 className="text-[17px] font-semibold">Recent weeks</h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">Select a week to see its days</p>
             </div>
           </div>
 
           {recentWeeks.length ? (
-            <div className="max-h-[360px] divide-y divide-[#25272c] overflow-y-auto [scrollbar-width:thin]">
+            <div className="max-h-[370px] space-y-2 overflow-y-auto p-3 [scrollbar-width:thin]">
               {recentWeeks.map((week) => {
                 const isExpanded = expandedWeeks.has(week.key);
 
                 return (
-                  <div key={week.key}>
+                  <div key={week.key} className={`overflow-hidden rounded-xl border ${isExpanded ? "border-emerald-500/50 bg-emerald-500/[0.06]" : "border-[#29394a] bg-[#101a24]"}`}>
                     <button
                       type="button"
                       onClick={() => toggleWeek(week.key)}
@@ -719,9 +704,7 @@ const customWeeks = Array.from(
                             isExpanded ? "rotate-90" : ""
                           }`}
                         />
-                        <div>
-                          <div className="text-[12px] font-semibold">{week.label}</div>
-                        </div>
+                        <div className="text-[13px] font-semibold">{week.label}</div>
                       </div>
 
                       <div className="text-right text-xs text-muted-foreground">
@@ -734,12 +717,12 @@ const customWeeks = Array.from(
                           {week.net >= 0 ? "+" : ""}
                           {money(week.net)}
                         </div>
-                        <div className="mt-0.5 text-[10px] text-muted-foreground">weekly net</div>
+                        <div className="mt-0.5 text-[10px] text-muted-foreground">net</div>
                       </div>
                     </button>
 
                     {isExpanded && (
-                      <div className="divide-y divide-border/40">
+                      <div className="divide-y divide-border/40 border-t border-[#29394a]">
                         {week.days.map((day) => {
                           const net = day.earnings - day.expenses;
 
@@ -790,6 +773,40 @@ const customWeeks = Array.from(
       </Card>
 
       </div>
+
+      <Card className="rounded-[15px] border-[#29394a] bg-[#0d151e]">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[17px] font-semibold">Apps this month</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Gross earnings by delivery app · {monthLabel(selectedMonth)}</p>
+            </div>
+            <div className="flex items-center overflow-hidden rounded-lg border border-[#29394a] bg-[#101a24]">
+              <Button type="button" variant="ghost" size="icon" onClick={goToPreviousMonth} aria-label="Previous month" className="h-8 w-8 rounded-none">
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="min-w-[116px] px-2 text-center text-xs font-medium">{monthLabel(selectedMonth)}</span>
+              <Button type="button" variant="ghost" size="icon" onClick={goToNextMonth} disabled={!canGoNextMonth} aria-label="Next month" className="h-8 w-8 rounded-none">
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {APPS.map((app) => {
+              const { icon: Icon, color } = APP_STYLES[app];
+              return (
+                <div key={app} className="min-w-0 rounded-xl border border-[#29394a] bg-[#101a24] p-4">
+                  <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                    <Icon className="h-4 w-4" style={{ color }} />
+                    {app}
+                  </div>
+                  <div className="mt-4 text-[22px] font-semibold tracking-tight tabular-nums">{money(appTotals[app])}</div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
 
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md">
