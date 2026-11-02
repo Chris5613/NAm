@@ -5,6 +5,7 @@ import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
+import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildIncomeHistory, legacyProjectIncome, shiftMonth } from "@/lib/incomeHistory";
 import {
@@ -29,6 +30,12 @@ const sourceColors = {
   Stocks: "#38bdf8",
   COIN: "#2dd4bf",
   GoMining: "#fb923c",
+  "GoMining Mining": "#fb923c",
+  "GoMining Bounty": "#fbbf24",
+  "GoMining Liquidity": "#f59e0b",
+  "GoMining Locking": "#f97316",
+  Nosana: "#e879f9",
+  "Unity Network": "#a78bfa",
 };
 const fallbackColors = ["#e879f9", "#f472b6", "#facc15", "#818cf8", "#22d3ee"];
 const sourceColor = name => sourceColors[name] || fallbackColors[
@@ -48,6 +55,7 @@ function readHistory() {
     unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(),
     backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(),
     payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
+    manualIncome: {},
   };
 }
 
@@ -55,7 +63,7 @@ export default function IncomeHistoryPage() {
   const [history, setHistory] = useState(readHistory);
   const [selectedMonth, setSelectedMonth] = useState(null);
   const [clock, setClock] = useState(Date.now());
-  useEffect(() => subscribe(() => setHistory(readHistory())), []);
+  useEffect(() => subscribe(() => setHistory(current => ({ ...readHistory(), manualIncome: current.manualIncome }))), []);
   useEffect(() => {
     const timer = window.setInterval(() => setClock(Date.now()), 60000);
     return () => window.clearInterval(timer);
@@ -65,8 +73,9 @@ export default function IncomeHistoryPage() {
     const refresh = async () => {
       try {
         const result = await api.get("/api/yield-sources/earnings");
-        if (active && result?.loopscaleHistory) setHistory(current => ({
+        if (active && result) setHistory(current => ({
           ...current, loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory),
+          manualIncome: result.manualIncomeHistory || current.manualIncome,
         }));
       } catch { /* Retain saved history if the provider is unavailable. */ }
     };
@@ -87,7 +96,12 @@ export default function IncomeHistoryPage() {
   const liveMonths = useBackendMonthlyIncome(trackers, localMonths);
   const projectMonths = useMemo(() => getEffectiveProjectIncome(liveMonths, history.snapshots), [liveMonths, history.snapshots]);
   const legacy = useMemo(() => legacyProjectIncome(history.legacyProjects), [history.legacyProjects]);
-  const months = useMemo(() => buildIncomeHistory(projectMonths, history.payouts, currentMonth, legacy), [projectMonths, history.payouts, currentMonth, legacy]);
+  const manualMonths = history.manualIncome?.monthly;
+  const archived2025 = history.manualIncome?.annual2025 || {};
+  const months = useMemo(() => {
+    const recorded = buildIncomeHistory(projectMonths, history.payouts, currentMonth, legacy);
+    return mergeManualIncome(recorded, manualMonths || {}, currentMonth);
+  }, [projectMonths, history.payouts, currentMonth, legacy, manualMonths]);
   const monthMap = new Map(months.map(month => [month.monthKey, month]));
   const ytdMonths = [];
   for (let key = `${currentMonth.slice(0, 4)}-01`; key <= currentMonth; key = shiftMonth(key, 1)) {
@@ -99,6 +113,7 @@ export default function IncomeHistoryPage() {
   const trailingTotal = months.filter(month => month.monthKey >= shiftMonth(currentMonth, -11))
     .reduce((sum, month) => sum + month.total, 0);
   const ytdTotal = ytdMonths.reduce((sum, month) => sum + (month.total || 0), 0);
+  const archived2025Total = Object.values(archived2025).reduce((sum, amount) => sum + amount, 0);
   const sources = Object.entries(selected?.sources || {}).sort((a, b) => b[1] - a[1]);
   const topSource = sources[0];
   const chartData = ytdMonths.map(month => ({ ...month, label: shortMonth(month.monthKey), value: month.total }));
@@ -194,6 +209,21 @@ export default function IncomeHistoryPage() {
         </div>
       </section>
     </div>
+    {Object.keys(archived2025).length > 0 && <section className={`${panel} p-4`} aria-label="2025 annual income archive">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <h2 className="text-base font-semibold">2025 archive</h2>
+          <p className="text-[11px] text-muted-foreground">Annual figures without monthly dates</p>
+        </div>
+        <strong className="text-lg tabular-nums text-emerald-400">{formatCurrency(archived2025Total)}</strong>
+      </div>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+        {Object.entries(archived2025).map(([name, amount]) => <div key={name} className="flex items-center justify-between gap-3 rounded-xl border border-[#263342] bg-[#0e141c] px-3 py-3 text-xs">
+          <span className="flex min-w-0 items-center gap-2"><span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: sourceColor(name) }}/><span className="truncate">{name}</span></span>
+          <strong className="tabular-nums">{formatCurrency(amount)}</strong>
+        </div>)}
+      </div>
+    </section>}
     {(ytdMonths.some(month => month.stocks > 0) || selected?.stocks > 0 || legacy.undated.length > 0) && <div className="space-y-1 px-1 text-[10px] text-muted-foreground">
       {(ytdMonths.some(month => month.stocks > 0) || selected?.stocks > 0) && <p>Stock payouts use announced distributions and saved share counts; check your brokerage for actual cash received.</p>}
       {legacy.undated.length > 0 && <p className="text-amber-300">

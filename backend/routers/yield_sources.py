@@ -10,6 +10,7 @@ from ..yield_poll_merge import filter_registered_source_snapshots
 from ..auth import current_user
 from ..db import get_db
 from ..models import User, Project
+from ..manual_income_history import manual_income_for_user
 from ..yield_source_sync import (
     REGISTRATION_KEY, SNAPSHOTS_KEY, HISTORY_KEY,
     registered_wallets, _read, _write,
@@ -114,6 +115,7 @@ async def backend_earnings_ledger(
         "loopscaleHistory": loopscale,
         "sourceCheckedAt": source.get("checkedAt"),
         "sourceSuccessfulAt": source.get("successfulAt"),
+        "manualIncomeHistory": manual_income_for_user(user.id),
         "migrationMode": "independent-server-ledger",
     }
 
