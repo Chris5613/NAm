@@ -19,9 +19,20 @@ const monthLabel = key => new Intl.DateTimeFormat("en-US", { month: "long", year
   .format(new Date(`${key}-15T12:00:00Z`));
 const shortMonth = key => new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" })
   .format(new Date(`${key}-15T12:00:00Z`));
-const sourceColors = ["#34d399", "#60a5fa", "#a78bfa", "#fbbf24", "#f472b6", "#38bdf8"];
-const sourceColor = name => name === "Stocks" ? "#60a5fa" : sourceColors[
-  [...name].reduce((hash, character) => hash + character.charCodeAt(0), 0) % sourceColors.length
+const sourceColors = {
+  Lulo: "#a3e635",
+  Loopscale: "#60a5fa",
+  Kryptex: "#fbbf24",
+  Salad: "#34d399",
+  Unetwork: "#a78bfa",
+  RollerCoin: "#fb7185",
+  Stocks: "#38bdf8",
+  COIN: "#2dd4bf",
+  GoMining: "#fb923c",
+};
+const fallbackColors = ["#e879f9", "#f472b6", "#facc15", "#818cf8", "#22d3ee"];
+const sourceColor = name => sourceColors[name] || fallbackColors[
+  [...name].reduce((hash, character) => hash + character.charCodeAt(0), 0) % fallbackColors.length
 ];
 
 function readHistory() {
