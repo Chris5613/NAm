@@ -126,7 +126,7 @@ export default function ProjectBreakEvenPage() {
         <span className="text-sm font-semibold tabular-nums text-[#91a4b8]">{String(index + 1).padStart(2, "0")}</span>
         <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: color }} />
         <span className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">{row.name}</span>
-        <span className={`text-xl font-semibold tabular-nums sm:text-2xl ${ratio >= 100 || noCostSalad ? "text-[#32d99b]" : "text-white"}`}>{row.spent ? percent(ratio) : noCostSalad ? "No cost" : "Add cost"}</span>
+        <span className={`text-xl font-semibold tabular-nums sm:text-2xl ${isRecovered(row) ? "text-[#32d99b]" : "text-white"}`}>{isRecovered(row) ? "Recovered" : row.spent ? percent(ratio) : "Add cost"}</span>
         <ChevronRight className="h-5 w-5 shrink-0 text-[#91a4b8]" />
       </div>
       <p className="mt-3 text-sm tabular-nums text-[#91a4b8]">{row.spent ? `${money(row.earned)} earned of ${money(row.spent)} spent` : `${money(row.earned)} recorded earnings`}</p>
@@ -185,7 +185,7 @@ export default function ProjectBreakEvenPage() {
           <div><h2 id="break-even-dialog-title" className="text-2xl font-semibold">{selected.name}</h2><p className="mt-1 text-sm text-[#91a4b8]">Earnings-only recovery</p></div>
           <button ref={closeButtonRef} type="button" onClick={closeProject} aria-label="Close project details" className="rounded-lg p-1.5 text-[#91a4b8] hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
-        <strong className="mt-6 block text-5xl tracking-tight">{selected.spent ? percent(Math.max(0, selected.earned) / selected.spent * 100) : "—"}</strong>
+        <strong className="mt-6 block text-5xl tracking-tight">{isRecovered(selected) ? "Recovered" : selected.spent ? percent(Math.max(0, selected.earned) / selected.spent * 100) : "—"}</strong>
         <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full" style={{ width: `${selected.spent ? Math.min(100, Math.max(0, selected.earned) / selected.spent * 100) : selected.id === "salad-project" && selected.earned > 0 ? 100 : 0}%`, backgroundColor: colors[selected.name] || "#38bdf8" }} /></div>
         <dl className="mt-5 divide-y divide-[#263342] border-t border-[#263342] text-base">
           <div className="flex justify-between gap-3 py-4"><dt className="text-[#91a4b8]">Total spent</dt><dd className="font-semibold tabular-nums">{selected.spent ? money(selected.spent) : "Not entered"}</dd></div>
