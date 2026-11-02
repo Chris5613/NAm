@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { Home, CreditCard, CalendarDays, ChartNoAxesCombined, Bike, Target, Download, LogOut, KeyRound } from "lucide-react";
 
 const mainLinks = [{ to: "/", label: "Home", Icon: Home }, { to: "/spending", label: "Spending", Icon: CreditCard }];
-const financeLinks = [{ to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/income-history", label: "Income History", Icon: ChartNoAxesCombined }, { to: "/doordash", label: "Delivery", Icon: Bike }, { to: "/project-break-even", label: "Project Break-Even", Icon: Target }];
+const financeLinks = [{ to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/income-history", label: "Income History", Icon: ChartNoAxesCombined }, { to: "/project-break-even", label: "Project Break-Even", Icon: Target }, { to: "/doordash", label: "Delivery", Icon: Bike }];
 
 export default function Sidebar() {
   const [importOpen, setImportOpen] = useState(false);
