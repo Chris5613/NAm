@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ChevronRight } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronRight, X } from "lucide-react";
 import { subscribe } from "@/lib/serverStore";
 import {
   formatCurrency, getKryptexStats, getPaybackStats, getRollerCoinTrackerStats,
@@ -45,7 +45,35 @@ export default function ProjectBreakEvenPage() {
   const [selectedId, setSelectedId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
+  const closeButtonRef = useRef(null);
+  const dialogRef = useRef(null);
+  const triggerRef = useRef(null);
   useEffect(() => subscribe(() => setData(readProjects())), []);
+  useEffect(() => {
+    if (!selectedId) return undefined;
+    closeButtonRef.current?.focus();
+    const onKeyDown = event => {
+      if (event.key === "Escape") {
+        setSelectedId(null);
+        setEditing(false);
+        triggerRef.current?.focus();
+      } else if (event.key === "Tab") {
+        const focusable = [...(dialogRef.current?.querySelectorAll('button:not([disabled]), input:not([disabled])') || [])];
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [selectedId]);
 
   const ranked = useMemo(() => [...data.rows].sort((a, b) => {
     if (!a.spent || !b.spent) return Number(Boolean(b.spent)) - Number(Boolean(a.spent));
@@ -65,9 +93,15 @@ export default function ProjectBreakEvenPage() {
     setDraft(selected?.spent > 0 ? String(selected.spent) : "");
     setEditing(true);
   }
-  function selectProject(id) {
-    setSelectedId(current => current === id ? null : id);
+  function selectProject(id, event) {
+    triggerRef.current = event.currentTarget;
+    setSelectedId(id);
     setEditing(false);
+  }
+  function closeProject() {
+    setSelectedId(null);
+    setEditing(false);
+    triggerRef.current?.focus();
   }
   function saveSpent(event) {
     event.preventDefault();
@@ -85,9 +119,9 @@ export default function ProjectBreakEvenPage() {
     const ratio = row.spent > 0 ? Math.max(0, row.earned) / row.spent * 100 : 0;
     const color = colors[row.name] || "#38bdf8";
     const noCostSalad = row.id === "salad-project" && !row.spent && row.earned > 0;
-    return <div key={row.id}><button type="button" onClick={() => selectProject(row.id)}
-      className={`w-full rounded-xl border p-3 text-left transition-colors sm:p-4 ${selected?.id === row.id ? "border-[#3ba580] bg-[#12231f]" : "border-[#263342] bg-[#101922] hover:border-[#3c5267]"}`}
-      aria-expanded={selected?.id === row.id} aria-controls={`break-even-detail-${row.id}`}>
+    return <button key={row.id} type="button" onClick={event => selectProject(row.id, event)}
+      className="w-full rounded-xl border border-[#263342] bg-[#101922] p-3 text-left transition-colors hover:border-[#3c5267] sm:p-4"
+      aria-haspopup="dialog">
       <div className="flex items-center gap-3">
         <span className="text-[11px] font-semibold tabular-nums text-[#91a4b8]">{String(index + 1).padStart(2, "0")}</span>
         <span className="h-2 w-2 rounded-full" style={{ backgroundColor: color }} />
@@ -96,25 +130,14 @@ export default function ProjectBreakEvenPage() {
         <ChevronRight className="h-4 w-4 shrink-0 text-[#91a4b8]" />
       </div>
       <p className="mt-2 text-xs tabular-nums text-[#91a4b8]">{row.spent ? `${money(row.earned)} earned of ${money(row.spent)} spent` : `${money(row.earned)} recorded earnings`}</p>
+      {row.spent > 0 && !isRecovered(row) && <p className="mt-1 text-xs font-semibold tabular-nums text-[#fbbf24]">{money(Math.max(0, row.spent - row.earned))} left to earn</p>}
       <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full transition-[width]" style={{ width: `${noCostSalad ? 100 : Math.min(100, ratio)}%`, backgroundColor: color }} /></div>
-    </button>
-      {selected?.id === row.id && <div id={`break-even-detail-${row.id}`} className="mt-2 rounded-xl border border-[#3c5267] bg-[#101922] p-4 text-sm">
-        <div className="flex justify-between gap-3 border-b border-[#263342] pb-3"><span className="text-[#91a4b8]">{selectedStats?.remaining === 0 ? "Above entered cost" : "Still to recover"}</span><strong className="tabular-nums">{selectedStats?.configured ? money(selectedStats.remaining === 0 ? Math.max(0, selectedStats.pnl) : selectedStats.remaining) : "—"}</strong></div>
-        <p className="mt-3 text-xs text-[#c8d3df]">{noCostSalad ? "Salad has recorded earnings and no entered cost to recover." : !selectedStats?.configured ? "Enter a cost to estimate recovery." : selectedStats.remaining === 0 ? "Entered costs recovered." : selectedStats.daysToProfit != null ? `About ${selectedStats.daysToProfit.toLocaleString()} days to recover at the current earnings pace.` : "No reliable daily pace available."}</p>
-        {selectedStats?.configured && selectedStats.remaining > 0 && <p className="mt-1 text-[11px] text-[#91a4b8]">Forecast only; earnings can change.</p>}
-        {editing ? <form onSubmit={saveSpent} className="mt-4 space-y-2">
-          <label htmlFor="break-even-spent" className="text-xs text-[#c8d3df]">Total spent (USD)</label>
-          <input id="break-even-spent" autoFocus type="number" min="0" step="0.01" value={draft} onChange={event => setDraft(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-[#3c5267] bg-[#111b25] px-3 py-2 text-sm outline-none focus:border-[#32d99b]" />
-          <div className="flex gap-2"><button type="submit" className="flex-1 rounded-lg bg-[#32d99b] px-3 py-2 text-xs font-semibold text-[#082019]">Save</button><button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-[#3c5267] px-3 py-2 text-xs">Cancel</button></div>
-        </form> : <button type="button" onClick={startEdit} className="mt-4 w-full rounded-lg border border-[#3c5267] bg-[#192936] px-3 py-2.5 text-xs font-semibold hover:bg-[#203447]">Edit total spent</button>}
-      </div>}
-    </div>;
+    </button>;
   }
 
   return <div className="min-w-0 space-y-3 pb-7 text-white" data-testid="project-break-even-page">
     <header className="px-1">
       <h1 className="text-[22px] font-semibold tracking-tight">Project Break-Even</h1>
-      <p className="mt-1 text-xs text-[#91a4b8]">Track how much of each project’s entered costs its recorded earnings have covered.</p>
     </header>
 
     <section className={`${panel} p-5`} aria-label="Earnings-only cost recovery">
@@ -156,6 +179,30 @@ export default function ProjectBreakEvenPage() {
       </section>
     </div>
 
-    <p className="px-1 text-[11px] text-[#91a4b8]">Recovery compares recorded lifetime earnings with costs you enter. It excludes current balances and does not represent realized profit.</p>
+    {selected && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event => { if (event.target === event.currentTarget) closeProject(); }}>
+      <section ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="break-even-dialog-title" className={`${panel} max-h-[90vh] w-full max-w-md overflow-y-auto p-5 shadow-2xl sm:p-6`}>
+        <div className="flex items-start justify-between gap-4">
+          <div><h2 id="break-even-dialog-title" className="text-lg font-semibold">{selected.name}</h2><p className="mt-0.5 text-xs text-[#91a4b8]">Earnings-only recovery</p></div>
+          <button ref={closeButtonRef} type="button" onClick={closeProject} aria-label="Close project details" className="rounded-lg p-1.5 text-[#91a4b8] hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
+        </div>
+        <strong className="mt-6 block text-4xl tracking-tight">{selected.spent ? percent(Math.max(0, selected.earned) / selected.spent * 100) : "—"}</strong>
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full" style={{ width: `${selected.spent ? Math.min(100, Math.max(0, selected.earned) / selected.spent * 100) : selected.id === "salad-project" && selected.earned > 0 ? 100 : 0}%`, backgroundColor: colors[selected.name] || "#38bdf8" }} /></div>
+        <dl className="mt-5 divide-y divide-[#263342] border-t border-[#263342] text-sm">
+          <div className="flex justify-between gap-3 py-3"><dt className="text-[#91a4b8]">Total spent</dt><dd className="font-semibold tabular-nums">{selected.spent ? money(selected.spent) : "Not entered"}</dd></div>
+          <div className="flex justify-between gap-3 py-3"><dt className="text-[#91a4b8]">Lifetime earned</dt><dd className="font-semibold tabular-nums">{money(selected.earned)}</dd></div>
+          <div className="flex justify-between gap-3 py-3"><dt className="text-[#91a4b8]">{selectedStats?.remaining === 0 ? "Above entered cost" : "Still to recover"}</dt><dd className="font-semibold tabular-nums">{selectedStats?.configured ? money(selectedStats.remaining === 0 ? Math.max(0, selectedStats.pnl) : selectedStats.remaining) : "—"}</dd></div>
+        </dl>
+        <div className="mt-3 rounded-xl border border-[#276751] bg-[#12221e] p-3.5 text-xs">
+          <p>{selected.id === "salad-project" && !selected.spent && selected.earned > 0 ? "Salad has recorded earnings and no entered cost to recover." : !selectedStats?.configured ? "Enter a cost to estimate recovery." : selectedStats.remaining === 0 ? "Entered costs recovered." : selectedStats.daysToProfit != null ? `About ${selectedStats.daysToProfit.toLocaleString()} days to recover at the current earnings pace.` : "No reliable daily pace available."}</p>
+          {selectedStats?.configured && selectedStats.remaining > 0 && <p className="mt-1 text-[#91a4b8]">Forecast only; earnings can change.</p>}
+        </div>
+        {editing ? <form onSubmit={saveSpent} className="mt-4 space-y-2">
+          <label htmlFor="break-even-spent" className="text-xs text-[#c8d3df]">Total spent (USD)</label>
+          <input id="break-even-spent" autoFocus type="number" min="0" step="0.01" value={draft} onChange={event => setDraft(event.target.value)} placeholder="0.00" className="w-full rounded-lg border border-[#3c5267] bg-[#111b25] px-3 py-2 text-sm outline-none focus:border-[#32d99b]" />
+          <div className="flex gap-2"><button type="submit" className="flex-1 rounded-lg bg-[#32d99b] px-3 py-2 text-xs font-semibold text-[#082019]">Save</button><button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-[#3c5267] px-3 py-2 text-xs">Cancel</button></div>
+        </form> : <button type="button" onClick={startEdit} className="mt-4 w-full rounded-lg border border-[#3c5267] bg-[#192936] px-3 py-2.5 text-xs font-semibold hover:bg-[#203447]">Edit total spent</button>}
+      </section>
+    </div>}
+
   </div>;
 }
