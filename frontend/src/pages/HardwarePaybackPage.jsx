@@ -82,21 +82,21 @@ export default function HardwarePaybackPage() {
   const remove = id => { const next = devices.filter(row => row.id !== id); remoteStorage.setItem(KEY, JSON.stringify(next)); setDevices(next); setDraft(null); };
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="hardware-payback-page">
     <header className="flex flex-wrap items-center justify-between gap-3 px-1"><h1 className="text-[32px] font-semibold tracking-tight">Hardware Payback</h1><button type="button" onClick={() => { setError(""); setDraft({ name: "", cost: "", power: "", startMonth: currentMonth }); }} className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"><Plus className="h-4 w-4"/>Add hardware</button></header>
-    <div className="grid gap-3 sm:grid-cols-3">{[["Hardware cost", stats.cost], ["Net project earnings", stats.earned], ["Left to recover", stats.remaining]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
+    <div className="grid grid-cols-1 gap-3">{[["Hardware cost", stats.cost], ["Net project earnings", stats.earned], ["Left to recover", stats.remaining]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
     {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{stats.breakEven ? `${stats.earned >= stats.cost ? "Recovered" : "Estimated break-even"}: ${label(stats.breakEven)}` : stats.pace <= 0 ? "No positive earnings pace yet" : "Beyond the 36-month forecast"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => (
-          <article key={d.id} style={{ borderColor: ["#326e59", "#645284", "#94753e", "#386a91"][index % 4] }} className="rounded-xl border border-[#304252] bg-gradient-to-br from-[#132330] to-[#101720] p-4">
+          <article key={d.id} style={{ borderColor: ["#326e59", "#645284", "#94753e", "#386a91"][index % 4] }} className="w-full max-w-[280px] rounded-xl border border-[#304252] bg-gradient-to-br from-[#132330] to-[#101720] p-4">
             <div className="flex items-center gap-3">
               <span className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-2.5 text-emerald-300"><Cpu size={20}/></span>
               <h3 className="min-w-0 flex-1 truncate text-lg font-semibold">{d.name}</h3>
               <button type="button" aria-label={`Edit ${d.name}`} onClick={() => { setError(""); setDraft({ ...d }); }} className="rounded-lg border border-[#344657] p-2 text-[#aabac8] hover:text-white"><Pencil size={15}/></button>
             </div>
-            <dl className="my-5 grid grid-cols-3 gap-2 text-sm">
+            <dl className="my-5 grid grid-cols-1 gap-4 text-sm">
               <div><dt>Cost</dt><dd className="font-semibold">{money(d.cost)}</dd></div>
               <div><dt>Allocated recovery</dt><dd className="font-semibold text-emerald-300">{money(d.cost * progress)}</dd></div>
               <div><dt>Left</dt><dd className="font-semibold">{money(d.cost * (1 - progress))}</dd></div>
             </dl>
             <div className="mb-4 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-[#253447]"><div className="h-full bg-emerald-400" style={{width: `${progress * 100}%`}}/></div><span>{progress === 1 ? "Recovered" : Math.round(progress * 100) + "%"}</span></div>
-            <div className="flex flex-wrap justify-between gap-2 border-t border-[#304252] pt-3 text-sm text-[#b1c2d0]">
+            <div className="flex flex-col items-start gap-2 border-t border-[#304252] pt-3 text-sm text-[#b1c2d0]">
               <span className="inline-flex items-center gap-2"><CalendarDays size={15}/>{label(d.startMonth)}</span>
               <span className="inline-flex items-center gap-2"><Zap size={15} className="text-amber-300"/>{money(d.power)}/mo power</span>
             </div>
