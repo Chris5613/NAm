@@ -48,17 +48,44 @@ function buildTimeline(devices, months, currentMonth) {
   }
   return { points, cost, earned, remaining: Math.max(0, cost - earned), halfway, breakEven, pace };
 }
+// Fractional Pacific calendar month, used to prorate power after a checkpoint.
+function monthPosition(time) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(time).map(part => [part.type, Number(part.value)]));
+  const days = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
+  return parts.year * 12 + parts.month - 1 +
+    (parts.day - 1 + (parts.hour + parts.minute / 60 + parts.second / 3600) / 24) / days;
+}
+
+function deviceEarnings(devices, months, month, now, legacyStats) {
+  const totalCost = devices.reduce((total, device) => total + device.cost, 0);
+  return Object.fromEntries(devices.map(device => {
+    if (!device.checkpoint) {
+      return [device.id, totalCost ? legacyStats.earned * device.cost / totalCost : 0];
+    }
+    const checkpoint = device.checkpoint;
+    const income = months.reduce((sum, row) =>
+      row.monthKey >= checkpoint.month && row.monthKey <= month ? sum + row.projectTotal : sum, 0);
+    const power = Math.max(0, monthPosition(now) - monthPosition(checkpoint.time)) * device.power;
+    const earned = checkpoint.carried + (income - checkpoint.baseline) * device.cost / totalCost - power;
+    return [device.id, earned];
+  }));
+}
+
 export default function HardwarePaybackPage() {
   const [devices, setDevices] = useState(readDevices);
   const [history, setHistory] = useState(readHistory);
   const [draft, setDraft] = useState(null);
   const [error, setError] = useState("");
+  const [historyReady, setHistoryReady] = useState(false);
   const [clock, setClock] = useState(Date.now());
   useEffect(() => subscribe(() => { setDevices(readDevices()); setHistory(current => ({ ...readHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills })); }), []);
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 60000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let active = true;
-    const refresh = async () => { try { const result = await api.get("/api/yield-sources/earnings"); if (active && result) setHistory(current => ({ ...current, loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory), manualIncome: result.manualIncomeHistory || current.manualIncome, luloBackfills: result.luloBackfills || current.luloBackfills })); } catch {} };
+    const refresh = async () => { try { const result = await api.get("/api/yield-sources/earnings"); if (active && result) setHistory(current => ({ ...current, loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory), manualIncome: result.manualIncomeHistory || current.manualIncome, luloBackfills: result.luloBackfills || current.luloBackfills })); if (active && result) setHistoryReady(true); } catch {} };
     refresh(); const timer = setInterval(refresh, 90000); return () => { active = false; clearInterval(timer); };
   }, []);
   const currentMonth = useMemo(getCurrentMonthKey, [clock]);
@@ -70,20 +97,35 @@ export default function HardwarePaybackPage() {
     return mergeManualIncome(buildIncomeHistory(projects, history.payouts, currentMonth, legacyProjectIncome(history.legacyProjects)), history.manualIncome?.monthly || {}, currentMonth);
   }, [liveMonths, history, currentMonth]);
   const stats = useMemo(() => buildTimeline(devices, months, currentMonth), [devices, months, currentMonth]);
-  const progress = stats.cost ? Math.min(1, Math.max(0, stats.earned / stats.cost)) : 0;
+  const earnings = deviceEarnings(devices, months, currentMonth, Date.now(), stats);
+  const totalEarned = Object.values(earnings).reduce((sum, value) => sum + value, 0);
+  const left = devices.reduce((sum, device) => sum + Math.max(0, device.cost - earnings[device.id]), 0);
+  function persist(next) {
+    const time = Date.now();
+    const carried = deviceEarnings(devices, months, currentMonth, time, stats);
+    const baseline = months.find(row => row.monthKey === currentMonth)?.projectTotal || 0;
+    const updated = next.map(device => ({
+      ...device, checkpoint: { time, month: currentMonth, baseline, carried: carried[device.id] ?? 0 },
+    }));
+    remoteStorage.setItem(KEY, JSON.stringify(updated));
+    setDevices(updated);
+    setDraft(null);
+  }
   const save = event => {
     event.preventDefault();
     const name = draft.name.trim(), cost = Number(draft.cost), power = Number(draft.power || 0);
     if (!name || !/^\d{4}-\d{2}$/.test(draft.startMonth) || draft.startMonth > currentMonth || !Number.isFinite(cost) || cost <= 0 || !Number.isFinite(power) || power < 0) { setError("Enter a name, purchase month, and valid cost."); return; }
     const { source, ...device } = draft;
     const next = draft.id ? devices.map(row => row.id === draft.id ? { ...device, name, cost, power } : row) : [...devices, { ...device, id: crypto.randomUUID(), name, cost, power }];
-    remoteStorage.setItem(KEY, JSON.stringify(next)); setDevices(next); setDraft(null); setError("");
+    persist(next); setError("");
   };
-  const remove = id => { const next = devices.filter(row => row.id !== id); remoteStorage.setItem(KEY, JSON.stringify(next)); setDevices(next); setDraft(null); };
+  const remove = id => { const next = devices.filter(row => row.id !== id); persist(next); };
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="hardware-payback-page">
     <header className="flex flex-wrap items-center justify-between gap-3 px-1"><h1 className="text-[32px] font-semibold tracking-tight">Hardware Payback</h1><button type="button" onClick={() => { setError(""); setDraft({ name: "", cost: "", power: "", startMonth: currentMonth }); }} className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"><Plus className="h-4 w-4"/>Add hardware</button></header>
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[["Hardware cost", stats.cost], ["Net project earnings", stats.earned], ["Left to recover", stats.remaining]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
-    {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{stats.breakEven ? `${stats.earned >= stats.cost ? "Recovered" : "Estimated break-even"}: ${label(stats.breakEven)}` : stats.pace <= 0 ? "No positive earnings pace yet" : "Beyond the 36-month forecast"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[["Hardware cost", stats.cost], ["Net project earnings", totalEarned], ["Left to recover", left]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
+    {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{left <= 0 ? "Recovered" : stats.pace > 0 ? `Estimated break-even: ${label(shiftMonth(currentMonth, Math.min(1200, Math.ceil(left / stats.pace))))}` : "No positive earnings pace yet"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => {
+          const progress = Math.max(0, Math.min(1, earnings[d.id] / d.cost));
+          return (
           <article key={d.id} style={{ borderColor: ["#326e59", "#645284", "#94753e", "#386a91"][index % 4] }} className="w-full max-w-[280px] rounded-xl border border-[#304252] bg-gradient-to-br from-[#132330] to-[#101720] p-4">
             <div className="flex items-center gap-3">
               <span className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-2.5 text-emerald-300"><Cpu size={20}/></span>
@@ -93,7 +135,7 @@ export default function HardwarePaybackPage() {
             <dl className="my-5 grid grid-cols-1 gap-4 text-sm">
               <div><dt>Cost</dt><dd className="font-semibold">{money(d.cost)}</dd></div>
               <div><dt>Allocated recovery</dt><dd className="font-semibold text-emerald-300">{money(d.cost * progress)}</dd></div>
-              <div><dt>Left</dt><dd className="font-semibold">{money(d.cost * (1 - progress))}</dd></div>
+              <div><dt>Left</dt><dd className="font-semibold">{money(Math.max(0, d.cost - earnings[d.id]))}</dd></div>
             </dl>
             <div className="mb-4 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-[#253447]"><div className="h-full bg-emerald-400" style={{width: `${progress * 100}%`}}/></div><span>{progress === 1 ? "Recovered" : Math.round(progress * 100) + "%"}</span></div>
             <div className="flex flex-col items-start gap-2 border-t border-[#304252] pt-3 text-sm text-[#b1c2d0]">
@@ -101,8 +143,8 @@ export default function HardwarePaybackPage() {
               <span className="inline-flex items-center gap-2"><Zap size={15} className="text-amber-300"/>{money(d.power)}/mo power</span>
             </div>
           </article>
-        ))}</div></section>}
+        ); })}</div></section>}
     {!devices.length && <p className={`${panel} p-6`}>Add your first device to track payback.</p>}
-    {draft && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setDraft(null); }}><form onSubmit={save} role="dialog" aria-modal="true" aria-label={draft.id ? "Edit hardware" : "Add hardware"} className={`${panel} w-full max-w-md space-y-4 p-6 shadow-2xl`}><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">{draft.id ? "Edit hardware" : "Add hardware"}</h2><button type="button" onClick={() => setDraft(null)} aria-label="Close" className="p-1 text-[#91a4b8]"><X className="h-5 w-5"/></button></div><label className="block text-sm">Name<input required value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="RTX 5070" className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">Save</button></div></form></div>}
+    {draft && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setDraft(null); }}><form onSubmit={save} role="dialog" aria-modal="true" aria-label={draft.id ? "Edit hardware" : "Add hardware"} className={`${panel} w-full max-w-md space-y-4 p-6 shadow-2xl`}><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">{draft.id ? "Edit hardware" : "Add hardware"}</h2><button type="button" onClick={() => setDraft(null)} aria-label="Close" className="p-1 text-[#91a4b8]"><X className="h-5 w-5"/></button></div><label className="block text-sm">Name<input required value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="RTX 5070" className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" disabled={!historyReady} onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" disabled={!historyReady} className="disabled:opacity-50 flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">{historyReady ? "Save" : "Loading earnings…"}</button></div></form></div>}
   </div>;
 }
