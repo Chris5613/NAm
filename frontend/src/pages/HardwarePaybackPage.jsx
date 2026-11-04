@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Plus, Pencil, Trash2, X, Cpu, CalendarDays, Zap } from "lucide-react";
 import { api } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
@@ -72,11 +71,6 @@ export default function HardwarePaybackPage() {
   }, [liveMonths, history, currentMonth]);
   const stats = useMemo(() => buildTimeline(devices, months, currentMonth), [devices, months, currentMonth]);
   const progress = stats.cost ? Math.min(1, Math.max(0, stats.earned / stats.cost)) : 0;
-  const recorded = stats.points.filter(point => point.actual != null);
-  const recent = recorded.slice(1).map((point, index) => ({
-    label: point.label,
-    net: point.actual - recorded[index].actual,
-  })).slice(-12);
   const save = event => {
     event.preventDefault();
     const name = draft.name.trim(), cost = Number(draft.cost), power = Number(draft.power || 0);
@@ -89,7 +83,7 @@ export default function HardwarePaybackPage() {
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="hardware-payback-page">
     <header className="flex flex-wrap items-center justify-between gap-3 px-1"><h1 className="text-[32px] font-semibold tracking-tight">Hardware Payback</h1><button type="button" onClick={() => { setError(""); setDraft({ name: "", cost: "", power: "", startMonth: currentMonth }); }} className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"><Plus className="h-4 w-4"/>Add hardware</button></header>
     <div className="grid gap-3 sm:grid-cols-3">{[["Hardware cost", stats.cost], ["Net project earnings", stats.earned], ["Left to recover", stats.remaining]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
-    {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{stats.breakEven ? `${stats.earned >= stats.cost ? "Recovered" : "Estimated break-even"}: ${label(stats.breakEven)}` : stats.pace <= 0 ? "No positive earnings pace yet" : "Beyond the 36-month forecast"}</span></div><div className="mt-4 grid gap-3 lg:grid-cols-2">{devices.map((d, index) => (
+    {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{stats.breakEven ? `${stats.earned >= stats.cost ? "Recovered" : "Estimated break-even"}: ${label(stats.breakEven)}` : stats.pace <= 0 ? "No positive earnings pace yet" : "Beyond the 36-month forecast"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => (
           <article key={d.id} style={{ borderColor: ["#326e59", "#645284", "#94753e", "#386a91"][index % 4] }} className="rounded-xl border border-[#304252] bg-gradient-to-br from-[#132330] to-[#101720] p-4">
             <div className="flex items-center gap-3">
               <span className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-2.5 text-emerald-300"><Cpu size={20}/></span>
@@ -109,16 +103,6 @@ export default function HardwarePaybackPage() {
           </article>
         ))}</div></section>}
     {!devices.length && <p className={`${panel} p-6`}>Add your first device to track payback.</p>}
-    {recent.length > 0 && <section className={`${panel} p-5`}>
-      <h2 className="text-lg font-semibold">Recent monthly earnings</h2>
-      <div className="mt-4 h-56"><ResponsiveContainer width="100%" height="100%">
-        <BarChart data={recent}><CartesianGrid vertical={false} stroke="#283849"/>
-          <XAxis dataKey="label" tick={{fontSize: 11}}/><YAxis tickFormatter={money} width={75}/>
-          <Tooltip formatter={value => [money(value), "Net earnings"]} contentStyle={{background: "#121e29"}}/>
-          <Bar dataKey="net" fill="#34d399" radius={[4,4,0,0]}/>
-        </BarChart>
-      </ResponsiveContainer></div>
-    </section>}
     {draft && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={e => { if (e.target === e.currentTarget) setDraft(null); }}><form onSubmit={save} role="dialog" aria-modal="true" aria-label={draft.id ? "Edit hardware" : "Add hardware"} className={`${panel} w-full max-w-md space-y-4 p-6 shadow-2xl`}><div className="flex items-center justify-between"><h2 className="text-xl font-semibold">{draft.id ? "Edit hardware" : "Add hardware"}</h2><button type="button" onClick={() => setDraft(null)} aria-label="Close" className="p-1 text-[#91a4b8]"><X className="h-5 w-5"/></button></div><label className="block text-sm">Name<input required value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} placeholder="RTX 5070" className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">Save</button></div></form></div>}
   </div>;
 }
