@@ -856,8 +856,6 @@ const requestRollerCoinLatest =
         window.location.origin
       );
 
-      // Today's total uses observed wallet changes. The dated earnings API
-      // can return zero while the wallet changes, so it is not polled here.
       const now = Date.now();
       if (now - lastRollerCoinWalletRequestRef.current >= 600000) {
         lastRollerCoinWalletRequestRef.current = now;
@@ -1103,6 +1101,20 @@ const requestRollerCoinLatest =
       requestRollerCoinLatest,
     ]
   );
+
+  useEffect(() => {
+    if (!rollerCoinConnected) return;
+    const requestMiningIncome = () => {
+      const day = getTodayKey();
+      window.postMessage(
+        { source: "rollercoin-app", type: "SYNC_RANGE", from: day, to: day },
+        window.location.origin
+      );
+    };
+    requestMiningIncome();
+    const timer = window.setInterval(requestMiningIncome, 600000);
+    return () => window.clearInterval(timer);
+  }, [rollerCoinConnected]);
 
   const applyProjectData =
     useCallback(
@@ -3865,8 +3877,8 @@ const importSaladPayload =
   })();
   // Keep Kryptex visible before its first recorded increase today. A zero
   // display row does not add projected income or change the source ledger.
-  const todayBreakdown = Object.entries({ Kryptex: 0, ...dailySourceTotals })
-    .filter(([name,amount]) => Number.isFinite(Number(amount)) && (name === "Kryptex" || Number(amount) !== 0))
+  const todayBreakdown = Object.entries({ Kryptex: 0, RollerCoin: 0, ...dailySourceTotals })
+    .filter(([name,amount]) => Number.isFinite(Number(amount)) && (name === "Kryptex" || name === "RollerCoin" || Number(amount) !== 0))
     .map(([name,amount]) => ({ name, amount: Math.max(0, Number(amount)) }))
     .sort((a,b) => b.amount - a.amount);
   const displayedTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
