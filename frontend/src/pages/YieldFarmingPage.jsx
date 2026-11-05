@@ -3851,9 +3851,10 @@ const importSaladPayload =
   // display row does not add projected income or change the source ledger.
   const todayBreakdown = Object.entries({ Kryptex: 0, ...dailySourceTotals })
     .filter(([name,amount]) => Number.isFinite(Number(amount)) && (name === "Kryptex" || Number(amount) !== 0))
-    .map(([name,amount]) => ({ name, amount: Number(amount) }))
+    .map(([name,amount]) => ({ name, amount: Math.max(0, Number(amount)) }))
     .sort((a,b) => b.amount - a.amount);
-  const rawTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
+  const displayedTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
+  const rawTodayEarnings = Object.values(dailySourceTotals).reduce((sum, value) => sum + (Number.isFinite(Number(value)) ? Number(value) : 0), 0);
   const [serverDailyIncome, setServerDailyIncome] = useState(null);
   const dailySourceSignature = JSON.stringify(dailySourceTotals);
   useEffect(() => {
@@ -4632,9 +4633,9 @@ const summary =
         <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <h2 className="text-[16px] font-semibold">Today's Earnings</h2>
           <div className="mt-4 flex flex-col items-center gap-2">
-            <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.max(0,Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100))}%, #25313d 0)`}}>
+            <div className="flex h-36 w-36 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.max(0,Math.min(100,displayedTodayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100))}%, #25313d 0)`}}>
               <div className="flex h-[79%] w-[79%] flex-col items-center justify-center rounded-full bg-[#0b1017]">
-                <strong className="text-xl font-semibold tabular-nums">{formatCurrency(todayEarnings)}</strong>
+                <strong className="text-xl font-semibold tabular-nums">{formatCurrency(displayedTodayEarnings)}</strong>
                 <span className="text-[10px] text-muted-foreground">Today so far</span>
               </div>
             </div>
@@ -4650,7 +4651,7 @@ const summary =
                 {todayBreakdown.map(source => (
                   <div key={source.name} className="flex items-center justify-between gap-3 text-xs">
                     <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
-                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{source.name === "Loopscale" && Math.abs(source.amount) < 0.01
+                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{source.name === "Loopscale" && source.amount > 0 && source.amount < 0.01
                       ? `${source.amount.toFixed(6)}`
                       : formatCurrency(source.amount)}</span>
                   </div>
@@ -4663,7 +4664,7 @@ const summary =
                 )}
                 <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs">
                   <span className="font-medium">Total</span>
-                  <span className="font-semibold tabular-nums">{formatCurrency(todayEarnings)}</span>
+                  <span className="font-semibold tabular-nums">{formatCurrency(displayedTodayEarnings)}</span>
                 </div>
               </div>
             ) : (
