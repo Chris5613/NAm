@@ -41,34 +41,6 @@ def init_db() -> None:
         if "hidden" not in {column["name"] for column in inspector.get_columns("spending_transactions")}:
             connection.execute(text("ALTER TABLE spending_transactions ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE"))
 
-        # Restore the account's dated Lulo readings before income-only tracking began.
-        if connection.dialect.name == "postgresql":
-            connection.execute(text("""
-                WITH target AS (
-                    SELECT id, user_id, value::jsonb AS doc
-                    FROM settings
-                    WHERE key = 'yield_confirmed_daily_income_chart_v1' AND user_id = 1
-                    FOR UPDATE
-                ), recovered AS (
-                    SELECT target.id, jsonb_agg(jsonb_build_object(
-                        'x', hour_pt, 'value', earned, 'displayed', earned
-                    ) ORDER BY hour_pt) AS points
-                    FROM target JOIN settings audit ON audit.user_id = target.user_id
-                      AND audit.key = 'yield_server_daily_income_2026-11-05'
-                    CROSS JOIN LATERAL jsonb_array_elements(audit.value::jsonb->'observations') obs
-                    CROSS JOIN LATERAL (SELECT
-                        (obs->>'observedAt')::timestamptz AT TIME ZONE 'America/Los_Angeles' AS local_at,
-                        (obs->'sources'->>'Lulo')::numeric AS earned) reading
-                    CROSS JOIN LATERAL (SELECT extract(epoch FROM local_at::time) / 3600 AS hour_pt) clock
-                    WHERE local_at::date = DATE '2026-11-05' AND earned >= 0
-                      AND hour_pt < (target.doc->'2026-11-05'->0->>'x')::numeric
-                    GROUP BY target.id
-                )
-                UPDATE settings s SET value = jsonb_set(s.value::jsonb, '{2026-11-05}',
-                    recovered.points || (s.value::jsonb->'2026-11-05'))
-                FROM recovered WHERE s.id = recovered.id
-            """))
-
 
 def get_db() -> Iterator[Session]:
     db = SessionLocal()
