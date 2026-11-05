@@ -64,7 +64,6 @@ import {
   reconcileMonthlySnapshots,
   getEffectiveProjectIncome,
   DAILY_BALANCE_SNAPSHOT_KEY,
-  DAILY_EARNINGS_CHART_OBSERVATIONS_KEY,
   AUTO_RECOVERED_EARNINGS_KEY,
   PROJECT_QUICK_CACHE_KEY,
   INACTIVE_PROJECTS_KEY,
@@ -81,6 +80,8 @@ import {
   RollerCoinProjectCard,
   ProjectIncomeSection
 } from "@/components/YieldFarmingComponents";
+
+const DAILY_INCOME_CHART_KEY = "yield_confirmed_daily_income_chart_v1";
 
 export default function YieldFarmingPage() {
   const [stockPayouts, setStockPayouts] = useState(() => readObject(STOCK_DIVIDEND_PAYOUTS_KEY));
@@ -3680,6 +3681,21 @@ const importSaladPayload =
   // This is the Lulo provider day (UTC), not NAm's Pacific calendar day.
   const currentLuloUtc = currentLuloUtcDaily(luloProjects, new Date(earningsClock));
   const sourceTotalsForDay = key => {
+    if (key === todayKey) {
+      const income = luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc);
+      const allocation = unetworkTracker?.daily?.[key];
+      const datedAmounts = {
+        Salad: saladTracker?.daily?.[key],
+        RollerCoin: rollerCoinTracker?.daily?.[key]?.usd,
+        Stocks: stockPayoutTotal(stockPayouts, key),
+        // The balance-delta fallback stores zero allocations and zero micros.
+        Unetwork: allocation?.count > 0 || allocation?.micros > 0 ? allocation.usd : 0,
+      };
+      for (const [source, amount] of Object.entries(datedAmounts)) {
+        if (Number.isFinite(Number(amount)) && Number(amount) > 0) income[source] = Number(amount);
+      }
+      return income;
+    }
     // Midnight UTC can start tomorrow for Lulo while it is still today PT.
     // Expose that day for Lulo ONLY; no Pacific provider belongs there yet.
     if (key > todayKey) {
@@ -3886,7 +3902,7 @@ const importSaladPayload =
   // Persist the ACTUAL signed total for the daily graph, including
   // negative values and recoveries; never derive graph shape from a max.
   const [dailyEarningsObservations, setDailyEarningsObservations] = useState(
-    () => readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)
+    () => readObject(DAILY_INCOME_CHART_KEY)
   );
   useEffect(() => {
     if (!Number.isFinite(todayEarnings)) return;
@@ -3898,7 +3914,7 @@ const importSaladPayload =
     }).formatToParts(now);
     const timePart = type => Number(hourParts.find(part => part.type === type)?.value || 0);
     const hour = timePart("hour") + timePart("minute") / 60 + timePart("second") / 3600;
-    const stored = readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY);
+    const stored = readObject(DAILY_INCOME_CHART_KEY);
     const currentPoints = Array.isArray(stored[currentDay]) ? stored[currentDay] : [];
     const previous = currentPoints[currentPoints.length - 1];
     // Only record a change, or a heartbeat every 15 minutes.
@@ -3911,7 +3927,7 @@ const importSaladPayload =
       .sort((a,b) => a.x - b.x)
       .slice(-1500);
     const next = { ...stored, [currentDay]: nextPoints };
-    saveObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY, next);
+    saveObject(DAILY_INCOME_CHART_KEY, next);
     setDailyEarningsObservations(next);
   }, [todayEarnings, displayedTodayEarnings, earningsClock, todayKey]);
 
@@ -3946,8 +3962,7 @@ const importSaladPayload =
     ? dailyEarningsObservations[todayKey] : [];
   // The user confirmed that Oct 30 opened at -$0.86. Use this one-time
   // opening observation only until an earlier recorded reading exists.
-  const observedStart = todayKey === "2026-10-30"
-    ? [{ x: 0, value: -0.86 }] : [];
+  const observedStart = [];
   const dailyChartPoints = [...observedStart, ...storedDailyChartPoints]
     .filter(point => Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.value)))
     .map(point => ({ x: Math.max(0, Math.min(24, Number(point.x))), value: Math.max(0, Number(point.displayed ?? point.value)) }))
