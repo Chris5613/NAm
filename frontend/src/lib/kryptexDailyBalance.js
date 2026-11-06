@@ -39,8 +39,11 @@ export function recordKryptexDailyBalance(tracker, balance, day, recordedToday =
 }
 
 export function withKryptexDailyBalance(sources, tracker, day) {
-  const reading = tracker?.dailyBalanceDays?.[day];
-  const value = Number(reading?.changeUsd);
-  if (!reading || !Number.isFinite(value)) return sources;
-  return { ...sources, Kryptex: value };
+  const result = { ...sources };
+  // The balance is a holding denominated in USD. Its movement is not income.
+  delete result.Kryptex;
+  const value = Number(tracker?.kryptexMiningDaily?.[day]);
+  if (tracker?.kryptexConfirmedDays?.[day] && Number.isFinite(value) && value >= 0)
+    result.Kryptex = value;
+  return result;
 }
