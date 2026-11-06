@@ -1852,10 +1852,9 @@ const importSaladPayload =
           payload?.status ||
           {};
 
-        const currentBalance =
-          Number(
-            status?.balance_usd
-          );
+        const hasBalance = status?.balance_usd != null;
+        const currentBalance = Number(hasBalance
+          ? status.balance_usd : loadKryptexTracker()?.lastBalance);
 
         if (
           !Number.isFinite(
@@ -1986,8 +1985,7 @@ const importSaladPayload =
               lastSyncedAt:
                 syncedAt,
               reachable:
-                payload?.reachable !==
-                false,
+                hasBalance && payload?.reachable !== false,
               miners,
             };
           }
