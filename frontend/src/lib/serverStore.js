@@ -236,7 +236,7 @@ export async function hydrate(ownerId = journalOwner) {
       const { before, after } = JSON.parse(window.sessionStorage.getItem(journalKey));
       if (JSON.stringify(before) !== JSON.stringify(savedValues.get(key) ?? null)) {
         conflicts.add(key);
-        onError(`Could not restore "${key}" automatically because it changed on the server. Your edit is retained in this tab.`);
+        console.info(`Could not restore "${key}" automatically because it changed on the server. Your edit is retained in this tab.`);
       }
       cache.set(key, after);
       if (key === "networth_projects") projectConflict = conflicts.has(key);
