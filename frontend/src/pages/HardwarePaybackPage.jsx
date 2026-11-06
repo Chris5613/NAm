@@ -24,9 +24,14 @@ const canonicalSourceName = source => {
   return value;
 };
 const monthSourceAmount = (row, source, kryptexTracker) => {
-  // This integration exposes a projected rate, but no dated mined sats.
-  // Until a confirmed daily feed is available, no Kryptex amount is credited.
-  if (canonicalSourceName(source) === "Kryptex") return 0;
+  if (canonicalSourceName(source) === "Kryptex") {
+    const prefix = `${row?.monthKey || ""}-`;
+    if (!row?.monthKey) return 0;
+    return Object.entries(kryptexTracker?.kryptexMiningDaily || {})
+      .reduce((sum, [day, value]) => day.startsWith(prefix) &&
+        kryptexTracker?.kryptexConfirmedDays?.[day]
+        ? sum + Math.max(0, Number(value) || 0) : sum, 0);
+  }
   return Object.entries(row?.sources || {}).reduce((sum, [name, amount]) =>
     canonicalSourceName(name) === canonicalSourceName(source) ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
 };
@@ -36,7 +41,11 @@ const pacificDayKey = time => {
   }).formatToParts(new Date(time)).map(part => [part.type, part.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 };
-const todayKryptexIncome = () => 0;
+const todayKryptexIncome = tracker => {
+  const day = pacificDayKey(Date.now());
+  return tracker?.kryptexConfirmedDays?.[day]
+    ? Math.max(0, Number(tracker?.kryptexMiningDaily?.[day]) || 0) : 0;
+};
 const sourceOptionsFor = (history, months) => {
   const activeNames = new Set((history.activeProjectNames || []).map(canonicalSourceName));
   const hasTrackerData = tracker => tracker && Object.keys(tracker).some(key =>
@@ -202,7 +211,8 @@ export default function HardwarePaybackPage() {
       checkpoint: {
         time,
         month: currentMonth,
-        baseline: monthSourceAmount(currentRow, device.source, history.kryptex),
+        baseline: canonicalSourceName(device.source) === "Kryptex" && !devices.some(row => row.id === device.id)
+          ? 0 : monthSourceAmount(currentRow, device.source, history.kryptex),
         carried: devices.find(previous => previous.id === device.id)?.source === device.source ? (carried[device.id] ?? 0) : 0,
         ...(canonicalSourceName(device.source) === "Kryptex" ? { ledger: KRYPTEX_PAYBACK_LEDGER } : {}),
       },
