@@ -10,6 +10,7 @@ import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
+const KRYPTEX_PAYBACK_LEDGER = "kryptex-mining-v1";
 const INTEGRATED_SOURCES = ["Kryptex", "Salad", "RollerCoin", "Unetwork", "Loopscale", "Lulo"];
 const panel = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const money = value => formatCurrency(Number(value) || 0);
@@ -106,6 +107,11 @@ function deviceEarnings(devices, months, month, now, legacyStats, kryptexTracker
   return Object.fromEntries(devices.map(device => {
     if (!device.checkpoint || !device.source) return [device.id, 0];
     const checkpoint = device.checkpoint;
+    // Older checkpoints were built from Kryptex balance changes, which can be
+    // negative when BTC moves. They are not valid hardware-payback earnings.
+    // Ignore them until the device is saved with the mining-income ledger.
+    const isKryptex = canonicalSourceName(device.source) === "Kryptex";
+    if (isKryptex && checkpoint.ledger !== KRYPTEX_PAYBACK_LEDGER) return [device.id, 0];
     const income = months.reduce((sum, row) =>
       row.monthKey >= checkpoint.month && row.monthKey <= month ? sum + monthSourceAmount(row, device.source, kryptexTracker) : sum, 0);
     const power = Math.max(0, monthPosition(now) - monthPosition(checkpoint.time)) * device.power;
@@ -153,6 +159,7 @@ export default function HardwarePaybackPage() {
         month: currentMonth,
         baseline: monthSourceAmount(currentRow, device.source, history.kryptex),
         carried: devices.find(previous => previous.id === device.id)?.source === device.source ? (carried[device.id] ?? 0) : 0,
+        ...(canonicalSourceName(device.source) === "Kryptex" ? { ledger: KRYPTEX_PAYBACK_LEDGER } : {}),
       },
     }));
     remoteStorage.setItem(KEY, JSON.stringify(updated));
