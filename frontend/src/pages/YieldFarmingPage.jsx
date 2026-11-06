@@ -1949,14 +1949,20 @@ const importSaladPayload =
                 )
               );
 
-            // The provider's profitabilityUsdDay is a projected 24-hour
-            // rate, never a confirmed amount earned on this calendar day.
-            // Clear the old rate-based entry for today so it cannot masquerade
-            // as earned income after this release.
+            // Only dated satoshi accruals from Kryptex's account chart
+            // count as income. Balance changes and projected rates do not.
             const kryptexMiningDaily = {
               ...(current?.kryptexMiningDaily || {}),
             };
-            delete kryptexMiningDaily[day];
+            const confirmedUsd = Number(payload?.earnings?.daily_usd?.[day]);
+            const confirmedDays = { ...(current?.kryptexConfirmedDays || {}) };
+            if (Object.prototype.hasOwnProperty.call(payload?.earnings?.daily_usd || {}, day) &&
+                Number.isFinite(confirmedUsd) && confirmedUsd >= 0) {
+              kryptexMiningDaily[day] = confirmedUsd;
+              confirmedDays[day] = true;
+            } else if (!confirmedDays[day]) {
+              delete kryptexMiningDaily[day];
+            }
 
             const lifetimeEarnedUsd =
               (
@@ -1987,6 +1993,7 @@ const importSaladPayload =
               withdrawableUsd,
               monthlyEarnings,
               kryptexMiningDaily,
+              kryptexConfirmedDays: confirmedDays,
               lastSyncedAt:
                 syncedAt,
               reachable:
@@ -3711,7 +3718,7 @@ const importSaladPayload =
       const income = luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc);
       const allocation = unetworkTracker?.daily?.[key];
       const datedAmounts = {
-        Kryptex: 0, // A projected daily rate is not confirmed mining income.
+        Kryptex: Number(kryptexTracker?.kryptexMiningDaily?.[key]) || 0,
         Salad: saladTracker?.daily?.[key],
         RollerCoin: rollerCoinTracker?.daily?.[key]?.usd
           ?? earningsLedger.days?.[key]?.sources?.RollerCoin
