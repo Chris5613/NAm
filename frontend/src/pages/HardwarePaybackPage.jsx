@@ -143,6 +143,20 @@ export default function HardwarePaybackPage() {
     const projects = reconcileLuloIncome(getEffectiveProjectIncome(liveMonths, history.snapshots), history.backfills, history.luloBackfills, currentMonth);
     return mergeManualIncome(buildIncomeHistory(projects, history.payouts, currentMonth, legacyProjectIncome(history.legacyProjects)), history.manualIncome?.monthly || {}, currentMonth);
   }, [liveMonths, history, currentMonth]);
+  useEffect(() => {
+    if (!historyReady) return;
+    const legacyKryptex = devices.filter(device =>
+      canonicalSourceName(device.source) === "Kryptex" && device.checkpoint && device.checkpoint.ledger !== KRYPTEX_PAYBACK_LEDGER);
+    if (!legacyKryptex.length) return;
+    const now = Date.now();
+    const currentRow = months.find(row => row.monthKey === currentMonth);
+    const baseline = monthSourceAmount(currentRow, "Kryptex", history.kryptex);
+    const migrated = devices.map(device => legacyKryptex.some(row => row.id === device.id)
+      ? { ...device, checkpoint: { time: now, month: currentMonth, baseline, carried: 0, ledger: KRYPTEX_PAYBACK_LEDGER } }
+      : device);
+    remoteStorage.setItem(KEY, JSON.stringify(migrated));
+    setDevices(migrated);
+  }, [historyReady, devices, months, currentMonth, history.kryptex]);
   const sourceOptions = useMemo(() => sourceOptionsFor(history, months), [history, months]);
   const stats = useMemo(() => buildTimeline(devices, months, currentMonth, history.kryptex), [devices, months, currentMonth, history.kryptex]);
   const earnings = deviceEarnings(devices, months, currentMonth, Date.now(), stats, history.kryptex);
