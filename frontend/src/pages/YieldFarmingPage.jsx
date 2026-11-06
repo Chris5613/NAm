@@ -3822,7 +3822,15 @@ const importSaladPayload =
     }
     return sources;
   };
-  const dailySourceTotals = sourceTotalsForDay(todayKey);
+  // Today's earnings count is income-only. Balance movements and signed P/L
+  // (especially negative market-value changes) must never reduce the amount
+  // shown as earned today. Historical charts can still retain signed values.
+  const dailySourceTotals = Object.fromEntries(
+    Object.entries(sourceTotalsForDay(todayKey)).map(([name, amount]) => [
+      name,
+      Math.max(0, Number.isFinite(Number(amount)) ? Number(amount) : 0),
+    ])
+  );
   const selectedBreakdown = (() => {
     const selection = selectedEarningsPoint;
     if (!selection || selection.range !== earningsChartRange) return null;
