@@ -3697,7 +3697,7 @@ const importSaladPayload =
       const income = luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc);
       const allocation = unetworkTracker?.daily?.[key];
       const datedAmounts = {
-        Kryptex: kryptexTracker?.kryptexMiningDaily?.[key],
+        Kryptex: kryptexTracker?.kryptexMiningDaily?.[key] ?? kryptexTracker?.profitabilityUsdDay,
         Salad: saladTracker?.daily?.[key],
         RollerCoin: rollerCoinTracker?.daily?.[key]?.usd,
         Stocks: stockPayoutTotal(stockPayouts, key),
