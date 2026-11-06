@@ -1941,14 +1941,14 @@ const importSaladPayload =
             const kryptexMiningDaily = {
               ...(current?.kryptexMiningDaily || {}),
             };
-            const confirmedUsd = Number(payload?.earnings?.daily_usd?.[day]);
             const confirmedDays = { ...(current?.kryptexConfirmedDays || {}) };
-            if (Object.prototype.hasOwnProperty.call(payload?.earnings?.daily_usd || {}, day) &&
-                Number.isFinite(confirmedUsd) && confirmedUsd >= 0) {
-              kryptexMiningDaily[day] = confirmedUsd;
-              confirmedDays[day] = true;
-            } else if (!confirmedDays[day]) {
-              delete kryptexMiningDaily[day];
+            const confirmedChartDays = payload?.earnings?.daily_usd || {};
+            for (const [entryDay, value] of Object.entries(confirmedChartDays)) {
+              if (!/^\d{4}-\d{2}-\d{2}$/.test(entryDay) || entryDay < "2026-11-01" || entryDay > day) continue;
+              const confirmedUsd = Number(value);
+              if (!Number.isFinite(confirmedUsd) || confirmedUsd < 0) continue;
+              kryptexMiningDaily[entryDay] = confirmedUsd;
+              confirmedDays[entryDay] = true;
             }
 
             const confirmedMonth = Object.entries(kryptexMiningDaily)
