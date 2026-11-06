@@ -2036,6 +2036,55 @@ const importSaladPayload =
     return () => window.removeEventListener("kryptex-aggregate-update", handleAggregate);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshCombinedKryptex = async () => {
+      try {
+        const response = await projectsApi.getAll();
+        if (cancelled) return;
+        const project = (response?.data || []).find(
+          item => String(item?.name || "").trim().toLowerCase() === "kryptex"
+        );
+        if (!project) return;
+
+        const profitabilityUsdDay = Number(project?.kryptex_profitability_usd_day);
+        if (!Number.isFinite(profitabilityUsdDay) || profitabilityUsdDay < 0) return;
+
+        setKryptexTracker(current => ({
+          ...current,
+          profitabilityUsdDay,
+          miners: Array.isArray(project?.kryptex_miners)
+            ? project.kryptex_miners
+            : (current?.miners || []),
+          lastSyncedAt: project?.kryptex_last_synced_at || current?.lastSyncedAt || null,
+          activeMachineCount: Math.max(
+            0,
+            Number(project?.kryptex_active_machine_count) || 0
+          ),
+          reachable: true,
+        }));
+        setKryptexConnected(true);
+      } catch {
+        // Keep the last known tracker value if the server refresh is unavailable.
+      }
+    };
+
+    refreshCombinedKryptex();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") refreshCombinedKryptex();
+    }, 30000);
+
+    const onFocus = () => refreshCombinedKryptex();
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, []);
+
   const requestKryptexLatest =
     useCallback(
       () => {
