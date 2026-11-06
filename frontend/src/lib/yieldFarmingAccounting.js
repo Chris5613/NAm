@@ -2570,6 +2570,10 @@ function loadKryptexTracker() {
       parsed.dailyBalanceDays && typeof parsed.dailyBalanceDays === "object"
         ? parsed.dailyBalanceDays : {},
 
+    kryptexMiningDaily:
+      parsed.kryptexMiningDaily && typeof parsed.kryptexMiningDaily === "object"
+        ? parsed.kryptexMiningDaily : {},
+
     openingBalanceUsd:
       KRYPTEX_OPENING_BALANCE_USD,
 

@@ -7,25 +7,56 @@ import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMont
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
+import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
-const COMMON_INCOME_SOURCES = ["Kryptex", "Salad", "RollerCoin", "Unetwork", "Loopscale", "Lulo", "Nosana", "GoMining", "COIN", "Stocks", "Other projects"];
+const INTEGRATED_SOURCES = ["Kryptex", "Salad", "RollerCoin", "Unetwork", "Loopscale", "Lulo"];
 const panel = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const money = value => formatCurrency(Number(value) || 0);
 const label = key => new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${key}-15T12:00:00Z`));
 const readDevices = () => { try { const rows = JSON.parse(remoteStorage.getItem(KEY) || "[]"); return Array.isArray(rows) ? rows : []; } catch { return []; } };
-const monthSourceAmount = (row, source) => Number(row?.sources?.[source]) || 0;
-const sourceOptionsFor = months => Array.from(new Set([
-  ...COMMON_INCOME_SOURCES,
-  ...(months || []).flatMap(row => Object.keys(row?.sources || {})),
-])).sort((a, b) => a.localeCompare(b));
+const canonicalSourceName = source => {
+  const value = String(source || "").trim().replace(/\s+/g, " ");
+  const normalized = value.toLowerCase();
+  if (["unity network", "unitynetwork", "unetwork"].includes(normalized)) return "Unetwork";
+  if (normalized === "roller coin") return "RollerCoin";
+  return value;
+};
+const monthSourceAmount = (row, source, kryptexTracker) => {
+  if (source === "Kryptex" && kryptexTracker && Object.prototype.hasOwnProperty.call(kryptexTracker, "kryptexMiningDaily")) {
+    return Object.entries(kryptexTracker.kryptexMiningDaily || {})
+      .filter(([date]) => String(date).slice(0, 7) === String(row?.monthKey || ""))
+      .reduce((sum, [, amount]) => sum + (Number(amount) || 0), 0);
+  }
+  return Object.entries(row?.sources || {}).reduce((sum, [name, amount]) =>
+    canonicalSourceName(name) === canonicalSourceName(source) ? sum + (Number(amount) || 0) : sum, 0);
+};
+const sourceOptionsFor = (history, months) => {
+  const activeNames = new Set((history.activeProjectNames || []).map(canonicalSourceName));
+  const hasTrackerData = tracker => tracker && Object.keys(tracker).some(key =>
+    ["initialized", "lastSyncedAt", "balanceSyncedAt", "daily", "monthlyEarnings", "positions", "kryptexMiningDaily"].includes(key) &&
+    tracker[key] && (typeof tracker[key] !== "object" || Object.keys(tracker[key]).length > 0));
+  INTEGRATED_SOURCES.forEach(source => {
+    const tracker = source === "Kryptex" ? history.kryptex : source === "Salad" ? history.salad : source === "RollerCoin" ? history.rollercoin : source === "Unetwork" ? history.unetwork : source === "Loopscale" ? history.loopscale : history.luloProjects?.length ? history.luloProjects : null;
+    if (hasTrackerData(tracker) || (source === "Lulo" && history.luloProjects?.length)) activeNames.add(source);
+  });
+  const recorded = (months || []).flatMap(row => Object.keys(row?.sources || {})).map(canonicalSourceName);
+  return Array.from(new Set([...activeNames, ...recorded.filter(source => activeNames.has(source))]))
+    .filter(Boolean)
+    .sort((a, b) => a.localeCompare(b));
+};
 function readHistory() {
   let legacyProjects = [];
   try { const saved = JSON.parse(remoteStorage.getItem("networth_projects") || "[]"); if (Array.isArray(saved)) legacyProjects = saved; } catch {}
-  return { legacyProjects, luloProjects: (readObject(PROJECT_QUICK_CACHE_KEY).projects || []).filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {} };
+  const inactive = new Set((readObject(INACTIVE_PROJECTS_KEY).ids || []).map(String));
+  const quickProjects = readObject(PROJECT_QUICK_CACHE_KEY).projects || [];
+  const activeProjectNames = [
+    ...legacyProjects.filter(project => !inactive.has(String(project?.id)) && project?.inactive !== true && project?.is_inactive !== true).map(project => project?.name),
+    ...quickProjects.filter(project => !inactive.has(String(project?.id)) && project?.inactive !== true && project?.is_inactive !== true).map(project => project?.name),
+  ].filter(Boolean);
+  return { legacyProjects, activeProjectNames, luloProjects: quickProjects.filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {} };
 }
-function buildTimeline(devices, months, currentMonth) {
+function buildTimeline(devices, months, currentMonth, kryptexTracker) {
   if (!devices.length) return { points: [], cost: 0, earned: 0, remaining: 0, halfway: null, breakEven: null, pace: 0 };
   const cost = devices.reduce((sum, d) => sum + Number(d.cost || 0), 0);
   const start = devices.map(d => d.startMonth).sort()[0];
@@ -36,7 +67,7 @@ function buildTimeline(devices, months, currentMonth) {
     const fraction = month === currentMonth ? day / days : 1;
     const row = months.find(item => item.monthKey === month);
     const activeSources = new Set(devices.filter(device => device.source && month >= device.startMonth).map(device => device.source));
-    const income = Array.from(activeSources).reduce((sum, source) => sum + monthSourceAmount(row, source), 0);
+    const income = Array.from(activeSources).reduce((sum, source) => sum + monthSourceAmount(row, source, kryptexTracker), 0);
     cumulative += income - devices.reduce((sum, d) => month >= d.startMonth ? sum + (Number(d.power) || 0) * fraction : sum, 0);
     points.push({ month, label: label(month), actual: Math.round(cumulative * 100) / 100, forecast: null });
   }
@@ -67,7 +98,7 @@ function monthPosition(time) {
     (parts.day - 1 + (parts.hour + parts.minute / 60 + parts.second / 3600) / 24) / days;
 }
 
-function deviceEarnings(devices, months, month, now, legacyStats) {
+function deviceEarnings(devices, months, month, now, legacyStats, kryptexTracker) {
   const costsBySource = devices.reduce((totals, device) => {
     if (device.source) totals[device.source] = (totals[device.source] || 0) + (Number(device.cost) || 0);
     return totals;
@@ -76,7 +107,7 @@ function deviceEarnings(devices, months, month, now, legacyStats) {
     if (!device.checkpoint || !device.source) return [device.id, 0];
     const checkpoint = device.checkpoint;
     const income = months.reduce((sum, row) =>
-      row.monthKey >= checkpoint.month && row.monthKey <= month ? sum + monthSourceAmount(row, device.source) : sum, 0);
+      row.monthKey >= checkpoint.month && row.monthKey <= month ? sum + monthSourceAmount(row, device.source, kryptexTracker) : sum, 0);
     const power = Math.max(0, monthPosition(now) - monthPosition(checkpoint.time)) * device.power;
     const sourceCost = costsBySource[device.source] || 0;
     const earned = checkpoint.carried + (income - checkpoint.baseline) * device.cost / sourceCost - power;
@@ -106,21 +137,21 @@ export default function HardwarePaybackPage() {
     const projects = reconcileLuloIncome(getEffectiveProjectIncome(liveMonths, history.snapshots), history.backfills, history.luloBackfills, currentMonth);
     return mergeManualIncome(buildIncomeHistory(projects, history.payouts, currentMonth, legacyProjectIncome(history.legacyProjects)), history.manualIncome?.monthly || {}, currentMonth);
   }, [liveMonths, history, currentMonth]);
-  const sourceOptions = useMemo(() => sourceOptionsFor(months), [months]);
-  const stats = useMemo(() => buildTimeline(devices, months, currentMonth), [devices, months, currentMonth]);
-  const earnings = deviceEarnings(devices, months, currentMonth, Date.now(), stats);
+  const sourceOptions = useMemo(() => sourceOptionsFor(history, months), [history, months]);
+  const stats = useMemo(() => buildTimeline(devices, months, currentMonth, history.kryptex), [devices, months, currentMonth, history.kryptex]);
+  const earnings = deviceEarnings(devices, months, currentMonth, Date.now(), stats, history.kryptex);
   const totalEarned = Object.values(earnings).reduce((sum, value) => sum + value, 0);
   const left = devices.reduce((sum, device) => sum + Math.max(0, device.cost - earnings[device.id]), 0);
   function persist(next) {
     const time = Date.now();
-    const carried = deviceEarnings(devices, months, currentMonth, time, stats);
+    const carried = deviceEarnings(devices, months, currentMonth, time, stats, history.kryptex);
     const currentRow = months.find(row => row.monthKey === currentMonth);
     const updated = next.map(device => ({
       ...device,
       checkpoint: {
         time,
         month: currentMonth,
-        baseline: monthSourceAmount(currentRow, device.source),
+        baseline: monthSourceAmount(currentRow, device.source, history.kryptex),
         carried: devices.find(previous => previous.id === device.id)?.source === device.source ? (carried[device.id] ?? 0) : 0,
       },
     }));

@@ -1935,6 +1935,15 @@ const importSaladPayload =
                 )
               );
 
+            // Hardware payback uses Kryptex's reported mining rate, not
+            // balance changes that can be distorted by BTC price movement.
+            const kryptexMiningDaily = {
+              ...(current?.kryptexMiningDaily || {}),
+            };
+            if (profitabilityUsdDay > 0) {
+              kryptexMiningDaily[day] = Number(profitabilityUsdDay.toFixed(6));
+            }
+
             const lifetimeEarnedUsd =
               (
                 Number(
@@ -1963,6 +1972,7 @@ const importSaladPayload =
               profitabilityUsdDay,
               withdrawableUsd,
               monthlyEarnings,
+              kryptexMiningDaily,
               lastSyncedAt:
                 syncedAt,
               reachable:
