@@ -1872,6 +1872,10 @@ const importSaladPayload =
           payload?.synced_at ||
           new Date().toISOString();
 
+        // A v1.4+ extension payload is machine-local. Do not let that one PC
+        // overwrite the server-aggregated profitability that arrives via
+        // "kryptex-aggregate-update".
+        const isMachineScoped = Boolean(payload?.machine?.id);
         const profitabilityUsdDay =
           Number(
             status?.profitability_usd_day
@@ -1977,7 +1981,10 @@ const importSaladPayload =
                     6
                   )
                 ),
-              profitabilityUsdDay,
+              profitabilityUsdDay:
+                isMachineScoped
+                  ? Number(current?.profitabilityUsdDay) || 0
+                  : profitabilityUsdDay,
               withdrawableUsd,
               monthlyEarnings,
               kryptexMiningDaily,
@@ -2007,6 +2014,27 @@ const importSaladPayload =
       },
       []
     );
+
+  useEffect(() => {
+    const handleAggregate = (event) => {
+      const detail = event?.detail || {};
+      const status = detail?.status || {};
+      const profitabilityUsdDay = Number(status?.profitability_usd_day);
+      if (!Number.isFinite(profitabilityUsdDay) || profitabilityUsdDay < 0) return;
+
+      setKryptexTracker(current => ({
+        ...current,
+        profitabilityUsdDay,
+        miners: Array.isArray(status?.miners) ? status.miners : [],
+        lastSyncedAt: detail?.synced_at || current?.lastSyncedAt || new Date().toISOString(),
+        reachable: true,
+        activeMachineCount: Math.max(0, Number(detail?.machine_count) || 0),
+      }));
+    };
+
+    window.addEventListener("kryptex-aggregate-update", handleAggregate);
+    return () => window.removeEventListener("kryptex-aggregate-update", handleAggregate);
+  }, []);
 
   const requestKryptexLatest =
     useCallback(
