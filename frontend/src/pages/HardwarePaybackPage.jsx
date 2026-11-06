@@ -10,7 +10,7 @@ import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
-const KRYPTEX_PAYBACK_LEDGER = "kryptex-mining-v1";
+const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
 const INTEGRATED_SOURCES = ["Kryptex", "Salad", "RollerCoin", "Unetwork", "Loopscale", "Lulo"];
 const panel = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const money = value => formatCurrency(Number(value) || 0);
@@ -24,18 +24,9 @@ const canonicalSourceName = source => {
   return value;
 };
 const monthSourceAmount = (row, source, kryptexTracker) => {
-  if (canonicalSourceName(source) === "Kryptex" && kryptexTracker) {
-    const miningTotal = Object.entries(kryptexTracker.kryptexMiningDaily || {})
-      .filter(([date]) => String(date).slice(0, 7) === String(row?.monthKey || ""))
-      .reduce((sum, [, amount]) => sum + Math.max(0, Number(amount) || 0), 0);
-    if (miningTotal > 0) return miningTotal;
-    // Use Kryptex's current reported mining rate while the dated ledger
-    // initializes. Never use the balance/P&L delta for payback.
-    if (row?.monthKey === getCurrentMonthKey()) {
-      return Math.max(0, Number(kryptexTracker.profitabilityUsdDay) || 0);
-    }
-    return 0;
-  }
+  // This integration exposes a projected rate, but no dated mined sats.
+  // Until a confirmed daily feed is available, no Kryptex amount is credited.
+  if (canonicalSourceName(source) === "Kryptex") return 0;
   return Object.entries(row?.sources || {}).reduce((sum, [name, amount]) =>
     canonicalSourceName(name) === canonicalSourceName(source) ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
 };
@@ -45,10 +36,7 @@ const pacificDayKey = time => {
   }).formatToParts(new Date(time)).map(part => [part.type, part.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
 };
-const todayKryptexIncome = tracker => Math.max(
-  0,
-  Number(tracker?.kryptexMiningDaily?.[pacificDayKey(Date.now())] ?? tracker?.profitabilityUsdDay) || 0
-);
+const todayKryptexIncome = () => 0;
 const sourceOptionsFor = (history, months) => {
   const activeNames = new Set((history.activeProjectNames || []).map(canonicalSourceName));
   const hasTrackerData = tracker => tracker && Object.keys(tracker).some(key =>
@@ -82,7 +70,7 @@ const estimatedDailyForDevice = (device, devices, months, currentMonth, kryptexT
   if (!sourceCost) return 0;
   const allocation = (Number(device.cost) || 0) / sourceCost;
   if (source === "Kryptex") {
-    return Math.max(0, todayKryptexIncome(kryptexTracker) * allocation - (Number(device.power) || 0) / 30);
+    return Math.max(0, Math.max(0, Number(kryptexTracker?.profitabilityUsdDay) || 0) * allocation - (Number(device.power) || 0) / 30);
   }
   const row = months.find(item => item.monthKey === currentMonth);
   const dayOfMonth = Number(new Intl.DateTimeFormat("en-US", {
