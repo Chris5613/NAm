@@ -30,7 +30,7 @@ function readProjects() {
       daily: project.totalBalance * (project.weightedApy || 0) / 100 / 365,
     })),
     { id: "salad-project", name: "Salad", earned: salad.lifetimeUsd, daily: salad.estimatedDailyUsd },
-    { id: "rollercoin-project", name: "RollerCoin", earned: rollercoin.lifetimeUsd, daily: 0 },
+    { id: "rollercoin-project", name: "RollerCoin", earned: rollercoin.lifetimeUsd, daily: Math.max(0, Number(rollercoin.todayUsd) || 0) },
     { id: "unetwork-project", name: "Unetwork", earned: unetwork.lifetimeUsd, daily: unetwork.estimatedDailyUsd },
     { id: "kryptex-project", name: "Kryptex", earned: kryptex.lifetimeUsd, daily: kryptex.dailyUsd },
   ];
