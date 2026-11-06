@@ -7,7 +7,7 @@ import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMont
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
+import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, KRYPTEX_OPENING_BALANCE_USD, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject, saveKryptexTracker } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
 const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
@@ -46,6 +46,10 @@ const todayKryptexIncome = tracker => {
   return tracker?.kryptexConfirmedDays?.[day]
     ? Math.max(0, Number(tracker?.kryptexMiningDaily?.[day]) || 0) : 0;
 };
+const backfilledKryptexIncome = (device, tracker, today) =>
+  Object.entries(tracker?.kryptexMiningDaily || {}).reduce((sum, [day, value]) =>
+    day >= device.earningsStartDay && day <= today && tracker?.kryptexConfirmedDays?.[day]
+      ? sum + Math.max(0, Number(value) || 0) : sum, 0);
 const sourceOptionsFor = (history, months) => {
   const activeNames = new Set((history.activeProjectNames || []).map(canonicalSourceName));
   const hasTrackerData = tracker => tracker && Object.keys(tracker).some(key =>
@@ -150,6 +154,13 @@ function deviceEarnings(devices, months, month, now, legacyStats, kryptexTracker
       row.monthKey >= checkpoint.month && row.monthKey <= month ? sum + monthSourceAmount(row, device.source, kryptexTracker) : sum, 0);
     const power = Math.max(0, monthPosition(now) - monthPosition(checkpoint.time)) * device.power;
     const sourceCost = costsBySource[device.source] || 0;
+    if (isKryptex && device.earningsStartDay) {
+      // This device explicitly includes the confirmed chart history from Nov 1.
+      // Recompute from stored dated earnings, so an edit cannot double count it.
+      const accrued = backfilledKryptexIncome(device, kryptexTracker, pacificDayKey(now));
+      return [device.id, Math.max(0, accrued * device.cost / sourceCost -
+        Math.max(0, monthPosition(now) - monthPosition(device.powerStartTime || checkpoint.time)) * device.power)];
+    }
     // If hardware was added today, credit the full positive Kryptex amount
     // for today only. From tomorrow onward, the checkpoint rule applies.
     if (isKryptex && pacificDayKey(checkpoint.time) === pacificDayKey(Date.now())) {
@@ -169,6 +180,40 @@ export default function HardwarePaybackPage() {
   const [historyReady, setHistoryReady] = useState(false);
   const [clock, setClock] = useState(Date.now());
   useEffect(() => subscribe(() => { setDevices(readDevices()); setHistory(current => ({ ...readHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills })); }), []);
+  useEffect(() => {
+    const receiveChartEarnings = event => {
+      if (event.source !== window || event.origin !== window.location.origin ||
+          event.data?.source !== "kryptex-tracker-ext" || event.data?.type !== "KRYPTEX_PUSH") return;
+      const chartDays = event.data.payload?.earnings?.daily_usd || {};
+      const today = pacificDayKey(Date.now());
+      const current = loadKryptexTracker();
+      const daily = { ...(current.kryptexMiningDaily || {}) };
+      const confirmed = { ...(current.kryptexConfirmedDays || {}) };
+      let changed = false;
+      for (const [day, value] of Object.entries(chartDays)) {
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < "2026-11-01" || day > today) continue;
+        const amount = Number(value);
+        if (!Number.isFinite(amount) || amount < 0) continue;
+        if (daily[day] !== amount || !confirmed[day]) changed = true;
+        daily[day] = amount;
+        confirmed[day] = true;
+      }
+      if (!changed) return;
+      const monthKey = getCurrentMonthKey();
+      const monthlyEarnings = { ...(current.monthlyEarnings || {}) };
+      const oldMonth = Number(monthlyEarnings[monthKey]) || 0;
+      const newMonth = Object.entries(daily).reduce((sum, [day, amount]) =>
+        day.startsWith(`${monthKey}-`) && confirmed[day] ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
+      monthlyEarnings[monthKey] = Number(newMonth.toFixed(6));
+      const lifetimeEarnedUsd = Math.max(KRYPTEX_OPENING_BALANCE_USD,
+        (Number(current.lifetimeEarnedUsd) || KRYPTEX_OPENING_BALANCE_USD) - oldMonth) + newMonth;
+      saveKryptexTracker({ ...current, kryptexMiningDaily: daily,
+        kryptexConfirmedDays: confirmed, monthlyEarnings, lifetimeEarnedUsd: Number(lifetimeEarnedUsd.toFixed(6)) });
+    };
+    window.addEventListener("message", receiveChartEarnings);
+    window.postMessage({ source: "kryptex-tracker-app", type: "REQUEST_LATEST" }, window.location.origin);
+    return () => window.removeEventListener("message", receiveChartEarnings);
+  }, []);
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 60000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let active = true;
@@ -187,13 +232,21 @@ export default function HardwarePaybackPage() {
     if (!historyReady) return;
     const legacyKryptex = devices.filter(device =>
       canonicalSourceName(device.source) === "Kryptex" && device.checkpoint && device.checkpoint.ledger !== KRYPTEX_PAYBACK_LEDGER);
-    if (!legacyKryptex.length) return;
+    const needsNov1Backfill = device => canonicalSourceName(device.source) === "Kryptex" &&
+      device.name?.trim().toLowerCase() === "rtx 2080 pc" && device.checkpoint &&
+      pacificDayKey(device.checkpoint.time) >= "2026-11-01" &&
+      pacificDayKey(device.checkpoint.time) <= "2026-11-06" && !device.earningsStartDay;
+    if (!legacyKryptex.length && !devices.some(needsNov1Backfill)) return;
     const now = Date.now();
     const currentRow = months.find(row => row.monthKey === currentMonth);
     const baseline = monthSourceAmount(currentRow, "Kryptex", history.kryptex);
-    const migrated = devices.map(device => legacyKryptex.some(row => row.id === device.id)
-      ? { ...device, checkpoint: { time: now, month: currentMonth, baseline, carried: 0, ledger: KRYPTEX_PAYBACK_LEDGER } }
-      : device);
+    const migrated = devices.map(device => {
+      const backfill = needsNov1Backfill(device);
+      const next = legacyKryptex.some(row => row.id === device.id)
+        ? { ...device, checkpoint: { time: now, month: currentMonth, baseline, carried: 0, ledger: KRYPTEX_PAYBACK_LEDGER } }
+        : device;
+      return backfill ? { ...next, earningsStartDay: "2026-11-01", powerStartTime: device.checkpoint.time } : next;
+    });
     remoteStorage.setItem(KEY, JSON.stringify(migrated));
     setDevices(migrated);
   }, [historyReady, devices, months, currentMonth, history.kryptex]);
