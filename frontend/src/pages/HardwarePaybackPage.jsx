@@ -24,13 +24,20 @@ const canonicalSourceName = source => {
   return value;
 };
 const monthSourceAmount = (row, source, kryptexTracker) => {
-  if (source === "Kryptex" && kryptexTracker && Object.prototype.hasOwnProperty.call(kryptexTracker, "kryptexMiningDaily")) {
-    return Object.entries(kryptexTracker.kryptexMiningDaily || {})
+  if (canonicalSourceName(source) === "Kryptex" && kryptexTracker) {
+    const miningTotal = Object.entries(kryptexTracker.kryptexMiningDaily || {})
       .filter(([date]) => String(date).slice(0, 7) === String(row?.monthKey || ""))
-      .reduce((sum, [, amount]) => sum + (Number(amount) || 0), 0);
+      .reduce((sum, [, amount]) => sum + Math.max(0, Number(amount) || 0), 0);
+    if (miningTotal > 0) return miningTotal;
+    // Use Kryptex's current reported mining rate while the dated ledger
+    // initializes. Never use the balance/P&L delta for payback.
+    if (row?.monthKey === getCurrentMonthKey()) {
+      return Math.max(0, Number(kryptexTracker.profitabilityUsdDay) || 0);
+    }
+    return 0;
   }
   return Object.entries(row?.sources || {}).reduce((sum, [name, amount]) =>
-    canonicalSourceName(name) === canonicalSourceName(source) ? sum + (Number(amount) || 0) : sum, 0);
+    canonicalSourceName(name) === canonicalSourceName(source) ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
 };
 const sourceOptionsFor = (history, months) => {
   const activeNames = new Set((history.activeProjectNames || []).map(canonicalSourceName));
@@ -69,7 +76,7 @@ function buildTimeline(devices, months, currentMonth, kryptexTracker) {
     const row = months.find(item => item.monthKey === month);
     const activeSources = new Set(devices.filter(device => device.source && month >= device.startMonth).map(device => device.source));
     const income = Array.from(activeSources).reduce((sum, source) => sum + monthSourceAmount(row, source, kryptexTracker), 0);
-    cumulative += income - devices.reduce((sum, d) => month >= d.startMonth ? sum + (Number(d.power) || 0) * fraction : sum, 0);
+    cumulative = Math.max(0, cumulative + income - devices.reduce((sum, d) => month >= d.startMonth ? sum + (Number(d.power) || 0) * fraction : sum, 0));
     points.push({ month, label: label(month), actual: Math.round(cumulative * 100) / 100, forecast: null });
   }
   const earned = cumulative;
@@ -116,7 +123,7 @@ function deviceEarnings(devices, months, month, now, legacyStats, kryptexTracker
       row.monthKey >= checkpoint.month && row.monthKey <= month ? sum + monthSourceAmount(row, device.source, kryptexTracker) : sum, 0);
     const power = Math.max(0, monthPosition(now) - monthPosition(checkpoint.time)) * device.power;
     const sourceCost = costsBySource[device.source] || 0;
-    const earned = checkpoint.carried + (income - checkpoint.baseline) * device.cost / sourceCost - power;
+    const earned = Math.max(0, checkpoint.carried + (income - checkpoint.baseline) * device.cost / sourceCost - power);
     return [device.id, earned];
   }));
 }
@@ -160,7 +167,7 @@ export default function HardwarePaybackPage() {
   const sourceOptions = useMemo(() => sourceOptionsFor(history, months), [history, months]);
   const stats = useMemo(() => buildTimeline(devices, months, currentMonth, history.kryptex), [devices, months, currentMonth, history.kryptex]);
   const earnings = deviceEarnings(devices, months, currentMonth, Date.now(), stats, history.kryptex);
-  const totalEarned = Object.values(earnings).reduce((sum, value) => sum + value, 0);
+  const totalEarned = Object.values(earnings).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
   const left = devices.reduce((sum, device) => sum + Math.max(0, device.cost - earnings[device.id]), 0);
   function persist(next) {
     const time = Date.now();
