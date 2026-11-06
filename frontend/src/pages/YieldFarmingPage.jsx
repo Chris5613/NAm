@@ -1103,6 +1103,20 @@ const requestRollerCoinLatest =
     ]
   );
 
+  // Ask the connected extension for dated RollerCoin records from the
+  // November gap. The importer merges confirmed daily rows and preserves
+  // any larger value already recorded for a day.
+  useEffect(() => {
+    if (!rollerCoinConnected) return;
+    const key = "rollercoin-nov-1-6-2026-backfill-requested-v1";
+    if (window.sessionStorage.getItem(key)) return;
+    window.postMessage(
+      { source: "rollercoin-app", type: "SYNC_RANGE", from: "2026-11-01", to: "2026-11-06" },
+      window.location.origin
+    );
+    window.sessionStorage.setItem(key, "1");
+  }, [rollerCoinConnected]);
+
   const applyProjectData =
     useCallback(
       (projects) => {
