@@ -3690,6 +3690,24 @@ const importSaladPayload =
   // This is the Lulo provider day (UTC), not NAm's Pacific calendar day.
   const currentLuloUtc = currentLuloUtcDaily(luloProjects, new Date(earningsClock));
   const sourceTotalsForDay = key => {
+    // Today's card uses dated income feeds only. Kryptex's mining rate is
+    // income; its balance movement is excluded because BTC price changes can
+    // create a misleading positive or negative P/L.
+    if (key === todayKey) {
+      const income = luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc);
+      const allocation = unetworkTracker?.daily?.[key];
+      const datedAmounts = {
+        Kryptex: kryptexTracker?.kryptexMiningDaily?.[key],
+        Salad: saladTracker?.daily?.[key],
+        RollerCoin: rollerCoinTracker?.daily?.[key]?.usd,
+        Stocks: stockPayoutTotal(stockPayouts, key),
+        Unetwork: allocation?.count > 0 || allocation?.micros > 0 ? allocation.usd : 0,
+      };
+      for (const [source, amount] of Object.entries(datedAmounts)) {
+        if (Number.isFinite(Number(amount)) && Number(amount) > 0) income[source] = Number(amount);
+      }
+      return income;
+    }
     // Midnight UTC can start tomorrow for Lulo while it is still today PT.
     // Expose that day for Lulo ONLY; no Pacific provider belongs there yet.
     if (key > todayKey) {
