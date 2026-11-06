@@ -1949,19 +1949,14 @@ const importSaladPayload =
                 )
               );
 
-            // Hardware payback uses Kryptex's reported mining rate, not
-            // balance changes that can be distorted by BTC price movement.
+            // The provider's profitabilityUsdDay is a projected 24-hour
+            // rate, never a confirmed amount earned on this calendar day.
+            // Clear the old rate-based entry for today so it cannot masquerade
+            // as earned income after this release.
             const kryptexMiningDaily = {
               ...(current?.kryptexMiningDaily || {}),
             };
-            if (profitabilityUsdDay > 0) {
-              // Keep today's recorded Kryptex income from moving backward when
-              // the live profitability quote or BTC price changes.
-              kryptexMiningDaily[day] = Math.max(
-                Number(kryptexMiningDaily[day]) || 0,
-                Number(profitabilityUsdDay.toFixed(6))
-              );
-            }
+            delete kryptexMiningDaily[day];
 
             const lifetimeEarnedUsd =
               (
@@ -3716,7 +3711,7 @@ const importSaladPayload =
       const income = luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc);
       const allocation = unetworkTracker?.daily?.[key];
       const datedAmounts = {
-        Kryptex: kryptexTracker?.kryptexMiningDaily?.[key] ?? kryptexTracker?.profitabilityUsdDay,
+        Kryptex: 0, // A projected daily rate is not confirmed mining income.
         Salad: saladTracker?.daily?.[key],
         RollerCoin: rollerCoinTracker?.daily?.[key]?.usd
           ?? earningsLedger.days?.[key]?.sources?.RollerCoin
