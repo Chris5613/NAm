@@ -168,10 +168,16 @@ function AuthGate() {
 
     let cancelled = false;
 
-    setStoreErrorHandler(
-      (message) =>
-        toast.error(message)
-    );
+    setStoreErrorHandler((message) => {
+      // Session-journal restore conflicts are informational: the server copy
+      // already won and the tab retains its local edit. Do not spam the UI
+      // with repeated error toasts for these expected cross-device conflicts.
+      if (/^Could not restore ".+" automatically because it changed on the server\./.test(String(message || ""))) {
+        console.info(message);
+        return;
+      }
+      toast.error(message);
+    });
 
     hydrate(user.id)
       .then(() => {
