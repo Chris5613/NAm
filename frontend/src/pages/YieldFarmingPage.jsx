@@ -1904,7 +1904,7 @@ const importSaladPayload =
                 ? previousBalance
                 : KRYPTEX_OPENING_BALANCE_USD;
 
-            const { earned: positiveDelta, peak: peakBalance } =
+            const { peak: peakBalance } =
               kryptexIncrease(currentBalance, baselineBalance, current?.peakBalance);
 
             const day = getTodayKey();
@@ -1937,19 +1937,7 @@ const importSaladPayload =
                   : 0
               );
 
-            monthlyEarnings[
-              monthKey
-            ] =
-              Number(
-                (
-                  existingMonth +
-                  positiveDelta
-                ).toFixed(
-                  6
-                )
-              );
-
-            // Only dated satoshi accruals from Kryptex's account chart
+            monthlyEarned satoshi accruals from Kryptex's account chart
             // count as income. Balance changes and projected rates do not.
             const kryptexMiningDaily = {
               ...(current?.kryptexMiningDaily || {}),
@@ -1964,14 +1952,15 @@ const importSaladPayload =
               delete kryptexMiningDaily[day];
             }
 
+            const confirmedMonth = Object.entries(kryptexMiningDaily)
+              .reduce((sum, [entryDay, amount]) => entryDay.startsWith(`${monthKey}-`) &&
+                confirmedDays[entryDay] ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
+            monthlyEarnings[monthKey] = Number(confirmedMonth.toFixed(6));
+
             const lifetimeEarnedUsd =
-              (
-                Number(
-                  current?.lifetimeEarnedUsd
-                ) ||
-                KRYPTEX_OPENING_BALANCE_USD
-              ) +
-              positiveDelta;
+              Math.max(KRYPTEX_OPENING_BALANCE_USD,
+                (Number(current?.lifetimeEarnedUsd) || KRYPTEX_OPENING_BALANCE_USD) - existingMonth) +
+              confirmedMonth;
 
             return {
               ...current,
