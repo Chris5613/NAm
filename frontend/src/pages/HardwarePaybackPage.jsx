@@ -39,6 +39,16 @@ const monthSourceAmount = (row, source, kryptexTracker) => {
   return Object.entries(row?.sources || {}).reduce((sum, [name, amount]) =>
     canonicalSourceName(name) === canonicalSourceName(source) ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
 };
+const pacificDayKey = time => {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date(time)).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+};
+const todayKryptexIncome = tracker => Math.max(
+  0,
+  Number(tracker?.kryptexMiningDaily?.[pacificDayKey(Date.now())] ?? tracker?.profitabilityUsdDay) || 0
+);
 const sourceOptionsFor = (history, months) => {
   const activeNames = new Set((history.activeProjectNames || []).map(canonicalSourceName));
   const hasTrackerData = tracker => tracker && Object.keys(tracker).some(key =>
@@ -123,6 +133,12 @@ function deviceEarnings(devices, months, month, now, legacyStats, kryptexTracker
       row.monthKey >= checkpoint.month && row.monthKey <= month ? sum + monthSourceAmount(row, device.source, kryptexTracker) : sum, 0);
     const power = Math.max(0, monthPosition(now) - monthPosition(checkpoint.time)) * device.power;
     const sourceCost = costsBySource[device.source] || 0;
+    // If hardware was added today, credit the full positive Kryptex amount
+    // for today only. From tomorrow onward, the checkpoint rule applies.
+    if (isKryptex && pacificDayKey(checkpoint.time) === pacificDayKey(Date.now())) {
+      const todayIncome = todayKryptexIncome(kryptexTracker);
+      return [device.id, Math.max(0, todayIncome * device.cost / sourceCost - power)];
+    }
     const earned = Math.max(0, checkpoint.carried + (income - checkpoint.baseline) * device.cost / sourceCost - power);
     return [device.id, earned];
   }));
