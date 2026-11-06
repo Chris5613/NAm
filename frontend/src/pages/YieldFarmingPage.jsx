@@ -3699,7 +3699,10 @@ const importSaladPayload =
       const datedAmounts = {
         Kryptex: kryptexTracker?.kryptexMiningDaily?.[key] ?? kryptexTracker?.profitabilityUsdDay,
         Salad: saladTracker?.daily?.[key],
-        RollerCoin: rollerCoinTracker?.daily?.[key]?.usd,
+        RollerCoin: rollerCoinTracker?.daily?.[key]?.usd
+          ?? earningsLedger.days?.[key]?.sources?.RollerCoin
+          ?? (Number(rollerCoinTracker?.walletDaily?.[key]?.usd) > 0
+            ? rollerCoinTracker.walletDaily[key].usd : 0),
         Stocks: stockPayoutTotal(stockPayouts, key),
         Unetwork: allocation?.count > 0 || allocation?.micros > 0 ? allocation.usd : 0,
       };
