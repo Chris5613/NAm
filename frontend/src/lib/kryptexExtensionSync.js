@@ -87,7 +87,19 @@ export async function applyKryptexExtensionPayload(payload) {
   }
 
   try {
-    const result = await reconcileKryptexStatus(payload.status);
+    const result = await reconcileKryptexStatus(payload.status, {
+      machine: payload.machine || null,
+      observedAt: syncedAt,
+    });
+    if (result?.status) {
+      window.dispatchEvent(new CustomEvent("kryptex-aggregate-update", {
+        detail: {
+          status: result.status,
+          machine_count: result.machine_count || 0,
+          synced_at: syncedAt,
+        },
+      }));
+    }
     setKryptexExtensionState({
       last_applied_synced_at: syncedAt,
       last_applied_received_at: new Date().toISOString(),
