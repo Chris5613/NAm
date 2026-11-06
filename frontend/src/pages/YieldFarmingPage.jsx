@@ -3706,6 +3706,13 @@ const importSaladPayload =
       for (const [source, amount] of Object.entries(datedAmounts)) {
         if (Number.isFinite(Number(amount)) && Number(amount) > 0) income[source] = Number(amount);
       }
+      // Loopscale records positive, flow-adjusted daily observations by
+      // position. Include those observations in the same income-only total.
+      const observedLoopscale = Object.values(loopscaleHistory?.positions || {})
+        .reduce((sum, position) => sum + (Number(position?.observedDaily?.[key]) || 0), 0);
+      const recordedLoopscale = Number(earningsLedger.days?.[key]?.sources?.Loopscale) || 0;
+      const loopscaleIncome = Math.max(0, observedLoopscale, recordedLoopscale);
+      if (loopscaleIncome > 0) income.Loopscale = loopscaleIncome;
       return income;
     }
     // Midnight UTC can start tomorrow for Lulo while it is still today PT.
