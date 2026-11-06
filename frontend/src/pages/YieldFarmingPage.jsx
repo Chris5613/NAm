@@ -1941,7 +1941,12 @@ const importSaladPayload =
               ...(current?.kryptexMiningDaily || {}),
             };
             if (profitabilityUsdDay > 0) {
-              kryptexMiningDaily[day] = Number(profitabilityUsdDay.toFixed(6));
+              // Keep today's recorded Kryptex income from moving backward when
+              // the live profitability quote or BTC price changes.
+              kryptexMiningDaily[day] = Math.max(
+                Number(kryptexMiningDaily[day]) || 0,
+                Number(profitabilityUsdDay.toFixed(6))
+              );
             }
 
             const lifetimeEarnedUsd =
