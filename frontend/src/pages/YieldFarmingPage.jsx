@@ -1936,7 +1936,7 @@ const importSaladPayload =
                   : 0
               );
 
-            monthlyEarned satoshi accruals from Kryptex's account chart
+            // Only dated satoshi accruals from Kryptex's account chart
             // count as income. Balance changes and projected rates do not.
             const kryptexMiningDaily = {
               ...(current?.kryptexMiningDaily || {}),
