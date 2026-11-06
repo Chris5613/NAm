@@ -1996,7 +1996,13 @@ const importSaladPayload =
         );
 
         setKryptexMessage(
-          "Kryptex synced."
+          Object.prototype.hasOwnProperty.call(payload?.earnings?.daily_usd || {}, getTodayKey())
+            ? "Kryptex earnings chart synced."
+            : Object.prototype.hasOwnProperty.call(payload?.earnings?.daily_sats || {}, getTodayKey())
+              ? "Kryptex sats captured; waiting for a BTC price."
+              : payload?.chart_scan?.series_count === 0
+                ? "Kryptex chart is visible, but its earnings data was not recognized."
+                : "Open Kryptex's Satoshi earnings chart to sync today's income."
         );
       },
       []
