@@ -2,18 +2,62 @@ import { withCorsProxy, fetchWithCors, proxyFetch } from "./cors-proxy";
 
 // Paths below are backend proxy routes, not vendor URLs. Keys live on the server.
 const COINGECKO_BASE = "/coingecko";
+const COINGECKO_PRICE_TTL_MS = 60 * 1000;
+const COINGECKO_FAILURE_TTL_MS = 5 * 60 * 1000;
+const coinGeckoPriceCache = new Map();
+const coinGeckoPriceInFlight = new Map();
+
+function cachedCoinGeckoPrice(key) {
+  const entry = coinGeckoPriceCache.get(key);
+  if (!entry || Date.now() >= entry.expiresAt) return null;
+  return entry;
+}
+
+function saveCoinGeckoPrice(key, value, ttl) {
+  coinGeckoPriceCache.set(key, {
+    value,
+    expiresAt: Date.now() + ttl,
+  });
+  return value;
+}
 
 export const coinGeckoApi = {
   getPrice: async (coinId, vsCurrency = "usd") => {
-    try {
-      const response = await withCorsProxy(
-        `${COINGECKO_BASE}/simple/price?ids=${coinId}&vs_currencies=${vsCurrency}`
-      );
-      return response.data[coinId]?.[vsCurrency] || 0;
-    } catch (error) {
-      console.warn(`CoinGecko price fetch failed for ${coinId}:`, error);
-      return 0;
+    const ids = String(coinId || "").split(",").map(id => id.trim()).filter(Boolean);
+    if (!ids.length) return 0;
+
+    const key = `${ids.sort().join(",")}|${vsCurrency}`;
+    const cached = cachedCoinGeckoPrice(key);
+    if (cached) return cached.value;
+
+    if (coinGeckoPriceInFlight.has(key)) {
+      return coinGeckoPriceInFlight.get(key);
     }
+
+    const request = (async () => {
+      try {
+        const response = await withCorsProxy(
+          `${COINGECKO_BASE}/simple/price?ids=${encodeURIComponent(ids.join(","))}&vs_currencies=${encodeURIComponent(vsCurrency)}`
+        );
+
+        const values = Object.fromEntries(
+          ids.map(id => [id, Number(response?.data?.[id]?.[vsCurrency]) || 0])
+        );
+        const value = ids.length === 1 ? values[ids[0]] : values;
+        return saveCoinGeckoPrice(key, value, COINGECKO_PRICE_TTL_MS);
+      } catch (error) {
+        console.warn(`CoinGecko price fetch failed for ${ids.join(",")}:`, error);
+        // Cache a failed lookup briefly so focus/events do not hammer the
+        // backend/vendor while it is rate-limited or temporarily unavailable.
+        const value = ids.length === 1 ? 0 : Object.fromEntries(ids.map(id => [id, 0]));
+        return saveCoinGeckoPrice(key, value, COINGECKO_FAILURE_TTL_MS);
+      } finally {
+        coinGeckoPriceInFlight.delete(key);
+      }
+    })();
+
+    coinGeckoPriceInFlight.set(key, request);
+    return request;
   },
 
   search: async (query) => {
