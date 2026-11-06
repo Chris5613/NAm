@@ -1,6 +1,6 @@
 import { recordKryptexDailyBalance, withKryptexDailyBalance } from "./kryptexDailyBalance";
 
-test("a balance drop reduces today's Kryptex row and a rebound does not double count", () => {
+test("balance changes do not rewrite confirmed Kryptex earnings", () => {
   const day = "2026-11-02";
   const initial = {
     lastBalance: 278, peakBalance: 278, lastSyncedAt: "2026-11-02T20:00:00Z",
@@ -8,7 +8,10 @@ test("a balance drop reduces today's Kryptex row and a rebound does not double c
   const down = recordKryptexDailyBalance(initial, 277.5, day, 0.8);
   expect(down[day].changeUsd).toBeCloseTo(0.3);
   expect(withKryptexDailyBalance({ Kryptex: 0.8, Salad: 1 }, { dailyBalanceDays: down }, day))
-    .toEqual({ Kryptex: 0.3, Salad: 1 });
+    .toEqual({ Salad: 1 });
+  expect(withKryptexDailyBalance({ Kryptex: 0.8, Salad: 1 }, {
+    dailyBalanceDays: down, kryptexMiningDaily: { [day]: 1.62 }, kryptexConfirmedDays: { [day]: true },
+  }, day)).toEqual({ Kryptex: 1.62, Salad: 1 });
   const rebound = recordKryptexDailyBalance({ ...initial, lastBalance: 277.5, dailyBalanceDays: down }, 278, day, 0.8);
   expect(rebound[day].changeUsd).toBeCloseTo(0.8);
   const nextDay = recordKryptexDailyBalance({ ...initial, dailyBalanceDays: rebound }, 278.2, "2026-11-03");
