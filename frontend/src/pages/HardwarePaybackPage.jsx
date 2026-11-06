@@ -74,6 +74,26 @@ function readHistory() {
   ].filter(Boolean);
   return { legacyProjects, activeProjectNames, luloProjects: quickProjects.filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {} };
 }
+const estimatedDailyForDevice = (device, devices, months, currentMonth, kryptexTracker) => {
+  const source = canonicalSourceName(device.source);
+  const sourceCost = devices
+    .filter(row => canonicalSourceName(row.source) === source)
+    .reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
+  if (!sourceCost) return 0;
+  const allocation = (Number(device.cost) || 0) / sourceCost;
+  if (source === "Kryptex") {
+    return Math.max(0, todayKryptexIncome(kryptexTracker) * allocation - (Number(device.power) || 0) / 30);
+  }
+  const row = months.find(item => item.monthKey === currentMonth);
+  const dayOfMonth = Number(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles", day: "numeric",
+  }).format(new Date()));
+  const monthIncome = monthSourceAmount(row, source, kryptexTracker);
+  return Math.max(0, (monthIncome / Math.max(1, dayOfMonth)) * allocation - (Number(device.power) || 0) / 30);
+};
+const recoveryDateLabel = date => new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Los_Angeles", month: "short", day: "numeric", year: "numeric",
+}).format(date);
 function buildTimeline(devices, months, currentMonth, kryptexTracker) {
   if (!devices.length) return { points: [], cost: 0, earned: 0, remaining: 0, halfway: null, breakEven: null, pace: 0 };
   const cost = devices.reduce((sum, d) => sum + Number(d.cost || 0), 0);
@@ -217,6 +237,13 @@ export default function HardwarePaybackPage() {
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[["Hardware cost", stats.cost], ["Net project earnings", totalEarned], ["Left to recover", left]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
     {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{left <= 0 ? "Recovered" : stats.pace > 0 ? `Estimated break-even: ${label(shiftMonth(currentMonth, Math.min(1200, Math.ceil(left / stats.pace))))}` : "No positive earnings pace yet"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => {
           const progress = Math.max(0, Math.min(1, earnings[d.id] / d.cost));
+          const remaining = Math.max(0, d.cost - earnings[d.id]);
+          const estimatedDaily = estimatedDailyForDevice(d, devices, months, currentMonth, history.kryptex);
+          const estimatedRecoveryDate = remaining <= 0
+            ? null
+            : estimatedDaily > 0
+              ? new Date(Date.now() + Math.ceil(remaining / estimatedDaily) * 86400000)
+              : null;
           return (
           <article key={d.id} style={{ borderColor: ["#326e59", "#645284", "#94753e", "#386a91"][index % 4] }} className="w-full max-w-[280px] rounded-xl border border-[#304252] bg-gradient-to-br from-[#132330] to-[#101720] p-4">
             <div className="flex items-center gap-3">
@@ -227,7 +254,8 @@ export default function HardwarePaybackPage() {
             <dl className="my-5 grid grid-cols-1 gap-4 text-sm">
               <div><dt>Cost</dt><dd className="font-semibold">{money(d.cost)}</dd></div>
               <div><dt>Allocated recovery</dt><dd className="font-semibold text-emerald-300">{money(d.cost * progress)}</dd></div>
-              <div><dt>Left</dt><dd className="font-semibold">{money(Math.max(0, d.cost - earnings[d.id]))}</dd></div>
+              <div><dt>Left</dt><dd className="font-semibold">{money(remaining)}</dd></div>
+              <div><dt>Estimated recovered</dt><dd className="font-semibold">{remaining <= 0 ? "Recovered" : estimatedRecoveryDate ? recoveryDateLabel(estimatedRecoveryDate) : "No positive pace yet"}</dd></div>
             </dl>
             <div className="mb-4 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-[#253447]"><div className="h-full bg-emerald-400" style={{width: `${progress * 100}%`}}/></div><span>{progress === 1 ? "Recovered" : Math.round(progress * 100) + "%"}</span></div>
             <div className="flex flex-col items-start gap-2 border-t border-[#304252] pt-3 text-sm text-[#b1c2d0]">
