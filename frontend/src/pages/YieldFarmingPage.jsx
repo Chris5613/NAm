@@ -4710,15 +4710,13 @@ const summary =
                 {todayBreakdown.map(source => (
                   <div key={source.name} className="flex items-center justify-between gap-3 text-xs">
                     <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
-                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{source.name === "Loopscale" && Math.abs(source.amount) < 0.01
-                      ? `${source.amount.toFixed(6)}`
-                      : formatCurrency(source.amount)}</span>
+                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{formatCurrency(source.amount)}</span>
                   </div>
                 ))}
                 {!todayBreakdown.some(source => source.name === "Loopscale") && (
                   <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="min-w-0 text-muted-foreground">Loopscale <span className="text-[10px] opacity-75">("awaiting update")</span></span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground">$0.000000</span>
+                    <span className="min-w-0 text-muted-foreground">Loopscale</span>
+                    <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{formatCurrency(0)}</span>
                   </div>
                 )}
                 <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs">
@@ -4729,8 +4727,8 @@ const summary =
             ) : (
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">Loopscale ("awaiting increase")</span>
-                  <span className="tabular-nums text-muted-foreground">$0.000000</span>
+                  <span className="text-muted-foreground">Loopscale</span>
+                  <span className="font-semibold tabular-nums text-emerald-400">{formatCurrency(0)}</span>
                 </div>
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
                   No new increases recorded yet. Each source starts from its first observed balance; earlier amounts are not assumed to be earned today.
