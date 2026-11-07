@@ -5,6 +5,8 @@ withdrawable balance is not earnings, opening baselines are not new income,
 and TRX market repricing does not add mined rewards.
 """
 from datetime import datetime, timezone
+import json
+import os
 import unittest
 
 from backend.provider_stats import (
@@ -14,6 +16,19 @@ from backend.provider_stats import (
 
 
 class ProviderStatisticsTests(unittest.TestCase):
+    def setUp(self):
+        self._old_profile = os.environ.get("NAM_PRIVATE_ACCOUNTING_PROFILE_JSON")
+        os.environ["NAM_PRIVATE_ACCOUNTING_PROFILE_JSON"] = json.dumps({
+            "kryptexOpeningBalanceUsd": 12.5,
+            "rollercoinHistoricalTrx": 50,
+        })
+
+    def tearDown(self):
+        if self._old_profile is None:
+            os.environ.pop("NAM_PRIVATE_ACCOUNTING_PROFILE_JSON", None)
+        else:
+            os.environ["NAM_PRIVATE_ACCOUNTING_PROFILE_JSON"] = self._old_profile
+
     def test_salad_projects_from_hour_apart_lifetime_samples(self):
         tracker = {
             "currentBalance": 4.1,
@@ -112,8 +127,8 @@ class ProviderStatisticsTests(unittest.TestCase):
             "monthlyEarnings": {"2026-10": 2.15},
             "miners": [{"id": "1"}],
         }, "2026-10")
-        self.assertEqual(result["currentBalanceUsd"], 16.47)
-        self.assertAlmostEqual(result["earnedSinceBaseline"], 3.53)
+        self.assertEqual(result["currentBalanceUsd"], 12.5)
+        self.assertAlmostEqual(result["earnedSinceBaseline"], 7.5)
         self.assertEqual(result["monthUsd"], 2.15)
         self.assertEqual(result["dailyUsd"], 1.2)
         self.assertEqual(len(result["miners"]), 1)
