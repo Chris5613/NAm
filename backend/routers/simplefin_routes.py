@@ -8,6 +8,7 @@ import os
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 from uuid import uuid4
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
+from ..input_validation import iso_day, money_decimal
 from ..rate_limit import check_request_rate
 from ..models import (
     Asset,
@@ -289,7 +291,7 @@ def get_simplefin_account_balance(
     account: dict[str, Any],
     *,
     is_debt: bool,
-) -> float | None:
+) -> Decimal | None:
     """
     Choose the appropriate SimpleFIN balance for the account.
 
@@ -319,8 +321,8 @@ def get_simplefin_account_balance(
         if value is None or value == "":
             continue
         try:
-            return float(value)
-        except (TypeError, ValueError):
+            return money_decimal(value, key)
+        except HTTPException:
             continue
 
     return None
@@ -332,23 +334,28 @@ def normalize_transaction_date(
     if value is None or value == "":
         return None
 
-    if (
-        isinstance(value, (int, float))
-        or str(value).isdigit()
-    ):
-        timestamp = float(value)
+    if isinstance(value, (int, float, Decimal)) or str(value).isdigit():
+        try:
+            timestamp = float(value)
+        except (TypeError, ValueError, OverflowError):
+            return None
 
-        # Pending SimpleFIN transactions can
-        # sometimes use posted=0.
+        # Pending SimpleFIN transactions can sometimes use posted=0.
         if timestamp <= 0:
             return None
 
-        return datetime.fromtimestamp(
-            timestamp,
-            tz=timezone.utc,
-        ).date().isoformat()
+        try:
+            return datetime.fromtimestamp(
+                timestamp,
+                tz=timezone.utc,
+            ).date().isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
 
-    return str(value)[:10]
+    try:
+        return iso_day(str(value))
+    except HTTPException:
+        return None
 
 
 def simplefin_transaction_is_pending(
@@ -376,15 +383,12 @@ def simplefin_transaction_key(
     account_id: str,
     merchant: str,
     date_value: str,
-    amount: float,
-) -> tuple[str, str, float, str]:
+    amount: Decimal,
+) -> tuple[str, str, str, str]:
     return (
         str(account_id),
         str(date_value),
-        round(
-            float(amount or 0),
-            2,
-        ),
+        format(amount.quantize(Decimal("0.01")), "f"),
         str(
             merchant
             or "SimpleFIN transaction"
@@ -839,6 +843,19 @@ async def add_connection(
     }
 
 
+def user_scoped_provider_id(
+    db: Session,
+    model,
+    preferred_id: str,
+    user_id: int,
+) -> str:
+    """Keep legacy IDs when owned by this user; avoid cross-user PK collisions."""
+    existing = db.get(model, preferred_id)
+    if existing is None or getattr(existing, "user_id", None) == user_id:
+        return preferred_id
+    return f"{preferred_id}-u{user_id}"
+
+
 def save_simplefin_payload(
     payload: dict[str, Any],
     connection: SimplefinConnection,
@@ -916,42 +933,34 @@ def save_simplefin_payload(
             is_debt=is_debt,
         )
 
-        account_key = (
-            f"simplefin-{account_id}"
+        account_key = user_scoped_provider_id(
+            db,
+            SpendingAccount,
+            f"simplefin-{account_id}",
+            user.id,
         )
 
-        account_row = SpendingAccount(
-            id=account_key,
-            user_id=user.id,
-            name=account_name,
-            type=(
-                account.get("type")
-                or account.get(
-                    "subtype"
-                )
-            ),
-            current_balance=balance,
-            provider_account_id=(
-                account_key
-            ),
-            linked_at=(
-                connection.created_at
-            ),
-        )
+        account_row = db.get(SpendingAccount, account_key)
+        if account_row is None:
+            account_row = SpendingAccount(
+                id=account_key,
+                user_id=user.id,
+            )
+        account_row.name = account_name
+        account_row.type = account.get("type") or account.get("subtype")
+        account_row.current_balance = balance
+        account_row.provider_account_id = account_key
+        account_row.linked_at = connection.created_at
+        db.add(account_row)
 
-        db.merge(
-            account_row
-        )
-
-        asset_id = (
-            "simplefin-asset-"
-            f"{account_id}"
-        )
-
-        asset = db.get(
+        asset_id = user_scoped_provider_id(
+            db,
             Asset,
-            asset_id,
+            f"simplefin-asset-{account_id}",
+            user.id,
         )
+
+        asset = db.get(Asset, asset_id)
 
         if not asset:
             asset = Asset(
@@ -972,9 +981,7 @@ def save_simplefin_payload(
         asset.current_price = 0
 
         if balance is not None:
-            asset.manual_value = abs(
-                float(balance)
-            )
+            asset.manual_value = abs(float(balance))
 
         asset.data = {
             **(
@@ -1089,14 +1096,13 @@ def save_simplefin_payload(
             if not posted:
                 continue
 
-            amount = abs(
-                float(
-                    transaction.get(
-                        "amount"
-                    )
-                    or 0
-                )
-            )
+            try:
+                amount = abs(money_decimal(
+                    transaction.get("amount") or 0,
+                    "SimpleFIN transaction amount",
+                ))
+            except HTTPException:
+                continue
 
             if amount <= 0:
                 continue
@@ -1139,14 +1145,16 @@ def save_simplefin_payload(
                 tx_key
             )
 
-            existing_transaction = (
-                db.get(
-                    SpendingTransaction,
-                    (
-                        "simplefin-"
-                        f"{transaction_id}"
-                    ),
-                )
+            transaction_key_id = user_scoped_provider_id(
+                db,
+                SpendingTransaction,
+                f"simplefin-{transaction_id}",
+                user.id,
+            )
+
+            existing_transaction = db.get(
+                SpendingTransaction,
+                transaction_key_id,
             )
 
             if (
@@ -1209,10 +1217,7 @@ def save_simplefin_payload(
                 continue
 
             row = SpendingTransaction(
-                id=(
-                    "simplefin-"
-                    f"{transaction_id}"
-                ),
+                id=transaction_key_id,
                 user_id=user.id,
                 merchant=merchant,
                 amount=amount,
