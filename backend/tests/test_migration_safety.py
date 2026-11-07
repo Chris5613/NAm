@@ -92,6 +92,16 @@ class MigrationSafetyTests(unittest.TestCase):
         self.assertEqual(row.user_id, 2)
         self.assertEqual(row.name, "Other Asset")
 
+    def test_snapshot_month_keys_normalize_and_bad_timestamps_skip(self):
+        preview = asyncio.run(preview_dump({
+            "networth_history": [
+                {"monthKey": "2026-11", "value": 100},
+                {"timestamp": "not-a-date", "value": 200},
+            ]
+        }, self.user, self.db))
+        self.assertEqual(preview["imported"]["net_worth_snapshots"], 1)
+        self.assertEqual(preview["skipped"]["invalid_record"], 1)
+
     def test_preview_runs_spending_validation_without_writes(self):
         before = self.db.scalar(select(func.count()).select_from(SpendingAccount))
         with self.assertRaises(HTTPException) as caught:
