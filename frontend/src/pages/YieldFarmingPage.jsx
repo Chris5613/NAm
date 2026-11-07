@@ -1,3 +1,4 @@
+import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
 import { useDailyEarningsHighWater } from "../hooks/useDailyEarningsHighWater";
 import { buildSourceTotalsForDay } from "../lib/yieldIncomeSources";
@@ -3711,43 +3712,8 @@ const importSaladPayload =
       .sort((a,b) => b.amount-a.amount);
     return { label, note, entries, total: entries.reduce((sum,item)=>sum+item.amount,0) };
   })();
-  const [serverDailyIncome, setServerDailyIncome] = useState(null);
-
-  // Pull the server's accepted high-water snapshot when this browser opens or
-  // changes days. This keeps multiple PCs converged on the same cumulative day.
-  useEffect(() => {
-    let active = true;
-    api.get(`/api/project-tracking/daily-earnings/${todayKey}`)
-      .then(result => {
-        if (active && result?.date === todayKey) setServerDailyIncome(result);
-      })
-      .catch(() => {
-        // Local high-water state remains authoritative until the server returns.
-      });
-    return () => { active = false; };
-  }, [todayKey]);
-
-  const dailySourceSignature = JSON.stringify(dailySourceTotals);
-  useEffect(() => {
-    let active = true;
-    const sources = JSON.parse(dailySourceSignature);
-    api.put("/api/project-tracking/daily-earnings", {
-      date: todayKey, sources,
-    }).then(result => {
-      if (active && result?.complete && result?.date === todayKey) {
-        setServerDailyIncome(result);
-      }
-    }).catch(() => {
-      // Preserve the local cumulative high-water during backend outages.
-    });
-    return () => { active = false; };
-  }, [dailySourceSignature, todayKey]);
-
-  // Merge server high-water into this browser's durable high-water state.
-  useEffect(() => {
-    if (serverDailyIncome?.date !== todayKey || !serverDailyIncome?.sources) return;
-    mergeHighWaterSources(serverDailyIncome.sources);
-  }, [mergeHighWaterSources, serverDailyIncome, todayKey]);
+  const serverDailyIncome =
+    useServerDailyIncome(todayKey, dailySourceTotals, mergeHighWaterSources);
 
   const serverSources = serverDailyIncome?.date === todayKey
     ? (serverDailyIncome?.sources || {}) : {};
