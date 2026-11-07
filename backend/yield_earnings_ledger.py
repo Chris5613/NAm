@@ -12,9 +12,10 @@ from math import isfinite
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .private_accounting import private_accounting_profile
+
 PACIFIC = ZoneInfo("America/Los_Angeles")
 LULO_MONTHLY_ACCOUNTING_VERSION = 5
-LULO_SEPTEMBER_2026_OPENING_EARNED = 9.05
 HISTORY_OBSERVATION_LIMIT = 1440
 
 
@@ -153,7 +154,7 @@ def advance_lulo_monthly(monthly: dict | None, project: dict, snapshot: dict,
     if as_float(previous.get("version"), 0) != LULO_MONTHLY_ACCOUNTING_VERSION:
         project_months[month] = {
             "version": LULO_MONTHLY_ACCOUNTING_VERSION,
-            "monthEarned": LULO_SEPTEMBER_2026_OPENING_EARNED if month == "2026-09" else 0,
+            "monthEarned": private_accounting_profile()["luloSeptemberOpeningEarnedUsd"] if month == "2026-09" else 0,
             "lastLifetimeInterest": interest,
             "lastBalanceUsd": balance,
             "createdAt": snapshot["syncedAt"],
