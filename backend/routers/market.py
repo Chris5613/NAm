@@ -428,38 +428,18 @@ async def proxy(
         )
 
     headers = dict(config.get("headers", {}))
+    body = None
 
-    if request.method == "GET":
-        try:
-            return await cached_get(cache_key, url, headers)
-        except HTTPException as error:
-            if provider == "lulo":
-                logger.warning(
-                    "[Lulo Sync] failed endpoint=%s status=%s",
-                    path,
-                    error.status_code,
-                )
-            raise
-
-    body = await request.body()
-
-    if (
-        provider
-        in {
-            "solana",
-            "loopscale",
-        }
-        and request.method == "POST"
-    ):
-        headers[
-            "Content-Type"
-        ] = "application/json"
+    if request.method == "POST":
+        body = await request.body()
+        if provider in {"solana", "loopscale"}:
+            headers["Content-Type"] = "application/json"
 
     try:
-        data = await asyncio.to_thread(_fetch,
-            url,
-            headers,
-            body,
+        data = (
+            await cached_get(cache_key, url, headers)
+            if request.method == "GET"
+            else await asyncio.to_thread(_fetch, url, headers, body)
         )
     except HTTPException as error:
         if provider == "lulo":
