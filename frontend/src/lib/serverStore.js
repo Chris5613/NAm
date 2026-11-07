@@ -180,8 +180,9 @@ async function pushProjects({ throwOnError = false } = {}) {
 
       const saved = await resourceApi.patchProjects(changes);
       if (generation !== storeGeneration) return;
+      if (!Array.isArray(saved)) throw new Error("Invalid projects response from server.");
 
-      savedProjects = clone(saved || []);
+      savedProjects = clone(saved);
       cache.set(
         "networth_projects",
         rebaseProjects(sent, cache.get("networth_projects") || [], saved || [])
@@ -233,11 +234,12 @@ async function pushKey(key, { throwOnError = false } = {}) {
 
         const saved = await resourceApi.patchRecords(resource, changes);
         if (generation !== storeGeneration) return;
+        if (!Array.isArray(saved)) throw new Error(`Invalid ${resource} response from server.`);
 
-        savedValues.set(key, clone(saved || []));
+        savedValues.set(key, clone(saved));
         cache.set(
           key,
-          rebaseProjects(sent || [], cache.get(key) || [], saved || [])
+          rebaseProjects(sent || [], cache.get(key) || [], saved)
         );
       } else {
         if (JSON.stringify(before) === JSON.stringify(sent)) return;
