@@ -6,6 +6,7 @@ an alternate path to forge their server-side output.
 """
 
 SERVER_OWNED_SETTING_KEYS = frozenset({
+    "private_accounting_profile_v1",
     # Backend source registration is written only by PUT /api/yield-sources/wallets.
     "yield_backend_source_wallets_v1",
     # Read-only upstream observations and reconciliation outputs.
