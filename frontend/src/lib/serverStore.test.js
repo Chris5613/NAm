@@ -23,6 +23,33 @@ beforeEach(async () => {
 });
 afterEach(() => resetStore());
 
+test("derived cache journals auto-resolve to the server without conflict popups", async () => {
+  resetStore();
+  window.sessionStorage.clear();
+  settingsApi.all.mockResolvedValue({
+    daily_category_baseline_pst: { date: "2026-11-07", value: 200 },
+  });
+  window.sessionStorage.setItem(
+    "nam_unsaved_v1:default:daily_category_baseline_pst",
+    JSON.stringify({
+      before: { date: "2026-11-06", value: 100 },
+      after: { date: "2026-11-07", value: 150 },
+    })
+  );
+
+  await hydrate();
+
+  expect(JSON.parse(remoteStorage.getItem("daily_category_baseline_pst"))).toEqual({
+    date: "2026-11-07",
+    value: 200,
+  });
+  expect(getStoreConflicts()).not.toContain("daily_category_baseline_pst");
+  expect(window.sessionStorage.getItem(
+    "nam_unsaved_v1:default:daily_category_baseline_pst"
+  )).toBeNull();
+  expect(settingsApi.patch).not.toHaveBeenCalled();
+});
+
 test("saving an unchanged settings value does not repeat an API write", async () => {
   remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
   await flushPendingWrites();
