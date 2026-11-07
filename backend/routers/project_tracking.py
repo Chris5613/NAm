@@ -261,7 +261,52 @@ async def receive_kryptex_machine(
     # server-owned so every browser receives exactly the same combined rate.
     tracker = setting(db, user.id, KRYPTEX_TRACKER_KEY)
     tracker = dict(tracker) if isinstance(tracker, dict) else {}
+
+    # The account earnings chart is account-wide, not machine-specific. Merge
+    # it here under the same lock so PC 1 and PC 2 cannot race tracker history.
+    earnings = payload.get("earnings") if isinstance(payload.get("earnings"), dict) else {}
+    daily_usd = earnings.get("daily_usd") if isinstance(earnings.get("daily_usd"), dict) else {}
+    mining_daily = dict(tracker.get("kryptexMiningDaily") or {}) if isinstance(
+        tracker.get("kryptexMiningDaily"), dict
+    ) else {}
+    confirmed_days = dict(tracker.get("kryptexConfirmedDays") or {}) if isinstance(
+        tracker.get("kryptexConfirmedDays"), dict
+    ) else {}
+    previous_confirmed_total = sum(
+        max(0.0, number(value) or 0.0)
+        for day, value in mining_daily.items()
+        if confirmed_days.get(day)
+    )
+    touched_months: set[str] = set()
+    for day, raw in list(daily_usd.items())[:400]:
+        day = str(day)
+        amount = number(raw)
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or amount is None or amount < 0:
+            continue
+        mining_daily[day] = amount
+        confirmed_days[day] = True
+        touched_months.add(day[:7])
+
+    monthly = dict(tracker.get("monthlyEarnings") or {}) if isinstance(
+        tracker.get("monthlyEarnings"), dict
+    ) else {}
+    for month in touched_months:
+        monthly[month] = round(sum(
+            max(0.0, number(value) or 0.0)
+            for day, value in mining_daily.items()
+            if str(day).startswith(month + "-") and confirmed_days.get(day)
+        ), 8)
+
+    next_confirmed_total = sum(
+        max(0.0, number(value) or 0.0)
+        for day, value in mining_daily.items()
+        if confirmed_days.get(day)
+    )
+    prior_lifetime = number(tracker.get("lifetimeEarnedUsd"))
+    historical_base = max(0.0, (prior_lifetime or 0.0) - previous_confirmed_total)
+
     tracker.update({
+        "initialized": True,
         "currentBalance": aggregate["status"]["balance_usd"],
         "lastBalance": aggregate["status"]["balance_usd"],
         "withdrawableUsd": aggregate["status"]["withdrawable_usd"],
@@ -270,17 +315,26 @@ async def receive_kryptex_machine(
         "activeMachineCount": aggregate["machine_count"],
         "reachable": aggregate["machine_count"] > 0,
         "lastSyncedAt": now.isoformat(),
+        "kryptexMiningDaily": mining_daily,
+        "kryptexConfirmedDays": confirmed_days,
+        "monthlyEarnings": monthly,
+        "lifetimeEarnedUsd": round(historical_base + next_confirmed_total, 8)
+            if prior_lifetime is not None or next_confirmed_total > 0 else tracker.get("lifetimeEarnedUsd"),
     })
     save_setting(db, user.id, KRYPTEX_TRACKER_KEY, tracker)
     db.commit()
-    return aggregate
+    return {**aggregate, "tracker": tracker}
 
 
 @router.get("/kryptex/aggregate")
 async def read_kryptex_aggregate(
     user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> dict:
-    return _kryptex_aggregate(setting(db, user.id, KRYPTEX_MACHINES_KEY), datetime.now(timezone.utc))
+    aggregate = _kryptex_aggregate(
+        setting(db, user.id, KRYPTEX_MACHINES_KEY), datetime.now(timezone.utc)
+    )
+    tracker = setting(db, user.id, KRYPTEX_TRACKER_KEY)
+    return {**aggregate, "tracker": tracker if isinstance(tracker, dict) else {}}
 
 
 @router.put("/latest")
