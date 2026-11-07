@@ -4105,9 +4105,14 @@ const importSaladPayload =
     .map(([name,amount]) => ({ name, amount: Number(amount) }))
     .sort((a,b) => b.amount - a.amount);
   const rawTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
+  const previouslyDisplayedTodayMax = (Array.isArray(
+    readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)?.[todayKey]
+  ) ? readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)[todayKey] : [])
+    .reduce((highest, point) => Math.max(highest, Number(point?.value) || 0), 0);
   const todayEarnings = Math.max(
     0,
     rawTodayEarnings,
+    previouslyDisplayedTodayMax,
     serverDailyIncome?.date === todayKey && Number.isFinite(Number(serverDailyIncome?.totalUsd))
       ? Number(serverDailyIncome.totalUsd) : 0
   );
@@ -4172,19 +4177,22 @@ const importSaladPayload =
   }).formatToParts(new Date(earningsClock));
   const clockPart = key => Number(pacificClockParts.find(part => part.type === key)?.value || 0);
   const currentHour = clockPart("hour") + clockPart("minute") / 60;
-  // Show signed observed earnings. Historical positive-only intraday
-  // ledgers cannot reliably reconstruct prior losses, so only the new
-  // signed observations are used for the current chart.
-  const storedDailyChartPoints = Array.isArray(dailyEarningsObservations[todayKey])
+  // Today's intraday chart follows the same cumulative high-water rule as
+  // the card. Repair any earlier same-day dip already saved before this rule.
+  const storedDailyChartPointsRaw = Array.isArray(dailyEarningsObservations[todayKey])
     ? dailyEarningsObservations[todayKey] : [];
-  // The user confirmed that Oct 30 opened at -$0.86. Use this one-time
-  // opening observation only until an earlier recorded reading exists.
-  const observedStart = todayKey === "2026-10-30"
-    ? [{ x: 0, value: -0.86 }] : [];
-  const dailyChartPoints = [...observedStart, ...storedDailyChartPoints]
+  let runningDailyHigh = 0;
+  const dailyChartPoints = storedDailyChartPointsRaw
     .filter(point => Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.value)))
-    .map(point => ({ x: Math.max(0, Math.min(24, Number(point.x))), value: Number(point.value) }))
-    .sort((a, b) => a.x - b.x);
+    .map(point => ({
+      x: Math.max(0, Math.min(24, Number(point.x))),
+      value: Math.max(0, Number(point.value)),
+    }))
+    .sort((a, b) => a.x - b.x)
+    .map(point => {
+      runningDailyHigh = Math.max(runningDailyHigh, point.value);
+      return { ...point, value: runningDailyHigh };
+    });
   // Several extensions can update almost simultaneously, making brief
   // down/up corrections draw needle-like spikes. Consolidate the *visual*
   // readings into fifteen-minute windows; the saved raw observations and
@@ -4236,7 +4244,7 @@ const importSaladPayload =
       : [{ x: 0, value: 0, displayBaseline: true }]));
   }
   const dailyChartMax = Math.max(0.1, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
-  const dailyChartMin = Math.min(0, todayEarnings, ...dailyChartData.map(point => point.value)) * 1.2;
+  const dailyChartMin = 0;
   // Show the whole day from midnight while ending at the present hour.
   const dailyChartEnd = Math.max(1, Math.min(24, Math.ceil(currentHour)));
   const dailyChartTicks = Array.from({ length: 25 }, (_, hour) => hour)
