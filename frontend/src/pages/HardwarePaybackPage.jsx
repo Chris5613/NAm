@@ -7,7 +7,7 @@ import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMont
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, KRYPTEX_OPENING_BALANCE_USD, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject, saveKryptexTracker } from "@/lib/yieldFarmingAccounting";
+import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, getKryptexOpeningBalanceUsd, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject, saveKryptexTracker } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
 const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
@@ -205,8 +205,8 @@ export default function HardwarePaybackPage() {
       const newMonth = Object.entries(daily).reduce((sum, [day, amount]) =>
         day.startsWith(`${monthKey}-`) && confirmed[day] ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
       monthlyEarnings[monthKey] = Number(newMonth.toFixed(6));
-      const lifetimeEarnedUsd = Math.max(KRYPTEX_OPENING_BALANCE_USD,
-        (Number(current.lifetimeEarnedUsd) || KRYPTEX_OPENING_BALANCE_USD) - oldMonth) + newMonth;
+      const lifetimeEarnedUsd = Math.max(getKryptexOpeningBalanceUsd(),
+        (Number(current.lifetimeEarnedUsd) || getKryptexOpeningBalanceUsd()) - oldMonth) + newMonth;
       saveKryptexTracker({ ...current, kryptexMiningDaily: daily,
         kryptexConfirmedDays: confirmed, monthlyEarnings, lifetimeEarnedUsd: Number(lifetimeEarnedUsd.toFixed(6)) });
     };
