@@ -50,7 +50,7 @@ function App() {
    * Keep Project Income + Bitcoin current regardless
    * of which page in NAm is open.
    *
-   * Lulo, RateX, Loopscale and BTC refresh here.
+   * Lulo, Loopscale and BTC refresh here.
    * The resulting total is also written to the existing
    * crypto cache used by the Net Worth dashboard.
    */
