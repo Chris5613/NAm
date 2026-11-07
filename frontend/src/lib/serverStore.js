@@ -132,7 +132,7 @@ function dedupeCollection(key, value) {
 }
 
 function isConflict(error) {
-  return error?.status === 409 || error?.code === "INVALID_PROJECT_IDS";
+  return error?.status === 409;
 }
 
 async function loadServerValue(key) {
