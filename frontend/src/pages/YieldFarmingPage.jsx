@@ -1,3 +1,4 @@
+import { useDailyEarningsHighWater } from "../hooks/useDailyEarningsHighWater";
 import { buildSourceTotalsForDay } from "../lib/yieldIncomeSources";
 import { buildMonthlyEarningsChart } from "../lib/monthlyEarningsChart";
 import { buildDailyEarningsChart } from "../lib/dailyEarningsChart";
@@ -3668,57 +3669,13 @@ const importSaladPayload =
     buildSourceTotalsForDay(key, sourceTotalsContext);
 
   // Today's Earnings is a cumulative earned-income counter, not mark-to-market
-  // P/L. Each source gets a per-day high-water mark: it may increase or stay
-  // flat, but a reset, stale sync, price move, or corrected-down reading cannot
-  // erase earnings that were already accepted earlier in the same day.
-  const TODAY_EARNINGS_HIGH_WATER_KEY = "yield_today_earnings_high_water_v1";
-  const observedDailySourceTotals = Object.fromEntries(
-    Object.entries(sourceTotalsForDay(todayKey)).map(([name, amount]) => [
-      name,
-      Math.max(0, Number.isFinite(Number(amount)) ? Number(amount) : 0),
-    ])
-  );
-  const observedDailySourceSignature = JSON.stringify(observedDailySourceTotals);
-  const [dailyEarningsHighWater, setDailyEarningsHighWater] = useState(() => {
-    const saved = readObject(TODAY_EARNINGS_HIGH_WATER_KEY);
-    return {
-      days: saved?.days && typeof saved.days === "object" ? saved.days : {},
-    };
-  });
+  // P/L. Persist per-source high-water values in a dedicated hook.
+  const observedDailySourceTotals = sourceTotalsForDay(todayKey);
+  const {
+    dailySourceTotals,
+    mergeHighWaterSources,
+  } = useDailyEarningsHighWater(todayKey, observedDailySourceTotals);
 
-  useEffect(() => {
-    const observed = JSON.parse(observedDailySourceSignature);
-    setDailyEarningsHighWater(previous => {
-      const priorSources = previous?.days?.[todayKey] || {};
-      const names = new Set([...Object.keys(priorSources), ...Object.keys(observed)]);
-      const nextSources = {};
-      names.forEach(name => {
-        const prior = Math.max(0, Number(priorSources[name]) || 0);
-        const current = Math.max(0, Number(observed[name]) || 0);
-        nextSources[name] = Math.max(prior, current);
-      });
-      if (JSON.stringify(nextSources) === JSON.stringify(priorSources)) return previous;
-      const next = {
-        ...previous,
-        days: { ...(previous?.days || {}), [todayKey]: nextSources },
-      };
-      saveObject(TODAY_EARNINGS_HIGH_WATER_KEY, next);
-      return next;
-    });
-  }, [observedDailySourceSignature, todayKey]);
-
-  const persistedTodaySources = dailyEarningsHighWater?.days?.[todayKey] || {};
-  const dailySourceTotals = Object.fromEntries(
-    [...new Set([...Object.keys(persistedTodaySources), ...Object.keys(observedDailySourceTotals)])]
-      .map(name => [
-        name,
-        Math.max(
-          0,
-          Number(persistedTodaySources[name]) || 0,
-          Number(observedDailySourceTotals[name]) || 0
-        ),
-      ])
-  );
   const selectedBreakdown = (() => {
     const selection = selectedEarningsPoint;
     if (!selection || selection.range !== earningsChartRange) return null;
@@ -3785,30 +3742,11 @@ const importSaladPayload =
     return () => { active = false; };
   }, [dailySourceSignature, todayKey]);
 
-  // Merge the server high-water back into this browser's durable state. This
-  // prevents PC 1 from showing less than PC 2 after either machine reports.
+  // Merge server high-water into this browser's durable high-water state.
   useEffect(() => {
     if (serverDailyIncome?.date !== todayKey || !serverDailyIncome?.sources) return;
-    setDailyEarningsHighWater(previous => {
-      const priorSources = previous?.days?.[todayKey] || {};
-      const nextSources = { ...priorSources };
-      let changed = false;
-      Object.entries(serverDailyIncome.sources).forEach(([name, raw]) => {
-        const prior = Math.max(0, Number(nextSources[name]) || 0);
-        const incoming = Math.max(0, Number(raw) || 0);
-        const next = Math.max(prior, incoming);
-        if (Math.abs(next - prior) > 0.000000001) changed = true;
-        nextSources[name] = next;
-      });
-      if (!changed) return previous;
-      const next = {
-        ...previous,
-        days: { ...(previous?.days || {}), [todayKey]: nextSources },
-      };
-      saveObject(TODAY_EARNINGS_HIGH_WATER_KEY, next);
-      return next;
-    });
-  }, [serverDailyIncome, todayKey]);
+    mergeHighWaterSources(serverDailyIncome.sources);
+  }, [mergeHighWaterSources, serverDailyIncome, todayKey]);
 
   const serverSources = serverDailyIncome?.date === todayKey
     ? (serverDailyIncome?.sources || {}) : {};
