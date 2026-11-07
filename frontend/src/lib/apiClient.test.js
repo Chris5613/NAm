@@ -1,10 +1,10 @@
 import { api, authApi, ApiError, spendingApi } from "./apiClient";
 
 beforeEach(() => {
-  global.fetch = jest.fn();
+  global.fetch = vi.fn();
 });
 
-const ok = (data) => ({ ok: true, status: 200, text: jest.fn().mockResolvedValue(JSON.stringify(data)) });
+const ok = (data) => ({ ok: true, status: 200, text: vi.fn().mockResolvedValue(JSON.stringify(data)) });
 
 test("authenticated SimpleFIN sync sends only the connection ID, never access credentials", async () => {
   global.fetch.mockResolvedValue(ok({ accounts: 2, received_transactions: 4, transactions: [] }));
@@ -35,7 +35,7 @@ test("change-password requests include credentials and do not put password in th
 
 test("spending save sends JSON and surfaces server validation errors", async () => {
   global.fetch.mockResolvedValueOnce({
-    ok: false, status: 422, text: jest.fn().mockResolvedValue(JSON.stringify({ detail: "date must be valid" })),
+    ok: false, status: 422, text: vi.fn().mockResolvedValue(JSON.stringify({ detail: "date must be valid" })),
   });
   await expect(spendingApi.saveTransaction({ amount: 10, date: "not-a-date" }))
     .rejects.toMatchObject({ name: "ApiError", status: 422, message: "date must be valid" });
@@ -44,7 +44,7 @@ test("spending save sends JSON and surfaces server validation errors", async () 
 test("SimpleFIN backend HTTP errors are preserved without exposing raw HTML", async () => {
   global.fetch.mockResolvedValueOnce({
     ok: false, status: 404,
-    text: jest.fn().mockResolvedValue(JSON.stringify({ detail: "SimpleFIN rejected the request. HTTP 404." })),
+    text: vi.fn().mockResolvedValue(JSON.stringify({ detail: "SimpleFIN rejected the request. HTTP 404." })),
   });
   await expect(api.post("/api/simplefin/sync", { connection_id: "safe-id" }))
     .rejects.toMatchObject({ name: "ApiError", status: 404, message: "SimpleFIN rejected the request. HTTP 404." });
