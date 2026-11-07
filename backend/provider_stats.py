@@ -9,9 +9,9 @@ from math import isfinite
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from .private_accounting import private_accounting_profile
+
 PACIFIC = ZoneInfo("America/Los_Angeles")
-KRYPTEX_OPENING_BALANCE_USD = 16.47
-ROLLERCOIN_HISTORICAL_TRX = 69.123738
 MONTH_DAYS = 30.4375
 
 
@@ -155,14 +155,14 @@ def unetwork_stats(tracker: dict, today: str, month: str) -> dict:
 
 
 def kryptex_stats(tracker: dict, month: str) -> dict:
-    balance = numeric(tracker.get("currentBalance")) or KRYPTEX_OPENING_BALANCE_USD
+    balance = numeric(tracker.get("currentBalance")) or private_accounting_profile()["kryptexOpeningBalanceUsd"]
     daily = numeric(tracker.get("profitabilityUsdDay"))
-    lifetime = numeric(tracker.get("lifetimeEarnedUsd")) or KRYPTEX_OPENING_BALANCE_USD
+    lifetime = numeric(tracker.get("lifetimeEarnedUsd")) or private_accounting_profile()["kryptexOpeningBalanceUsd"]
     miners = tracker.get("miners")
     return {
         "currentBalanceUsd": balance,
-        "openingBalanceUsd": KRYPTEX_OPENING_BALANCE_USD,
-        "earnedSinceBaseline": max(0.0, lifetime - KRYPTEX_OPENING_BALANCE_USD),
+        "openingBalanceUsd": private_accounting_profile()["kryptexOpeningBalanceUsd"],
+        "earnedSinceBaseline": max(0.0, lifetime - private_accounting_profile()["kryptexOpeningBalanceUsd"]),
         "lifetimeUsd": lifetime,
         "monthUsd": numeric(obj(tracker.get("monthlyEarnings")).get(month)),
         "dailyUsd": daily,
@@ -192,7 +192,7 @@ def rollercoin_stats(tracker: dict, today: str, month: str) -> dict:
             today_usd += usd
             today_trx += trx
     tracked_lifetime_trx = lifetime_trx
-    lifetime_trx += ROLLERCOIN_HISTORICAL_TRX
+    lifetime_trx += private_accounting_profile()["rollercoinHistoricalTrx"]
 
     price = numeric(tracker.get("lastTrxPrice"))
     current_trx = max(0.0, numeric(tracker.get("currentTrxBalance")))
@@ -230,7 +230,7 @@ def rollercoin_stats(tracker: dict, today: str, month: str) -> dict:
         max(0.0, lifetime_usd / tracked_lifetime_trx)
         if tracked_lifetime_trx > 0 else price
     )
-    lifetime_usd += ROLLERCOIN_HISTORICAL_TRX * reference_price
+    lifetime_usd += private_accounting_profile()["rollercoinHistoricalTrx"] * reference_price
     return {
         "todayUsd": today_usd,
         "todayTrx": today_trx,
