@@ -1028,6 +1028,7 @@ export default function YieldFarmingPage() {
   });
   const [historyOpen, setHistoryOpen] = useState(false);
   const [earningsChartRange, setEarningsChartRange] = useState("daily");
+  const [earningsChartYear, setEarningsChartYear] = useState(() => String(getCurrentYear()));
   const [selectedEarningsPoint, setSelectedEarningsPoint] = useState(null);
   useEffect(() => {
     if (!selectedEarningsPoint) return;
@@ -1394,9 +1395,21 @@ export default function YieldFarmingPage() {
     ...monthlyChartData.map(day => Number(day.value) || 0)
   ) * 1.15;
 
+  const availableEarningsYears = [...new Set([
+    "2025",
+    todayKey.slice(0, 4),
+    ...projectIncome
+      .map(month => String(month?.monthKey || "").slice(0, 4))
+      .filter(year => /^\\d{4}$/.test(year)),
+    ...Object.values(stockPayouts || {})
+      .map(payout => String(payout?.date || "").slice(0, 4))
+      .filter(year => /^\\d{4}$/.test(year)),
+  ])].sort((a, b) => b.localeCompare(a));
+
   const yearlyChartData = buildYearlyEarningsChart(
     projectIncome,
     stockPayouts,
+    earningsChartYear,
     todayKey
   );
   const thisYearEarned = yearlyChartData.reduce(
@@ -1902,7 +1915,7 @@ const summary =
         <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-[16px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : earningsChartRange === "monthly" ? "This Month" : "This Year"}</h2>
+              <h2 className="text-[16px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : earningsChartRange === "monthly" ? "This Month" : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}</h2>
               <div className="mt-2 text-[27px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : earningsChartRange === "weekly" ? weekEarnings : earningsChartRange === "monthly" ? thisMonthEarned : thisYearEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
@@ -1919,8 +1932,24 @@ const summary =
                   </button>
                 ))}
               </div>
+              {earningsChartRange === "yearly" && (
+                <select
+                  aria-label="Earnings chart year"
+                  value={earningsChartYear}
+                  onChange={event => {
+                    setEarningsChartYear(event.target.value);
+                    setSelectedEarningsPoint(null);
+                  }}
+                  className="rounded-lg border border-[#2b3848] bg-[#0e141c] px-2.5 py-1.5 text-[11px] font-medium text-white outline-none"
+                >
+                  {availableEarningsYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              )}
               <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-400">
-                <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />Live
+                <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                {earningsChartRange === "yearly" && earningsChartYear !== todayKey.slice(0, 4) ? "Historical" : "Live"}
               </div>
             </div>
           </div>
