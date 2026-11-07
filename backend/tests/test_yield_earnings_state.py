@@ -6,14 +6,14 @@ from backend.yield_earnings_state import (
 )
 
 LOAN = "my-onyc-loan"
-WALLET = "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM"
+WALLET = "11111111111111111111111111111111"
 
 
 class BackendLedgerMigrationTests(unittest.TestCase):
     def test_imports_browser_legacy_and_keeps_all_prior_months(self):
         local = {
             "lulo-1": {
-                "2026-09": {"version": 5, "monthEarned": 9.05,
+                "2026-09": {"version": 5, "monthEarned": 7.25,
                             "lastSyncedAt": "2026-09-30T22:00:00Z"},
                 "2026-10": {"version": 5, "monthEarned": 0.3,
                             "lastSyncedAt": "2026-10-30T18:00:00Z"},
