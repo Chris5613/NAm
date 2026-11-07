@@ -1,7 +1,7 @@
 """Regression tests for authoritative project portfolio accounting."""
 import unittest
 
-from backend.project_accounting import amount, portfolio_summary, daily_income_summary, signed_amount
+from backend.project_accounting import amount, portfolio_summary, daily_income_summary, monotonic_daily_sources, signed_amount
 
 
 class ProjectPortfolioTests(unittest.TestCase):
@@ -56,6 +56,23 @@ class ProjectPortfolioTests(unittest.TestCase):
         self.assertEqual(total["totalUsd"], -0.259)
         self.assertEqual(total["sources"]["Loopscale"], -0.86)
         self.assertTrue(total["complete"])
+
+    def test_monotonic_daily_sources_never_decrease_or_drop_sources(self):
+        merged = monotonic_daily_sources(
+            {"Kryptex": 1.25, "Salad": 0.40, "RollerCoin": 0.75},
+            {"Kryptex": 0.90, "Salad": 0.55},
+        )
+        self.assertEqual(merged["Kryptex"], 1.25)
+        self.assertEqual(merged["Salad"], 0.55)
+        self.assertEqual(merged["RollerCoin"], 0.75)
+
+    def test_monotonic_daily_sources_clamps_negative_updates_to_zero(self):
+        merged = monotonic_daily_sources(
+            {"Loopscale": 0.30},
+            {"Loopscale": -0.50, "NewSource": -1},
+        )
+        self.assertEqual(merged["Loopscale"], 0.30)
+        self.assertEqual(merged["NewSource"], 0.0)
 
     def test_invalid_daily_income_is_explicitly_rejected(self):
         total = daily_income_summary({"RollerCoin": float("inf"), "Salad": 2})
