@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
+from ..input_validation import finite_money
 from ..models import NetWorthSnapshot, Setting, User, Project
 from ..project_writes import plan_project_changes, ProjectConflict
 from ..server_owned_settings import is_server_owned_setting
@@ -293,10 +294,19 @@ async def net_worth_history(user: User = Depends(current_user), db: Session = De
 @router.post("/net-worth/history")
 async def add_snapshot(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     reserved = {"timestamp", "value", "source"}
+    raw_timestamp = payload.get("timestamp")
+    if not isinstance(raw_timestamp, str) or not raw_timestamp.strip():
+        raise HTTPException(422, "timestamp must be a valid ISO date/time.")
+    timestamp = raw_timestamp.strip()
+    try:
+        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise HTTPException(422, "timestamp must be a valid ISO date/time.") from error
+
     snapshot = NetWorthSnapshot(
         user_id=user.id,
-        timestamp=str(payload.get("timestamp")),
-        value=float(payload.get("value") or 0),
+        timestamp=timestamp,
+        value=finite_money(payload.get("value"), "value"),
         source=payload.get("source"),
         data={key: value for key, value in payload.items() if key not in reserved},
     )
