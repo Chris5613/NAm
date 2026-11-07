@@ -1,3 +1,4 @@
+import { buildSourceTotalsForDay } from "../lib/yieldIncomeSources";
 import { buildMonthlyEarningsChart } from "../lib/monthlyEarningsChart";
 import { buildDailyEarningsChart } from "../lib/dailyEarningsChart";
 import { kryptexIncrease } from "../lib/kryptexEarnings";
@@ -3638,167 +3639,35 @@ const importSaladPayload =
   }, []);
   // This is the Lulo provider day (UTC), not NAm's Pacific calendar day.
   const currentLuloUtc = currentLuloUtcDaily(luloProjects, new Date(earningsClock));
-  const sourceTotalsForDay = key => {
-    // Today's card uses dated income feeds only. Kryptex's mining rate is
-    // income; its balance movement is excluded because BTC price changes can
-    // create a misleading positive or negative P/L.
-    if (key === todayKey) {
-      const income = luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc);
-      const allocation = unetworkTracker?.daily?.[key];
-      const datedAmounts = {
-        Kryptex: Number(kryptexTracker?.kryptexMiningDaily?.[key]) || 0,
-        Salad: saladTracker?.daily?.[key],
-        RollerCoin: rollerCoinTracker?.daily?.[key]?.usd
-          ?? earningsLedger.days?.[key]?.sources?.RollerCoin
-          ?? (Number(rollerCoinTracker?.walletDaily?.[key]?.usd) > 0
-            ? rollerCoinTracker.walletDaily[key].usd : 0),
-        Stocks: stockPayoutTotal(stockPayouts, key),
-        Unetwork: allocation?.count > 0 || allocation?.micros > 0 ? allocation.usd : 0,
-      };
-      for (const [source, amount] of Object.entries(datedAmounts)) {
-        if (Number.isFinite(Number(amount)) && Number(amount) > 0) income[source] = Number(amount);
-      }
-      // Loopscale records positive, flow-adjusted daily observations by
-      // position. Include those observations in the same income-only total.
-      const observedLoopscale = Object.values(loopscaleHistory?.positions || {})
-        .reduce((sum, position) => sum + (Number(position?.observedDaily?.[key]) || 0), 0);
-      const recordedLoopscale = Number(earningsLedger.days?.[key]?.sources?.Loopscale) || 0;
-      const loopscaleIncome = Math.max(0, observedLoopscale, recordedLoopscale);
-      if (loopscaleIncome > 0) income.Loopscale = loopscaleIncome;
-      return income;
-    }
-    // Midnight UTC can start tomorrow for Lulo while it is still today PT.
-    // Expose that day for Lulo ONLY; no Pacific provider belongs there yet.
-    if (key > todayKey) {
-      return key === currentLuloUtc.utcDay
-        ? luloSourcesForChartDay({}, luloProjects, key, todayKey, currentLuloUtc)
-        : {};
-    }
-    const sources = withKryptexDailyBalance(
-      withUnetworkDatedEarnings(
-        { ...(earningsLedger.days[key]?.sources || {}) }, unetworkTracker, key
-      ), kryptexTracker, key
-    );
-    // Wallet delta, not a second earnings feed, powers today's RollerCoin
-    // income. Older days retain their stored values for compatibility.
-    const walletDay = rollerCoinTracker?.walletDaily?.[key];
-    const minedEntry = rollerCoinTracker?.daily?.[key];
-    if (key === todayKey || walletDay || recoveredEarningsByDay?.[key]?.RollerCoin) {
-      // A new wallet tracker begins at zero *additional* TRX, not at zero
-      // earnings for the whole day. Preserve the dated earnings previously
-      // captured before wallet tracking began, then add only wallet changes
-      // observed after that baseline. Do not replace a real prior amount with
-      // an empty first wallet snapshot.
-      const priorLedgerUsd = Number(sources.RollerCoin) || 0;
-      const datedUsd = Number(minedEntry?.usd) || 0;
-      const changeTrx = Number(walletDay?.trx) || 0;
-      const price = Number(rollerCoinTracker?.lastTrxPrice) || 0;
-      const preAnchorEstimateUsd = key === ROLLERCOIN_OCT30_ANCHOR_DAY
-        ? ROLLERCOIN_OCT30_ESTIMATED_MORNING_TRX * price : 0;
-      // Never add estimated morning rewards twice to any saved dated entry.
-      // Preserve the larger of previously recorded income or the estimate,
-      // then separately add post-9:04 wallet changes.
-      const previouslyRecordedUsd = Math.max(
-        0, priorLedgerUsd, datedUsd, preAnchorEstimateUsd
-      );
-      let walletChangeUsd = walletDay?.usd != null &&
-        Number.isFinite(Number(walletDay.usd))
-        ? Number(walletDay.usd) : changeTrx * price;
-      // On Oct 30, use the actual user-provided wallet reference rather
-      // than a zero-initialized tracker entry. Comparing directly to the
-      // current wallet prevents double-counting repeated snapshots.
-      if (key === todayKey && key === ROLLERCOIN_OCT30_ANCHOR_DAY) {
-        const balanceTime = Date.parse(rollerCoinTracker?.balanceSyncedAt || "");
-        const confirmedBalance = Number(rollerCoinTracker?.currentTrxBalance);
-        if (Number.isFinite(balanceTime) &&
-            balanceTime >= ROLLERCOIN_OCT30_ANCHOR_AT &&
-            Number.isFinite(confirmedBalance) && confirmedBalance >= 0 &&
-            price > 0) {
-          walletChangeUsd = (confirmedBalance - ROLLERCOIN_OCT30_ANCHOR_TRX) * price;
-        } else {
-          walletChangeUsd = 0;
-        }
-      }
-      const includeWalletChange = walletDay ||
-        (key === todayKey && key === ROLLERCOIN_OCT30_ANCHOR_DAY);
-      const trackedTotalUsd = previouslyRecordedUsd + (includeWalletChange ? walletChangeUsd : 0);
-      // Only use the previous night's fresh reading and a modest positive
-      // token delta. Recovered quantity is valued separately from market P/L.
-      const yesterday = new Date(todayKey + "T12:00:00Z");
-      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-      const previousDate = yesterday.toISOString().slice(0, 10);
-      const candidate = (projectRecovery?.candidates || [])
-        .find(item => item.id === "rollercoin-project" && item.eligibleForGuardedRecovery);
-      const recoveredUsd = key === todayKey &&
-        projectRecovery?.referenceDate === previousDate &&
-        candidate && Number.isFinite(Number(candidate.usdAtCurrentPrice))
-        ? Number(candidate.usdAtCurrentPrice) : 0;
-      // A snapshot recovery and live wallet deltas describe overlapping
-      // token changes; MAX avoids counting the same TRX twice.
-      const persistedRecoveryUsd = Number(recoveredEarningsByDay?.[key]?.RollerCoin) || 0;
-      const totalUsd = Math.max(trackedTotalUsd, recoveredUsd, persistedRecoveryUsd);
-      if (totalUsd !== 0) sources.RollerCoin = totalUsd;
-      else delete sources.RollerCoin;
-    } else if (minedEntry) {
-      const recordedUsd = Number(minedEntry.usd);
-      if (Number.isFinite(recordedUsd) && recordedUsd > 0)
-        sources.RollerCoin = recordedUsd;
-    }
-    if (key === SALAD_FIXED_DAY) {
-      // Preserve the verified 00:00–09:00 earnings, then take the later
-      // earnings from the extension's dated full-day total when available.
-      // The dated amount already includes the morning window, so adding
-      // the fixed amount to it would double-count those earnings.
-      const datedTotal = Number(saladTracker?.daily?.[key]);
-      const observedIncrease = Math.max(0, Number(sources.Salad) || 0);
-      const postMorningTotal = SALAD_FIXED_TOTAL +
-        Math.max(0, Number(saladTracker?.saladPostMorningEarned) || 0);
-      // Dated full-day earnings already include the morning amount.
-      // The fallback counts only new lifetime-balance increases after 9 AM.
-      sources.Salad = Math.max(
-        SALAD_FIXED_TOTAL,
-        Number.isFinite(datedTotal) ? datedTotal : 0,
-        postMorningTotal,
-        observedIncrease
-      );
-    }
-    if (key === LULO_FIXED_DAY) {
-      sources.Lulo = Math.max(LULO_FIXED_TOTAL, Number(sources.Lulo) || 0);
-    }
-    // Lulo's UTC calendar day is authoritative. Before midnight UTC the
-    // live bucket belongs to this date; afterward its completed total stays
-    // on this date, while the new UTC day gets its own separate value.
-    const luloDaySources = luloSourcesForChartDay(sources, luloProjects, key, todayKey, currentLuloUtc);
-    if (Object.prototype.hasOwnProperty.call(luloDaySources, "Lulo")) {
-      sources.Lulo = luloDaySources.Lulo;
-    } else if (luloProjects.length) {
-      delete sources.Lulo;
-    }
-    // Historical verified Oct 29 display floor must remain intact.
-    if (key === LULO_FIXED_DAY) {
-      sources.Lulo = Math.max(LULO_FIXED_TOTAL, Number(sources.Lulo) || 0);
-    }
-    // Signed daily observations are authoritative when available.
-    const loopscalePositions = Object.values(loopscaleHistory?.positions || {})
-      .filter(position => Object.prototype.hasOwnProperty.call(position?.observedDaily || {}, key));
-    if (loopscalePositions.length) {
-      sources.Loopscale = loopscalePositions.reduce((sum, position) =>
-        sum + (Number(position.observedDaily[key]) || 0), 0);
-    }
-    const paidStocks = stockPayoutTotal(stockPayouts, key);
-    if (paidStocks > 0) sources.Stocks = paidStocks;
-    else delete sources.Stocks;
-    // Only for Oct 29 while it is today: $2 opening display plus the
-    // signed change since the saved reference, never the earlier day's P/L.
-    if (key === todayKey && todayKey === LOOPSCALE_FIXED_DISPLAY_DAY) {
-      const reference = savedLoopscaleReference ?? currentLoopscaleReference;
-      sources.Loopscale = Number((
-        LOOPSCALE_FIXED_DISPLAY_USD +
-        (currentLoopscaleReference - reference)
-      ).toFixed(8));
-    }
-    return sources;
+  const sourceTotalsContext = {
+    todayKey,
+    luloProjects,
+    currentLuloUtc,
+    unetworkTracker,
+    kryptexTracker,
+    saladTracker,
+    rollerCoinTracker,
+    earningsLedger,
+    stockPayouts,
+    loopscaleHistory,
+    recoveredEarningsByDay,
+    projectRecovery,
+    savedLoopscaleReference,
+    currentLoopscaleReference,
+    SALAD_FIXED_DAY,
+    SALAD_FIXED_TOTAL,
+    LULO_FIXED_DAY,
+    LULO_FIXED_TOTAL,
+    ROLLERCOIN_OCT30_ANCHOR_DAY,
+    ROLLERCOIN_OCT30_ANCHOR_TRX,
+    ROLLERCOIN_OCT30_ANCHOR_AT,
+    ROLLERCOIN_OCT30_ESTIMATED_MORNING_TRX,
+    LOOPSCALE_FIXED_DISPLAY_DAY,
+    LOOPSCALE_FIXED_DISPLAY_USD,
   };
+  const sourceTotalsForDay = key =>
+    buildSourceTotalsForDay(key, sourceTotalsContext);
+
   // Today's Earnings is a cumulative earned-income counter, not mark-to-market
   // P/L. Each source gets a per-day high-water mark: it may increase or stay
   // flat, but a reset, stale sync, price move, or corrected-down reading cannot
