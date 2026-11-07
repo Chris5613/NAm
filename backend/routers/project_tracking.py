@@ -391,10 +391,25 @@ async def store_daily_earnings(
 
     history = existing.get("observations")
     history = history if isinstance(history, list) else []
+    raw_history = existing.get("rawObservations")
+    raw_history = raw_history if isinstance(raw_history, list) else []
 
-    # Recover the highest accepted per-source values from every observation
-    # already recorded today. This repairs a day that may have dipped before
-    # the monotonic rule was deployed, rather than locking in the latest low.
+    # Preserve the provider-derived observation exactly as received after
+    # validation. This is accounting/audit truth and may move down or negative.
+    raw_observation = {
+        "observedAt": now.isoformat(),
+        "totalUsd": incoming["totalUsd"],
+        "sources": incoming["sources"],
+    }
+    if (not raw_history or
+        abs(float(raw_history[-1].get("totalUsd") or 0) - incoming["totalUsd"]) > 0.000001 or
+        raw_history[-1].get("sources") != incoming["sources"]):
+        raw_history.append(raw_observation)
+        raw_history = raw_history[-300:]
+
+    # Recover the highest accepted per-source values from every display
+    # observation already recorded today. This is a presentation/accrual rule,
+    # not a rewrite of the raw provider observations above.
     historical_highs: dict[str, float] = {}
     for observation in history:
         if isinstance(observation, dict):
@@ -402,9 +417,7 @@ async def store_daily_earnings(
                 historical_highs, observation.get("sources")
             )
 
-    # Today's earnings are cumulative accruals. Once a source has contributed
-    # an amount today, later stale/reset/corrected-down readings must not make
-    # the accepted day total fall. Missing sources are preserved as well.
+    # Today's visible earnings counter may increase or stay flat, never fall.
     monotonic_sources = monotonic_daily_sources(
         historical_highs, existing.get("sources")
     )
@@ -421,17 +434,29 @@ async def store_daily_earnings(
             "sources": calculated["sources"],
         })
         history = history[-300:]
+
     record = {
         "date": day,
         "firstRecordedAt": existing.get("firstRecordedAt") or now.isoformat(),
         "lastRecordedAt": now.isoformat(),
+        # Display/high-water fields kept for backward-compatible UI reads.
         "totalUsd": calculated["totalUsd"],
         "sources": calculated["sources"],
         "observations": history,
+        # Raw provider-derived fields retain corrections and negative changes.
+        "rawTotalUsd": incoming["totalUsd"],
+        "rawSources": incoming["sources"],
+        "rawObservations": raw_history,
     }
     save_setting(db, user.id, key, record)
     db.commit()
-    return {"date": day, **calculated, "receivedAt": now.isoformat()}
+    return {
+        "date": day,
+        **calculated,
+        "rawTotalUsd": incoming["totalUsd"],
+        "rawSources": incoming["sources"],
+        "receivedAt": now.isoformat(),
+    }
 
 
 @router.get("/daily-earnings/{day}")
@@ -440,7 +465,13 @@ async def read_daily_earnings(
 ) -> dict:
     if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day):
         raise HTTPException(status_code=422, detail="Invalid date.")
-    return setting(db, user.id, f"yield_server_daily_income_{day}") or {"date": day, "sources": {}, "observations": []}
+    return setting(db, user.id, f"yield_server_daily_income_{day}") or {
+        "date": day,
+        "sources": {},
+        "observations": [],
+        "rawSources": {},
+        "rawObservations": [],
+    }
 
 
 @router.get("/provider-stats")
