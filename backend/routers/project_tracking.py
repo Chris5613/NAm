@@ -24,6 +24,10 @@ router = APIRouter(prefix="/api/project-tracking", tags=["project tracking"])
 LATEST_KEY = "yield_project_latest_balance_feed_v1"
 ALERT_KEY = "yield_project_sync_alerts_v1"
 BACKUP_PREFIX = "yield_project_balance_backup_"
+KRYPTEX_MACHINES_KEY = "yield_kryptex_machine_snapshots_v1"
+KRYPTEX_TRACKER_KEY = "project_income_kryptex_tracker_v1"
+KRYPTEX_MACHINE_STALE_SECONDS = 5 * 60
+KRYPTEX_MACHINE_RETENTION_SECONDS = 24 * 60 * 60
 
 
 def setting(db: Session, uid: int, key: str) -> Any:
@@ -100,6 +104,183 @@ def validate_item(item: dict, old: dict | None, now: datetime) -> dict | None:
             for a in assets[:100] if isinstance(a, dict)
         ]
     return normalized
+
+
+def _kryptex_miners(raw: Any) -> list[dict]:
+    if not isinstance(raw, list):
+        return []
+    cleaned = []
+    numeric_fields = (
+        "hashrate", "profitability_usd_day", "accepted_shares", "rejected_shares",
+        "temperature_c", "power_w", "fan_percent",
+    )
+    text_fields = ("device", "device_type", "miner", "coin", "algorithm", "state")
+    for item in raw[:128]:
+        if not isinstance(item, dict):
+            continue
+        row: dict[str, Any] = {}
+        for field in text_fields:
+            if item.get(field) is not None:
+                row[field] = str(item.get(field))[:160]
+        for field in numeric_fields:
+            value = number(item.get(field))
+            if value is not None:
+                row[field] = value
+        cleaned.append(row)
+    return cleaned
+
+
+def _kryptex_machine_record(payload: dict, now: datetime) -> tuple[str, dict, dict]:
+    machine = payload.get("machine") if isinstance(payload.get("machine"), dict) else {}
+    machine_id = str(machine.get("id") or "legacy").strip()[:128]
+    if not machine_id:
+        raise HTTPException(status_code=422, detail="Kryptex machine ID is required.")
+    status = payload.get("status")
+    if not isinstance(status, dict):
+        raise HTTPException(status_code=422, detail="Kryptex status is required.")
+
+    profitability = number(status.get("profitability_usd_day"))
+    balance = number(status.get("balance_usd"))
+    withdrawable = number(status.get("withdrawable_usd"))
+    if profitability is None or profitability < 0:
+        raise HTTPException(status_code=422, detail="Invalid Kryptex profitability.")
+    if balance is not None and balance < 0:
+        raise HTTPException(status_code=422, detail="Invalid Kryptex balance.")
+    if withdrawable is not None and withdrawable < 0:
+        raise HTTPException(status_code=422, detail="Invalid Kryptex withdrawable balance.")
+
+    received = now.isoformat()
+    record = {
+        "id": machine_id,
+        "name": str(machine.get("name") or "Kryptex PC")[:128],
+        "serverReceivedAt": received,
+        # Keep the client timestamp for diagnostics only. It never determines
+        # freshness, so clock skew between mining PCs cannot evict a machine.
+        "clientObservedAt": str(payload.get("synced_at") or "")[:64] or None,
+        "profitabilityUsdDay": profitability,
+        "miners": _kryptex_miners(status.get("miners")),
+    }
+    account_status = {
+        "balanceUsd": balance,
+        "withdrawableUsd": withdrawable,
+        "serverReceivedAt": received,
+    }
+    return machine_id, record, account_status
+
+
+def _kryptex_aggregate(saved: Any, now: datetime) -> dict:
+    root = saved if isinstance(saved, dict) else {}
+    machines = root.get("machines") if isinstance(root.get("machines"), dict) else {}
+    active = []
+    for machine_id, raw in machines.items():
+        if not isinstance(raw, dict):
+            continue
+        seen = timestamp(raw.get("serverReceivedAt"))
+        if seen is None:
+            continue
+        age = (now - seen).total_seconds()
+        if 0 <= age <= KRYPTEX_MACHINE_STALE_SECONDS:
+            active.append({**raw, "id": str(machine_id)})
+
+    active.sort(key=lambda row: str(row.get("id") or ""))
+    miners = []
+    for machine in active:
+        for miner in machine.get("miners") or []:
+            if isinstance(miner, dict):
+                miners.append({
+                    **miner,
+                    "machine_id": machine.get("id"),
+                    "machine_name": machine.get("name") or "Kryptex PC",
+                })
+
+    latest = root.get("latestAccountStatus")
+    latest = latest if isinstance(latest, dict) else {}
+    profitability = sum(max(0.0, number(row.get("profitabilityUsdDay")) or 0.0) for row in active)
+    return {
+        "status": {
+            "balance_usd": max(0.0, number(latest.get("balanceUsd")) or 0.0),
+            "withdrawable_usd": max(0.0, number(latest.get("withdrawableUsd")) or 0.0),
+            "profitability_usd_day": round(profitability, 8),
+            "miners": miners,
+        },
+        "machine_count": len(active),
+        "machines": [
+            {
+                "id": row.get("id"),
+                "name": row.get("name"),
+                "last_seen_at": row.get("serverReceivedAt"),
+                "profitability_usd_day": max(0.0, number(row.get("profitabilityUsdDay")) or 0.0),
+            }
+            for row in active
+        ],
+        "received_at": latest.get("serverReceivedAt"),
+    }
+
+
+@router.post("/kryptex/machine")
+async def receive_kryptex_machine(
+    payload: dict, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Atomically upsert one mining PC and return the server-wide aggregate."""
+    now = datetime.now(timezone.utc)
+    machine_id, record, account_status = _kryptex_machine_record(payload, now)
+
+    # Multiple PCs can report at the same time. Serialize the read/merge/write
+    # so one machine can never overwrite the other machine's snapshot.
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    saved = setting(db, user.id, KRYPTEX_MACHINES_KEY)
+    saved = saved if isinstance(saved, dict) else {}
+    existing = saved.get("machines") if isinstance(saved.get("machines"), dict) else {}
+    machines = dict(existing)
+    machines[machine_id] = record
+
+    # Bound durable telemetry while keeping a useful offline history.
+    retained = {}
+    for key, value in machines.items():
+        if not isinstance(value, dict):
+            continue
+        seen = timestamp(value.get("serverReceivedAt"))
+        if seen is not None and 0 <= (now - seen).total_seconds() <= KRYPTEX_MACHINE_RETENTION_SECONDS:
+            retained[str(key)] = value
+    if len(retained) > 32:
+        retained = dict(sorted(
+            retained.items(),
+            key=lambda item: str(item[1].get("serverReceivedAt") or ""),
+            reverse=True,
+        )[:32])
+
+    next_saved = {
+        "machines": retained,
+        "latestAccountStatus": account_status,
+        "updatedAt": now.isoformat(),
+    }
+    save_setting(db, user.id, KRYPTEX_MACHINES_KEY, next_saved)
+    aggregate = _kryptex_aggregate(next_saved, now)
+
+    # Preserve dated earnings/account history, but make live machine telemetry
+    # server-owned so every browser receives exactly the same combined rate.
+    tracker = setting(db, user.id, KRYPTEX_TRACKER_KEY)
+    tracker = dict(tracker) if isinstance(tracker, dict) else {}
+    tracker.update({
+        "currentBalance": aggregate["status"]["balance_usd"],
+        "lastBalance": aggregate["status"]["balance_usd"],
+        "withdrawableUsd": aggregate["status"]["withdrawable_usd"],
+        "profitabilityUsdDay": aggregate["status"]["profitability_usd_day"],
+        "miners": aggregate["status"]["miners"],
+        "activeMachineCount": aggregate["machine_count"],
+        "reachable": aggregate["machine_count"] > 0,
+        "lastSyncedAt": now.isoformat(),
+    })
+    save_setting(db, user.id, KRYPTEX_TRACKER_KEY, tracker)
+    db.commit()
+    return aggregate
+
+
+@router.get("/kryptex/aggregate")
+async def read_kryptex_aggregate(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    return _kryptex_aggregate(setting(db, user.id, KRYPTEX_MACHINES_KEY), datetime.now(timezone.utc))
 
 
 @router.put("/latest")
