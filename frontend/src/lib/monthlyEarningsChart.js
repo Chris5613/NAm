@@ -45,8 +45,13 @@ export function buildMonthlyDailyEarningsChart({
 /**
  * Current-year YTD chart: always return Jan-Dec, but leave future months null.
  */
-export function buildYearlyEarningsChart(incomeRows, payouts, todayKey) {
-  const year = String(todayKey || "").slice(0, 4);
+export function buildYearlyEarningsChart(
+  incomeRows,
+  payouts,
+  selectedYear,
+  todayKey
+) {
+  const year = String(selectedYear || "").slice(0, 4);
   const currentMonthKey = String(todayKey || "").slice(0, 7);
   if (!/^\d{4}$/.test(year)) return [];
 
