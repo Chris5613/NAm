@@ -6,8 +6,9 @@ the migration cannot lose attributes whose shapes vary across records.
 """
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -132,7 +133,7 @@ class SpendingAccount(Base, TimestampMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(255))
     type: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    current_balance: Mapped[float | None] = mapped_column(Float, nullable=True)
+    current_balance: Mapped[Decimal | None] = mapped_column(Numeric(20, 6), nullable=True)
     provider_account_id: Mapped[str | None] = mapped_column(String(128), index=True, nullable=True)
     linked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -144,7 +145,7 @@ class SpendingTransaction(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(128), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     merchant: Mapped[str] = mapped_column(String(255))
-    amount: Mapped[float] = mapped_column(Float)
+    amount: Mapped[Decimal] = mapped_column(Numeric(20, 6))
     date: Mapped[str] = mapped_column(String(10))
     category: Mapped[str] = mapped_column(String(64), default="Other")
     account_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
