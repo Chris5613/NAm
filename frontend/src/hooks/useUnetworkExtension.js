@@ -312,5 +312,6 @@ export function useUnetworkExtension() {
     unetworkSyncing,
     unetworkMessage,
     syncUnetworkBalance,
+    requestUnetworkLatest,
   };
 }
