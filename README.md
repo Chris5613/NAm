@@ -32,6 +32,14 @@ FastAPI backend, and PostgreSQL persistence.
 - The live two-tab conflict check, identical-snapshot persisted Lulo parity, and full disposable-PostgreSQL backup restore rehearsal were **waived, not passed**. See [Phase 7 closure record](docs/phase-7-closure.md).
 - **Automatic backend financial transaction writes remain disabled.** Completion of the monitoring phase does **not** authorize an accounting-writer cutover. Release gates in `phase7-release-evidence.template.json` and `tools/phase7_release_gate.py` remain fail-closed.
 
+## Frontend workspace
+
+The only supported Node workspace is `frontend/`. Use `frontend/package.json`
+and `frontend/package-lock.json` with `npm ci`; root-level Node manifests are
+not used by Render or GitHub Actions. This keeps local, CI, and production
+dependency resolution aligned while the older CRA/CRACO build is migrated in
+stages.
+
 ## Validation
 
 The `NAm source validation` GitHub Actions workflow checks the Python
