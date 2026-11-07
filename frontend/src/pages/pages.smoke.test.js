@@ -6,7 +6,7 @@ import CloudPage from "./CloudPage";
 import CryptoPage from "./CryptoPage";
 import DoorDashPage from "./DoorDashPage";
 
-jest.mock("@/lib/AuthContext", () => ({
+jest.mock("../lib/AuthContext", () => ({
   useAuth: () => ({
     user: { username: "test" },
     isAuthenticated: true,
@@ -14,7 +14,7 @@ jest.mock("@/lib/AuthContext", () => ({
   }),
 }));
 
-jest.mock("@/lib/apiClient", () => ({
+jest.mock("../lib/apiClient", () => ({
   api: {
     get: jest.fn(async () => ({})),
     post: jest.fn(async () => ({})),
@@ -34,7 +34,7 @@ jest.mock("@/lib/apiClient", () => ({
   },
 }));
 
-jest.mock("@/lib/external-apis", () => ({
+jest.mock("../lib/external-apis", () => ({
   coinGeckoApi: {
     getPrice: jest.fn(async () => 0),
     getPrices: jest.fn(async () => ({})),
