@@ -1,15 +1,17 @@
 """Spending accounts and transactions."""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
-from ..input_validation import finite_money, iso_day
+from ..input_validation import iso_day, money_decimal
 from ..db import get_db
 from ..models import SpendingAccount, SpendingTransaction, User
 from ..schemas import spending_account_to_dict, spending_transaction_to_dict
@@ -17,13 +19,74 @@ from ..schemas import spending_account_to_dict, spending_transaction_to_dict
 router = APIRouter(prefix="/api/spending", tags=["spending"])
 
 
-def _parse_linked_at(value: Any) -> datetime | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
+class SpendingAccountInput(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str | None = None
+    name: str | None = None
+    type: str | None = None
+    currentBalance: Decimal | None = None
+    providerAccountId: str | None = None
+    linkedAt: datetime | None = None
+
+    @field_validator("currentBalance", mode="before")
+    @classmethod
+    def validate_current_balance(cls, value):
+        return None if value is None else money_decimal(value, "currentBalance")
+
+
+class SpendingTransactionInput(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    id: str | None = None
+    merchant: str | None = None
+    amount: Decimal = Decimal("0")
+    date: str
+    category: str | None = None
+    accountId: str | None = None
+    pending: bool = False
+    source: str | None = None
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def validate_amount(cls, value):
+        return money_decimal(value, "amount")
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def validate_date(cls, value):
+        return iso_day(value)
+
+
+class SpendingTransactionPatch(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    category: str | None = None
+    merchant: str | None = None
+    amount: Decimal | None = None
+    date: str | None = None
+    accountId: str | None = None
+    hidden: bool | None = None
+
+    @field_validator("amount", mode="before")
+    @classmethod
+    def validate_amount(cls, value):
+        return None if value is None else money_decimal(value, "amount")
+
+    @field_validator("date", mode="before")
+    @classmethod
+    def validate_date(cls, value):
+        return None if value is None else iso_day(value)
+
+
+class SpendingBudgetInput(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    budget: Decimal = Decimal("0")
+
+    @field_validator("budget", mode="before")
+    @classmethod
+    def validate_budget(cls, value):
+        return money_decimal(value, "budget")
 
 
 @router.get("/accounts")
@@ -33,15 +96,15 @@ async def list_accounts(user: User = Depends(current_user), db: Session = Depend
 
 
 @router.post("/accounts")
-async def upsert_account(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+async def upsert_account(payload: SpendingAccountInput, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     row = SpendingAccount(
-        id=str(payload.get("id") or uuid4()),
+        id=str(payload.id or uuid4()),
         user_id=user.id,
-        name=payload.get("name") or "Account",
-        type=payload.get("type"),
-        current_balance=finite_money(payload.get("currentBalance"), "currentBalance") if payload.get("currentBalance") is not None else None,
-        provider_account_id=payload.get("providerAccountId"),
-        linked_at=_parse_linked_at(payload.get("linkedAt")),
+        name=payload.name or "Account",
+        type=payload.type,
+        current_balance=payload.currentBalance,
+        provider_account_id=payload.providerAccountId,
+        linked_at=payload.linkedAt,
     )
     db.merge(row)
     db.commit()
@@ -87,22 +150,22 @@ async def list_hidden_transactions(
     ]
 
 
-def _transaction_row(payload: dict[str, Any], user_id: int) -> SpendingTransaction:
+def _transaction_row(payload: SpendingTransactionInput, user_id: int) -> SpendingTransaction:
     return SpendingTransaction(
-        id=str(payload.get("id") or uuid4()),
+        id=str(payload.id or uuid4()),
         user_id=user_id,
-        merchant=payload.get("merchant") or "Unknown merchant",
-        amount=finite_money(payload.get("amount"), "amount"),
-        date=iso_day(payload.get("date")),
-        category=payload.get("category") or "Other",
-        account_id=payload.get("accountId"),
-        pending=bool(payload.get("pending", False)),
-        source=payload.get("source") or "manual",
+        merchant=payload.merchant or "Unknown merchant",
+        amount=payload.amount,
+        date=payload.date,
+        category=payload.category or "Other",
+        account_id=payload.accountId,
+        pending=payload.pending,
+        source=payload.source or "manual",
     )
 
 
 @router.post("/transactions")
-async def upsert_transaction(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+async def upsert_transaction(payload: SpendingTransactionInput, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     row = _transaction_row(payload, user.id)
     db.merge(row)
     db.commit()
@@ -110,7 +173,7 @@ async def upsert_transaction(payload: dict[str, Any], user: User = Depends(curre
 
 
 @router.post("/transactions/bulk")
-async def upsert_many(payload: list[dict[str, Any]], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+async def upsert_many(payload: list[SpendingTransactionInput], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     for item in payload:
         db.merge(_transaction_row(item, user.id))
     db.commit()
@@ -119,24 +182,29 @@ async def upsert_many(payload: list[dict[str, Any]], user: User = Depends(curren
 
 @router.patch("/transactions/{transaction_id}")
 async def patch_transaction(
-    transaction_id: str, payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)
+    transaction_id: str, payload: SpendingTransactionPatch, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> dict:
     row = db.get(SpendingTransaction, transaction_id)
     if not row or row.user_id != user.id:
         raise HTTPException(status_code=404, detail="Transaction not found.")
 
-    if "category" in payload:
-        row.category = payload["category"] or "Other"
-    if "merchant" in payload:
-        row.merchant = payload["merchant"]
-    if "amount" in payload:
-        row.amount = finite_money(payload["amount"], "amount")
-    if "date" in payload:
-        row.date = iso_day(payload["date"])
-    if "accountId" in payload:
-        row.account_id = payload["accountId"]
-    if "hidden" in payload:
-        row.hidden = bool(payload["hidden"])
+    supplied = payload.model_fields_set
+    if "category" in supplied:
+        row.category = payload.category or "Other"
+    if "merchant" in supplied:
+        row.merchant = payload.merchant or "Unknown merchant"
+    if "amount" in supplied:
+        if payload.amount is None:
+            raise HTTPException(status_code=422, detail="amount must be a finite number.")
+        row.amount = payload.amount
+    if "date" in supplied:
+        if payload.date is None:
+            raise HTTPException(status_code=422, detail="date must be a valid YYYY-MM-DD date.")
+        row.date = payload.date
+    if "accountId" in supplied:
+        row.account_id = payload.accountId
+    if "hidden" in supplied:
+        row.hidden = bool(payload.hidden)
     db.commit()
     return spending_transaction_to_dict(row)
 
@@ -160,14 +228,14 @@ async def get_budget(user: User = Depends(current_user), db: Session = Depends(g
 
 
 @router.put("/budget")
-async def set_budget(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+async def set_budget(payload: SpendingBudgetInput, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     from ..models import Setting
 
-    amount = max(finite_money(payload.get("budget"), "budget"), 0)
+    amount = max(payload.budget, Decimal("0"))
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == "spending_budget"))
     if row:
-        row.value = {"amount": amount}
+        row.value = {"amount": float(amount)}
     else:
-        db.add(Setting(user_id=user.id, key="spending_budget", value={"amount": amount}))
+        db.add(Setting(user_id=user.id, key="spending_budget", value={"amount": float(amount)}))
     db.commit()
-    return {"budget": amount}
+    return {"budget": float(amount)}
