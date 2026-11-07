@@ -175,6 +175,7 @@ export default function YieldFarmingPage() {
     saladSyncing,
     saladMessage,
     syncSaladBalance,
+    requestSaladLatest,
   } = useSaladExtension();
 
   const [
@@ -200,6 +201,7 @@ export default function YieldFarmingPage() {
     unetworkSyncing,
     unetworkMessage,
     syncUnetworkBalance,
+    requestUnetworkLatest,
   } = useUnetworkExtension();
 
   const [
