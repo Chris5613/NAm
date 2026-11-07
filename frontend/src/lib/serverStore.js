@@ -35,6 +35,14 @@ function journal(key, before, after) {
   try { window.sessionStorage.setItem(journalKey(key), JSON.stringify({ before: clone(before), after: clone(after) })); } catch {}
 }
 function clearJournal(key) { try { window.sessionStorage.removeItem(journalKey(key)); } catch {} }
+function readJournal(key) {
+  try {
+    const raw = window.sessionStorage.getItem(journalKey(key));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
 let projectWrite = Promise.resolve();
 let projectConflict = false;
 let storeGeneration = 0;
@@ -263,13 +271,21 @@ export async function resolveStoreConflict(key, strategy) {
 
   const generation = storeGeneration;
   const localValue = clone(cache.get(key));
+  const journalEntry = readJournal(key);
   const resource = COLLECTION_RESOURCES[key];
 
   if (key === "networth_projects") {
     const serverValue = await resourceApi.list("projects");
     if (generation !== storeGeneration) return;
     if (strategy === "local") {
-      const changes = projectChanges(serverValue || [], localValue || []);
+      // Rebase only this tab's edits onto the latest server collection.
+      // A project added/changed elsewhere is preserved unless this tab
+      // explicitly changed that same project relative to its before-image.
+      const localBase = Array.isArray(journalEntry?.before)
+        ? journalEntry.before
+        : (savedProjects || []);
+      const rebased = rebaseProjects(localBase, localValue || [], serverValue || []);
+      const changes = projectChanges(serverValue || [], rebased);
       const saved = changes.length ? await resourceApi.patchProjects(changes) : serverValue;
       if (generation !== storeGeneration) return;
       savedProjects = clone(saved || []);
@@ -285,7 +301,11 @@ export async function resolveStoreConflict(key, strategy) {
     const serverValue = await resourceApi.list(resource);
     if (generation !== storeGeneration) return;
     if (strategy === "local") {
-      const changes = projectChanges(serverValue || [], localValue || []);
+      const localBase = Array.isArray(journalEntry?.before)
+        ? journalEntry.before
+        : (savedValues.get(key) || []);
+      const rebased = rebaseProjects(localBase, localValue || [], serverValue || []);
+      const changes = projectChanges(serverValue || [], rebased);
       const saved = changes.length ? await resourceApi.patchRecords(resource, changes) : serverValue;
       if (generation !== storeGeneration) return;
       cache.set(key, clone(saved || []));
