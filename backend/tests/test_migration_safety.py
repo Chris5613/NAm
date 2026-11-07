@@ -8,7 +8,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Session
 
-from backend.models import Asset, SpendingAccount, SpendingTransaction, User
+from backend.models import Asset, NetWorthSnapshot, SpendingAccount, SpendingTransaction, User
 from backend.routers.migration import import_dump, preview_dump
 
 
@@ -24,6 +24,7 @@ class MigrationSafetyTests(unittest.TestCase):
         Asset.__table__.create(self.engine)
         SpendingAccount.__table__.create(self.engine)
         SpendingTransaction.__table__.create(self.engine)
+        NetWorthSnapshot.__table__.create(self.engine)
         self.db = Session(self.engine)
         self.user = User(id=1, username="owner", password_hash="unused")
         self.other = User(id=2, username="other", password_hash="unused")
