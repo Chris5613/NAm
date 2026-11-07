@@ -54,8 +54,8 @@ export function AuthProvider({ children }) {
         await authApi.login(username, password);
         await refresh();
       },
-      setup: async (username, password) => {
-        await authApi.setup(username, password);
+      setup: async (username, password, setupToken) => {
+        await authApi.setup(username, password, setupToken);
         await refresh();
       },
       logout: async () => {
