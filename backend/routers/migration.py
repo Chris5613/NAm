@@ -2,6 +2,7 @@
 
 import json
 from datetime import datetime
+from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
@@ -48,9 +49,31 @@ def is_sample(record: Any) -> bool:
     return isinstance(record, dict) and record.get("sample") is True
 
 
+def _canonical_value(value: Any) -> Any:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, (int, float, Decimal)):
+        try:
+            number = Decimal(str(value))
+            if number.is_finite():
+                return {"$number": format(number.normalize(), "f")}
+        except Exception:
+            pass
+    if isinstance(value, list):
+        return [_canonical_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _canonical_value(item)
+            for key, item in sorted(value.items())
+            if item not in (None, "")
+        }
+    return value
+
+
 def _canonical_record(record: dict[str, Any]) -> str:
     cleaned = {
-        key: value for key, value in record.items()
+        key: _canonical_value(value)
+        for key, value in record.items()
         if key not in {"id", "user_id", "created_at", "updated_at"}
         and value not in (None, "")
     }
