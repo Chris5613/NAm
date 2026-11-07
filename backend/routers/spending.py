@@ -97,6 +97,10 @@ async def list_accounts(user: User = Depends(current_user), db: Session = Depend
 
 @router.post("/accounts")
 async def upsert_account(payload: SpendingAccountInput, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    if payload.id:
+        existing = db.get(SpendingAccount, payload.id)
+        if existing is not None and existing.user_id != user.id:
+            raise HTTPException(status_code=409, detail="Account ID is already in use.")
     row = SpendingAccount(
         id=str(payload.id or uuid4()),
         user_id=user.id,
@@ -166,6 +170,10 @@ def _transaction_row(payload: SpendingTransactionInput, user_id: int) -> Spendin
 
 @router.post("/transactions")
 async def upsert_transaction(payload: SpendingTransactionInput, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    if payload.id:
+        existing = db.get(SpendingTransaction, payload.id)
+        if existing is not None and existing.user_id != user.id:
+            raise HTTPException(status_code=409, detail="Transaction ID is already in use.")
     row = _transaction_row(payload, user.id)
     db.merge(row)
     db.commit()
@@ -175,6 +183,10 @@ async def upsert_transaction(payload: SpendingTransactionInput, user: User = Dep
 @router.post("/transactions/bulk")
 async def upsert_many(payload: list[SpendingTransactionInput], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     for item in payload:
+        if item.id:
+            existing = db.get(SpendingTransaction, item.id)
+            if existing is not None and existing.user_id != user.id:
+                raise HTTPException(status_code=409, detail="Transaction ID is already in use.")
         db.merge(_transaction_row(item, user.id))
     db.commit()
     return {"count": len(payload)}
