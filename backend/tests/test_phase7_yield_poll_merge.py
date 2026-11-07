@@ -4,7 +4,7 @@ from copy import deepcopy
 
 from backend.yield_poll_merge import merge_poll_observations, filter_registered_source_snapshots, same_wallet_registration
 
-W1 = "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM"
+W1 = "11111111111111111111111111111111"
 W2 = "72eGAvpNKB8YcpbS15BjZ7fkb7Lm8GjQSyHyxEAq8YBH"
 
 
