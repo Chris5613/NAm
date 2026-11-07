@@ -67,9 +67,9 @@ export const assetsApi = {
     const asset = normalizeId({ ...data });
     const all = normalizeItems(storage.getAssets());
     const key = assetIdentityKey(asset);
-    const exists = all.some((item) => assetIdentityKey(item) === key);
-    if (exists) {
-      return toResponse(asset);
+    const existing = all.find((item) => assetIdentityKey(item) === key);
+    if (existing) {
+      return toResponse(existing);
     }
     storage.setAssets([...all, asset]);
     await flushKey(STORAGE_KEYS.ASSETS);
@@ -121,9 +121,9 @@ export const phonesApi = {
     const phone = normalizeId({ ...data });
     const all = normalizeItems(storage.getPhones());
     const key = phoneIdentityKey(phone);
-    const exists = all.some((item) => phoneIdentityKey(item) === key);
-    if (exists) {
-      return toResponse(phone);
+    const existing = all.find((item) => phoneIdentityKey(item) === key);
+    if (existing) {
+      return toResponse(existing);
     }
     storage.setPhones([...all, phone]);
     await flushKey(STORAGE_KEYS.PHONES);
@@ -366,9 +366,9 @@ export const projectsApi = {
     });
     const all = normalizeItems(storage.getProjects());
     const key = projectIdentityKey(project);
-    const exists = all.some((item) => projectIdentityKey(item) === key);
-    if (exists) {
-      return toResponse(project);
+    const existing = all.find((item) => projectIdentityKey(item) === key);
+    if (existing) {
+      return toResponse(existing);
     }
     storage.setProjects([...all, project]);
     await flushKey(STORAGE_KEYS.PROJECTS);
@@ -620,9 +620,9 @@ export const walletsApi = {
     const wallet = normalizeId({ ...data });
     const all = normalizeItems(storage.getWallets());
     const key = walletIdentityKey(wallet);
-    const exists = all.some((item) => walletIdentityKey(item) === key);
-    if (exists) {
-      return toResponse(wallet);
+    const existing = all.find((item) => walletIdentityKey(item) === key);
+    if (existing) {
+      return toResponse(existing);
     }
     storage.setWallets([...all, wallet]);
     await flushKey(STORAGE_KEYS.WALLETS);
@@ -782,9 +782,9 @@ export const customTokensApi = {
     const token = normalizeId({ ...data });
     const all = normalizeItems(storage.getTokens());
     const key = customTokenIdentityKey(token);
-    const exists = all.some((item) => customTokenIdentityKey(item) === key);
-    if (exists) {
-      return toResponse(token);
+    const existing = all.find((item) => customTokenIdentityKey(item) === key);
+    if (existing) {
+      return toResponse(existing);
     }
     storage.setTokens([...all, token]);
     await flushKey(STORAGE_KEYS.TOKENS);
