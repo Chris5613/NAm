@@ -75,6 +75,31 @@ def signed_amount(value: Any) -> Decimal | None:
     return result if result.is_finite() and abs(result) <= Decimal("100000000") else None
 
 
+def monotonic_daily_sources(previous: dict[str, Any] | None,
+                            incoming: dict[str, Any] | None) -> dict[str, float]:
+    """Merge cumulative daily earnings without ever reducing a source.
+
+    Daily earnings are an accrual counter, not live mark-to-market P/L.
+    Missing sources are preserved and negative/corrected-down readings cannot
+    erase earnings that were already accepted earlier in the same day.
+    """
+    previous = previous if isinstance(previous, dict) else {}
+    incoming = incoming if isinstance(incoming, dict) else {}
+    names = set(previous) | set(incoming)
+    merged: dict[str, float] = {}
+    for raw_name in names:
+        name = str(raw_name).strip()
+        if not name or len(name) > 100:
+            continue
+        prior = signed_amount(previous.get(raw_name))
+        current = signed_amount(incoming.get(raw_name))
+        prior = max(Decimal(0), prior) if prior is not None else Decimal(0)
+        current = max(Decimal(0), current) if current is not None else Decimal(0)
+        value = max(prior, current)
+        merged[name] = float(value.quantize(PRECISION, rounding=ROUND_HALF_UP))
+    return merged
+
+
 def daily_income_summary(sources: dict[str, Any]) -> dict[str, Any]:
     """Canonical signed day total from already-derived per-project accruals.
 
