@@ -9,18 +9,18 @@ import {
   isHydrated,
 } from "./serverStore";
 
-jest.mock("./apiClient", () => ({
+vi.mock("./apiClient", () => ({
   resourceApi: {
-    list: jest.fn(),
-    patchProjects: jest.fn(),
-    patchRecords: jest.fn(),
-    replaceAll: jest.fn(),
+    list: vi.fn(),
+    patchProjects: vi.fn(),
+    patchRecords: vi.fn(),
+    replaceAll: vi.fn(),
   },
   settingsApi: {
-    all: jest.fn(),
-    get: jest.fn(),
-    set: jest.fn(),
-    patch: jest.fn((key, before, after) => Promise.resolve(after)),
+    all: vi.fn(),
+    get: vi.fn(),
+    set: vi.fn(),
+    patch: vi.fn((key, before, after) => Promise.resolve(after)),
   },
 }));
 
@@ -32,7 +32,7 @@ const write = (rows) => remoteStorage.setItem(key, JSON.stringify(rows));
 beforeEach(async () => {
   resetStore();
   window.sessionStorage.clear();
-  jest.clearAllMocks();
+  vi.clearAllMocks();
 
   settingsApi.all.mockResolvedValue({});
   settingsApi.get.mockResolvedValue(null);
@@ -116,7 +116,7 @@ test("overlapping project flushes serialize writes and preserve newer local edit
 });
 
 test("project stale-write conflict automatically replaces local data with server copy", async () => {
-  const onError = jest.fn();
+  const onError = vi.fn();
   setStoreErrorHandler(onError);
 
   const server = [
@@ -139,7 +139,7 @@ test("project stale-write conflict automatically replaces local data with server
 });
 
 test("setting stale-write conflict automatically replaces local data with server copy", async () => {
-  const onError = jest.fn();
+  const onError = vi.fn();
   setStoreErrorHandler(onError);
 
   remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "local" }));
@@ -157,7 +157,7 @@ test("setting stale-write conflict automatically replaces local data with server
 });
 
 test("non-conflict failed setting save remains visible only in the current tab", async () => {
-  const onError = jest.fn();
+  const onError = vi.fn();
   setStoreErrorHandler(onError);
 
   settingsApi.patch.mockRejectedValueOnce(new Error("offline"));
@@ -220,7 +220,7 @@ test("same-name financial projects retain distinct IDs through local save", asyn
 });
 
 test("invalid duplicate project IDs stay visible without a destructive save", async () => {
-  const onError = jest.fn();
+  const onError = vi.fn();
   setStoreErrorHandler(onError);
 
   const duplicates = [
