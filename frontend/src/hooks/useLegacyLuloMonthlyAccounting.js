@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import {
   getCurrentMonthKey, getTodayKey, MONTHLY_TRACKING_START,
-  LULO_MONTHLY_ACCOUNTING_VERSION, LULO_SEPTEMBER_2026_OPENING_EARNED,
+  LULO_MONTHLY_ACCOUNTING_VERSION, getLuloSeptemberOpeningEarnedUsd,
 } from "@/lib/yieldFarmingAccounting";
 
 export function useLegacyLuloMonthlyAccounting({
@@ -127,7 +127,7 @@ export function useLegacyLuloMonthlyAccounting({
                   monthEarned:
                     monthKey ===
                     "2026-09"
-                      ? LULO_SEPTEMBER_2026_OPENING_EARNED
+                      ? getLuloSeptemberOpeningEarnedUsd()
                       : 0,
                   lastLifetimeInterest:
                     lifetimeInterest,
