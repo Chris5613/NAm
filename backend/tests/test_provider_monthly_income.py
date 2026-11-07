@@ -1,4 +1,6 @@
 """Parity fixtures for monthly extension-provider income."""
+import json
+import os
 import unittest
 
 from backend.provider_monthly_income import monthly_provider_income
@@ -14,6 +16,19 @@ def monthly_sources(result):
 
 
 class MonthlyProviderTests(unittest.TestCase):
+    def setUp(self):
+        self._old_profile = os.environ.get("NAM_PRIVATE_ACCOUNTING_PROFILE_JSON")
+        os.environ["NAM_PRIVATE_ACCOUNTING_PROFILE_JSON"] = json.dumps({
+            "kryptexOpeningBalanceUsd": 12.5,
+            "rollercoinSeptemberBaselineTrx": 40,
+        })
+
+    def tearDown(self):
+        if self._old_profile is None:
+            os.environ.pop("NAM_PRIVATE_ACCOUNTING_PROFILE_JSON", None)
+        else:
+            os.environ["NAM_PRIVATE_ACCOUNTING_PROFILE_JSON"] = self._old_profile
+
     def test_salad_current_month_uses_bucket_not_daily_or_balance(self):
         rows = monthly_sources(monthly_provider_income({
             "salad": {
@@ -86,10 +101,10 @@ class MonthlyProviderTests(unittest.TestCase):
     def test_kryptex_legacy_baseline_and_monthly_profit(self):
         rows = monthly_sources(monthly_provider_income({
             "kryptex": {"monthlyEarnings": {
-                "2026-09": 16.47, "2026-10": .47
+                "2026-09": 12.5, "2026-10": .47
             }}
         }, "2026-10"))
-        self.assertEqual(rows["2026-09"]["Kryptex"], 16.47)
+        self.assertEqual(rows["2026-09"]["Kryptex"], 12.5)
         self.assertEqual(rows["2026-10"]["Kryptex"], .47)
 
     def test_empty_and_unsupported_months(self):
