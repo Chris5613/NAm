@@ -2989,14 +2989,9 @@ Object.values(
   /*
    * ROLLERCOIN
    *
-   * September 1-14, 2026 has been manually verified
-   * from RollerCoin's earnings table:
-   *
-   * 45.443264 TRX
-   *
-   * The extension has not consistently returned all
-   * historical September rows, so use that verified
-   * amount as the baseline.
+   * The verified opening-period RollerCoin baseline is loaded from
+   * the private backend profile because the extension has not always
+   * returned the complete historical range.
    *
    * Any synced earnings AFTER September 14 are added
    * on top of the baseline.
@@ -3257,8 +3252,7 @@ Object.values(
  * profitability. The dashboard records only
  * positive balance changes as new earnings.
  *
- * September 2026 starts with the requested
- * $16.47 opening baseline.
+ * The opening baseline is loaded from the private backend profile.
  */
 {
   const monthlyEarnings =
