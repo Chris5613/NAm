@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 from backend import yield_source_sync as sync
 
-WALLET = "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM"
+WALLET = "11111111111111111111111111111111"
 LOOP_WALLET = "72eGAvpNKB8YcpbS15BjZ7fkb7Lm8GjQSyHyxEAq8YBH"
 
 
