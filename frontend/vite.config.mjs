@@ -21,16 +21,10 @@ export default defineConfig(({ mode }) => {
         "@": fileURLToPath(new URL("./src", import.meta.url)),
       },
     },
-    esbuild: {
-      loader: "jsx",
-      include: /src\/.*\.js$/,
-      exclude: [],
-    },
-    optimizeDeps: {
-      esbuildOptions: {
-        loader: {
-          ".js": "jsx",
-        },
+    oxc: {
+      include: /src\/.*\.[jt]sx?$/,
+      jsx: {
+        runtime: "automatic",
       },
     },
     server: {
