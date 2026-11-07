@@ -147,7 +147,9 @@ export function useKryptexExtension() {
   const [kryptexMessage, setKryptexMessage] = useState("");
 
   const importKryptexPayload = useCallback(payload => {
-    const status = payload?.status || {};
+    // v1.4.10+ sends per-PC telemetry as local_status; retain status support
+    // for older extension builds.
+    const status = payload?.local_status || payload?.status || {};
     const hasBalance = status?.balance_usd != null;
     const currentBalance = Number(
       hasBalance ? status.balance_usd : loadKryptexTracker()?.lastBalance
