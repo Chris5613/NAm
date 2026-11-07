@@ -28,6 +28,16 @@ const savedValues = new Map();
 const writes = new Map();
 const conflicts = new Set();
 const JOURNAL_PREFIX = "nam_unsaved_v1:";
+
+// These values are derived caches/baselines that can be rebuilt from canonical
+// server-backed data. A stale tab journal must never turn them into a manual
+// cross-device conflict or repeatedly notify the user.
+const AUTO_RESOLVE_SERVER_KEYS = new Set([
+  "daily_category_baseline_pst",
+  "daily_net_worth_baseline_pst",
+  "crypto_wallet_balance_cache",
+]);
+
 let journalOwner = "default";
 const journalKey = key => `${JOURNAL_PREFIX}${journalOwner}:${key}`;
 const clone = value => value === undefined ? null : JSON.parse(JSON.stringify(value));
@@ -225,6 +235,21 @@ async function pushKey(key, { throwOnError = false } = {}) {
       notify(key);
     } catch (error) {
       if (generation !== storeGeneration) return;
+      if ((error.status === 409 || error.code === "INVALID_PROJECT_IDS") && AUTO_RESOLVE_SERVER_KEYS.has(key)) {
+        try {
+          const serverValue = await settingsApi.get(key);
+          if (generation !== storeGeneration) return;
+          cache.set(key, clone(serverValue));
+          savedValues.set(key, clone(serverValue));
+          conflicts.delete(key);
+          clearJournal(key);
+          notify(key);
+          notifyConflicts();
+          return;
+        } catch {
+          // Fall through to the normal error path if the refresh itself fails.
+        }
+      }
       if (error.status === 409 || error.code === "INVALID_PROJECT_IDS") {
         conflicts.add(key);
         notifyConflicts();
@@ -371,7 +396,14 @@ export async function hydrate(ownerId = journalOwner) {
       if (!journalKey?.startsWith(`${JOURNAL_PREFIX}${journalOwner}:`)) continue;
       const key = journalKey.slice(`${JOURNAL_PREFIX}${journalOwner}:`.length);
       const { before, after } = JSON.parse(window.sessionStorage.getItem(journalKey));
-      if (JSON.stringify(before) !== JSON.stringify(savedValues.get(key) ?? null)) {
+      const serverValue = clone(savedValues.get(key) ?? null);
+      if (JSON.stringify(before) !== JSON.stringify(serverValue)) {
+        if (AUTO_RESOLVE_SERVER_KEYS.has(key)) {
+          cache.set(key, serverValue);
+          clearJournal(key);
+          conflicts.delete(key);
+          continue;
+        }
         conflicts.add(key);
         console.info(`Could not restore "${key}" automatically because it changed on the server. Your edit is retained in this tab.`);
       }
