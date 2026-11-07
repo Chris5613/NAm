@@ -239,8 +239,8 @@ The existing five-minute backend polling process now:
    and preserves the original month opening-baseline rules.
 5. Applies Lulo's version-5 interest checks: meaningful principal movements
    re-anchor the lifetime interest counter without booking cash flow as yield;
-   excessive interest spikes are rejected; the $9.05 September 2026 opening
-   correction is preserved.
+   excessive interest spikes are rejected; the private deployment-specific
+   opening correction is preserved.
 6. Saves results to separate PostgreSQL setting keys
    `yield_backend_loopscale_pnl_ledger_v1` and
    `yield_backend_lulo_monthly_ledger_v1`.
