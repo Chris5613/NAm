@@ -1,8 +1,11 @@
 """Authentication and account setup routes."""
 
+import os
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from ..auth import clear_session_cookie, current_user, hash_password, set_session_cookie, verify_password
@@ -18,6 +21,10 @@ class Credentials(BaseModel):
     password: str = Field(min_length=8, max_length=256)
 
 
+class SetupCredentials(Credentials):
+    setup_token: str = Field(min_length=1, max_length=512)
+
+
 class PasswordReset(BaseModel):
     username: str = Field(min_length=1, max_length=64)
     security_answer: str = Field(min_length=1, max_length=256)
@@ -29,12 +36,43 @@ class PasswordReset(BaseModel):
 
 @router.get("/status")
 async def auth_status(db: Session = Depends(get_db)) -> dict:
-    return {"needs_setup": db.scalar(select(func.count(User.id))) == 0}
+    needs_setup = db.scalar(select(func.count(User.id))) == 0
+    return {
+        "needs_setup": needs_setup,
+        "setup_token_required": needs_setup,
+        "setup_configured": bool(os.getenv("APP_SETUP_TOKEN")),
+    }
 
 
 @router.post("/setup")
-async def setup(credentials: Credentials, response: Response, db: Session = Depends(get_db)) -> dict:
-    """Creates the single account. Only available while no user exists."""
+async def setup(
+    credentials: SetupCredentials,
+    response: Response,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    """Create the single account only with the deployment bootstrap token."""
+    check_request_rate(
+        "setup",
+        request.client.host if request.client else "unknown",
+        max_attempts=12,
+        seconds=3600,
+    )
+
+    expected = os.getenv("APP_SETUP_TOKEN", "")
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Account setup is not configured on the backend.",
+        )
+    if not secrets.compare_digest(credentials.setup_token, expected):
+        raise HTTPException(status_code=403, detail="Invalid setup token.")
+
+    # Empty-table row locks do not prevent two concurrent first-user creates.
+    # PostgreSQL advisory locking serializes this one-time bootstrap transaction.
+    if db.bind is not None and db.bind.dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(563241911)"))
+
     if db.scalar(select(func.count(User.id))) > 0:
         raise HTTPException(status_code=409, detail="An account already exists. Sign in instead.")
 
