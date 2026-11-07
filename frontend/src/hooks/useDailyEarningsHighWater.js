@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { readObject, saveObject } from "@/lib/yieldFarmingAccounting";
 
 const TODAY_EARNINGS_HIGH_WATER_KEY = "yield_today_earnings_high_water_v1";
@@ -22,10 +22,7 @@ export function mergeDailyHighWaterSources(previous = {}, incoming = {}) {
 }
 
 export function useDailyEarningsHighWater(todayKey, observedSources) {
-  const observed = useMemo(
-    () => sanitizeSources(observedSources),
-    [JSON.stringify(observedSources || {})]
-  );
+  const observed = sanitizeSources(observedSources);
   const observedSignature = JSON.stringify(observed);
 
   const [state, setState] = useState(() => {
