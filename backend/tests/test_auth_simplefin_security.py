@@ -30,7 +30,8 @@ class SecurityHardeningTests(unittest.TestCase):
             setup_token="wrong",
         )
         request = Request({"type": "http", "client": ("127.0.0.1", 1234), "headers": []})
-        with patch.dict(os.environ, {"APP_SETUP_TOKEN": "correct"}, clear=False):
+        with patch.dict(os.environ, {"APP_SETUP_TOKEN": "correct"}, clear=False), \
+             patch("backend.routers.auth_routes.check_request_rate"):
             with self.assertRaises(HTTPException) as result:
                 asyncio.run(setup(credentials, Response(), request, SimpleNamespace()))
         self.assertEqual(result.exception.status_code, 403)
