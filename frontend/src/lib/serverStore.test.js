@@ -1,5 +1,8 @@
 import { resourceApi, settingsApi } from "./apiClient";
-import { hydrate, remoteStorage, flushPendingWrites, resetStore, setStoreErrorHandler, refreshCollection, isHydrated } from "./serverStore";
+import {
+  hydrate, remoteStorage, flushPendingWrites, resetStore, setStoreErrorHandler,
+  refreshCollection, isHydrated, resolveStoreConflict, getStoreConflicts,
+} from "./serverStore";
 
 jest.mock("./apiClient", () => ({
   resourceApi: { list: jest.fn(), patchProjects: jest.fn(), patchRecords: jest.fn(), replaceAll: jest.fn() },
@@ -61,6 +64,46 @@ test("conflicts retain unsaved history and stop automatic overwrites", async () 
   expect(resourceApi.patchProjects).toHaveBeenCalledTimes(1);
   expect(onError).toHaveBeenCalledTimes(1);
   expect(read()[0].earned).toBe(5);
+});
+
+test("keeping this tab rebases local edits without deleting unrelated remote projects", async () => {
+  const onError = jest.fn();
+  setStoreErrorHandler(onError);
+
+  // Local tab edits p from 1 -> 4 while q stays untouched.
+  write([{ id: "p", earned: 4 }, { id: "q", earned: 2 }]);
+  resourceApi.patchProjects.mockRejectedValueOnce(
+    Object.assign(new Error("conflict"), { status: 409 })
+  );
+  await flushPendingWrites();
+  expect(getStoreConflicts()).toContain("networth_projects");
+
+  // Another device independently added r and changed q.
+  const latestServer = [
+    { id: "p", earned: 1 },
+    { id: "q", earned: 8 },
+    { id: "r", earned: 3 },
+  ];
+  resourceApi.list.mockImplementation(async (name) =>
+    name === "projects" ? latestServer : []
+  );
+  resourceApi.patchProjects.mockResolvedValue([
+    { id: "p", earned: 4 },
+    { id: "q", earned: 8 },
+    { id: "r", earned: 3 },
+  ]);
+
+  await resolveStoreConflict("networth_projects", "local");
+
+  expect(resourceApi.patchProjects).toHaveBeenLastCalledWith([
+    { id: "p", before: { id: "p", earned: 1 }, after: { id: "p", earned: 4 } },
+  ]);
+  expect(read()).toEqual([
+    { id: "p", earned: 4 },
+    { id: "q", earned: 8 },
+    { id: "r", earned: 3 },
+  ]);
+  expect(getStoreConflicts()).not.toContain("networth_projects");
 });
 
 test("late responses cannot repopulate a signed-out store", async () => {
