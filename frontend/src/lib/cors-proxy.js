@@ -1,7 +1,7 @@
 // All third-party market data now goes through the backend proxy, which holds the
 // API keys and applies short-lived caching. Nothing here contacts a vendor directly.
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "";
+const API_BASE_URL = import.meta.env.REACT_APP_API_BASE_URL || import.meta.env.VITE_API_BASE_URL || "";
 
 async function proxyRequest(path, options = {}) {
   const response = await fetch(`${API_BASE_URL}/api/market${path}`, {
