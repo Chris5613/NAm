@@ -7,13 +7,11 @@ so their previously recorded monthly income remains in the frontend for now.
 from math import isfinite
 from typing import Any
 
-from .provider_stats import (
-    KRYPTEX_OPENING_BALANCE_USD, obj, numeric, unetwork_month_totals,
-)
+from .provider_stats import obj, numeric, unetwork_month_totals
+from .private_accounting import private_accounting_profile
 
 FIRST_MONTH = "2026-09"
 ROLLERCOIN_SEPT_14 = "2026-09-14"
-ROLLERCOIN_SEPT_BASELINE_TRX = 45.443264
 
 
 def month_from_day(value: Any) -> str | None:
@@ -109,7 +107,7 @@ def monthly_provider_income(trackers: dict, current_month: str) -> list[dict]:
     kryptex = obj(trackers.get("kryptex"))
     kryptex_monthly = kryptex.get("monthlyEarnings")
     if not isinstance(kryptex_monthly, dict):
-        kryptex_monthly = {FIRST_MONTH: KRYPTEX_OPENING_BALANCE_USD}
+        kryptex_monthly = {FIRST_MONTH: private_accounting_profile()["kryptexOpeningBalanceUsd"]}
     for month, raw in kryptex_monthly.items():
         add(month, "Kryptex", numeric(raw))
 
