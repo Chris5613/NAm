@@ -10,6 +10,7 @@ export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
@@ -28,7 +29,7 @@ export default function LoginScreen() {
 
     setBusy(true);
     try {
-      if (needsSetup) await setup(username, password);
+      if (needsSetup) await setup(username, password, setupToken);
       else await login(username, password);
     } catch (submitError) {
       setError(submitError.message || "Could not sign in. Check that the backend is running.");
@@ -115,9 +116,32 @@ export default function LoginScreen() {
               </div>
             )}
 
+            {needsSetup && (
+              <div>
+                <label className="text-sm font-medium" htmlFor="setup-token">
+                  Setup token
+                </label>
+                <Input
+                  id="setup-token"
+                  type="password"
+                  className="mt-2"
+                  autoComplete="off"
+                  value={setupToken}
+                  onChange={(event) => setSetupToken(event.target.value)}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Use the private APP_SETUP_TOKEN configured on the backend.
+                </p>
+              </div>
+            )}
+
             {error && <p className="text-sm text-rose-400">{error}</p>}
 
-            <Button className="w-full" disabled={busy || !username || !password} type="submit">
+            <Button
+              className="w-full"
+              disabled={busy || !username || !password || (needsSetup && !setupToken)}
+              type="submit"
+            >
               {busy && <Loader2 className="h-4 w-4 animate-spin" />}
               {needsSetup ? "Create account" : "Sign in"}
             </Button>
