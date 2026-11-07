@@ -32,6 +32,16 @@ FastAPI backend, and PostgreSQL persistence.
 - The live two-tab conflict check, identical-snapshot persisted Lulo parity, and full disposable-PostgreSQL backup restore rehearsal were **waived, not passed**. See [Phase 7 closure record](docs/phase-7-closure.md).
 - **Automatic backend financial transaction writes remain disabled.** Completion of the monitoring phase does **not** authorize an accounting-writer cutover. Release gates in `phase7-release-evidence.template.json` and `tools/phase7_release_gate.py` remain fail-closed.
 
+## First-run account bootstrap
+
+A brand-new empty deployment requires a private backend environment variable named
+`APP_SETUP_TOKEN` before the first account can be created. The setup screen asks
+for that token once. After a user exists, `/api/auth/setup` is closed and normal
+sign-in does not use the token.
+
+Keep `APP_SETUP_TOKEN` only in the backend environment (for example, Render
+environment variables); never commit it to the repository or frontend bundle.
+
 ## Frontend workspace
 
 The only supported Node workspace is `frontend/`. Use `frontend/package.json`
