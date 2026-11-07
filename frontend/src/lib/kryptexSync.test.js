@@ -2,20 +2,20 @@ import { reconcileKryptexStatus } from "./kryptexSync";
 import { projectsApi } from "./api";
 import { localStorage as storage } from "./localStorage";
 
-jest.mock("./api", () => ({ projectsApi: {
-  getAll: jest.fn(async () => ({ data: [{ id: "k", name: "Kryptex" }] })),
-  update: jest.fn(async () => ({})),
-  addTransaction: jest.fn(async () => ({})),
-  addToCategory: jest.fn(async () => ({})),
+vi.mock("./api", () => ({ projectsApi: {
+  getAll: vi.fn(async () => ({ data: [{ id: "k", name: "Kryptex" }] })),
+  update: vi.fn(async () => ({})),
+  addTransaction: vi.fn(async () => ({})),
+  addToCategory: vi.fn(async () => ({})),
 } }));
-jest.mock("./localStorage", () => ({ localStorage: {
-  getKryptexConfig: jest.fn(), setKryptexConfig: jest.fn(),
+vi.mock("./localStorage", () => ({ localStorage: {
+  getKryptexConfig: vi.fn(), setKryptexConfig: vi.fn(),
 } }));
 
 const status = balance_usd => ({ balance_usd, withdrawable_usd: balance_usd, profitability_usd_day: 1, miners: [] });
 
 beforeEach(() => {
-  jest.clearAllMocks();
+  vi.clearAllMocks();
   projectsApi.getAll.mockResolvedValue({ data: [{ id: "k", name: "Kryptex" }] });
   projectsApi.update.mockResolvedValue({});
   projectsApi.addTransaction.mockResolvedValue({});
