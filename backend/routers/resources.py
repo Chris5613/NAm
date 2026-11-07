@@ -14,6 +14,7 @@ from ..db import get_db
 from ..models import NetWorthSnapshot, Setting, User, Project
 from ..project_writes import plan_project_changes, ProjectConflict
 from ..server_owned_settings import is_server_owned_setting
+from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_profile
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
@@ -238,11 +239,15 @@ async def patch_resource_records(name: str, payload: dict[str, Any],
 @router.get("/settings")
 async def all_settings(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     rows = db.scalars(select(Setting).where(Setting.user_id == user.id)).all()
-    return {row.key: row.value for row in rows}
+    values = {row.key: row.value for row in rows}
+    values[PRIVATE_ACCOUNTING_KEY] = private_accounting_profile()
+    return values
 
 
 @router.get("/settings/{key}")
 async def get_setting(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    if key == PRIVATE_ACCOUNTING_KEY:
+        return {"key": key, "value": private_accounting_profile()}
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
     return {"key": key, "value": row.value if row else None}
 
