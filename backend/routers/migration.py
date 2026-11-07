@@ -1,6 +1,7 @@
 """Safe one-time import of a browser's localStorage dump into the database."""
 
 import json
+import re
 from datetime import datetime
 from decimal import Decimal
 from typing import Any
