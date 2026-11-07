@@ -1,18 +1,21 @@
 import { kryptexIncrease } from "../lib/kryptexEarnings";
 import { recordKryptexDailyBalance, withKryptexDailyBalance } from "../lib/kryptexDailyBalance";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { remoteStorage, subscribe } from "@/lib/serverStore";
-import { STOCK_DIVIDEND_PAYOUTS_KEY, stockPayoutTotal } from "@/lib/stockDividendPayouts";
+import { remoteStorage } from "@/lib/serverStore";
+import { stockPayoutTotal } from "@/lib/stockDividendPayouts";
 import { projectsApi } from "@/lib/api";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { useRegisteredYieldWallets } from "@/hooks/useRegisteredYieldWallets";
+import { useBackendLoopscaleHistory } from "@/hooks/useBackendLoopscaleHistory";
+import { useInactiveYieldProjects } from "@/hooks/useInactiveYieldProjects";
+import { useStockDividendPayouts } from "@/hooks/useStockDividendPayouts";
+import { useYieldPersistence } from "@/hooks/useYieldPersistence";
 import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { useBackendProviderStats } from "@/hooks/useBackendProviderStats";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { currentLuloUtcDaily, luloSourcesForChartDay } from "@/lib/luloUtcDaily";
 import { useLegacyLuloMonthlyAccounting } from "@/hooks/useLegacyLuloMonthlyAccounting";
-import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { latestRollerCoinTimestamp, shouldAcceptRollerCoinBalance } from "@/lib/rollerCoinFreshness";
 import { withUnetworkDatedEarnings } from "@/lib/unetworkDailyIncome";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,54 +87,13 @@ import {
 } from "@/components/YieldFarmingComponents";
 
 export default function YieldFarmingPage() {
-  const [stockPayouts, setStockPayouts] = useState(() => readObject(STOCK_DIVIDEND_PAYOUTS_KEY));
-  useEffect(() => subscribe(key => {
-    if (key == null || key === STOCK_DIVIDEND_PAYOUTS_KEY) setStockPayouts(readObject(STOCK_DIVIDEND_PAYOUTS_KEY));
-  }), []);
-  const recordStockPayout = useCallback((symbol, date, amount) => {
-    if (!["VTI", "VOO"].includes(symbol) || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
-        date > getTodayKey() || !Number.isFinite(amount) || amount < 0.01 || amount > 100000000) return;
-    const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
-      [`${symbol}:${date}`]: { symbol, date, amount: Number(amount.toFixed(2)), source: "manual" } };
-    // A brokerage may post the cash after Vanguard's payable date. The
-    // corrected receipt replaces that nearby calculation, not adds to it.
-    for (const [key, payout] of Object.entries(next)) {
-      if (key !== `${symbol}:${date}` && payout?.symbol === symbol && payout?.source === "announced" &&
-          Math.abs(Date.parse(payout.date) - Date.parse(date)) <= 3 * 86400000) delete next[key];
-    }
-    saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
-    setStockPayouts(next);
-  }, []);
-  const removeStockPayout = useCallback((symbol, date) => {
-    const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY) };
-    next[`${symbol}:${date}`] = { symbol, date, amount: 0, source: "excluded" };
-    saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
-    setStockPayouts(next);
-  }, []);
-  const restoreStockPayout = useCallback((symbol, date) => {
-    const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY) };
-    delete next[`${symbol}:${date}`];
-    saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
-    setStockPayouts(next);
-  }, []);
-  const recordAnnouncedStockPayouts = useCallback(candidates => {
-    const next = { ...readObject(STOCK_DIVIDEND_PAYOUTS_KEY) };
-    let changed = false;
-    for (const [key, payout] of Object.entries(candidates)) {
-      if (Object.prototype.hasOwnProperty.call(next, key)) continue;
-      // An actual amount already entered near the announced payment date
-      // takes precedence, even if a brokerage posted it one day later.
-      if (Object.values(next).some(saved => saved?.symbol === payout.symbol &&
-          saved?.source !== "announced" && Number(saved?.amount) > 0 &&
-          Math.abs(Date.parse(saved.date) - Date.parse(payout.date)) <= 3 * 86400000)) continue;
-      next[key] = payout;
-      changed = true;
-    }
-    if (changed) {
-      saveObject(STOCK_DIVIDEND_PAYOUTS_KEY, next);
-      setStockPayouts(next);
-    }
-  }, []);
+  const {
+    stockPayouts,
+    recordStockPayout,
+    removeStockPayout,
+    restoreStockPayout,
+    recordAnnouncedStockPayouts,
+  } = useStockDividendPayouts();
   const [estimatedStockDividendsAnnual, setEstimatedStockDividendsAnnual] = useState(null);
   const updateStockDividendEstimate = useCallback(value => {
     setEstimatedStockDividendsAnnual(previous => previous === value ? previous : value);
@@ -157,20 +119,12 @@ export default function YieldFarmingPage() {
     loadProjectExpenses
   );
 
-  const [inactiveProjectIds, setInactiveProjectIds] = useState(() => {
-    const saved = readObject(INACTIVE_PROJECTS_KEY).ids;
-    return Array.isArray(saved) ? saved.map(String) : [];
-  });
-  const deactivateProject = key => setInactiveProjectIds(current => {
-    const next = current.includes(String(key)) ? current : [...current, String(key)];
-    saveObject(INACTIVE_PROJECTS_KEY, { ids: next });
-    return next;
-  });
-  const reactivateProject = key => setInactiveProjectIds(current => {
-    const next = current.filter(id => id !== String(key));
-    saveObject(INACTIVE_PROJECTS_KEY, { ids: next });
-    return next;
-  });
+  const {
+    inactiveProjectIds,
+    deactivateProject,
+    reactivateProject,
+  } = useInactiveYieldProjects();
+
   const [
     allProjects,
     setAllProjects,
@@ -206,27 +160,7 @@ export default function YieldFarmingPage() {
     loadLoopscaleHistory
   );
 
-  // The server reconciles cumulative Loopscale P/L while Chrome is closed.
-  // Accept its result only when newer and compatible with saved month
-  // baselines; the legacy browser ledger remains the fallback.
-  useEffect(() => {
-    let active = true;
-    const refreshBackendHistory = async () => {
-      try {
-        const data = await api.get("/api/yield-sources/earnings");
-        if (!active || !data?.loopscaleHistory) return;
-        setLoopscaleHistory(current =>
-          mergeBackendLoopscaleHistory(current, data.loopscaleHistory)
-        );
-      } catch {
-        // The existing locally recorded history remains authoritative
-        // until a compatible server observation is available.
-      }
-    };
-    refreshBackendHistory();
-    const timer = window.setInterval(refreshBackendHistory, 60000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  useBackendLoopscaleHistory(setLoopscaleHistory);
 
   const [
     saladTracker,
@@ -400,120 +334,20 @@ export default function YieldFarmingPage() {
     setMonthlyBackfills,
   });
 
-  useEffect(
-    () => {
-      savePositions(
-        manualPositions
-      );
-    },
-    [
-      manualPositions,
-    ]
-  );
-
-  // One TRX price polling loop below (every 5 minutes) is sufficient.
-
-  useEffect(
-    () => {
-      saveProjectLogos(
-        projectLogos
-      );
-    },
-    [
-      projectLogos,
-    ]
-  );
-
-  useEffect(
-    () => {
-      saveMonthlyBackfills(
-        monthlyBackfills
-      );
-    },
-    [
-      monthlyBackfills,
-    ]
-  );
-
-  useEffect(
-    () => {
-      saveLuloMonthlyBaselines(
-        luloMonthlyBaselines
-      );
-    },
-    [
-      luloMonthlyBaselines,
-    ]
-  );
-
-
-  useEffect(
-    () => {
-      saveLoopscaleHistory(
-        loopscaleHistory
-      );
-    },
-    [
-      loopscaleHistory,
-    ]
-  );
-
-  useEffect(
-    () => {
-      saveSaladTracker(
-        saladTracker
-      );
-    },
-    [
-      saladTracker,
-    ]
-  );
-
-  useEffect(
-    () => {
-      saveKryptexTracker(
-        kryptexTracker
-      );
-    },
-    [
-      kryptexTracker,
-    ]
-  );
-
-  useEffect(
-    () => {
-      saveRollerCoinTracker(
-        rollerCoinTracker
-      );
-    },
-    [
-      rollerCoinTracker,
-    ]
-  );
-
-  useEffect(
-    () => {
-      saveUnetworkTracker(
-        unetworkTracker
-      );
-    },
-    [
-      unetworkTracker,
-    ]
-  );
+  useYieldPersistence({
+    manualPositions,
+    projectLogos,
+    monthlyBackfills,
+    luloMonthlyBaselines,
+    loopscaleHistory,
+    saladTracker,
+    kryptexTracker,
+    rollerCoinTracker,
+    unetworkTracker,
+    monthlySnapshots,
+  });
 
   // RollerCoin TRX price is supplied with each extension wallet sync.
-
-  useEffect(
-    () => {
-      saveMonthlySnapshots(
-        monthlySnapshots
-      );
-    },
-    [
-      monthlySnapshots,
-    ]
-  );
 
   const importRollerCoinPayload =
     useCallback(
