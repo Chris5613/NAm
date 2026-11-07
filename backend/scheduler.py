@@ -203,6 +203,29 @@ def scheduler_status() -> dict[str, Any]:
             "last_yield_poll_at": _last_yield_poll.isoformat() if _last_yield_poll else None}
 
 
+def daily_snapshot_due(now: datetime, day: str) -> bool:
+    if _last_daily_key == day:
+        return False
+    return _last_daily_attempt is None or now - _last_daily_attempt >= timedelta(minutes=5)
+
+
+def run_daily_snapshot_attempt(now: datetime, day: str) -> bool:
+    """Run one daily snapshot attempt; failed attempts remain retryable."""
+    global _last_daily_key, _last_daily_attempt
+    if not daily_snapshot_due(now, day):
+        return False
+
+    _last_daily_attempt = now
+    try:
+        take_daily_snapshots()
+    except Exception:
+        log.exception("Daily net-worth snapshot failed; will retry")
+        return False
+
+    _last_daily_key = day
+    return True
+
+
 async def scheduler_loop() -> None:
     global _last_daily_key, _last_daily_attempt, _last_project_day, _last_catchup_check, _last_yield_poll, _leader
     connection = None
@@ -238,15 +261,8 @@ async def scheduler_loop() -> None:
             day = local_now.date().isoformat()
             # Daily net-worth accounting uses the same Pacific calendar day
             # as the Dashboard.
-            if _last_daily_key != day and ( _last_daily_attempt is None or now - _last_daily_attempt >= timedelta(minutes=5)):
-                _last_daily_attempt = now
-                try:
-                    await asyncio.to_thread(take_daily_snapshots)
-                    _last_daily_key = day
-                except Exception:
-                    # Do not silently mark an unsuccessful daily snapshot complete.
-                    # Retry after the bounded delay, leaving yesterday/history intact.
-                    log.exception("Daily net-worth snapshot failed; will retry")
+            if daily_snapshot_due(now, day):
+                await asyncio.to_thread(run_daily_snapshot_attempt, now, day)
             project_day = local_now.date().isoformat()
             # Catch up a missed night on restart/wakeup. Keep the actual
             # capture timestamp; do not pretend a stale feed was live at 23:58.
