@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
-from ..project_accounting import portfolio_summary, daily_income_summary
+from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 
@@ -138,7 +138,7 @@ async def store_daily_earnings(
     payload: dict, user: User = Depends(current_user),
     db: Session = Depends(get_db)
 ) -> dict:
-    """Persist authenticated, signed per-source daily totals as audit history."""
+    """Persist authenticated cumulative per-source daily earnings as audit history."""
     now = datetime.now(timezone.utc)
     day = str(payload.get("date") or "")
     pacific_day = now.astimezone(ZoneInfo("America/Los_Angeles")).date().isoformat()
@@ -147,12 +147,21 @@ async def store_daily_earnings(
     sources = payload.get("sources")
     if not isinstance(sources, dict) or len(sources) > 100:
         raise HTTPException(status_code=422, detail="Invalid project sources.")
-    calculated = daily_income_summary(sources)
-    if not calculated["complete"]:
-        raise HTTPException(status_code=422, detail="Invalid signed daily project amount.")
+    incoming = daily_income_summary(sources)
+    if not incoming["complete"]:
+        raise HTTPException(status_code=422, detail="Invalid daily project amount.")
     key = f"yield_server_daily_income_{day}"
     existing = setting(db, user.id, key)
     existing = existing if isinstance(existing, dict) else {}
+
+    # Today's earnings are cumulative accruals. Once a source has contributed
+    # an amount today, later stale/reset/corrected-down readings must not make
+    # the accepted day total fall. Missing sources are preserved as well.
+    monotonic_sources = monotonic_daily_sources(
+        existing.get("sources"), incoming["sources"]
+    )
+    calculated = daily_income_summary(monotonic_sources)
+
     history = existing.get("observations")
     history = history if isinstance(history, list) else []
     if (not history or
