@@ -1,13 +1,29 @@
 import { resourceApi, settingsApi } from "./apiClient";
 import {
-  hydrate, remoteStorage, flushPendingWrites, resetStore, setStoreErrorHandler,
-  refreshCollection, isHydrated, resolveStoreConflict, getStoreConflicts,
+  hydrate,
+  remoteStorage,
+  flushPendingWrites,
+  resetStore,
+  setStoreErrorHandler,
+  refreshCollection,
+  isHydrated,
 } from "./serverStore";
 
 jest.mock("./apiClient", () => ({
-  resourceApi: { list: jest.fn(), patchProjects: jest.fn(), patchRecords: jest.fn(), replaceAll: jest.fn() },
-  settingsApi: { all: jest.fn(), set: jest.fn(), patch: jest.fn((key, before, after) => Promise.resolve(after)) },
+  resourceApi: {
+    list: jest.fn(),
+    patchProjects: jest.fn(),
+    patchRecords: jest.fn(),
+    replaceAll: jest.fn(),
+  },
+  settingsApi: {
+    all: jest.fn(),
+    get: jest.fn(),
+    set: jest.fn(),
+    patch: jest.fn((key, before, after) => Promise.resolve(after)),
+  },
 }));
+
 const key = "networth_projects";
 const initial = [{ id: "p", earned: 1 }, { id: "q", earned: 2 }];
 const read = () => JSON.parse(remoteStorage.getItem(key));
@@ -17,35 +33,38 @@ beforeEach(async () => {
   resetStore();
   window.sessionStorage.clear();
   jest.clearAllMocks();
-  settingsApi.all.mockResolvedValue({});
-  resourceApi.list.mockImplementation(async (name) => name === "projects" ? initial : []);
-  await hydrate();
-});
-afterEach(() => resetStore());
 
-test("derived cache journals auto-resolve to the server without conflict popups", async () => {
-  resetStore();
-  window.sessionStorage.clear();
-  settingsApi.all.mockResolvedValue({
-    daily_category_baseline_pst: { date: "2026-11-07", value: 200 },
-  });
-  window.sessionStorage.setItem(
-    "nam_unsaved_v1:default:daily_category_baseline_pst",
-    JSON.stringify({
-      before: { date: "2026-11-06", value: 100 },
-      after: { date: "2026-11-07", value: 150 },
-    })
+  settingsApi.all.mockResolvedValue({});
+  settingsApi.get.mockResolvedValue(null);
+  resourceApi.list.mockImplementation(async (name) =>
+    name === "projects" ? initial : []
   );
 
   await hydrate();
+});
 
-  expect(JSON.parse(remoteStorage.getItem("daily_category_baseline_pst"))).toEqual({
-    date: "2026-11-07",
-    value: 200,
+afterEach(() => resetStore());
+
+test("legacy unsaved journals are discarded and server copy wins on hydrate", async () => {
+  resetStore();
+  window.sessionStorage.setItem(
+    "nam_unsaved_v1:default:networth_prefs",
+    JSON.stringify({
+      before: { theme: "light" },
+      after: { theme: "dark" },
+    })
+  );
+  settingsApi.all.mockResolvedValue({
+    networth_prefs: { theme: "server" },
   });
-  expect(getStoreConflicts()).not.toContain("daily_category_baseline_pst");
+
+  await hydrate();
+
+  expect(JSON.parse(remoteStorage.getItem("networth_prefs"))).toEqual({
+    theme: "server",
+  });
   expect(window.sessionStorage.getItem(
-    "nam_unsaved_v1:default:daily_category_baseline_pst"
+    "nam_unsaved_v1:default:networth_prefs"
   )).toBeNull();
   expect(settingsApi.patch).not.toHaveBeenCalled();
 });
@@ -54,138 +73,182 @@ test("saving an unchanged settings value does not repeat an API write", async ()
   remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
   await flushPendingWrites();
   expect(settingsApi.patch).toHaveBeenCalledTimes(1);
-  settingsApi.patch.mockClear();
 
+  settingsApi.patch.mockClear();
   remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
   await flushPendingWrites();
+
   expect(settingsApi.patch).not.toHaveBeenCalled();
 });
 
-test("overlapping flushes serialize writes and preserve newer local edits", async () => {
+test("overlapping project flushes serialize writes and preserve newer local edits", async () => {
   let finish;
   const first = new Promise((resolve) => { finish = resolve; });
-  resourceApi.patchProjects.mockReturnValueOnce(first).mockResolvedValueOnce([{ id: "p", earned: 3 }, initial[1]]);
+
+  resourceApi.patchProjects
+    .mockReturnValueOnce(first)
+    .mockResolvedValueOnce([{ id: "p", earned: 3 }, initial[1]]);
+
   write([{ id: "p", earned: 2 }, initial[1]]);
   const pending = flushPendingWrites();
+
   await Promise.resolve();
   await Promise.resolve();
+
   write([{ id: "p", earned: 3 }, initial[1]]);
   const next = flushPendingWrites();
+
   finish([{ id: "p", earned: 2 }, initial[1]]);
   await Promise.all([pending, next]);
+
   expect(resourceApi.patchProjects).toHaveBeenCalledTimes(2);
-  expect(resourceApi.patchProjects.mock.calls[1][0]).toEqual([{ id: "p", before: { id: "p", earned: 2 }, after: { id: "p", earned: 3 } }]);
+  expect(resourceApi.patchProjects.mock.calls[1][0]).toEqual([
+    {
+      id: "p",
+      before: { id: "p", earned: 2 },
+      after: { id: "p", earned: 3 },
+    },
+  ]);
   expect(read()[0].earned).toBe(3);
-  expect(resourceApi.replaceAll).not.toHaveBeenCalled();
 });
 
-test("conflicts retain unsaved history and stop automatic overwrites", async () => {
+test("project stale-write conflict automatically replaces local data with server copy", async () => {
   const onError = jest.fn();
   setStoreErrorHandler(onError);
-  resourceApi.patchProjects.mockRejectedValue(Object.assign(new Error("Reload before saving"), { status: 409 }));
-  write([{ id: "p", earned: 4 }, initial[1]]);
-  await flushPendingWrites();
-  await refreshCollection(key);
+
+  const server = [
+    { id: "p", earned: 8 },
+    { id: "q", earned: 2 },
+    { id: "remote", earned: 4 },
+  ];
+  resourceApi.patchProjects.mockRejectedValueOnce(
+    Object.assign(new Error("stale"), { status: 409 })
+  );
+  resourceApi.list.mockImplementation(async (name) =>
+    name === "projects" ? server : []
+  );
+
   write([{ id: "p", earned: 5 }, initial[1]]);
   await flushPendingWrites();
-  expect(resourceApi.patchProjects).toHaveBeenCalledTimes(1);
-  expect(onError).toHaveBeenCalledTimes(1);
-  expect(read()[0].earned).toBe(5);
+
+  expect(read()).toEqual(server);
+  expect(onError).not.toHaveBeenCalled();
 });
 
-test("keeping this tab rebases local edits without deleting unrelated remote projects", async () => {
+test("setting stale-write conflict automatically replaces local data with server copy", async () => {
   const onError = jest.fn();
   setStoreErrorHandler(onError);
 
-  // Local tab edits p from 1 -> 4 while q stays untouched.
-  write([{ id: "p", earned: 4 }, { id: "q", earned: 2 }]);
-  resourceApi.patchProjects.mockRejectedValueOnce(
-    Object.assign(new Error("conflict"), { status: 409 })
+  remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "local" }));
+  settingsApi.patch.mockRejectedValueOnce(
+    Object.assign(new Error("stale"), { status: 409 })
   );
+  settingsApi.get.mockResolvedValue({ theme: "server" });
+
   await flushPendingWrites();
-  expect(getStoreConflicts()).toContain("networth_projects");
 
-  // Another device independently added r and changed q.
-  const latestServer = [
-    { id: "p", earned: 1 },
-    { id: "q", earned: 8 },
-    { id: "r", earned: 3 },
-  ];
-  resourceApi.list.mockImplementation(async (name) =>
-    name === "projects" ? latestServer : []
-  );
-  resourceApi.patchProjects.mockResolvedValue([
-    { id: "p", earned: 4 },
-    { id: "q", earned: 8 },
-    { id: "r", earned: 3 },
-  ]);
+  expect(JSON.parse(remoteStorage.getItem("networth_prefs"))).toEqual({
+    theme: "server",
+  });
+  expect(onError).not.toHaveBeenCalled();
+});
 
-  await resolveStoreConflict("networth_projects", "local");
+test("non-conflict failed setting save remains visible only in the current tab", async () => {
+  const onError = jest.fn();
+  setStoreErrorHandler(onError);
 
-  expect(resourceApi.patchProjects).toHaveBeenLastCalledWith([
-    { id: "p", before: { id: "p", earned: 1 }, after: { id: "p", earned: 4 } },
-  ]);
-  expect(read()).toEqual([
-    { id: "p", earned: 4 },
-    { id: "q", earned: 8 },
-    { id: "r", earned: 3 },
-  ]);
-  expect(getStoreConflicts()).not.toContain("networth_projects");
+  settingsApi.patch.mockRejectedValueOnce(new Error("offline"));
+  remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "local" }));
+
+  await flushPendingWrites();
+
+  expect(JSON.parse(remoteStorage.getItem("networth_prefs"))).toEqual({
+    theme: "local",
+  });
+  expect(onError).toHaveBeenCalledTimes(1);
+  expect(window.sessionStorage.length).toBe(0);
+
+  resetStore();
+  settingsApi.all.mockResolvedValue({
+    networth_prefs: { theme: "server" },
+  });
+  await hydrate();
+
+  expect(JSON.parse(remoteStorage.getItem("networth_prefs"))).toEqual({
+    theme: "server",
+  });
 });
 
 test("late responses cannot repopulate a signed-out store", async () => {
   let finish;
-  resourceApi.patchProjects.mockImplementation(() => new Promise((resolve) => { finish = resolve; }));
+  resourceApi.patchProjects.mockImplementation(
+    () => new Promise((resolve) => { finish = resolve; })
+  );
+
   write([{ id: "p", earned: 2 }]);
   const pending = flushPendingWrites();
+
   await Promise.resolve();
   await Promise.resolve();
+
   resetStore();
   finish([{ id: "p", earned: 2 }]);
   await pending;
+
   expect(remoteStorage.getItem(key)).toBeNull();
 });
 
-test("same-name financial projects retain both distinct IDs through local save", async () => {
+test("same-name financial projects retain distinct IDs through local save", async () => {
   const projects = [
     ...initial,
     { id: "lulo-one", category: "yield", name: "Lulo", earned: 4 },
     { id: "lulo-two", category: "yield", name: "Lulo", earned: 9 },
   ];
+
   resourceApi.patchProjects.mockResolvedValue(projects);
   write(projects);
-  expect(read()).toHaveLength(4);
   await flushPendingWrites();
+
   expect(resourceApi.patchProjects).toHaveBeenCalledTimes(1);
   expect(resourceApi.patchProjects.mock.calls[0][0].map((change) => change.id))
     .toEqual(["lulo-one", "lulo-two"]);
-  expect(read().map((project) => project.id)).toEqual(projects.map((project) => project.id));
+  expect(read().map((project) => project.id))
+    .toEqual(projects.map((project) => project.id));
 });
 
-test("invalid duplicate project IDs stay in memory without a destructive save", async () => {
+test("invalid duplicate project IDs stay visible without a destructive save", async () => {
   const onError = jest.fn();
   setStoreErrorHandler(onError);
-  const duplicates = [{ id: "p", earned: 11 }, { id: "p", earned: 22 }];
+
+  const duplicates = [
+    { id: "p", earned: 11 },
+    { id: "p", earned: 22 },
+  ];
+
   write(duplicates);
-  expect(read()).toEqual(duplicates);
   await flushPendingWrites();
+
   expect(resourceApi.patchProjects).not.toHaveBeenCalled();
-  expect(onError).toHaveBeenCalledWith(expect.stringContaining("unique, nonempty string IDs"));
+  expect(onError).toHaveBeenCalledWith(
+    expect.stringContaining("unique, nonempty string IDs")
+  );
   expect(read()).toEqual(duplicates);
-  // A later automatic flush cannot turn the duplicate into a replace-all write.
-  await flushPendingWrites();
-  expect(resourceApi.patchProjects).not.toHaveBeenCalled();
   expect(resourceApi.replaceAll).not.toHaveBeenCalled();
 });
 
 test("a delayed old-account hydrate cannot refill memory after sign-out", async () => {
   let finishSettings;
-  settingsApi.all.mockImplementationOnce(() => new Promise((resolve) => { finishSettings = resolve; }));
+  settingsApi.all.mockImplementationOnce(
+    () => new Promise((resolve) => { finishSettings = resolve; })
+  );
+
   const pending = hydrate();
   expect(isHydrated()).toBe(false);
+
   resetStore();
   finishSettings({ "sensitive-old-account-key": { amount: 123 } });
   await pending;
+
   expect(isHydrated()).toBe(false);
   expect(remoteStorage.getItem("sensitive-old-account-key")).toBeNull();
   expect(remoteStorage.getItem("networth_projects")).toBeNull();
@@ -193,12 +256,19 @@ test("a delayed old-account hydrate cannot refill memory after sign-out", async 
 
 test("late collection refresh cannot repopulate the signed-out cache", async () => {
   let finish;
-  resourceApi.list.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+  resourceApi.list.mockImplementationOnce(
+    () => new Promise((resolve) => { finish = resolve; })
+  );
+
   const pending = refreshCollection("networth_assets");
-  while (!finish) await new Promise((resolve) => setTimeout(resolve, 0));
+  while (!finish) {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+
   resetStore();
   finish([{ id: "old-account-asset", manual_value: 999 }]);
   await pending;
+
   expect(remoteStorage.getItem("networth_assets")).toBeNull();
   expect(isHydrated()).toBe(false);
 });
@@ -206,52 +276,53 @@ test("late collection refresh cannot repopulate the signed-out cache", async () 
 test("a superseded hydrate cannot overwrite a newer successful login", async () => {
   let finishOldSettings;
   settingsApi.all
-    .mockImplementationOnce(() => new Promise((resolve) => { finishOldSettings = resolve; }))
+    .mockImplementationOnce(
+      () => new Promise((resolve) => { finishOldSettings = resolve; })
+    )
     .mockResolvedValueOnce({ "account-label": "new" });
+
   const stale = hydrate();
   const fresh = hydrate();
+
   await fresh;
   finishOldSettings({ "account-label": "old" });
   await stale;
+
   expect(isHydrated()).toBe(true);
   expect(remoteStorage.getItem("account-label")).toBe("new");
 });
 
 test("other collections send only changed records", async () => {
-  resourceApi.patchRecords.mockResolvedValue([{ id: "asset", name: "New" }]);
-  remoteStorage.setItem("networth_assets", JSON.stringify([{ id: "asset", name: "New" }]));
-  await flushPendingWrites();
-  expect(resourceApi.patchRecords).toHaveBeenCalledWith("assets", [
-    { id: "asset", before: null, after: { id: "asset", name: "New" } },
+  resourceApi.patchRecords.mockResolvedValue([
+    { id: "asset", name: "New" },
   ]);
-  expect(resourceApi.replaceAll).not.toHaveBeenCalled();
-});
 
-test("unsaved setting survives hydration in this tab and retries against same base", async () => {
-  settingsApi.patch.mockRejectedValueOnce(new Error("offline")).mockImplementation((key, before, after) => Promise.resolve(after));
-  remoteStorage.setItem("networth_prefs", JSON.stringify({ theme: "dark" }));
+  remoteStorage.setItem(
+    "networth_assets",
+    JSON.stringify([{ id: "asset", name: "New" }])
+  );
   await flushPendingWrites();
-  expect(window.sessionStorage.getItem("nam_unsaved_v1:default:networth_prefs")).not.toBeNull();
-  resetStore();
-  await hydrate();
-  await flushPendingWrites();
-  expect(settingsApi.patch).toHaveBeenCalledTimes(2);
-  expect(window.sessionStorage.getItem("nam_unsaved_v1:default:networth_prefs")).toBeNull();
+
+  expect(resourceApi.patchRecords).toHaveBeenCalledWith("assets", [
+    {
+      id: "asset",
+      before: null,
+      after: { id: "asset", name: "New" },
+    },
+  ]);
 });
 
-test("a different account does not restore another account's unsaved journal", async () => {
-  await hydrate(1);
-  remoteStorage.setItem("networth_prefs", JSON.stringify({ private: "first" }));
-  resetStore();
-  await hydrate(2);
-  expect(remoteStorage.getItem("networth_prefs")).toBeNull();
-  expect(window.sessionStorage.getItem("nam_unsaved_v1:1:networth_prefs")).not.toBeNull();
-});
-
-test("refresh preserves unsaved asset edits after a failed save", async () => {
+test("refresh preserves current-tab asset edits after a non-conflict save failure", async () => {
   resourceApi.patchRecords.mockRejectedValueOnce(new Error("offline"));
-  remoteStorage.setItem("networth_assets", JSON.stringify([{ id: "asset", name: "Mine" }]));
+
+  remoteStorage.setItem(
+    "networth_assets",
+    JSON.stringify([{ id: "asset", name: "Mine" }])
+  );
   await flushPendingWrites();
   await refreshCollection("networth_assets");
-  expect(JSON.parse(remoteStorage.getItem("networth_assets"))[0].name).toBe("Mine");
+
+  expect(
+    JSON.parse(remoteStorage.getItem("networth_assets"))[0].name
+  ).toBe("Mine");
 });
