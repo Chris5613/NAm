@@ -21,12 +21,6 @@ export default defineConfig(({ mode }) => {
         "@": fileURLToPath(new URL("./src", import.meta.url)),
       },
     },
-    oxc: {
-      include: /src\/.*\.[jt]sx?$/,
-      jsx: {
-        runtime: "automatic",
-      },
-    },
     server: {
       host: "127.0.0.1",
       port: 3000,
