@@ -1,6 +1,6 @@
 import { selectFreshSourceSnapshot } from "./backendYieldSourceSnapshots";
 
-const wallet = "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM";
+const wallet = "11111111111111111111111111111111";
 const now = Date.parse("2026-10-30T21:00:00Z");
 const at = "2026-10-30T20:59:30Z";
 const payload = {
