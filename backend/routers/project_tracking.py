@@ -154,16 +154,29 @@ async def store_daily_earnings(
     existing = setting(db, user.id, key)
     existing = existing if isinstance(existing, dict) else {}
 
+    history = existing.get("observations")
+    history = history if isinstance(history, list) else []
+
+    # Recover the highest accepted per-source values from every observation
+    # already recorded today. This repairs a day that may have dipped before
+    # the monotonic rule was deployed, rather than locking in the latest low.
+    historical_highs: dict[str, float] = {}
+    for observation in history:
+        if isinstance(observation, dict):
+            historical_highs = monotonic_daily_sources(
+                historical_highs, observation.get("sources")
+            )
+
     # Today's earnings are cumulative accruals. Once a source has contributed
     # an amount today, later stale/reset/corrected-down readings must not make
     # the accepted day total fall. Missing sources are preserved as well.
     monotonic_sources = monotonic_daily_sources(
-        existing.get("sources"), incoming["sources"]
+        historical_highs, existing.get("sources")
+    )
+    monotonic_sources = monotonic_daily_sources(
+        monotonic_sources, incoming["sources"]
     )
     calculated = daily_income_summary(monotonic_sources)
-
-    history = existing.get("observations")
-    history = history if isinstance(history, list) else []
     if (not history or
         abs(float(history[-1].get("totalUsd") or 0) - calculated["totalUsd"]) > 0.000001 or
         history[-1].get("sources") != calculated["sources"]):
