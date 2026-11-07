@@ -1,7 +1,7 @@
 // Server-backed data access. Replaces direct localStorage reads/writes.
 // `credentials: "include"` sends the httpOnly session cookie on every request.
 
-const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || "";
+const API_BASE_URL = import.meta.env.REACT_APP_API_BASE_URL || import.meta.env.VITE_API_BASE_URL || "";
 
 export class ApiError extends Error {
   constructor(message, status) {
