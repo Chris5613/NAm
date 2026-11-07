@@ -192,9 +192,12 @@ export default function YieldFarmingPage() {
     setLoopscaleSnapshot,
   ] = useState(() => readObject(PROJECT_QUICK_CACHE_KEY).loopscaleSnapshot || null);
 
+  const loopscaleWallet =
+    getPrivateAccountingProfile()?.loopscaleWallet || "";
+
   // Register provider public wallets once, then the server continues to poll
   // them independently of whether NAm is open.
-  useRegisteredYieldWallets(luloProjects, getPrivateAccountingProfile()?.loopscaleWallet || null);
+  useRegisteredYieldWallets(luloProjects, loopscaleWallet || null);
 
   const [
     loopscaleHistory,
@@ -2953,7 +2956,7 @@ const importSaladPayload =
       (async () => {
         try {
           const snapshot = await getLoopscaleOnycSnapshot(
-            LOOPSCALE_WALLET,
+            loopscaleWallet,
             { newerThan: loopscaleSnapshot?.syncedAt,
               referenceBalanceUsd: loopscaleSnapshot?.positionValueUsd }
           );
@@ -2978,6 +2981,7 @@ const importSaladPayload =
     requestSaladLatest,
     requestUnetworkLatest,
     requestKryptexLatest,
+    loopscaleWallet,
     loopscaleSnapshot?.syncedAt,
     loopscaleSnapshot?.positionValueUsd,
   ]);
