@@ -1,22 +1,23 @@
-"""One-time import of a browser's localStorage dump into the database."""
+"""Safe one-time import of a browser's localStorage dump into the database."""
 
 import json
+from datetime import datetime
 from typing import Any
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
+from ..input_validation import finite_money, iso_day, money_decimal
 from ..models import NetWorthSnapshot, Setting, SpendingAccount, SpendingTransaction, User
-from ..schemas import RESOURCES, dict_to_columns
+from ..schemas import RESOURCES, dict_to_columns, row_to_dict
 from ..server_owned_settings import is_server_owned_setting
 
 router = APIRouter(prefix="/api/migration", tags=["migration"])
 
-# localStorage key -> resource name in RESOURCES
 COLLECTION_KEYS = {
     "networth_assets": "assets",
     "networth_phones": "phones",
@@ -25,7 +26,6 @@ COLLECTION_KEYS = {
     "cloud_manual_bets": "bets",
 }
 
-# Everything else is preserved verbatim in the settings table.
 SKIP_KEYS = {
     "networth_spending_accounts",
     "networth_spending_transactions",
@@ -48,51 +48,64 @@ def is_sample(record: Any) -> bool:
     return isinstance(record, dict) and record.get("sample") is True
 
 
-def exact_name_key(value: Any) -> str:
-    return str(value or "").strip()
-
-
-def exact_name_candidates(record: dict[str, Any]) -> set[str]:
-    names = {
-        exact_name_key(record.get("name")),
-        exact_name_key(record.get("label")),
-        exact_name_key(record.get("model")),
+def _canonical_record(record: dict[str, Any]) -> str:
+    cleaned = {
+        key: value for key, value in record.items()
+        if key not in {"id", "user_id", "created_at", "updated_at"}
     }
-    return {value for value in names if value}
+    return json.dumps(cleaned, sort_keys=True, separators=(",", ":"), default=str)
 
 
-def record_signature(resource: str, record: dict[str, Any]) -> tuple[Any, ...]:
+def record_identity(resource: str, record: dict[str, Any]) -> tuple[Any, ...]:
+    """Identity for records that do not have a trusted stable ID.
+
+    Prefer provider/resource identifiers when available. Otherwise only exact
+    canonical duplicates are collapsed; a shared display name is never enough.
+    """
+    if resource == "wallets":
+        address = str(record.get("address") or "").strip()
+        if address:
+            return ("wallet", str(record.get("chain") or "").strip().lower(), address)
     if resource == "bets":
-        return (
-            str(record.get("date") or ""),
-            str(record.get("title") or ""),
-            str(record.get("matchup") or ""),
-            str(record.get("awayTeam") or ""),
-            str(record.get("homeTeam") or ""),
-            str(record.get("gamePk") or ""),
-            float(record.get("amount") or 0),
-            str(record.get("result") or ""),
-        )
-    if resource == "assets":
-        return (
-            str(record.get("name") or ""),
-            str(record.get("category") or ""),
-            str(record.get("symbol") or ""),
-            float(record.get("manual_value") or record.get("current_price") or 0),
-        )
-    if resource == "projects":
-        return (
-            str(record.get("name") or ""),
-            str(record.get("category") or ""),
-            float(record.get("invested") or 0),
-            float(record.get("earned") or 0),
-        )
-    return (
-        str(record.get("id") or ""),
-        str(record.get("name") or ""),
-        str(record.get("label") or ""),
-        str(record.get("model") or ""),
-    )
+        game = str(record.get("gamePk") or "").strip()
+        if game:
+            return ("bet-game", game, str(record.get("date") or ""), str(record.get("title") or ""))
+    return ("exact", _canonical_record(record))
+
+
+def _skip_tracker() -> tuple[dict[str, int], list[dict[str, Any]]]:
+    return {}, []
+
+
+def _record_skip(
+    counts: dict[str, int],
+    details: list[dict[str, Any]],
+    *,
+    resource: str,
+    reason: str,
+    index: int | None = None,
+    record_id: str | None = None,
+    key: str | None = None,
+) -> None:
+    counts[reason] = counts.get(reason, 0) + 1
+    if len(details) < 100:
+        item: dict[str, Any] = {"resource": resource, "reason": reason}
+        if index is not None:
+            item["index"] = index
+        if record_id:
+            item["id"] = record_id
+        if key:
+            item["key"] = key
+        details.append(item)
+
+
+def _linked_at(value: Any) -> datetime | None:
+    if value in (None, ""):
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError as error:
+        raise HTTPException(status_code=422, detail="linkedAt must be a valid ISO timestamp.") from error
 
 
 @router.get("/status")
@@ -108,142 +121,253 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
     return {"imported": any(counts.values()), "counts": counts}
 
 
-@router.post("/import")
-async def import_dump(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    """Accepts `{ "<localStorage key>": <value> }`; values may be raw JSON strings. Safe to re-run."""
-    # Coordinate legacy first-time imports with conflict-safe project saves.
-    db.scalar(select(User).where(User.id == user.id).with_for_update())
+def _run_import(
+    payload: dict[str, Any],
+    user: User,
+    db: Session,
+    *,
+    commit: bool,
+) -> dict:
+    if commit:
+        # Coordinate first-time imports with conflict-safe project saves.
+        db.scalar(select(User).where(User.id == user.id).with_for_update())
+
     payload = {key: decode(value) for key, value in payload.items()}
     imported: dict[str, int] = {}
-    skipped_samples = 0
+    skip_counts, skip_details = _skip_tracker()
 
     for storage_key, resource in COLLECTION_KEYS.items():
         records = payload.get(storage_key)
         if not isinstance(records, list):
             continue
+
         model, fields = RESOURCES[resource]
-        count = 0
-        existing_ids = set()
-        existing_signatures = set()
-        existing_names = set()
+        existing_ids: set[str] = set()
+        existing_identities: set[tuple[Any, ...]] = set()
+
         for row in db.scalars(select(model).where(model.user_id == user.id)):
             existing_ids.add(str(row.id))
-            existing_signatures.add(record_signature(resource, dict(row.data or {})))
-            row_data = dict(row.data or {})
-            row_names = exact_name_candidates({**row_data, "name": getattr(row, "name", None), "label": getattr(row, "label", None), "model": getattr(row, "model", None)})
-            existing_names.update(row_names)
-        for record in records:
+            existing_identities.add(record_identity(resource, row_to_dict(row, fields)))
+
+        count = 0
+        for index, record in enumerate(records):
             if not isinstance(record, dict):
+                _record_skip(skip_counts, skip_details, resource=resource, reason="invalid_record", index=index)
                 continue
             if is_sample(record):
-                skipped_samples += 1
+                _record_skip(skip_counts, skip_details, resource=resource, reason="sample", index=index)
                 continue
-            record_id = str(record.get("id") or "")
-            if resource == "projects" and record_id:
-                existing_project = db.get(model, record_id)
-                if existing_project is not None and existing_project.user_id != user.id:
+
+            record_id = str(record.get("id") or "").strip()
+            if record_id:
+                existing_any = db.get(model, record_id)
+                if existing_any is not None and existing_any.user_id != user.id:
+                    _record_skip(
+                        skip_counts, skip_details, resource=resource, reason="foreign_id",
+                        index=index, record_id=record_id,
+                    )
                     continue
-            sig = record_signature(resource, record)
-            record_names = exact_name_candidates(record)
-            if record_id and record_id in existing_ids:
-                continue
-            # Stable IDs distinguish legitimate same-named records.
-            # Name/signature fallback is only safe when the source has no ID.
-            if not record_id and record_names and record_names & existing_names:
-                continue
-            if not record_id and sig in existing_signatures:
-                continue
+                if record_id in existing_ids:
+                    _record_skip(
+                        skip_counts, skip_details, resource=resource, reason="existing_id",
+                        index=index, record_id=record_id,
+                    )
+                    continue
+            else:
+                identity = record_identity(resource, record)
+                if identity in existing_identities:
+                    _record_skip(
+                        skip_counts, skip_details, resource=resource, reason="duplicate_identity",
+                        index=index,
+                    )
+                    continue
+
             columns, extra = dict_to_columns(record, fields)
-            db.merge(model(id=str(record.get("id") or uuid4()), user_id=user.id, data=extra, **columns))
-            existing_ids.add(record_id) if record_id else None
-            existing_names.update(record_names)
-            existing_signatures.add(sig)
+            new_id = record_id or str(uuid4())
+            if commit:
+                db.add(model(id=new_id, user_id=user.id, data=extra, **columns))
+            existing_ids.add(new_id)
+            existing_identities.add(record_identity(resource, record))
             count += 1
+
         imported[resource] = count
 
     accounts = payload.get("networth_spending_accounts")
     if isinstance(accounts, list):
+        existing_ids = {
+            str(row.id)
+            for row in db.scalars(select(SpendingAccount).where(SpendingAccount.user_id == user.id))
+        }
+        existing_provider_ids = {
+            str(row.provider_account_id)
+            for row in db.scalars(select(SpendingAccount).where(SpendingAccount.user_id == user.id))
+            if row.provider_account_id
+        }
         count = 0
-        for account in accounts:
+        for index, account in enumerate(accounts):
             if not isinstance(account, dict):
+                _record_skip(skip_counts, skip_details, resource="spending_accounts", reason="invalid_record", index=index)
                 continue
             if is_sample(account):
-                skipped_samples += 1
+                _record_skip(skip_counts, skip_details, resource="spending_accounts", reason="sample", index=index)
                 continue
-            db.merge(
-                SpendingAccount(
-                    id=str(account.get("id") or uuid4()),
+
+            record_id = str(account.get("id") or "").strip()
+            if record_id:
+                existing_any = db.get(SpendingAccount, record_id)
+                if existing_any is not None and existing_any.user_id != user.id:
+                    _record_skip(skip_counts, skip_details, resource="spending_accounts", reason="foreign_id", index=index, record_id=record_id)
+                    continue
+                if record_id in existing_ids:
+                    _record_skip(skip_counts, skip_details, resource="spending_accounts", reason="existing_id", index=index, record_id=record_id)
+                    continue
+
+            provider_id = str(account.get("providerAccountId") or "").strip()
+            if not record_id and provider_id and provider_id in existing_provider_ids:
+                _record_skip(skip_counts, skip_details, resource="spending_accounts", reason="duplicate_identity", index=index)
+                continue
+
+            balance = (
+                money_decimal(account.get("currentBalance"), "currentBalance")
+                if account.get("currentBalance") is not None else None
+            )
+            new_id = record_id or str(uuid4())
+            if commit:
+                db.add(SpendingAccount(
+                    id=new_id,
                     user_id=user.id,
                     name=account.get("name") or "Account",
                     type=account.get("type"),
-                    current_balance=account.get("currentBalance"),
-                    provider_account_id=account.get("providerAccountId"),
-                )
-            )
+                    current_balance=balance,
+                    provider_account_id=provider_id or None,
+                    linked_at=_linked_at(account.get("linkedAt")),
+                ))
+            existing_ids.add(new_id)
+            if provider_id:
+                existing_provider_ids.add(provider_id)
             count += 1
         imported["spending_accounts"] = count
 
     transactions = payload.get("networth_spending_transactions")
     if isinstance(transactions, list):
+        existing_ids = {
+            str(row.id)
+            for row in db.scalars(select(SpendingTransaction).where(SpendingTransaction.user_id == user.id))
+        }
         count = 0
-        for transaction in transactions:
+        for index, transaction in enumerate(transactions):
             if not isinstance(transaction, dict) or not transaction.get("date"):
+                _record_skip(skip_counts, skip_details, resource="spending_transactions", reason="invalid_record", index=index)
                 continue
             if is_sample(transaction):
-                skipped_samples += 1
+                _record_skip(skip_counts, skip_details, resource="spending_transactions", reason="sample", index=index)
                 continue
-            db.merge(
-                SpendingTransaction(
-                    id=str(transaction.get("id") or uuid4()),
+
+            record_id = str(transaction.get("id") or "").strip()
+            if record_id:
+                existing_any = db.get(SpendingTransaction, record_id)
+                if existing_any is not None and existing_any.user_id != user.id:
+                    _record_skip(skip_counts, skip_details, resource="spending_transactions", reason="foreign_id", index=index, record_id=record_id)
+                    continue
+                if record_id in existing_ids:
+                    _record_skip(skip_counts, skip_details, resource="spending_transactions", reason="existing_id", index=index, record_id=record_id)
+                    continue
+
+            new_id = record_id or str(uuid4())
+            if commit:
+                db.add(SpendingTransaction(
+                    id=new_id,
                     user_id=user.id,
                     merchant=transaction.get("merchant") or "Unknown merchant",
-                    amount=float(transaction.get("amount") or 0),
-                    date=str(transaction["date"])[:10],
+                    amount=money_decimal(transaction.get("amount"), "amount"),
+                    date=iso_day(transaction["date"]),
                     category=transaction.get("category") or "Other",
                     account_id=transaction.get("accountId"),
                     pending=bool(transaction.get("pending", False)),
                     source=transaction.get("source") or "manual",
-                )
-            )
+                ))
+            else:
+                # Preview must apply the same validation even without writes.
+                money_decimal(transaction.get("amount"), "amount")
+                iso_day(transaction["date"])
+            existing_ids.add(new_id)
             count += 1
         imported["spending_transactions"] = count
 
     history = payload.get("networth_history")
     if isinstance(history, list):
-        existing = {row.timestamp for row in db.scalars(select(NetWorthSnapshot).where(NetWorthSnapshot.user_id == user.id))}
+        existing = {
+            row.timestamp
+            for row in db.scalars(select(NetWorthSnapshot).where(NetWorthSnapshot.user_id == user.id))
+        }
         added = 0
-        for entry in history:
+        for index, entry in enumerate(history):
             if not isinstance(entry, dict):
+                _record_skip(skip_counts, skip_details, resource="net_worth_snapshots", reason="invalid_record", index=index)
                 continue
             timestamp = str(entry.get("timestamp") or entry.get("monthKey") or "")
-            if not timestamp or timestamp in existing:
+            if not timestamp:
+                _record_skip(skip_counts, skip_details, resource="net_worth_snapshots", reason="invalid_record", index=index)
                 continue
-            db.add(
-                NetWorthSnapshot(
+            if timestamp in existing:
+                _record_skip(skip_counts, skip_details, resource="net_worth_snapshots", reason="duplicate_identity", index=index)
+                continue
+            value = finite_money(entry.get("value"), "value")
+            if commit:
+                db.add(NetWorthSnapshot(
                     user_id=user.id,
                     timestamp=timestamp,
-                    value=float(entry.get("value") or 0),
+                    value=value,
                     source=entry.get("source"),
                     data={k: v for k, v in entry.items() if k not in {"timestamp", "value", "source"}},
-                )
-            )
+                ))
             existing.add(timestamp)
             added += 1
         imported["net_worth_snapshots"] = added
 
     settings_saved = 0
     for key, value in payload.items():
-        # Phase 7: legacy imports cannot replace server-owned diagnostic,
-        # reconciliation, or cutover-backup records.
-        if key in SKIP_KEYS or is_server_owned_setting(key):
+        if key in SKIP_KEYS:
             continue
-        row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
-        if row:
-            row.value = value
-        else:
-            db.add(Setting(user_id=user.id, key=key, value=value))
+        if is_server_owned_setting(key):
+            _record_skip(skip_counts, skip_details, resource="settings", reason="server_owned", key=key)
+            continue
+        if commit:
+            row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
+            if row:
+                row.value = value
+            else:
+                db.add(Setting(user_id=user.id, key=key, value=value))
         settings_saved += 1
     imported["settings"] = settings_saved
 
-    db.commit()
-    return {"imported": imported, "skipped_samples": skipped_samples}
+    if commit:
+        db.commit()
+
+    return {
+        "mode": "import" if commit else "preview",
+        "imported": imported,
+        "skipped": skip_counts,
+        "skip_details": skip_details,
+        "skipped_samples": skip_counts.get("sample", 0),
+    }
+
+
+@router.post("/preview")
+async def preview_dump(
+    payload: dict[str, Any],
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Preview exactly what an import would add without mutating the database."""
+    return _run_import(payload, user, db, commit=False)
+
+
+@router.post("/import")
+async def import_dump(
+    payload: dict[str, Any],
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Import a localStorage dump. Safe to re-run; never dedupes by name alone."""
+    return _run_import(payload, user, db, commit=True)
