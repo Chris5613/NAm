@@ -12,10 +12,6 @@ import {
 } from "./external-apis";
 
 import {
-  getRatexPtonycSnapshot,
-} from "./ratexYieldSync";
-
-import {
   getLoopscaleOnycSnapshot,
 } from "./loopscaleYieldSync";
 
@@ -681,76 +677,6 @@ function saveRollerCoinPrice(
   );
 }
 
-function createRatexEntry(
-  snapshot
-) {
-  const quantity = number(
-    snapshot?.quantity
-  );
-
-  const balance = number(
-    snapshot?.currentValueUsd
-  );
-
-  if (
-    !(quantity > 0) ||
-    !(balance > 0)
-  ) {
-    return null;
-  }
-
-  const price = number(
-    snapshot?.priceUsd
-  );
-
-  const apy = number(
-    snapshot?.fixedApy
-  );
-
-  return {
-    id: "ratex-live",
-    platform: "RateX",
-    logo: "",
-    live: true,
-    balance,
-    apy,
-
-    earned: number(
-      snapshot?.earnedUsd
-    ),
-
-    lifetimeUsd: number(
-      snapshot?.earnedUsd
-    ),
-
-    monthUsd: 0,
-
-    estimatedMonthlyUsd:
-      balance > 0 && apy > 0
-        ? (
-            balance *
-            (apy / 100)
-          ) / 12
-        : 0,
-
-    lastSyncedAt:
-      snapshot?.syncedAt ||
-      new Date().toISOString(),
-
-    assets: [
-      {
-        id: "ratex-ptonyc",
-        asset: "PTONyc",
-        strategy: "Fixed Yield",
-        balance,
-        quantity,
-        price,
-        apy,
-      },
-    ],
-  };
-}
-
 function createLoopscaleEntry(
   snapshot
 ) {
@@ -852,59 +778,6 @@ const projectEntries = (
       project?.is_inactive === true
     ) {
       return false;
-    }
-
-    const platform =
-      String(
-        project?.platform ||
-        project?.name ||
-        ""
-      )
-        .trim()
-        .toLowerCase();
-
-    if (
-      platform === "ratex"
-    ) {
-      const status =
-        String(
-          project?.status || ""
-        )
-          .trim()
-          .toLowerCase();
-
-      if (
-        status === "matured" ||
-        status === "completed" ||
-        status === "closed"
-      ) {
-        return false;
-      }
-
-      const maturityValue =
-        project?.maturity ||
-        project?.maturity_date ||
-        project?.maturityDate ||
-        null;
-
-      if (
-        maturityValue
-      ) {
-        const maturity =
-          new Date(
-            maturityValue
-          );
-
-        if (
-          !Number.isNaN(
-            maturity.getTime()
-          ) &&
-          maturity.getTime() <=
-            Date.now()
-        ) {
-          return false;
-        }
-      }
     }
 
     return true;
@@ -1053,10 +926,7 @@ function getSavedLiveEntries() {
       .trim()
       .toLowerCase();
 
-    return (
-      platform === "ratex" ||
-      platform === "loopscale"
-    );
+    return platform === "loopscale";
   });
 }
 
@@ -1114,17 +984,6 @@ export async function refreshProjectCryptoPortfolio() {
       );
     }
 
-    const previousRatex =
-      previous
-        ?.projectEntries
-        ?.find(
-          (entry) =>
-            String(
-              entry?.platform || ""
-            ).toLowerCase() ===
-            "ratex"
-        ) || null;
-
     const previousLoopscale =
       previous
         ?.projectEntries
@@ -1136,47 +995,20 @@ export async function refreshProjectCryptoPortfolio() {
             "loopscale"
         ) || null;
 
-    let ratexEntry =
-      previousRatex;
-
     let loopscaleEntry =
       previousLoopscale;
 
     let liveTrxPrice = 0;
 
     const [
-      ratexResult,
       loopscaleResult,
       trxPriceResult,
     ] = await Promise.allSettled([
-      getRatexPtonycSnapshot(),
       getLoopscaleOnycSnapshot(),
       coinGeckoApi.getPrice(
         "tron"
       ),
     ]);
-
-    if (
-      ratexResult.status ===
-      "fulfilled"
-    ) {
-      const next =
-        createRatexEntry(
-          ratexResult.value
-        );
-
-      if (next) {
-        ratexEntry = next;
-      }
-    } else {
-      errors.push(
-        `RateX: ${
-          ratexResult.reason
-            ?.message ||
-          "refresh failed"
-        }`
-      );
-    }
 
     if (
       loopscaleResult.status ===
@@ -1285,7 +1117,6 @@ export async function refreshProjectCryptoPortfolio() {
     }
 
     const externalEntries = [
-      ratexEntry,
       loopscaleEntry,
       createSaladEntry(),
 
