@@ -1,3 +1,4 @@
+import { buildMonthlyEarningsChart } from "../lib/monthlyEarningsChart";
 import { buildDailyEarningsChart } from "../lib/dailyEarningsChart";
 import { kryptexIncrease } from "../lib/kryptexEarnings";
 import { recordKryptexDailyBalance, withKryptexDailyBalance } from "../lib/kryptexDailyBalance";
@@ -4036,21 +4037,7 @@ const importSaladPayload =
   const currentHour = clockPart("hour") + clockPart("minute") / 60;
   const { dailyChartData, dailyChartMax, dailyChartMin, dailyChartEnd, dailyChartTicks } =
     buildDailyEarningsChart(dailyEarningsObservations, todayKey, currentHour, todayEarnings);
-  const monthlyChartData = [...new Set([
-    ...projectIncome.filter(month => /^\d{4}-\d{2}$/.test(String(month.monthKey)))
-      .map(month => month.monthKey),
-    ...Object.values(stockPayouts).filter(row => /^\d{4}-\d{2}-\d{2}$/.test(row?.date || ""))
-      .map(row => row.date.slice(0, 7)),
-  ])].map(monthKey => {
-    const month = projectIncome.find(item => item.monthKey === monthKey);
-    return {
-      monthKey,
-      label: new Intl.DateTimeFormat("en-US",{month:"short",year:"2-digit",timeZone:"UTC"}).format(new Date(monthKey+"-15T12:00:00Z")),
-      value: Math.max(0,Number(month?.total) || 0) + stockPayoutTotal(stockPayouts, monthKey),
-      expenses: Math.max(0,Number(projectExpenses[monthKey]) || 0),
-    };
-  })
-    .sort((a,b) => a.monthKey.localeCompare(b.monthKey));
+  const monthlyChartData = buildMonthlyEarningsChart(projectIncome, stockPayouts, projectExpenses);
   const thisMonthEarned = monthlyChartData.find(month => month.monthKey === getCurrentMonthKey())?.value || 0;
   const monthlyChartMax = Math.max(0.1,...monthlyChartData.map(month => month.value))*1.15;
 
