@@ -44,8 +44,36 @@ def cache_result(key: str, data: Any) -> None:
     _cache[key] = (now, data)
 
 _cache: dict[str, tuple[float, Any]] = {}
+_inflight_gets: dict[str, asyncio.Task] = {}
 _dividend_cache: dict[str, tuple[float, Any]] = {}
 _schedule_cache: dict[int, tuple[float, list[dict[str, str]]]] = {}
+
+
+async def cached_get(
+    cache_key: str,
+    url: str,
+    headers: dict[str, str],
+) -> Any:
+    """Cache and coalesce identical GETs inside this backend process."""
+    cached = _cache.get(cache_key)
+    if cached and time.time() - cached[0] < CACHE_TTL_SECONDS:
+        return cached[1]
+
+    existing = _inflight_gets.get(cache_key)
+    if existing is not None:
+        return await existing
+
+    async def run() -> Any:
+        try:
+            data = await asyncio.to_thread(_fetch, url, headers, None)
+            cache_result(cache_key, data)
+            return data
+        finally:
+            _inflight_gets.pop(cache_key, None)
+
+    task = asyncio.create_task(run())
+    _inflight_gets[cache_key] = task
+    return await task
 
 
 def _parse_vanguard_schedule(pdf: bytes, year: int) -> list[dict[str, str]]:
@@ -290,63 +318,20 @@ def _fetch(
         ) from error
 
 
-@router.api_route(
-    "/mlb/{path:path}",
-    methods=["GET", "POST"],
-)
+@router.get("/mlb/{path:path}")
 async def public_mlb_proxy(
     path: str,
     request: Request,
+    user: User = Depends(current_user),
 ) -> Any:
-    """MLB schedule and game data are public and do not need account auth."""
+    """Authenticated read-only proxy for MLB schedule and game data."""
     if ".." in path:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid path.",
-        )
+        raise HTTPException(status_code=400, detail="Invalid path.")
 
     config = _provider_config()["mlb"]
-
-    params = urllib.parse.urlencode(
-        dict(request.query_params)
-    )
-
-    url = (
-        f'{config["base"]}/{path.lstrip("/")}'
-        + (
-            f"?{params}"
-            if params
-            else ""
-        )
-    )
-
-    cache_key = f"mlb:{url}"
-
-    cached = _cache.get(cache_key) if request.method == "GET" else None
-
-    if (
-        cached
-        and time.time() - cached[0]
-        < CACHE_TTL_SECONDS
-    ):
-        return cached[1]
-
-    body = (
-        await request.body()
-        if request.method == "POST"
-        else None
-    )
-
-    data = await asyncio.to_thread(_fetch,
-        url,
-        config.get("headers", {}),
-        body,
-    )
-
-    if request.method == "GET":
-        cache_result(cache_key, data)
-
-    return data
+    params = urllib.parse.urlencode(dict(request.query_params))
+    url = f'{config["base"]}/{path.lstrip("/")}' + (f"?{params}" if params else "")
+    return await cached_get(f"mlb:{url}", url, config.get("headers", {}))
 
 
 @router.api_route(
@@ -432,7 +417,6 @@ async def proxy(
     )
 
     cache_key = f"{provider}:{url}"
-
     cached = _cache.get(cache_key) if request.method == "GET" else None
 
     if provider == "lulo":
@@ -443,25 +427,21 @@ async def proxy(
             bool(cached and time.time() - cached[0] < CACHE_TTL_SECONDS),
         )
 
-    if (
-        cached
-        and time.time() - cached[0]
-        < CACHE_TTL_SECONDS
-    ):
-        return cached[1]
+    headers = dict(config.get("headers", {}))
 
-    body = (
-        await request.body()
-        if request.method == "POST"
-        else None
-    )
+    if request.method == "GET":
+        try:
+            return await cached_get(cache_key, url, headers)
+        except HTTPException as error:
+            if provider == "lulo":
+                logger.warning(
+                    "[Lulo Sync] failed endpoint=%s status=%s",
+                    path,
+                    error.status_code,
+                )
+            raise
 
-    headers = dict(
-        config.get(
-            "headers",
-            {},
-        )
-    )
+    body = await request.body()
 
     if (
         provider
@@ -571,9 +551,6 @@ async def proxy(
             type(data).__name__,
             rows if rows is not None else "n/a",
         )
-
-    if request.method == "GET":
-        cache_result(cache_key, data)
 
     return data
 
