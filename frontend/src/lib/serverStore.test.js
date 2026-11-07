@@ -36,9 +36,12 @@ beforeEach(async () => {
 
   settingsApi.all.mockResolvedValue({});
   settingsApi.get.mockResolvedValue(null);
+  settingsApi.patch.mockImplementation((settingKey, before, after) => Promise.resolve(after));
   resourceApi.list.mockImplementation(async (name) =>
     name === "projects" ? initial : []
   );
+  resourceApi.patchProjects.mockReset();
+  resourceApi.patchRecords.mockReset();
 
   await hydrate();
 });
