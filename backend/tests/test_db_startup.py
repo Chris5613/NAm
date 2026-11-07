@@ -1,4 +1,4 @@
-"""Existing columns must not trigger table-locking startup DDL."""
+"""Startup schema changes must flow through Alembic, not ad-hoc ALTERs."""
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -6,31 +6,36 @@ from backend import db
 
 
 class StartupSchemaTests(unittest.TestCase):
-    def test_existing_columns_skip_alter_table(self):
-        connection = MagicMock()
-        manager = MagicMock()
-        manager.__enter__.return_value = connection
+    def test_existing_database_runs_alembic_upgrade_only(self):
         inspector = MagicMock()
-        inspector.get_columns.side_effect = lambda table: (
-            [{"name": "security_answer_hash"}] if table == "users" else [{"name": "hidden"}]
-        )
-        with patch.object(db.engine, "begin", return_value=manager), \
-             patch.object(db.Base.metadata, "create_all"), \
-             patch.object(db, "inspect", return_value=inspector):
-            db.init_db()
-        connection.execute.assert_not_called()
+        inspector.get_table_names.return_value = ["users", "settings"]
 
-    def test_missing_legacy_column_is_added(self):
-        connection = MagicMock()
-        manager = MagicMock()
-        manager.__enter__.return_value = connection
-        inspector = MagicMock()
-        inspector.get_columns.side_effect = lambda table: (
-            [] if table == "users" else [{"name": "hidden"}]
-        )
-        with patch.object(db.engine, "begin", return_value=manager), \
-             patch.object(db.Base.metadata, "create_all"), \
-             patch.object(db, "inspect", return_value=inspector):
+        with patch.object(db, "inspect", return_value=inspector), \
+             patch.object(db.Base.metadata, "create_all") as create_all, \
+             patch.object(db.command, "stamp") as stamp, \
+             patch.object(db.command, "upgrade") as upgrade:
             db.init_db()
-        self.assertEqual(connection.execute.call_count, 1)
-        self.assertIn("security_answer_hash", str(connection.execute.call_args.args[0]))
+
+        create_all.assert_not_called()
+        stamp.assert_not_called()
+        upgrade.assert_called_once()
+        self.assertEqual(upgrade.call_args.args[1], "head")
+
+    def test_empty_database_bootstraps_current_models_then_stamps_head(self):
+        inspector = MagicMock()
+        inspector.get_table_names.return_value = []
+
+        with patch.object(db, "inspect", return_value=inspector), \
+             patch.object(db.Base.metadata, "create_all") as create_all, \
+             patch.object(db.command, "stamp") as stamp, \
+             patch.object(db.command, "upgrade") as upgrade:
+            db.init_db()
+
+        create_all.assert_called_once_with(bind=db.engine)
+        stamp.assert_called_once()
+        self.assertEqual(stamp.call_args.args[1], "head")
+        upgrade.assert_not_called()
+
+
+if __name__ == "__main__":
+    unittest.main()
