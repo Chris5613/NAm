@@ -52,7 +52,11 @@ export const authApi = {
   status: () => api.get("/api/auth/status"),
   me: () => api.get("/api/auth/me"),
   login: (username, password) => api.post("/api/auth/login", { username, password }),
-  setup: (username, password) => api.post("/api/auth/setup", { username, password }),
+  setup: (username, password, setupToken) => api.post("/api/auth/setup", {
+    username,
+    password,
+    setup_token: setupToken,
+  }),
   changePassword: (currentPassword, newPassword) => api.post("/api/auth/change-password", {
     current_password: currentPassword,
     new_password: newPassword,
