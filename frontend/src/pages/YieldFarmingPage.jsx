@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { STOCK_DIVIDEND_PAYOUTS_KEY, stockPayoutTotal } from "@/lib/stockDividendPayouts";
 import { projectsApi } from "@/lib/api";
-import { getLoopscaleOnycSnapshot, LOOPSCALE_WALLET } from "@/lib/loopscaleYieldSync";
+import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { useRegisteredYieldWallets } from "@/hooks/useRegisteredYieldWallets";
 import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
@@ -69,7 +69,8 @@ import {
   PROJECT_QUICK_CACHE_KEY,
   INACTIVE_PROJECTS_KEY,
   PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY,
-  KRYPTEX_OPENING_BALANCE_USD
+  getKryptexOpeningBalanceUsd,
+  getPrivateAccountingProfile
 } from "@/lib/yieldFarmingAccounting";
 import {
   KryptexProjectCard,
@@ -193,7 +194,7 @@ export default function YieldFarmingPage() {
 
   // Register provider public wallets once, then the server continues to poll
   // them independently of whether NAm is open.
-  useRegisteredYieldWallets(luloProjects, LOOPSCALE_WALLET);
+  useRegisteredYieldWallets(luloProjects, getPrivateAccountingProfile()?.loopscaleWallet || null);
 
   const [
     loopscaleHistory,
@@ -1921,7 +1922,7 @@ const importSaladPayload =
                 previousBalance
               )
                 ? previousBalance
-                : KRYPTEX_OPENING_BALANCE_USD;
+                : getKryptexOpeningBalanceUsd();
 
             const { peak: peakBalance } =
               kryptexIncrease(currentBalance, baselineBalance, current?.peakBalance);
@@ -1938,7 +1939,7 @@ const importSaladPayload =
                 current?.monthlyEarnings ||
                 {
                   "2026-09":
-                    KRYPTEX_OPENING_BALANCE_USD,
+                    getKryptexOpeningBalanceUsd(),
                 }
               ),
             };
@@ -1952,7 +1953,7 @@ const importSaladPayload =
               (
                 monthKey ===
                   "2026-09"
-                  ? KRYPTEX_OPENING_BALANCE_USD
+                  ? getKryptexOpeningBalanceUsd()
                   : 0
               );
 
@@ -1977,8 +1978,8 @@ const importSaladPayload =
             monthlyEarnings[monthKey] = Number(confirmedMonth.toFixed(6));
 
             const lifetimeEarnedUsd =
-              Math.max(KRYPTEX_OPENING_BALANCE_USD,
-                (Number(current?.lifetimeEarnedUsd) || KRYPTEX_OPENING_BALANCE_USD) - existingMonth) +
+              Math.max(getKryptexOpeningBalanceUsd(),
+                (Number(current?.lifetimeEarnedUsd) || getKryptexOpeningBalanceUsd()) - existingMonth) +
               confirmedMonth;
 
             return {
@@ -1990,7 +1991,7 @@ const importSaladPayload =
               peakBalance,
               dailyBalanceDays,
               openingBalanceUsd:
-                KRYPTEX_OPENING_BALANCE_USD,
+                getKryptexOpeningBalanceUsd(),
               lifetimeEarnedUsd:
                 Number(
                   lifetimeEarnedUsd.toFixed(
