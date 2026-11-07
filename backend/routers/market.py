@@ -204,9 +204,6 @@ def _provider_config() -> dict[str, dict[str, Any]]:
             if os.getenv("LULO_API_KEY")
             else {},
         },
-        "ratex": {
-            "base": "https://api.rate-x.io",
-        },
         "loopscale": {
             "base": "https://tars.loopscale.com",
         },
@@ -470,7 +467,6 @@ async def proxy(
         provider
         in {
             "solana",
-            "ratex",
             "loopscale",
         }
         and request.method == "POST"
