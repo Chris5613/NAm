@@ -1,3 +1,4 @@
+import { buildSelectedEarningsBreakdown, buildTodayEarningsDisplay } from "../lib/earningsDisplay";
 import { buildWeeklyEarningsChart } from "../lib/weeklyEarningsChart";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
@@ -3679,75 +3680,44 @@ const importSaladPayload =
     mergeHighWaterSources,
   } = useDailyEarningsHighWater(todayKey, observedDailySourceTotals);
 
-  const selectedBreakdown = (() => {
-    const selection = selectedEarningsPoint;
-    if (!selection || selection.range !== earningsChartRange) return null;
-    let sources = {};
-    let label = "";
-    let note = "";
-    if (selection.range === "monthly") {
-      const month = projectIncome.find(item => item.monthKey === selection.key);
-      sources = Object.fromEntries((month?.platforms || [])
-        .filter(item => Number.isFinite(Number(item.amount)))
-        .map(item => [String(item.platform), Number(item.amount)]));
-      const paidStocks = stockPayoutTotal(stockPayouts, selection.key);
-      if (paidStocks > 0) sources.Stocks = paidStocks;
-      if (!month && !paidStocks) return null;
-      label = selection.key;
-      note = "Recorded monthly project totals and received stock payouts";
-    } else {
-      if (selection.key > todayKey && selection.key !== currentLuloUtc.utcDay) return null;
-      sources = sourceTotalsForDay(selection.key);
-      label = selection.key;
-      note = selection.key === currentLuloUtc.utcDay && selection.key > todayKey
-        ? "Only Lulo's new UTC day is active; other providers still use the previous Pacific date."
-        : luloProjects.length && selection.key <= currentLuloUtc.utcDay
-          ? "Lulo's earnings use this UTC date; other sources use the Pacific calendar date."
-          : selection.range === "daily"
-            ? "Daily project totals currently available; intraday per-project snapshots were not saved"
-            : "Recorded earnings for this day";
-    }
-    const entries = Object.entries(sources)
-      .filter(([,amount]) => Number.isFinite(Number(amount)) && Number(amount) !== 0)
-      .map(([name, amount]) => ({name, amount: Number(amount)}))
-      .sort((a,b) => b.amount-a.amount);
-    return { label, note, entries, total: entries.reduce((sum,item)=>sum+item.amount,0) };
-  })();
+  const selectedBreakdown = buildSelectedEarningsBreakdown({
+    selection: selectedEarningsPoint,
+    earningsChartRange,
+    projectIncome,
+    stockPayouts,
+    todayKey,
+    luloUtcDay: currentLuloUtc.utcDay,
+    hasLuloProjects: luloProjects.length > 0,
+    sourceTotalsForDay,
+  });
+
   const serverDailyIncome =
     useServerDailyIncome(todayKey, dailySourceTotals, mergeHighWaterSources);
 
   const serverSources = serverDailyIncome?.date === todayKey
-    ? (serverDailyIncome?.sources || {}) : {};
-  const displayDailySourceTotals = Object.fromEntries(
-    [...new Set([...Object.keys(dailySourceTotals), ...Object.keys(serverSources)])]
-      .map(name => [
-        name,
-        Math.max(
-          0,
-          Number(dailySourceTotals[name]) || 0,
-          Number(serverSources[name]) || 0
-        ),
-      ])
-  );
-
-  // Keep Kryptex visible before its first recorded increase today. A zero
-  // display row does not add projected income or change the source ledger.
-  const todayBreakdown = Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
-    .filter(([name,amount]) => Number.isFinite(Number(amount)) && (name === "Kryptex" || Number(amount) !== 0))
-    .map(([name,amount]) => ({ name, amount: Number(amount) }))
-    .sort((a,b) => b.amount - a.amount);
-  const rawTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
+    ? (serverDailyIncome?.sources || {})
+    : {};
   const previouslyDisplayedTodayMax = (Array.isArray(
     readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)?.[todayKey]
   ) ? readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)[todayKey] : [])
-    .reduce((highest, point) => Math.max(highest, Number(point?.value) || 0), 0);
-  const todayEarnings = Math.max(
-    0,
+    .reduce(
+      (highest, point) => Math.max(highest, Number(point?.value) || 0),
+      0
+    );
+  const {
+    displayDailySourceTotals,
+    todayBreakdown,
     rawTodayEarnings,
+    todayEarnings,
+  } = buildTodayEarningsDisplay({
+    dailySourceTotals,
+    serverSources,
     previouslyDisplayedTodayMax,
-    serverDailyIncome?.date === todayKey && Number.isFinite(Number(serverDailyIncome?.totalUsd))
-      ? Number(serverDailyIncome.totalUsd) : 0
-  );
+    serverTotalUsd:
+      serverDailyIncome?.date === todayKey
+        ? serverDailyIncome?.totalUsd
+        : null,
+  });
 
   const dailyEarningsObservations =
     useDailyEarningsObservations(todayEarnings, earningsClock, todayKey);
