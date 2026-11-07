@@ -42,20 +42,57 @@ def set_setting(db: Session, user_id: int, key: str, value: Any) -> None:
 
 
 def calculate_net_worth(db: Session, user_id: int) -> float:
+    """Match the live Dashboard net-worth formula from persisted server data."""
     assets = db.scalars(select(Asset).where(Asset.user_id == user_id)).all()
-    projects = db.scalars(select(Project).where(Project.user_id == user_id, Project.inactive.is_(False))).all()
-    asset_total = 0.0
+    breakdown = {"stocks": 0.0, "cash": 0.0, "other": 0.0, "debts": 0.0}
+
     for asset in assets:
-        if asset.manual_value is not None:
-            asset_total += float(asset.manual_value)
-        elif asset.quantity is not None and asset.current_price is not None:
-            asset_total += float(asset.quantity) * float(asset.current_price)
-    return asset_total + sum(float(project.invested or 0) for project in projects)
+        category = str(asset.category or "")
+        if category != "stocks" and asset.manual_value is not None:
+            value = float(asset.manual_value or 0)
+        else:
+            value = float(asset.quantity or 0) * float(asset.current_price or 0)
+        if category in breakdown:
+            breakdown[category] += value
+
+    project_summary = setting_value(db, user_id, "project_income_portfolio_summary_v1")
+    project_summary = project_summary if isinstance(project_summary, dict) else {}
+    crypto_cache = setting_value(db, user_id, "networth_crypto_cache")
+    crypto_cache = crypto_cache if isinstance(crypto_cache, dict) else {}
+
+    project_balance = project_summary.get("portfolioBalance")
+    try:
+        project_balance = float(project_balance)
+        project_balance_valid = project_balance == project_balance and abs(project_balance) != float("inf")
+    except (TypeError, ValueError, OverflowError):
+        project_balance = 0.0
+        project_balance_valid = False
+
+    project_portfolio = crypto_cache.get("projectPortfolio")
+    project_portfolio = project_portfolio if isinstance(project_portfolio, dict) else {}
+    bitcoin = project_portfolio.get("bitcoin")
+    bitcoin = bitcoin if isinstance(bitcoin, dict) else {}
+    try:
+        bitcoin_balance = float(bitcoin.get("value", bitcoin.get("balance", 0)) or 0)
+    except (TypeError, ValueError, OverflowError):
+        bitcoin_balance = 0.0
+
+    try:
+        cached_crypto_total = float(crypto_cache.get("total") or 0)
+    except (TypeError, ValueError, OverflowError):
+        cached_crypto_total = 0.0
+
+    crypto_total = project_balance + bitcoin_balance if project_balance_valid else cached_crypto_total
+    return (
+        breakdown["stocks"] + crypto_total + breakdown["cash"] +
+        breakdown["other"] - breakdown["debts"]
+    )
 
 
 def take_daily_snapshots() -> int:
     now = utcnow()
-    day = now.date().isoformat()
+    local_now = now.astimezone(PACIFIC)
+    day = local_now.date().isoformat()
     created = 0
     with SessionLocal() as db:
         users = db.scalars(select(User)).all()
@@ -71,10 +108,12 @@ def take_daily_snapshots() -> int:
             db.add(
                 NetWorthSnapshot(
                     user_id=user.id,
-                    timestamp=now.isoformat(),
+                    # Store the Pacific-local ISO timestamp so its date prefix
+                    # matches the Dashboard's calendar day.
+                    timestamp=local_now.isoformat(),
                     value=calculate_net_worth(db, user.id),
                     source="server-scheduler",
-                    data={"scheduler": "daily-net-worth"},
+                    data={"scheduler": "daily-net-worth", "pacificDate": day},
                 )
             )
             set_setting(db, user.id, "scheduler_status", {"last_daily_snapshot_at": now.isoformat(), "status": "ok"})
@@ -195,8 +234,10 @@ async def scheduler_loop() -> None:
             else:
                 _leader = True
             now = datetime.now(timezone.utc)
-            day = now.date().isoformat()
-            # Daily job runs after midnight UTC, independently of browser tabs.
+            local_now = now.astimezone(PACIFIC)
+            day = local_now.date().isoformat()
+            # Daily net-worth accounting uses the same Pacific calendar day
+            # as the Dashboard.
             if _last_daily_key != day and ( _last_daily_attempt is None or now - _last_daily_attempt >= timedelta(minutes=5)):
                 _last_daily_attempt = now
                 try:
@@ -206,7 +247,6 @@ async def scheduler_loop() -> None:
                     # Do not silently mark an unsuccessful daily snapshot complete.
                     # Retry after the bounded delay, leaving yesterday/history intact.
                     log.exception("Daily net-worth snapshot failed; will retry")
-            local_now = now.astimezone(PACIFIC)
             project_day = local_now.date().isoformat()
             # Catch up a missed night on restart/wakeup. Keep the actual
             # capture timestamp; do not pretend a stale feed was live at 23:58.
