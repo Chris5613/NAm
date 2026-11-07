@@ -36,6 +36,6 @@ test("Cloud month navigation handles year boundaries", () => {
 });
 
 test("Cloud status and profit helpers preserve existing semantics", () => {
-  expect(getBetStatus({ status: "win" })).toBe("win");
+  expect(getBetStatus({ result: "win" })).toBe("win");
   expect(calculateProfit(10, 2)).toBeGreaterThanOrEqual(0);
 });
