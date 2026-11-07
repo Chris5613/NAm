@@ -7,7 +7,8 @@ import {
   jupiterPortfolioApi,
   bitcoinApi,
 } from "./external-apis";
-import { localStorage as storage } from "./localStorage";
+import { localStorage as storage, STORAGE_KEYS } from "./localStorage";
+import { flushKey } from "./serverStore";
 import { applyApyTransactionAccruals } from "./projectDailyReturns";
 import { applyLuloYieldSnapshot, getLuloYieldSnapshot } from "./luloYieldSync";
 import { api } from "./apiClient";
@@ -71,6 +72,7 @@ export const assetsApi = {
       return toResponse(asset);
     }
     storage.setAssets([...all, asset]);
+    await flushKey(STORAGE_KEYS.ASSETS);
     return toResponse(asset);
   },
 
@@ -80,6 +82,7 @@ export const assetsApi = {
       item.id === id ? normalizeId({ ...item, ...data }) : item
     );
     storage.setAssets(updated);
+    await flushKey(STORAGE_KEYS.ASSETS);
     return toResponse(updated.find((item) => item.id === id) || null);
   },
 
@@ -87,6 +90,7 @@ export const assetsApi = {
     const all = normalizeItems(storage.getAssets());
     const remaining = all.filter((item) => item.id !== id);
     storage.setAssets(remaining);
+    await flushKey(STORAGE_KEYS.ASSETS);
     return toResponse({ id });
   },
 };
@@ -99,6 +103,7 @@ export const cryptoCacheApi = {
     const current = storage.getCryptoCache();
     const next = { ...current, ...body, updated_at: new Date().toISOString() };
     storage.setCryptoCache(next);
+    await flushKey(STORAGE_KEYS.CRYPTO_CACHE);
     return toResponse(next);
   },
 };
@@ -121,6 +126,7 @@ export const phonesApi = {
       return toResponse(phone);
     }
     storage.setPhones([...all, phone]);
+    await flushKey(STORAGE_KEYS.PHONES);
     return toResponse(phone);
   },
 
@@ -130,6 +136,7 @@ export const phonesApi = {
       item.id === id ? normalizeId({ ...item, ...data }) : item
     );
     storage.setPhones(updated);
+    await flushKey(STORAGE_KEYS.PHONES);
     return toResponse(updated.find((item) => item.id === id) || null);
   },
 
@@ -137,6 +144,7 @@ export const phonesApi = {
     const all = normalizeItems(storage.getPhones());
     const remaining = all.filter((item) => item.id !== id);
     storage.setPhones(remaining);
+    await flushKey(STORAGE_KEYS.PHONES);
     return toResponse({ id });
   },
 
@@ -179,6 +187,7 @@ export const phonesApi = {
     );
 
     storage.setPhones(updated);
+    await flushKey(STORAGE_KEYS.PHONES);
     return toResponse(updated.find((item) => item.id === id));
   },
 
@@ -222,6 +231,7 @@ export const phonesApi = {
     }
 
     storage.setPhones(refreshed);
+    await flushKey(STORAGE_KEYS.PHONES);
     return toResponse({ updated, failed, skipped, total: all.length });
   },
 };
@@ -284,6 +294,7 @@ for (const asset of stockAssets) {
 }
 
     storage.setAssets(normalizeItems(nextAssets));
+    await flushKey(STORAGE_KEYS.ASSETS);
     return { updatedCount, totalAssets: assets.length };
   },
 };
@@ -343,6 +354,7 @@ export const projectsApi = {
     }));
 
     storage.setProjects(accrued);
+    await flushKey(STORAGE_KEYS.PROJECTS);
     return toResponse(accrued);
   },
 
@@ -359,6 +371,7 @@ export const projectsApi = {
       return toResponse(project);
     }
     storage.setProjects([...all, project]);
+    await flushKey(STORAGE_KEYS.PROJECTS);
     return toResponse(project);
   },
 
@@ -379,6 +392,7 @@ export const projectsApi = {
         : item
     );
     storage.setProjects(updated);
+    await flushKey(STORAGE_KEYS.PROJECTS);
     return toResponse(updated.find((item) => item.id === id) || null);
   },
 
@@ -386,6 +400,7 @@ export const projectsApi = {
     const all = normalizeItems(storage.getProjects());
     const remaining = all.filter((item) => item.id !== id);
     storage.setProjects(remaining);
+    await flushKey(STORAGE_KEYS.PROJECTS);
     return toResponse({ id });
   },
 
@@ -408,6 +423,7 @@ export const projectsApi = {
     });
 
     storage.setProjects(next);
+    await flushKey(STORAGE_KEYS.PROJECTS);
     return toResponse(next.find((item) => item.id === id)?.transactions || []);
   },
 
@@ -436,6 +452,7 @@ export const projectsApi = {
     });
 
     storage.setProjects(next);
+    await flushKey(STORAGE_KEYS.PROJECTS);
     return toResponse(next.find((item) => item.id === id) || null);
   },
 
@@ -465,6 +482,7 @@ export const projectsApi = {
     if (!updated) return toResponse(null);
 
     storage.setProjects(next);
+    await flushKey(STORAGE_KEYS.PROJECTS);
 
     if (prev?.source === "nosana" && prev?.source_date) {
       const snap = storage.getNosanaSyncedDates();
@@ -477,6 +495,7 @@ export const projectsApi = {
       };
 
       storage.setNosanaSyncedDates(snap);
+      await flushKey(STORAGE_KEYS.NOSANA_SYNCED_DATES);
     }
 
     if (
@@ -505,6 +524,7 @@ export const projectsApi = {
       });
 
       storage.setProjects(adjusted);
+      await flushKey(STORAGE_KEYS.PROJECTS);
     }
 
     return toResponse(updated);
@@ -532,6 +552,7 @@ export const projectsApi = {
     });
 
     storage.setProjects(next);
+    await flushKey(STORAGE_KEYS.PROJECTS);
 
     if (removed?.source === "nosana" && removed?.source_date) {
       const snap = storage.getNosanaSyncedDates();
@@ -539,6 +560,7 @@ export const projectsApi = {
       if (snap[removed.source_date]) {
         delete snap[removed.source_date];
         storage.setNosanaSyncedDates(snap);
+      await flushKey(STORAGE_KEYS.NOSANA_SYNCED_DATES);
       }
     }
 
@@ -547,6 +569,7 @@ export const projectsApi = {
       const baselineBefore = Number(removed.source_balance_before);
       if (config && Number.isFinite(baselineBefore)) {
         storage.setKryptexConfig({ ...config, baseline_balance_usd: baselineBefore });
+        await flushKey(STORAGE_KEYS.KRYPTEX_CONFIG);
       }
     }
 
@@ -557,6 +580,7 @@ export const projectsApi = {
         const dec = Number(removed.source_trx_delta) || 0;
         const nextBaseline = Math.max(0, (Number(rc.baseline_trx) || 0) - dec);
         storage.setRollerCoinConfig({ ...rc, baseline_trx: nextBaseline });
+        await flushKey(STORAGE_KEYS.ROLLERCOIN_CONFIG);
       }
     }
 
@@ -582,6 +606,7 @@ export const projectsApi = {
       });
 
       storage.setProjects(adjusted);
+      await flushKey(STORAGE_KEYS.PROJECTS);
     }
 
     return toResponse({ id: txnId });
@@ -600,6 +625,7 @@ export const walletsApi = {
       return toResponse(wallet);
     }
     storage.setWallets([...all, wallet]);
+    await flushKey(STORAGE_KEYS.WALLETS);
     return toResponse(wallet);
   },
 
@@ -617,6 +643,7 @@ export const walletsApi = {
     }
 
     storage.setWallets([...all, ...created]);
+    await flushKey(STORAGE_KEYS.WALLETS);
     return toResponse(created);
   },
 
@@ -624,6 +651,7 @@ export const walletsApi = {
     const all = normalizeItems(storage.getWallets());
     const remaining = all.filter((item) => item.id !== id);
     storage.setWallets(remaining);
+    await flushKey(STORAGE_KEYS.WALLETS);
     return toResponse({ id });
   },
 
@@ -742,6 +770,7 @@ export const tokenPrefsApi = {
     const prefs = { ...storage.getPrefs() };
     prefs[symbol] = { ...prefs[symbol], symbol, ...data };
     storage.setPrefs(prefs);
+    await flushKey(STORAGE_KEYS.PREFS);
     return toResponse(prefs[symbol]);
   },
 };
@@ -758,6 +787,7 @@ export const customTokensApi = {
       return toResponse(token);
     }
     storage.setTokens([...all, token]);
+    await flushKey(STORAGE_KEYS.TOKENS);
     return toResponse(token);
   },
 
@@ -767,6 +797,7 @@ export const customTokensApi = {
       item.id === id ? normalizeId({ ...item, ...data }) : item
     );
     storage.setTokens(updated);
+    await flushKey(STORAGE_KEYS.TOKENS);
     return toResponse(updated.find((item) => item.id === id) || null);
   },
 
@@ -774,6 +805,7 @@ export const customTokensApi = {
     const all = normalizeItems(storage.getTokens());
     const remaining = all.filter((item) => item.id !== id);
     storage.setTokens(remaining);
+    await flushKey(STORAGE_KEYS.TOKENS);
     return toResponse({ id });
   },
 
@@ -840,6 +872,7 @@ export const customTokensApi = {
     }
 
     storage.setTokens(next);
+    await flushKey(STORAGE_KEYS.TOKENS);
     return toResponse({ updated, total: all.length });
   },
 
@@ -911,6 +944,7 @@ export const netWorthApi = {
     const history = storage.getHistory();
     const nextHistory = [...history, snapshot];
     storage.setHistory(nextHistory);
+    await flushKey(STORAGE_KEYS.HISTORY);
 
     return toResponse(snapshot);
   },
