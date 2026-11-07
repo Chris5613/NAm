@@ -52,6 +52,7 @@ test("yearly chart always shows Jan-Dec and leaves future months empty", () => {
       { monthKey: "2026-11", total: 25 },
     ],
     {},
+    "2026",
     "2026-11-07"
   );
 
@@ -59,4 +60,21 @@ test("yearly chart always shows Jan-Dec and leaves future months empty", () => {
   expect(result[0]).toMatchObject({ monthKey: "2026-01", label: "Jan", value: 10 });
   expect(result[10]).toMatchObject({ monthKey: "2026-11", label: "Nov", value: 25 });
   expect(result[11]).toMatchObject({ monthKey: "2026-12", label: "Dec", value: null, future: true });
+});
+
+
+test("historical yearly chart shows all twelve months for 2025", () => {
+  const result = buildYearlyEarningsChart(
+    [
+      { monthKey: "2025-01", total: 4 },
+      { monthKey: "2025-12", total: 9 },
+    ],
+    {},
+    "2025",
+    "2026-11-07"
+  );
+
+  expect(result).toHaveLength(12);
+  expect(result[0]).toMatchObject({ monthKey: "2025-01", value: 4, future: false });
+  expect(result[11]).toMatchObject({ monthKey: "2025-12", value: 9, future: false });
 });
