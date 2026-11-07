@@ -96,7 +96,7 @@ def spending_account_to_dict(row: Any) -> dict[str, Any]:
         "id": row.id,
         "name": row.name,
         "type": row.type,
-        "currentBalance": row.current_balance,
+        "currentBalance": float(row.current_balance) if row.current_balance is not None else None,
         "providerAccountId": row.provider_account_id,
         "linkedAt": row.linked_at.isoformat() if row.linked_at else None,
     }
@@ -108,7 +108,7 @@ def spending_transaction_to_dict(row: Any) -> dict[str, Any]:
     return {
         "id": row.id,
         "merchant": row.merchant,
-        "amount": row.amount,
+        "amount": float(row.amount),
         "date": row.date,
         "category": row.category,
         "accountId": row.account_id,
