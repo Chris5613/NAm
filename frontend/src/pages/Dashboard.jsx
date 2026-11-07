@@ -18,6 +18,7 @@ import {
 import {
   localStorage as storage,
 } from "@/lib/localStorage";
+import { getPrivateAccountingProfile } from "@/lib/yieldFarmingAccounting";
 
 import { toast } from "sonner";
 
@@ -63,27 +64,8 @@ const MONTHLY_NET_WORTH_HISTORY_KEY =
 
 const LIVE_HISTORY_MAX_POINTS = 200;
 
-// User-confirmed historical monthly net worth, January 2025 through May 2026.
-// Chart-only records: never overwrite current holdings, balances, or saved snapshots.
-const IMPORTED_NET_WORTH_HISTORY = [
-  { date: "2025-01-01T12:00:00", value: 10782.51 },
-  { date: "2025-02-01T12:00:00", value: 10693.68 },
-  { date: "2025-03-01T12:00:00", value: 9528.58 },
-  { date: "2025-04-01T12:00:00", value: 8632.42 },
-  { date: "2025-05-01T12:00:00", value: 10896.34 },
-  { date: "2025-06-01T12:00:00", value: 8972.98 },
-  { date: "2025-07-01T12:00:00", value: 11405.74 },
-  { date: "2025-08-01T12:00:00", value: 12575.42 },
-  { date: "2025-09-01T12:00:00", value: 11304.91 },
-  { date: "2025-10-01T12:00:00", value: 13220.50 },
-  { date: "2025-11-01T12:00:00", value: 12834.66 },
-  { date: "2025-12-01T12:00:00", value: 11257.05 },
-  { date: "2026-01-01T12:00:00", value: 13684.99 },
-  { date: "2026-02-01T12:00:00", value: 15225.50 },
-  { date: "2026-03-01T12:00:00", value: 16233.31 },
-  { date: "2026-04-01T12:00:00", value: 17271.75 },
-  { date: "2026-05-01T12:00:00", value: 17491.19 },
-];
+// Personal historical net-worth rows are loaded from the authenticated
+// backend private accounting profile, never bundled into public source.
 
 /* =========================================================
    CATEGORY CONFIG
@@ -2067,7 +2049,7 @@ export default function Dashboard() {
   const now = new Date();
   const rangeDays = { "1W": 7, "1M": 30, "3M": 90, YTD: Math.ceil((now - new Date(now.getFullYear(), 0, 1)) / 86400000) + 1 };
   const cutoff = new Date(now.getTime() - (rangeDays[chartRange] || 36500) * 86400000);
-  // Imported 2025–2026 monthly values are user-confirmed history.
+  // Private profile monthly values are user-confirmed history.
   // Ignore duplicate snapshots for those months rather than replacing them.
   // Outside that known history, preserve genuine numeric zeros and discard
   // missing/invalid values (Number(null) and Number("") both become zero).
@@ -2082,7 +2064,10 @@ export default function Dashboard() {
     const value = parseHistoricalValue(rawValue);
     return Number.isFinite(date.getTime()) && value !== null ? { date, value } : null;
   };
-  const importedMonths = new Set(IMPORTED_NET_WORTH_HISTORY.map(p => p.date.slice(0, 7)));
+  const privateHistory = Array.isArray(getPrivateAccountingProfile()?.netWorthHistory)
+    ? getPrivateAccountingProfile().netWorthHistory
+    : [];
+  const importedMonths = new Set(privateHistory.map(p => String(p?.date || "").slice(0, 7)));
   const isImportedMonth = point => importedMonths.has(`${point.date.getFullYear()}-${String(point.date.getMonth() + 1).padStart(2, "0")}`);
   const livePoints = (liveHistory || [])
     .map(p => p && toHistoryPoint(p.timestamp || p.date || p.time, p.value))
@@ -2090,7 +2075,7 @@ export default function Dashboard() {
   const monthPoints = (history || [])
     .map(p => p && toHistoryPoint(p.monthKey ? p.monthKey + "-01T12:00:00" : (p.timestamp || p.date || p.time), p.value ?? p.total_net_worth))
     .filter(p => p && !isImportedMonth(p));
-  const importedPoints = IMPORTED_NET_WORTH_HISTORY.map(p => toHistoryPoint(p.date, p.value)).filter(Boolean);
+  const importedPoints = privateHistory.map(p => toHistoryPoint(p.date, p.value)).filter(Boolean);
   const currentPoint = toHistoryPoint(now, totalNetWorth);
   // A previously persisted May 9, 2026 zero snapshot is not a verified
   // portfolio valuation. Hide that exact point on the chart only; leave all
