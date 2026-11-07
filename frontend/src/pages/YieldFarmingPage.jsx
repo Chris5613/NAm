@@ -1,4 +1,5 @@
 import { useRollerCoinExtension } from "../hooks/useRollerCoinExtension";
+import { latestRollerCoinTimestamp } from "@/lib/rollerCoinFreshness";
 import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
