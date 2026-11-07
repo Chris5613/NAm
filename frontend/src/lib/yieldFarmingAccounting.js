@@ -23,15 +23,12 @@ const PROJECT_EXPENSES_KEY = "project_income_monthly_expenses_v1";
 
 const PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY =
   "project_income_portfolio_summary_v1";
+const PRIVATE_ACCOUNTING_PROFILE_KEY =
+  "private_accounting_profile_v1";
 
 
 const MONTHLY_TRACKING_START = "2026-09";
-const LULO_SEPTEMBER_2026_OPENING_EARNED = 9.05;
 const LULO_MONTHLY_ACCOUNTING_VERSION = 5;
-
-const ROLLERCOIN_HISTORICAL_TRX = 69.123738;
-
-const ROLLERCOIN_SEPTEMBER_2026_BASELINE_TRX = 45.443264;
 
 const ROLLERCOIN_SEPTEMBER_2026_BASELINE_END =
   "2026-09-14";
@@ -39,8 +36,31 @@ const ROLLERCOIN_SEPTEMBER_2026_BASELINE_END =
 const KRYPTEX_START_DATE =
   "2026-09-18";
 
-const KRYPTEX_OPENING_BALANCE_USD =
-  16.47;
+function getPrivateAccountingProfile() {
+  const parsed = readObject(PRIVATE_ACCOUNTING_PROFILE_KEY);
+  return parsed && typeof parsed === "object" ? parsed : {};
+}
+
+function privateNumber(key) {
+  const value = Number(getPrivateAccountingProfile()?.[key]);
+  return Number.isFinite(value) && value >= 0 ? value : 0;
+}
+
+function getKryptexOpeningBalanceUsd() {
+  return privateNumber("kryptexOpeningBalanceUsd");
+}
+
+function getRollerCoinHistoricalTrx() {
+  return privateNumber("rollercoinHistoricalTrx");
+}
+
+function getRollerCoinSeptemberBaselineTrx() {
+  return privateNumber("rollercoinSeptemberBaselineTrx");
+}
+
+function getLuloSeptemberOpeningEarnedUsd() {
+  return privateNumber("luloSeptemberOpeningEarnedUsd");
+}
 
 
 function readObject(key) {
@@ -1212,7 +1232,7 @@ function getRollerCoinTrackerStats(
     lifetimeTrx;
 
   lifetimeTrx +=
-    ROLLERCOIN_HISTORICAL_TRX;
+    getRollerCoinHistoricalTrx();
 
   /*
    * Current balance is the amount of TRX
@@ -1275,7 +1295,7 @@ function getRollerCoinTrackerStats(
   const historicalReferencePrice = trackedLifetimeTrx > 0
     ? Math.max(0, (lifetimeUsd / trackedLifetimeTrx))
     : liveTrxPrice;
-  lifetimeUsd += ROLLERCOIN_HISTORICAL_TRX * historicalReferencePrice;
+  lifetimeUsd += getRollerCoinHistoricalTrx() * historicalReferencePrice;
 
   return {
     todayUsd,
@@ -2545,7 +2565,7 @@ function loadKryptexTracker() {
       ? parsed.monthlyEarnings
       : {
           "2026-09":
-            KRYPTEX_OPENING_BALANCE_USD,
+            getKryptexOpeningBalanceUsd(),
         };
 
   return {
@@ -2556,11 +2576,11 @@ function loadKryptexTracker() {
 
     currentBalance:
       parsed.currentBalance != null && Number.isFinite(Number(parsed.currentBalance))
-        ? Number(parsed.currentBalance) : KRYPTEX_OPENING_BALANCE_USD,
+        ? Number(parsed.currentBalance) : getKryptexOpeningBalanceUsd(),
 
     lastBalance:
       parsed.lastBalance != null && Number.isFinite(Number(parsed.lastBalance))
-        ? Number(parsed.lastBalance) : KRYPTEX_OPENING_BALANCE_USD,
+        ? Number(parsed.lastBalance) : getKryptexOpeningBalanceUsd(),
 
     peakBalance:
       parsed.peakBalance != null && Number.isFinite(Number(parsed.peakBalance))
@@ -2579,13 +2599,13 @@ function loadKryptexTracker() {
         ? parsed.kryptexConfirmedDays : {},
 
     openingBalanceUsd:
-      KRYPTEX_OPENING_BALANCE_USD,
+      getKryptexOpeningBalanceUsd(),
 
     lifetimeEarnedUsd:
       Number(
         parsed.lifetimeEarnedUsd
       ) ||
-      KRYPTEX_OPENING_BALANCE_USD,
+      getKryptexOpeningBalanceUsd(),
 
     profitabilityUsdDay:
       Number(
@@ -2631,7 +2651,7 @@ function getKryptexStats(
 ) {
   const currentBalanceUsd =
     tracker?.currentBalance != null && Number.isFinite(Number(tracker.currentBalance))
-      ? Number(tracker.currentBalance) : KRYPTEX_OPENING_BALANCE_USD;
+      ? Number(tracker.currentBalance) : getKryptexOpeningBalanceUsd();
 
   const dailyUsd =
     Number(
@@ -2660,17 +2680,17 @@ function getKryptexStats(
     Number(
       tracker?.lifetimeEarnedUsd
     ) ||
-    KRYPTEX_OPENING_BALANCE_USD;
+    getKryptexOpeningBalanceUsd();
 
   return {
     currentBalanceUsd,
     openingBalanceUsd:
-      KRYPTEX_OPENING_BALANCE_USD,
+      getKryptexOpeningBalanceUsd(),
     earnedSinceBaseline:
       Math.max(
         0,
         lifetimeUsd -
-          KRYPTEX_OPENING_BALANCE_USD
+          getKryptexOpeningBalanceUsd()
       ),
     lifetimeUsd,
     monthUsd,
@@ -3088,7 +3108,7 @@ Object.values(
   rollerCoinMonths[
     "2026-09"
   ].trx +=
-    ROLLERCOIN_SEPTEMBER_2026_BASELINE_TRX;
+    getRollerCoinSeptemberBaselineTrx();
 
   Object.entries(
     rollerCoinMonths
@@ -3248,7 +3268,7 @@ Object.values(
       ? kryptexTracker.monthlyEarnings
       : {
           "2026-09":
-            KRYPTEX_OPENING_BALANCE_USD,
+            getKryptexOpeningBalanceUsd(),
         };
 
   Object.entries(
@@ -3526,14 +3546,16 @@ export {
   PROJECT_PAYBACK_KEY,
   PROJECT_EXPENSES_KEY,
   PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY,
+  PRIVATE_ACCOUNTING_PROFILE_KEY,
   MONTHLY_TRACKING_START,
-  LULO_SEPTEMBER_2026_OPENING_EARNED,
   LULO_MONTHLY_ACCOUNTING_VERSION,
-  ROLLERCOIN_HISTORICAL_TRX,
-  ROLLERCOIN_SEPTEMBER_2026_BASELINE_TRX,
   ROLLERCOIN_SEPTEMBER_2026_BASELINE_END,
   KRYPTEX_START_DATE,
-  KRYPTEX_OPENING_BALANCE_USD,
+  getPrivateAccountingProfile,
+  getLuloSeptemberOpeningEarnedUsd,
+  getRollerCoinHistoricalTrx,
+  getRollerCoinSeptemberBaselineTrx,
+  getKryptexOpeningBalanceUsd,
   readObject,
   saveObject,
   loadProjectPayback,
