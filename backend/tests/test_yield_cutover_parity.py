@@ -10,7 +10,7 @@ from backend.yield_cutover_parity import (
 from backend.lulo_transaction_reconciliation import reconcile_lulo_project
 
 
-WALLET = "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM"
+WALLET = "11111111111111111111111111111111"
 NOW = datetime(2026, 10, 30, 20, 1, tzinfo=timezone.utc)
 APPLIED = datetime(2026, 10, 30, 20, 0, tzinfo=timezone.utc)
 
