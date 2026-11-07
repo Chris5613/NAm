@@ -146,6 +146,9 @@ function KryptexProjectCard({
             <div>
               <p className="text-xs uppercase tracking-wide text-muted-foreground">
                 Live Profitability
+                {Number(stats?.activeMachineCount) > 0
+                  ? ` · ${Number(stats.activeMachineCount)} PC${Number(stats.activeMachineCount) === 1 ? "" : "s"}`
+                  : ""}
               </p>
               <p className="mt-1 font-semibold tabular-nums">
                 {formatCurrency(
