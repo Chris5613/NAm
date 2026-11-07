@@ -16,7 +16,7 @@ export function buildSelectedEarningsBreakdown({
   let label = "";
   let note = "";
 
-  if (selection.range === "monthly") {
+  if (selection.range === "yearly") {
     const month = projectIncome.find(item => item.monthKey === selection.key);
     sources = Object.fromEntries(
       (month?.platforms || [])
