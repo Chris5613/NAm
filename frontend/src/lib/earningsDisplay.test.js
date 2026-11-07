@@ -20,10 +20,10 @@ test("today display merges server and local high-water totals", () => {
   expect(result.todayEarnings).toBe(2.5);
 });
 
-test("monthly breakdown combines project platforms with stock payouts", () => {
+test("yearly month breakdown combines project platforms with stock payouts", () => {
   const result = buildSelectedEarningsBreakdown({
-    selection: { range: "monthly", key: "2026-11" },
-    earningsChartRange: "monthly",
+    selection: { range: "yearly", key: "2026-11" },
+    earningsChartRange: "yearly",
     projectIncome: [{
       monthKey: "2026-11",
       platforms: [
@@ -43,4 +43,25 @@ test("monthly breakdown combines project platforms with stock payouts", () => {
     { name: "Salad", amount: 1.5 },
   ]);
   expect(result.total).toBe(3.5);
+});
+
+
+test("monthly day breakdown uses recorded sources for that day", () => {
+  const result = buildSelectedEarningsBreakdown({
+    selection: { range: "monthly", key: "2026-11-06" },
+    earningsChartRange: "monthly",
+    projectIncome: [],
+    stockPayouts: {},
+    todayKey: "2026-11-07",
+    luloUtcDay: "2026-11-07",
+    hasLuloProjects: false,
+    sourceTotalsForDay: key =>
+      key === "2026-11-06" ? { Kryptex: 1.75, RollerCoin: 0.25 } : {},
+  });
+
+  expect(result.entries).toEqual([
+    { name: "Kryptex", amount: 1.75 },
+    { name: "RollerCoin", amount: 0.25 },
+  ]);
+  expect(result.total).toBe(2);
 });
