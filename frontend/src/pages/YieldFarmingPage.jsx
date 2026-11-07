@@ -1893,6 +1893,22 @@ const importSaladPayload =
             ? status.miners
             : [];
 
+        // v1.4+ machine payloads are persisted and merged by the backend.
+        // Do not rebuild a competing tracker from one PC in this tab.
+        if (isMachineScoped) {
+          setKryptexConnected(true);
+          setKryptexMessage(
+            Object.prototype.hasOwnProperty.call(payload?.earnings?.daily_usd || {}, getTodayKey())
+              ? "Kryptex earnings chart synced."
+              : Object.prototype.hasOwnProperty.call(payload?.earnings?.daily_sats || {}, getTodayKey())
+                ? "Kryptex sats captured; waiting for a BTC price."
+                : payload?.chart_scan?.series_count === 0
+                  ? "Kryptex chart is visible, but its earnings data was not recognized."
+                  : "Open Kryptex's Satoshi earnings chart to sync today's income."
+          );
+          return;
+        }
+
         setKryptexTracker(
           (current) => {
             const previousBalance =
@@ -2022,14 +2038,19 @@ const importSaladPayload =
       const profitabilityUsdDay = Number(status?.profitability_usd_day);
       if (!Number.isFinite(profitabilityUsdDay) || profitabilityUsdDay < 0) return;
 
-      setKryptexTracker(current => ({
-        ...current,
-        profitabilityUsdDay,
-        miners: Array.isArray(status?.miners) ? status.miners : [],
-        lastSyncedAt: detail?.synced_at || current?.lastSyncedAt || new Date().toISOString(),
-        reachable: true,
-        activeMachineCount: Math.max(0, Number(detail?.machine_count) || 0),
-      }));
+      if (detail?.tracker && typeof detail.tracker === "object") {
+        setKryptexTracker(detail.tracker);
+      } else {
+        setKryptexTracker(current => ({
+          ...current,
+          profitabilityUsdDay,
+          miners: Array.isArray(status?.miners) ? status.miners : [],
+          lastSyncedAt: detail?.synced_at || current?.lastSyncedAt || new Date().toISOString(),
+          reachable: Math.max(0, Number(detail?.machine_count) || 0) > 0,
+          activeMachineCount: Math.max(0, Number(detail?.machine_count) || 0),
+        }));
+      }
+      setKryptexConnected(Math.max(0, Number(detail?.machine_count) || 0) > 0);
     };
 
     window.addEventListener("kryptex-aggregate-update", handleAggregate);
@@ -2041,30 +2062,26 @@ const importSaladPayload =
 
     const refreshCombinedKryptex = async () => {
       try {
-        const response = await projectsApi.getAll();
+        const response = await api.get("/api/project-tracking/kryptex/aggregate");
         if (cancelled) return;
-        const project = (response?.data || []).find(
-          item => String(item?.name || "").trim().toLowerCase() === "kryptex"
-        );
-        if (!project) return;
-
-        const profitabilityUsdDay = Number(project?.kryptex_profitability_usd_day);
+        const profitabilityUsdDay = Number(response?.status?.profitability_usd_day);
         if (!Number.isFinite(profitabilityUsdDay) || profitabilityUsdDay < 0) return;
 
-        setKryptexTracker(current => ({
-          ...current,
-          profitabilityUsdDay,
-          miners: Array.isArray(project?.kryptex_miners)
-            ? project.kryptex_miners
-            : (current?.miners || []),
-          lastSyncedAt: project?.kryptex_last_synced_at || current?.lastSyncedAt || null,
-          activeMachineCount: Math.max(
-            0,
-            Number(project?.kryptex_active_machine_count) || 0
-          ),
-          reachable: true,
-        }));
-        setKryptexConnected(true);
+        if (response?.tracker && typeof response.tracker === "object") {
+          setKryptexTracker(response.tracker);
+        } else {
+          setKryptexTracker(current => ({
+            ...current,
+            profitabilityUsdDay,
+            miners: Array.isArray(response?.status?.miners)
+              ? response.status.miners
+              : (current?.miners || []),
+            lastSyncedAt: response?.received_at || current?.lastSyncedAt || null,
+            activeMachineCount: Math.max(0, Number(response?.machine_count) || 0),
+            reachable: Math.max(0, Number(response?.machine_count) || 0) > 0,
+          }));
+        }
+        setKryptexConnected(Math.max(0, Number(response?.machine_count) || 0) > 0);
       } catch {
         // Keep the last known tracker value if the server refresh is unavailable.
       }
