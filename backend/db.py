@@ -1,9 +1,12 @@
-"""Database engine, session handling, and schema setup."""
+"""Database engine, session handling, and versioned schema setup."""
 
 import os
 from collections.abc import Iterator
+from pathlib import Path
 
-from sqlalchemy import create_engine, inspect, text
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, inspect
 from sqlalchemy.orm import Session, sessionmaker
 
 from .models import Base
@@ -24,22 +27,39 @@ connection_options = (
     {"connect_timeout": 5, "options": "-c statement_timeout=8000 -c lock_timeout=3000"}
     if DATABASE_URL.startswith("postgresql") else {}
 )
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_timeout=5,
-                       connect_args=connection_options, future=True)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_timeout=5,
+    connect_args=connection_options,
+    future=True,
+)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
+def _alembic_config() -> Config:
+    root = Path(__file__).resolve().parents[1]
+    return Config(str(root / "alembic.ini"))
+
+
 def init_db() -> None:
-    Base.metadata.create_all(bind=engine)
-    with engine.begin() as connection:
-        # ADD COLUMN IF NOT EXISTS still requests an ACCESS EXCLUSIVE lock in
-        # Postgres. Repeating it on every boot can queue behind an active
-        # transaction and block all subsequent reads, including auth/health.
-        inspector = inspect(connection)
-        if "security_answer_hash" not in {column["name"] for column in inspector.get_columns("users")}:
-            connection.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS security_answer_hash TEXT"))
-        if "hidden" not in {column["name"] for column in inspector.get_columns("spending_transactions")}:
-            connection.execute(text("ALTER TABLE spending_transactions ADD COLUMN IF NOT EXISTS hidden BOOLEAN NOT NULL DEFAULT FALSE"))
+    """Bootstrap an empty database, otherwise apply reviewed Alembic revisions.
+
+    create_all() is intentionally limited to a completely empty database.
+    Existing databases never receive ad-hoc startup ALTER statements.
+    """
+    tables = set(inspect(engine).get_table_names()) - {"alembic_version"}
+    config = _alembic_config()
+
+    if not tables:
+        Base.metadata.create_all(bind=engine)
+        # The bootstrap schema is generated from current models, so record it
+        # at the current migration head rather than replaying historical ALTERs.
+        command.stamp(config, "head")
+        return
+
+    # Existing databases fail closed if the baseline/revisions do not match.
+    command.upgrade(config, "head")
 
 
 def get_db() -> Iterator[Session]:
