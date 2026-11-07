@@ -32,7 +32,12 @@ class SpendingAccountInput(BaseModel):
     @field_validator("currentBalance", mode="before")
     @classmethod
     def validate_current_balance(cls, value):
-        return None if value is None else money_decimal(value, "currentBalance")
+        if value is None:
+            return None
+        try:
+            return money_decimal(value, "currentBalance")
+        except HTTPException as error:
+            raise ValueError(str(error.detail)) from error
 
 
 class SpendingTransactionInput(BaseModel):
@@ -50,12 +55,18 @@ class SpendingTransactionInput(BaseModel):
     @field_validator("amount", mode="before")
     @classmethod
     def validate_amount(cls, value):
-        return money_decimal(value, "amount")
+        try:
+            return money_decimal(value, "amount")
+        except HTTPException as error:
+            raise ValueError(str(error.detail)) from error
 
     @field_validator("date", mode="before")
     @classmethod
     def validate_date(cls, value):
-        return iso_day(value)
+        try:
+            return iso_day(value)
+        except HTTPException as error:
+            raise ValueError(str(error.detail)) from error
 
 
 class SpendingTransactionPatch(BaseModel):
@@ -71,12 +82,22 @@ class SpendingTransactionPatch(BaseModel):
     @field_validator("amount", mode="before")
     @classmethod
     def validate_amount(cls, value):
-        return None if value is None else money_decimal(value, "amount")
+        if value is None:
+            return None
+        try:
+            return money_decimal(value, "amount")
+        except HTTPException as error:
+            raise ValueError(str(error.detail)) from error
 
     @field_validator("date", mode="before")
     @classmethod
     def validate_date(cls, value):
-        return None if value is None else iso_day(value)
+        if value is None:
+            return None
+        try:
+            return iso_day(value)
+        except HTTPException as error:
+            raise ValueError(str(error.detail)) from error
 
 
 class SpendingBudgetInput(BaseModel):
@@ -86,7 +107,10 @@ class SpendingBudgetInput(BaseModel):
     @field_validator("budget", mode="before")
     @classmethod
     def validate_budget(cls, value):
-        return money_decimal(value, "budget")
+        try:
+            return money_decimal(value, "budget")
+        except HTTPException as error:
+            raise ValueError(str(error.detail)) from error
 
 
 @router.get("/accounts")
