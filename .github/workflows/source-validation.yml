@@ -60,6 +60,7 @@ jobs:
       - name: Rehearse safe schema baseline on disposable CI PostgreSQL
         run: |
           DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -c "from backend.db import init_db; init_db()"
+          DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -m alembic downgrade 20261031_02
           DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -m alembic upgrade head
           DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -m alembic current
 
