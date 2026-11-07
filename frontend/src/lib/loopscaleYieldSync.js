@@ -1,8 +1,6 @@
 import { proxyFetch } from "./cors-proxy";
 import { getFreshBackendYieldSnapshot } from "./backendYieldSourceSnapshots";
-
-export const LOOPSCALE_WALLET =
-  "GCPg6e28DTuP3v9KYGR5n7adUr2bxiS8d7deHHgc2UNM";
+import { getPrivateAccountingProfile } from "./yieldFarmingAccounting";
 
 const ONYC_MINT =
   "5Y8NV33Vv7WbnLfq3zBcKSdYPrk7g2KoiQoe7M2tcxp5";
@@ -427,9 +425,12 @@ function getNetApy(
 }
 
 export async function getLoopscaleOnycSnapshot(
-  walletAddress = LOOPSCALE_WALLET,
+  walletAddress = getPrivateAccountingProfile()?.loopscaleWallet || "",
   { newerThan = null, referenceBalanceUsd = null } = {}
 ) {
+  if (!walletAddress) {
+    throw new Error("Loopscale wallet is not configured.");
+  }
   // Backend polls this public wallet while the browser is closed.
   // Use it only if newer than the local snapshot; otherwise fetch the
   // upstream Loopscale API exactly as before.
