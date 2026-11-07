@@ -13,7 +13,7 @@
 //   ext → app: { source: "kryptex-tracker-ext", type: "KRYPTEX_PUSH", payload: <status> }
 //   ext → app: { source: "kryptex-tracker-ext", type: "READY" }
 //   app → ext: { source: "kryptex-tracker-app", type: "REQUEST_LATEST" }
-import { reconcileKryptexStatus } from "./kryptexSync";
+import { api } from "./apiClient";
 import { localStorage as storage } from "./localStorage";
 
 const EXT_SOURCE = "kryptex-tracker-ext";
@@ -87,16 +87,20 @@ export async function applyKryptexExtensionPayload(payload) {
   }
 
   try {
-    const result = await reconcileKryptexStatus(payload.status, {
+    const result = await api.post("/api/project-tracking/kryptex/machine", {
       machine: payload.machine || null,
-      observedAt: syncedAt,
+      status: payload.status || null,
+      earnings: payload.earnings || null,
+      synced_at: syncedAt,
     });
     if (result?.status) {
       window.dispatchEvent(new CustomEvent("kryptex-aggregate-update", {
         detail: {
           status: result.status,
           machine_count: result.machine_count || 0,
-          synced_at: syncedAt,
+          machines: result.machines || [],
+          tracker: result.tracker || null,
+          synced_at: result.received_at || new Date().toISOString(),
         },
       }));
     }
