@@ -14,6 +14,7 @@ import {
 import {
   getLoopscaleOnycSnapshot,
 } from "./loopscaleYieldSync";
+import { getRollerCoinHistoricalTrx } from "./yieldFarmingAccounting";
 
 const PORTFOLIO_CACHE_KEY =
   "project_crypto_portfolio_v1";
@@ -26,9 +27,6 @@ const SALAD_TRACKER_KEY =
 
 const ROLLERCOIN_TRACKER_KEY =
   "project_income_rollercoin_tracker_v2";
-
-const ROLLERCOIN_HISTORICAL_TRX =
-  69.123738;
 
 const AUTO_SYNC_INTERVAL_MS =
   5 * 60 * 1000;
@@ -584,7 +582,7 @@ function getRollerCoinTrxBalance(
 
   return (
     trackedTrx +
-    ROLLERCOIN_HISTORICAL_TRX
+    getRollerCoinHistoricalTrx()
   );
 }
 
