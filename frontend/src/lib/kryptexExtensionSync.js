@@ -87,9 +87,20 @@ export async function applyKryptexExtensionPayload(payload) {
   }
 
   try {
+    // Current Kryptex extension builds expose local machine telemetry as
+    // `local_status` so it cannot be confused with account-wide earnings.
+    // Older builds used `status`; accept both formats while always sending
+    // the backend its canonical `status` field.
+    const machineStatus =
+      payload.local_status && typeof payload.local_status === "object"
+        ? payload.local_status
+        : payload.status && typeof payload.status === "object"
+          ? payload.status
+          : null;
+
     const result = await api.post("/api/project-tracking/kryptex/machine", {
       machine: payload.machine || null,
-      status: payload.status || null,
+      status: machineStatus,
       earnings: payload.earnings || null,
       synced_at: syncedAt,
     });
