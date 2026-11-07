@@ -1,6 +1,8 @@
 """Backend replay and cash-flow protection tests for Phase 4 earnings ledgers."""
 from copy import deepcopy
 from datetime import datetime, timezone
+import json
+import os
 import unittest
 
 from backend.yield_earnings_ledger import (
@@ -78,6 +80,18 @@ class LoopscaleLedgerTests(unittest.TestCase):
 
 
 class LuloMonthlyLedgerTests(unittest.TestCase):
+    def setUp(self):
+        self._old_profile = os.environ.get("NAM_PRIVATE_ACCOUNTING_PROFILE_JSON")
+        os.environ["NAM_PRIVATE_ACCOUNTING_PROFILE_JSON"] = json.dumps({
+            "luloSeptemberOpeningEarnedUsd": 7.25,
+        })
+
+    def tearDown(self):
+        if self._old_profile is None:
+            os.environ.pop("NAM_PRIVATE_ACCOUNTING_PROFILE_JSON", None)
+        else:
+            os.environ["NAM_PRIVATE_ACCOUNTING_PROFILE_JSON"] = self._old_profile
+
     def test_first_sync_preserves_zero_opening_income_in_october(self):
         result = advance_lulo_monthly({}, PROJECT, lulo_sample(12))
         entry = result["lulo-a"]["2026-10"]
@@ -85,9 +99,9 @@ class LuloMonthlyLedgerTests(unittest.TestCase):
         self.assertEqual(entry["monthEarned"], 0)
         self.assertEqual(entry["lastLifetimeInterest"], 12)
 
-    def test_first_september_observation_preserves_905_baseline(self):
+    def test_first_september_observation_preserves_private_baseline(self):
         record = advance_lulo_monthly({}, PROJECT, lulo_sample(9.1, stamp="2026-09-30T18:00:00Z"))
-        self.assertEqual(record["lulo-a"]["2026-09"]["monthEarned"], 9.05)
+        self.assertEqual(record["lulo-a"]["2026-09"]["monthEarned"], 7.25)
 
     def test_small_plausible_interest_adds_once(self):
         old = advance_lulo_monthly({}, PROJECT, lulo_sample(10))
