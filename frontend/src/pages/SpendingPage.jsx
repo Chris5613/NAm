@@ -9,6 +9,26 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { settingsApi, spendingApi } from "@/lib/apiClient";
 import { api } from "@/lib/apiClient";
 import { assetsApi } from "@/lib/api";
+import SpendingTransactionRow from "@/components/SpendingTransactionRow";
+import {
+  CATEGORIES,
+  CATEGORY_COLORS,
+  MONTH_LABELS,
+  SIMPLEFIN_REQUEST_HOUR_KEY,
+  cumulativeByDay,
+  dayKey,
+  daysInMonth,
+  emptyTransaction,
+  humanDate,
+  isExpense,
+  isIncome,
+  money,
+  monthKeyOf,
+  monthLabel,
+  reserveSimplefinHour,
+  shiftMonth,
+  simplefinHourLock,
+} from "@/lib/spendingMetrics";
 import {
   ArrowDownRight,
   Building2,
@@ -31,184 +51,9 @@ import {
   Settings2,
 } from "lucide-react";
 
-const CATEGORIES = [
-  "Housing", "Utilities", "Groceries", "Dining", "Gas & Fuel", "Transportation", "Travel",
-  "Shopping", "Subscriptions", "Entertainment", "Health", "Personal Care", "Pets", "Education",
-  "Insurance", "Taxes", "Fees", "Income", "Transfers", "Payments", "Other",
-];
-const MONTH_LABELS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const CATEGORY_COLORS = ["#60a5fa", "#34d399", "#a78bfa", "#f472b6", "#22d3ee", "#818cf8", "#2dd4bf", "#94a3b8"];
-const SIMPLEFIN_REQUEST_HOUR_KEY = "simplefin_request_hour";
-
-const dayKey = (date) => date.toISOString().slice(0, 10);
-const monthKeyOf = (date = new Date()) => date.toISOString().slice(0, 7);
-const hourKeyOf = (date = new Date()) => {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  return `${year}-${month}-${day}T${hour}`;
-};
-const nextHourOf = (date = new Date()) => {
-  const nextHour = new Date(date);
-  nextHour.setHours(date.getHours() + 1, 0, 0, 0);
-  return nextHour;
-};
-const timeLabel = (date) => new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
-const simplefinHourLock = (date = new Date()) => {
-  const nextHour = nextHourOf(date);
-  const currentHour = hourKeyOf(date);
-
-  return {
-    isLocked: false,
-    currentHour,
-    nextHourLabel: timeLabel(nextHour),
-  };
-};
-// why it no work
-const reserveSimplefinHour = () => {
-  return;
-};
-const money = (amount, fallback = "$0") =>
-  amount === null || amount === undefined || Number.isNaN(Number(amount))
-    ? fallback
-    : new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(amount);
-const humanDate = (date) => new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${date}T12:00:00`));
-const emptyTransaction = () => ({ merchant: "", amount: "", category: "Dining", date: dayKey(new Date()), accountId: "" });
-
-function shiftMonth(key, amount) {
-  const [year, month] = key.split("-").map(Number);
-  const date = new Date(year, month - 1 + amount, 1);
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function daysInMonth(key) {
-  const [year, month] = key.split("-").map(Number);
-  return new Date(year, month, 0).getDate();
-}
-
-function monthLabel(key) {
-  const [year, month] = key.split("-").map(Number);
-  return `${new Date(year, month - 1, 1).toLocaleDateString("en-US", { month: "long" })} ${year}`;
-}
-
 function getAccountIcon(account) {
   const type = String(account.type || "").toLowerCase();
   return type.includes("credit") ? CreditCard : type.includes("saving") ? WalletCards : Building2;
-}
-
-function getTransactionIcon(category) {
-  return category === "Food & drink" ? Utensils : category === "Shopping" ? ShoppingBag : ArrowDownRight;
-}
-
-const isIncome = (item) => item.category === "Income";
-const isExpense = (item) => !["Income", "Transfers", "Payments"].includes(item.category);
-
-// Running total per day index for one month.
-function cumulativeByDay(items, key, length, predicate = isExpense) {
-  const totals = new Map();
-  items
-    .filter((item) => item.date?.startsWith(key) && predicate(item))
-    .forEach((item) => {
-      const day = Number(item.date.slice(-2));
-      totals.set(day, (totals.get(day) || 0) + Math.abs(Number(item.amount || 0)));
-    });
-  let running = 0;
-  return Array.from({ length }, (_, index) => {
-    running += totals.get(index + 1) || 0;
-    return running;
-  });
-}
-
-function TransactionRow({ item, color, categories, showDate, onRecategorize, onHide, onAddCategory }) {
-  const [categoryOpen, setCategoryOpen] = useState(false);
-  const [newCategory, setNewCategory] = useState("");
-  const Icon = getTransactionIcon(item.category);
-  const options = categories.includes(item.category) ? categories : [item.category, ...categories];
-
-  return (
-    <div className="flex items-center gap-3 px-5 py-3">
-      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full" style={{ background: `${color}22`, color }}>
-        <Icon className="h-4 w-4" />
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">
-          {item.merchant}
-          {item.pending && <span className="ml-1 text-muted-foreground">| Pending</span>}
-        </p>
-        <div className="mt-0.5 flex items-center gap-2">
-          <button
-            type="button"
-            className="-ml-1 rounded border border-transparent px-1 py-0 text-xs text-muted-foreground hover:border-border/70 hover:text-foreground"
-            onClick={() => setCategoryOpen(true)}
-            aria-label={`Change category for ${item.merchant}`}
-          >
-            {item.category}
-          </button>
-          {showDate && <span className="text-xs text-muted-foreground">{humanDate(item.date)}</span>}
-        </div>
-      </div>
-      <span className="shrink-0 text-sm font-semibold tabular-nums">{money(item.amount)}</span>
-      <button title="Hide transaction" className="shrink-0 text-muted-foreground hover:text-amber-400" onClick={() => onHide(item.id)}>
-        <EyeOff className="h-3.5 w-3.5" />
-      </button>
-      <Dialog open={categoryOpen} onOpenChange={setCategoryOpen}>
-        <DialogContent className="w-[min(92vw,42rem)] max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Choose category</DialogTitle>
-            <DialogDescription>{item.merchant}</DialogDescription>
-          </DialogHeader>
-          <div className="grid max-h-[55vh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
-            {options.map((category) => (
-              <Button
-                key={category}
-                type="button"
-                variant={category === item.category ? "default" : "outline"}
-                className="justify-start"
-                onClick={() => {
-                  onRecategorize(item.id, category);
-                  setCategoryOpen(false);
-                }}
-              >
-                {category}
-              </Button>
-            ))}
-          </div>
-          <div className="flex gap-2 border-t border-border/60 pt-4">
-            <Input
-              value={newCategory}
-              onChange={(event) => setNewCategory(event.target.value)}
-              placeholder="New category"
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  const added = onAddCategory(newCategory);
-                  if (added) {
-                    onRecategorize(item.id, added);
-                    setNewCategory("");
-                    setCategoryOpen(false);
-                  }
-                }
-              }}
-            />
-            <Button
-              type="button"
-              onClick={() => {
-                const added = onAddCategory(newCategory);
-                if (added) {
-                  onRecategorize(item.id, added);
-                  setNewCategory("");
-                  setCategoryOpen(false);
-                }
-              }}
-            >
-              Add
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  );
 }
 
 export default function SpendingPage() {
@@ -978,7 +823,7 @@ const unhideTransaction = async (id) => {
           </div>
           <div className="-mx-6 max-h-[55vh] divide-y divide-border/40 overflow-y-auto border-y border-border/60">
             {filteredTransactions.length ? (
-              filteredTransactions.map((item) => <TransactionRow key={item.id} item={item} color={categoryColorMap[item.category] || CATEGORY_COLORS[CATEGORY_COLORS.length - 1]} categories={categories} showDate onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />)
+              filteredTransactions.map((item) => <SpendingTransactionRow key={item.id} item={item} color={categoryColorMap[item.category] || CATEGORY_COLORS[CATEGORY_COLORS.length - 1]} categories={categories} showDate onRecategorize={recategorize} onHide={hideTransaction} onAddCategory={addCategory} />)
             ) : (
               <p className="px-5 py-12 text-center text-sm text-muted-foreground">No transactions match this search.</p>
             )}
@@ -1003,7 +848,7 @@ const unhideTransaction = async (id) => {
           <div className="max-h-[60vh] divide-y divide-border/40 overflow-y-auto border-y border-border/60">
             {categoryTransactions.length ? (
               categoryTransactions.map((item) => (
-                <TransactionRow
+                <SpendingTransactionRow
                   key={item.id}
                   item={item}
                   color={categoryColorMap[item.category] || CATEGORY_COLORS[CATEGORY_COLORS.length - 1]}
