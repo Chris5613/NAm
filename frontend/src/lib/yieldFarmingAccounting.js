@@ -2714,6 +2714,13 @@ function getKryptexStats(
       )
         ? tracker.miners
         : [],
+    activeMachineCount:
+      Math.max(
+        0,
+        Number(
+          tracker?.activeMachineCount
+        ) || 0
+      ),
   };
 }
 
