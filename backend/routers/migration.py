@@ -52,6 +52,7 @@ def _canonical_record(record: dict[str, Any]) -> str:
     cleaned = {
         key: value for key, value in record.items()
         if key not in {"id", "user_id", "created_at", "updated_at"}
+        and value not in (None, "")
     }
     return json.dumps(cleaned, sort_keys=True, separators=(",", ":"), default=str)
 
@@ -231,6 +232,7 @@ def _run_import(
                 money_decimal(account.get("currentBalance"), "currentBalance")
                 if account.get("currentBalance") is not None else None
             )
+            linked_at = _linked_at(account.get("linkedAt"))
             new_id = record_id or str(uuid4())
             if commit:
                 db.add(SpendingAccount(
@@ -240,7 +242,7 @@ def _run_import(
                     type=account.get("type"),
                     current_balance=balance,
                     provider_account_id=provider_id or None,
-                    linked_at=_linked_at(account.get("linkedAt")),
+                    linked_at=linked_at,
                 ))
             existing_ids.add(new_id)
             if provider_id:
