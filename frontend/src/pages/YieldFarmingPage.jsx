@@ -1400,10 +1400,10 @@ export default function YieldFarmingPage() {
     todayKey.slice(0, 4),
     ...projectIncome
       .map(month => String(month?.monthKey || "").slice(0, 4))
-      .filter(year => /^\\d{4}$/.test(year)),
+      .filter(year => /^\d{4}$/.test(year)),
     ...Object.values(stockPayouts || {})
       .map(payout => String(payout?.date || "").slice(0, 4))
-      .filter(year => /^\\d{4}$/.test(year)),
+      .filter(year => /^\d{4}$/.test(year)),
   ])].sort((a, b) => b.localeCompare(a));
 
   const yearlyChartData = buildYearlyEarningsChart(
