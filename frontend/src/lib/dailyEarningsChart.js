@@ -3,7 +3,7 @@ export function buildDailyEarningsChart(observations, todayKey, hourNow, totalTo
   // Today's intraday chart follows the same cumulative high-water rule as
   // the card. Repair any earlier same-day dip already saved before this rule.
   const storedDailyChartPointsRaw = Array.isArray(observations[todayKey])
-    ? dailyEarningsObservations[todayKey] : [];
+    ? observations[todayKey] : [];
   let runningDailyHigh = 0;
   const dailyChartPoints = storedDailyChartPointsRaw
     .filter(point => Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.value)))
