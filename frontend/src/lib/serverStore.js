@@ -21,6 +21,7 @@ const WRITE_DEBOUNCE_MS = 600;
 const cache = new Map();
 const pendingTimers = new Map();
 const listeners = new Set();
+const conflictListeners = new Set();
 let hydrated = false;
 let savedProjects = [];
 const savedValues = new Map();
@@ -50,6 +51,37 @@ export function isHydrated() {
 export function subscribe(listener) {
   listeners.add(listener);
   return () => listeners.delete(listener);
+}
+
+export function subscribeConflicts(listener) {
+  conflictListeners.add(listener);
+  return () => conflictListeners.delete(listener);
+}
+
+export function getStoreConflicts() {
+  const keys = new Set(conflicts);
+  if (projectConflict) keys.add("networth_projects");
+  return [...keys].sort();
+}
+
+function notifyConflicts() {
+  const snapshot = getStoreConflicts();
+  conflictListeners.forEach(listener => {
+    try {
+      listener(snapshot);
+    } catch {
+      /* a bad subscriber must not break conflict reporting */
+    }
+  });
+}
+
+export class StoreConflictError extends Error {
+  constructor(key, message = "This data changed on another device before it could be saved.") {
+    super(message);
+    this.name = "StoreConflictError";
+    this.key = key;
+    this.code = "STORE_CONFLICT";
+  }
 }
 
 function notify(key) {
@@ -120,10 +152,14 @@ function dedupeCollection(key, value) {
   return deduped;
 }
 
-async function pushProjects() {
+async function pushProjects({ throwOnError = false } = {}) {
   const generation = storeGeneration;
   projectWrite = projectWrite.catch(() => {}).then(async () => {
-    if (generation !== storeGeneration || projectConflict) return;
+    if (generation !== storeGeneration) return;
+    if (projectConflict) {
+      if (throwOnError) throw new StoreConflictError("networth_projects");
+      return;
+    }
     const sent = JSON.parse(JSON.stringify(cache.get("networth_projects") || []));
     try {
       const changes = projectChanges(savedProjects, sent);
@@ -137,19 +173,28 @@ async function pushProjects() {
       notify("networth_projects");
     } catch (error) {
       if (generation !== storeGeneration) return;
-      if (error.status === 409 || error.code === "INVALID_PROJECT_IDS") projectConflict = true;
+      if (error.status === 409 || error.code === "INVALID_PROJECT_IDS") {
+        projectConflict = true;
+        conflicts.add("networth_projects");
+        notifyConflicts();
+      }
       onError(`Could not save projects: ${error.message}`);
+      if (throwOnError) throw error;
     }
   });
   return projectWrite;
 }
 
-async function pushKey(key) {
-  if (key === "networth_projects") return pushProjects();
+async function pushKey(key, { throwOnError = false } = {}) {
+  if (key === "networth_projects") return pushProjects({ throwOnError });
   const generation = storeGeneration;
   const previous = writes.get(key) || Promise.resolve();
   const job = previous.catch(() => {}).then(async () => {
-    if (generation !== storeGeneration || conflicts.has(key)) return;
+    if (generation !== storeGeneration) return;
+    if (conflicts.has(key)) {
+      if (throwOnError) throw new StoreConflictError(key);
+      return;
+    }
     const sent = clone(cache.get(key));
     const before = clone(savedValues.get(key));
     const resource = COLLECTION_RESOURCES[key];
@@ -172,8 +217,12 @@ async function pushKey(key) {
       notify(key);
     } catch (error) {
       if (generation !== storeGeneration) return;
-      if (error.status === 409 || error.code === "INVALID_PROJECT_IDS") conflicts.add(key);
+      if (error.status === 409 || error.code === "INVALID_PROJECT_IDS") {
+        conflicts.add(key);
+        notifyConflicts();
+      }
       onError(`Could not save "${key}": ${error.message}. Your edit is retained in this tab.`);
+      if (throwOnError) throw error;
     }
   });
   writes.set(key, job);
@@ -195,9 +244,77 @@ export async function flushPendingWrites() {
   const keys = [...pendingTimers.keys()];
   keys.forEach((key) => clearTimeout(pendingTimers.get(key)));
   pendingTimers.clear();
-  await Promise.all(keys.map(pushKey));
-  await projectWrite;
-  await Promise.all([...writes.values()]);
+  await Promise.all(keys.map(key => pushKey(key)));
+  await projectWrite.catch(() => {});
+  await Promise.all([...writes.values()].map(job => job.catch(() => {})));
+}
+
+export async function flushKey(key) {
+  clearTimeout(pendingTimers.get(key));
+  pendingTimers.delete(key);
+  if (getStoreConflicts().includes(key)) throw new StoreConflictError(key);
+  await pushKey(key, { throwOnError: true });
+  if (getStoreConflicts().includes(key)) throw new StoreConflictError(key);
+}
+
+export async function resolveStoreConflict(key, strategy) {
+  if (!getStoreConflicts().includes(key)) return;
+  if (!["server", "local"].includes(strategy)) throw new Error("Unknown conflict resolution strategy.");
+
+  const generation = storeGeneration;
+  const localValue = clone(cache.get(key));
+  const resource = COLLECTION_RESOURCES[key];
+
+  if (key === "networth_projects") {
+    const serverValue = await resourceApi.list("projects");
+    if (generation !== storeGeneration) return;
+    if (strategy === "local") {
+      const changes = projectChanges(serverValue || [], localValue || []);
+      const saved = changes.length ? await resourceApi.patchProjects(changes) : serverValue;
+      if (generation !== storeGeneration) return;
+      savedProjects = clone(saved || []);
+      cache.set(key, clone(saved || []));
+      savedValues.set(key, clone(saved || []));
+    } else {
+      savedProjects = clone(serverValue || []);
+      cache.set(key, clone(serverValue || []));
+      savedValues.set(key, clone(serverValue || []));
+    }
+    projectConflict = false;
+  } else if (resource) {
+    const serverValue = await resourceApi.list(resource);
+    if (generation !== storeGeneration) return;
+    if (strategy === "local") {
+      const changes = projectChanges(serverValue || [], localValue || []);
+      const saved = changes.length ? await resourceApi.patchRecords(resource, changes) : serverValue;
+      if (generation !== storeGeneration) return;
+      cache.set(key, clone(saved || []));
+      savedValues.set(key, clone(saved || []));
+    } else {
+      cache.set(key, clone(serverValue || []));
+      savedValues.set(key, clone(serverValue || []));
+    }
+  } else {
+    const serverValue = await settingsApi.get(key);
+    if (generation !== storeGeneration) return;
+    if (strategy === "local") {
+      const saved = JSON.stringify(serverValue) === JSON.stringify(localValue)
+        ? serverValue
+        : await settingsApi.patch(key, serverValue, localValue);
+      if (generation !== storeGeneration) return;
+      cache.set(key, clone(saved));
+      savedValues.set(key, clone(saved));
+    } else {
+      cache.set(key, clone(serverValue));
+      savedValues.set(key, clone(serverValue));
+    }
+  }
+
+  conflicts.delete(key);
+  if (key === "networth_projects") projectConflict = false;
+  clearJournal(key);
+  notify(key);
+  notifyConflicts();
 }
 
 export async function hydrate(ownerId = journalOwner) {
@@ -246,6 +363,7 @@ export async function hydrate(ownerId = journalOwner) {
   projectConflict ||= conflicts.has("networth_projects");
   hydrated = true;
   notify(null);
+  notifyConflicts();
 }
 
 export function resetStore() {
@@ -255,6 +373,7 @@ export function resetStore() {
   conflicts.clear();
   projectConflict = false;
   cache.clear();
+  notifyConflicts();
   pendingTimers.forEach((timer) => clearTimeout(timer));
   pendingTimers.clear();
   hydrated = false;
