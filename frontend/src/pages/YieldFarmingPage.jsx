@@ -3941,14 +3941,57 @@ const importSaladPayload =
     }
     return sources;
   };
-  // Today's earnings count is income-only. Balance movements and signed P/L
-  // (especially negative market-value changes) must never reduce the amount
-  // shown as earned today. Historical charts can still retain signed values.
-  const dailySourceTotals = Object.fromEntries(
+  // Today's Earnings is a cumulative earned-income counter, not mark-to-market
+  // P/L. Each source gets a per-day high-water mark: it may increase or stay
+  // flat, but a reset, stale sync, price move, or corrected-down reading cannot
+  // erase earnings that were already accepted earlier in the same day.
+  const TODAY_EARNINGS_HIGH_WATER_KEY = "yield_today_earnings_high_water_v1";
+  const observedDailySourceTotals = Object.fromEntries(
     Object.entries(sourceTotalsForDay(todayKey)).map(([name, amount]) => [
       name,
       Math.max(0, Number.isFinite(Number(amount)) ? Number(amount) : 0),
     ])
+  );
+  const observedDailySourceSignature = JSON.stringify(observedDailySourceTotals);
+  const [dailyEarningsHighWater, setDailyEarningsHighWater] = useState(() => {
+    const saved = readObject(TODAY_EARNINGS_HIGH_WATER_KEY);
+    return {
+      days: saved?.days && typeof saved.days === "object" ? saved.days : {},
+    };
+  });
+
+  useEffect(() => {
+    const observed = JSON.parse(observedDailySourceSignature);
+    setDailyEarningsHighWater(previous => {
+      const priorSources = previous?.days?.[todayKey] || {};
+      const names = new Set([...Object.keys(priorSources), ...Object.keys(observed)]);
+      const nextSources = {};
+      names.forEach(name => {
+        const prior = Math.max(0, Number(priorSources[name]) || 0);
+        const current = Math.max(0, Number(observed[name]) || 0);
+        nextSources[name] = Math.max(prior, current);
+      });
+      if (JSON.stringify(nextSources) === JSON.stringify(priorSources)) return previous;
+      const next = {
+        ...previous,
+        days: { ...(previous?.days || {}), [todayKey]: nextSources },
+      };
+      saveObject(TODAY_EARNINGS_HIGH_WATER_KEY, next);
+      return next;
+    });
+  }, [observedDailySourceSignature, todayKey]);
+
+  const persistedTodaySources = dailyEarningsHighWater?.days?.[todayKey] || {};
+  const dailySourceTotals = Object.fromEntries(
+    [...new Set([...Object.keys(persistedTodaySources), ...Object.keys(observedDailySourceTotals)])]
+      .map(name => [
+        name,
+        Math.max(
+          0,
+          Number(persistedTodaySources[name]) || 0,
+          Number(observedDailySourceTotals[name]) || 0
+        ),
+      ])
   );
   const selectedBreakdown = (() => {
     const selection = selectedEarningsPoint;
@@ -3984,14 +4027,22 @@ const importSaladPayload =
       .sort((a,b) => b.amount-a.amount);
     return { label, note, entries, total: entries.reduce((sum,item)=>sum+item.amount,0) };
   })();
-  // Keep Kryptex visible before its first recorded increase today. A zero
-  // display row does not add projected income or change the source ledger.
-  const todayBreakdown = Object.entries({ Kryptex: 0, ...dailySourceTotals })
-    .filter(([name,amount]) => Number.isFinite(Number(amount)) && (name === "Kryptex" || Number(amount) !== 0))
-    .map(([name,amount]) => ({ name, amount: Number(amount) }))
-    .sort((a,b) => b.amount - a.amount);
-  const rawTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
   const [serverDailyIncome, setServerDailyIncome] = useState(null);
+
+  // Pull the server's accepted high-water snapshot when this browser opens or
+  // changes days. This keeps multiple PCs converged on the same cumulative day.
+  useEffect(() => {
+    let active = true;
+    api.get(`/api/project-tracking/daily-earnings/${todayKey}`)
+      .then(result => {
+        if (active && result?.date === todayKey) setServerDailyIncome(result);
+      })
+      .catch(() => {
+        // Local high-water state remains authoritative until the server returns.
+      });
+    return () => { active = false; };
+  }, [todayKey]);
+
   const dailySourceSignature = JSON.stringify(dailySourceTotals);
   useEffect(() => {
     let active = true;
@@ -4003,24 +4054,65 @@ const importSaladPayload =
         setServerDailyIncome(result);
       }
     }).catch(() => {
-      // The original signed total stays visible during backend outages.
+      // Preserve the local cumulative high-water during backend outages.
     });
     return () => { active = false; };
   }, [dailySourceSignature, todayKey]);
 
-  // Prefer the server calculation only while it matches the latest live
-  // source readings. Never show an old server total during a new sync.
-  const serverSources = serverDailyIncome?.sources || {};
-  const serverSourcesMatch = serverDailyIncome?.date === todayKey &&
-    Object.keys(serverSources).length === Object.keys(dailySourceTotals).length &&
-    Object.entries(dailySourceTotals).every(([source, value]) =>
-      Number.isFinite(Number(serverSources[source])) &&
-      Math.abs(Number(serverSources[source]) - Number(value)) < 0.000001
-    );
-  const todayEarnings = serverSourcesMatch && Number.isFinite(Number(serverDailyIncome?.totalUsd))
-    ? Number(serverDailyIncome.totalUsd) : rawTodayEarnings;
-  // Persist the ACTUAL signed total for the daily graph, including
-  // negative values and recoveries; never derive graph shape from a max.
+  // Merge the server high-water back into this browser's durable state. This
+  // prevents PC 1 from showing less than PC 2 after either machine reports.
+  useEffect(() => {
+    if (serverDailyIncome?.date !== todayKey || !serverDailyIncome?.sources) return;
+    setDailyEarningsHighWater(previous => {
+      const priorSources = previous?.days?.[todayKey] || {};
+      const nextSources = { ...priorSources };
+      let changed = false;
+      Object.entries(serverDailyIncome.sources).forEach(([name, raw]) => {
+        const prior = Math.max(0, Number(nextSources[name]) || 0);
+        const incoming = Math.max(0, Number(raw) || 0);
+        const next = Math.max(prior, incoming);
+        if (Math.abs(next - prior) > 0.000000001) changed = true;
+        nextSources[name] = next;
+      });
+      if (!changed) return previous;
+      const next = {
+        ...previous,
+        days: { ...(previous?.days || {}), [todayKey]: nextSources },
+      };
+      saveObject(TODAY_EARNINGS_HIGH_WATER_KEY, next);
+      return next;
+    });
+  }, [serverDailyIncome, todayKey]);
+
+  const serverSources = serverDailyIncome?.date === todayKey
+    ? (serverDailyIncome?.sources || {}) : {};
+  const displayDailySourceTotals = Object.fromEntries(
+    [...new Set([...Object.keys(dailySourceTotals), ...Object.keys(serverSources)])]
+      .map(name => [
+        name,
+        Math.max(
+          0,
+          Number(dailySourceTotals[name]) || 0,
+          Number(serverSources[name]) || 0
+        ),
+      ])
+  );
+
+  // Keep Kryptex visible before its first recorded increase today. A zero
+  // display row does not add projected income or change the source ledger.
+  const todayBreakdown = Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
+    .filter(([name,amount]) => Number.isFinite(Number(amount)) && (name === "Kryptex" || Number(amount) !== 0))
+    .map(([name,amount]) => ({ name, amount: Number(amount) }))
+    .sort((a,b) => b.amount - a.amount);
+  const rawTodayEarnings = todayBreakdown.reduce((sum,item) => sum + item.amount,0);
+  const todayEarnings = Math.max(
+    0,
+    rawTodayEarnings,
+    serverDailyIncome?.date === todayKey && Number.isFinite(Number(serverDailyIncome?.totalUsd))
+      ? Number(serverDailyIncome.totalUsd) : 0
+  );
+
+  // Persist the cumulative high-water total for the intraday graph as well.
   const [dailyEarningsObservations, setDailyEarningsObservations] = useState(
     () => readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)
   );
@@ -4037,11 +4129,15 @@ const importSaladPayload =
     const stored = readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY);
     const currentPoints = Array.isArray(stored[currentDay]) ? stored[currentDay] : [];
     const previous = currentPoints[currentPoints.length - 1];
+    const priorMaximum = currentPoints.reduce(
+      (highest, point) => Math.max(highest, Number(point?.value) || 0), 0
+    );
+    const monotonicTodayEarnings = Math.max(0, priorMaximum, todayEarnings);
     // Only record a change, or a heartbeat every 15 minutes.
     if (previous &&
-        Math.abs(Number(previous.value) - todayEarnings) < 0.000001 &&
+        Math.abs(Number(previous.value) - monotonicTodayEarnings) < 0.000001 &&
         hour - Number(previous.x) < 0.25) return;
-    const nextPoints = [...currentPoints, { x: hour, value: Number(todayEarnings.toFixed(8)) }]
+    const nextPoints = [...currentPoints, { x: hour, value: Number(monotonicTodayEarnings.toFixed(8)) }]
       .filter(point => Number.isFinite(Number(point.x)) && Number.isFinite(Number(point.value)))
       .sort((a,b) => a.x - b.x)
       .slice(-1500);
