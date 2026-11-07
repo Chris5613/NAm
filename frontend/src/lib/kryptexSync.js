@@ -2,7 +2,7 @@ import { kryptexIncrease } from "./kryptexEarnings";
 import { projectsApi } from "./api";
 import { localStorage as storage } from "./localStorage";
 
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || "http://localhost:8001";
+const BACKEND_URL = import.meta.env.REACT_APP_BACKEND_URL || import.meta.env.VITE_BACKEND_URL || "http://localhost:8001";
 const DEFAULT_PROJECT_NAME = "Kryptex";
 const AMOUNT_EPSILON = 0.000001;
 const KRYPTEX_MACHINE_STALE_MS = 5 * 60 * 1000;
