@@ -1,5 +1,6 @@
 """Generic CRUD for record collections, plus the key/value settings store."""
 
+from datetime import datetime
 from typing import Any
 import hashlib
 from math import isfinite
