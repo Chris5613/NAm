@@ -123,6 +123,19 @@ def _record_skip(
         details.append(item)
 
 
+def _snapshot_timestamp(value: Any) -> str | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    if re.fullmatch(r"\d{4}-\d{2}", text):
+        text = f"{text}-01T12:00:00"
+    try:
+        datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return text
+
+
 def _linked_at(value: Any) -> datetime | None:
     if value in (None, ""):
         return None
@@ -330,7 +343,9 @@ def _run_import(
             if not isinstance(entry, dict):
                 _record_skip(skip_counts, skip_details, resource="net_worth_snapshots", reason="invalid_record", index=index)
                 continue
-            timestamp = str(entry.get("timestamp") or entry.get("monthKey") or "")
+            timestamp = _snapshot_timestamp(
+                entry.get("timestamp") or entry.get("monthKey")
+            )
             if not timestamp:
                 _record_skip(skip_counts, skip_details, resource="net_worth_snapshots", reason="invalid_record", index=index)
                 continue
