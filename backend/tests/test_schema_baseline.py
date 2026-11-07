@@ -21,7 +21,8 @@ class BaselineSchemaTests(unittest.TestCase):
     def test_current_revision_follows_baseline(self):
         config = Config(str(ROOT / "alembic.ini"))
         script = ScriptDirectory.from_config(config)
-        self.assertEqual(script.get_current_head(), "20261031_02")
+        self.assertEqual(script.get_current_head(), "20261107_03")
+        self.assertEqual(script.get_revision("20261107_03").down_revision, "20261031_02")
         self.assertEqual(script.get_revision("20261031_02").down_revision, "20261031_01")
 
     def test_upgrade_checks_existing_schema_without_creating_tables(self):
