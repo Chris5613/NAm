@@ -267,5 +267,6 @@ export function useSaladExtension() {
     saladSyncing,
     saladMessage,
     syncSaladBalance,
+    requestSaladLatest,
   };
 }
