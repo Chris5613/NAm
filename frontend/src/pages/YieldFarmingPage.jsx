@@ -4,6 +4,7 @@ import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
 import { buildSelectedEarningsBreakdown, buildTodayEarningsDisplay } from "../lib/earningsDisplay";
+import { reconcileLuloIncome } from "../lib/incomeHistory";
 import { buildWeeklyEarningsChart } from "../lib/weeklyEarningsChart";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
@@ -1318,6 +1319,21 @@ export default function YieldFarmingPage() {
   const sourceTotalsForDay = key =>
     buildSourceTotalsForDay(key, sourceTotalsContext);
 
+  // Keep the yearly chart, its month breakdown popup, and the history table
+  // on the same Lulo month totals. Monthly snapshots can lag or omit Lulo
+  // while confirmed dated Lulo performance rows are already available.
+  const chartProjectIncome = useMemo(
+    () => reconcileLuloIncome(
+      projectIncome,
+      monthlyBackfills,
+      {},
+      todayKey.slice(0, 7),
+      luloProjects,
+      todayKey
+    ),
+    [projectIncome, monthlyBackfills, luloProjects, todayKey]
+  );
+
   // Today's Earnings is a cumulative earned-income counter, not mark-to-market
   // P/L. Persist per-source high-water values in a dedicated hook.
   const observedDailySourceTotals = sourceTotalsForDay(todayKey);
@@ -1329,7 +1345,7 @@ export default function YieldFarmingPage() {
   const selectedBreakdown = buildSelectedEarningsBreakdown({
     selection: selectedEarningsPoint,
     earningsChartRange,
-    projectIncome,
+    projectIncome: chartProjectIncome,
     stockPayouts,
     todayKey,
     luloUtcDay: currentLuloUtc.utcDay,
@@ -1398,7 +1414,7 @@ export default function YieldFarmingPage() {
   const availableEarningsYears = [...new Set([
     "2025",
     todayKey.slice(0, 4),
-    ...projectIncome
+    ...chartProjectIncome
       .map(month => String(month?.monthKey || "").slice(0, 4))
       .filter(year => /^\d{4}$/.test(year)),
     ...Object.values(stockPayouts || {})
@@ -1407,7 +1423,7 @@ export default function YieldFarmingPage() {
   ])].sort((a, b) => b.localeCompare(a));
 
   const yearlyChartData = buildYearlyEarningsChart(
-    projectIncome,
+    chartProjectIncome,
     stockPayouts,
     earningsChartYear,
     todayKey
@@ -2586,7 +2602,7 @@ if (
             <div className="min-h-0 overflow-y-auto p-3 sm:p-4">
       <ProjectIncomeSection
         months={
-          projectIncome
+          chartProjectIncome
         }
         expenses={
           projectExpenses
