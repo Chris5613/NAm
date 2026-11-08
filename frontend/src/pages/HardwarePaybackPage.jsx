@@ -7,7 +7,7 @@ import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMont
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, getKryptexOpeningBalanceUsd, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject, saveKryptexTracker } from "@/lib/yieldFarmingAccounting";
+import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, getKryptexOpeningBalanceUsd, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject, saveKryptexTracker } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
 const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
@@ -221,13 +221,14 @@ export default function HardwarePaybackPage() {
     refresh(); const timer = setInterval(refresh, 90000); return () => { active = false; clearInterval(timer); };
   }, []);
   const currentMonth = useMemo(getCurrentMonthKey, [clock]);
+  const currentDay = useMemo(getTodayKey, [clock]);
   const trackers = useMemo(() => ({ salad: history.salad, rollercoin: history.rollercoin, unetwork: history.unetwork, kryptex: history.kryptex }), [history.salad, history.rollercoin, history.unetwork, history.kryptex]);
   const localMonths = useMemo(() => buildProjectIncome(history.luloProjects, history.loopscale, history.salad, history.backfills, history.rollercoin, history.unetwork, history.kryptex), [history]);
   const liveMonths = useBackendMonthlyIncome(trackers, localMonths);
   const months = useMemo(() => {
-    const projects = reconcileLuloIncome(getEffectiveProjectIncome(liveMonths, history.snapshots), history.backfills, history.luloBackfills, currentMonth);
+    const projects = reconcileLuloIncome(getEffectiveProjectIncome(liveMonths, history.snapshots), history.backfills, history.luloBackfills, currentMonth, history.luloProjects, currentDay);
     return mergeManualIncome(buildIncomeHistory(projects, history.payouts, currentMonth, legacyProjectIncome(history.legacyProjects)), history.manualIncome?.monthly || {}, currentMonth);
-  }, [liveMonths, history, currentMonth]);
+  }, [liveMonths, history, currentMonth, currentDay]);
   useEffect(() => {
     if (!historyReady) return;
     const legacyKryptex = devices.filter(device =>
