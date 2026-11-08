@@ -58,3 +58,28 @@ test("a locked total with unlabelled income does not count Lulo a second time", 
     { platform: "Kryptex", amount: 10 }, { platform: "Lulo", amount: 9 },
   ]);
 });
+
+
+test("uses completed Lulo daily rows when the current monthly ledger has not caught up", () => {
+  const months = reconcileLuloIncome([
+    { monthKey: "2026-11", total: 29.98, platforms: [
+      { platform: "Kryptex", amount: 14.63 },
+      { platform: "Loopscale", amount: 6.39 },
+      { platform: "Unetwork", amount: 4.79 },
+      { platform: "Salad", amount: 4.17 },
+    ] },
+  ], {}, {}, "2026-11", [{
+    id: "lulo-a",
+    lulo_daily_performance: [
+      { date: "2026-11-01", amount: 1.5 },
+      { date: "2026-11-02", amount: 2 },
+      { date: "2026-11-07", amount: 2.16 },
+      { date: "2026-11-07", amount: 2.1 },
+      { date: "2026-11-08", amount: 1.25 },
+    ],
+  }], "2026-11-07");
+
+  expect(months[0].platforms.find(row => row.platform === "Lulo").amount).toBeCloseTo(5.66, 6);
+  expect(months[0].total).toBeCloseTo(35.64, 6);
+  expect(buildIncomeHistory(months, {}, "2026-11")[0].sources.Lulo).toBeCloseTo(5.66, 6);
+});
