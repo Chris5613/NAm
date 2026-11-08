@@ -49,7 +49,7 @@ export function shiftMonth(monthKey, offset) {
 // has been locked, or when the Passive Income page has not populated its
 // quick project cache yet. Treat local and backend month totals as alternate
 // records of the same interest, never as amounts to add together.
-export function reconcileLuloIncome(months, localBackfills, backendBackfills, currentMonth) {
+export function reconcileLuloIncome(months, localBackfills, backendBackfills, currentMonth, luloProjects = [], currentDay = null) {
   const projects = new Map();
   for (const source of [localBackfills, backendBackfills]) {
     for (const [projectId, records] of Object.entries(source || {})) {
@@ -62,6 +62,30 @@ export function reconcileLuloIncome(months, localBackfills, backendBackfills, cu
         project[month] = Math.max(project[month] || 0, amount);
       }
       projects.set(projectId, project);
+    }
+  }
+
+  // The Passive Income chart can have confirmed Lulo UTC daily buckets before
+  // the monthly backfill ledger catches up. For the current Pacific month,
+  // treat those completed dated rows as another record of the same earnings.
+  // Compare per project and take the higher value so the later monthly ledger
+  // replaces the fallback instead of being added to it.
+  for (const projectRow of luloProjects || []) {
+    const projectId = String(projectRow?.id || "");
+    if (!projectId) continue;
+    const records = projects.get(projectId) || {};
+    const dailyByDate = new Map();
+    for (const row of projectRow?.lulo_daily_performance || []) {
+      const day = String(row?.date || "");
+      const amount = Number(row?.amount);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day.slice(0, 7) !== currentMonth ||
+        (currentDay && day > currentDay) || !Number.isFinite(amount) || amount < 0) continue;
+      dailyByDate.set(day, Math.max(dailyByDate.get(day) || 0, amount));
+    }
+    const dailyMonthTotal = [...dailyByDate.values()].reduce((sum, amount) => sum + amount, 0);
+    if (dailyMonthTotal > 0) {
+      records[currentMonth] = Math.max(Number(records[currentMonth]) || 0, dailyMonthTotal);
+      projects.set(projectId, records);
     }
   }
 
