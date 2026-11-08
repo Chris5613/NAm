@@ -9,7 +9,7 @@ import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMonth } from "@/lib/incomeHistory";
 import {
-  buildProjectIncome, formatCurrency, getCurrentMonthKey, getEffectiveProjectIncome,
+  buildProjectIncome, formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome,
   loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots,
   loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY,
   readObject,
@@ -90,6 +90,7 @@ export default function IncomeHistoryPage() {
   }, []);
 
   const currentMonth = useMemo(getCurrentMonthKey, [clock]);
+  const currentDay = useMemo(getTodayKey, [clock]);
   const trackers = useMemo(() => ({
     salad: history.salad, rollercoin: history.rollercoin,
     unetwork: history.unetwork, kryptex: history.kryptex,
@@ -101,8 +102,8 @@ export default function IncomeHistoryPage() {
   const liveMonths = useBackendMonthlyIncome(trackers, localMonths);
   const projectMonths = useMemo(() => reconcileLuloIncome(
     getEffectiveProjectIncome(liveMonths, history.snapshots),
-    history.backfills, history.luloBackfills, currentMonth,
-  ), [liveMonths, history.snapshots, history.backfills, history.luloBackfills, currentMonth]);
+    history.backfills, history.luloBackfills, currentMonth, history.luloProjects, currentDay,
+  ), [liveMonths, history.snapshots, history.backfills, history.luloBackfills, history.luloProjects, currentMonth, currentDay]);
   const legacy = useMemo(() => legacyProjectIncome(history.legacyProjects), [history.legacyProjects]);
   const manualMonths = history.manualIncome?.monthly;
   const months = useMemo(() => {
