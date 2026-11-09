@@ -10,6 +10,7 @@ import { settingsApi, spendingApi } from "@/lib/apiClient";
 import { api } from "@/lib/apiClient";
 import { assetsApi } from "@/lib/api";
 import SpendingTransactionRow from "@/components/SpendingTransactionRow";
+import usePassiveIncomeHistory from "@/hooks/usePassiveIncomeHistory";
 import {
   CATEGORIES,
   CATEGORY_COLORS,
@@ -73,6 +74,7 @@ export default function SpendingPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [isLinking, setIsLinking] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const passiveIncomeMonths = usePassiveIncomeHistory();
   const [range, setRange] = useState("month");
   const [selectedMonth, setSelectedMonth] = useState(() => monthKeyOf());
   const [transaction, setTransaction] = useState(emptyTransaction);
@@ -110,7 +112,24 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
   );
 
   const totalSpent = useMemo(() => rangeTransactions.filter(isExpense).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [rangeTransactions]);
-  const totalIncome = useMemo(() => rangeTransactions.filter(isIncome).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [rangeTransactions]);
+  const bankIncome = useMemo(() => rangeTransactions.filter(isIncome).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [rangeTransactions]);
+  const passiveIncome = useMemo(() => {
+    if (range === "ytd") {
+      return passiveIncomeMonths
+        .filter((month) => month.monthKey?.startsWith(selectedYear))
+        .reduce((sum, month) => sum + Math.max(0, Number(month.total) || 0), 0);
+    }
+
+    return Math.max(
+      0,
+      Number(
+        passiveIncomeMonths.find(
+          (month) => month.monthKey === selectedMonth
+        )?.total
+      ) || 0
+    );
+  }, [passiveIncomeMonths, range, selectedMonth, selectedYear]);
+  const totalIncome = bankIncome + passiveIncome;
   const netCashFlow = totalIncome - totalSpent;
   const yearTotal = useMemo(() => yearTransactions.filter(isExpense).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [yearTransactions]);
 
@@ -656,7 +675,7 @@ const unhideTransaction = async (id) => {
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Reports</h2><span className="text-[11px] text-muted-foreground">{selectedYear} spending by month</span>
             </div>
             <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-4">
-              <div><p className="text-[10px] text-muted-foreground">Income</p><p className="mt-1 text-lg font-semibold tabular-nums text-emerald-400">{money(totalIncome)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Income</p><p className="mt-1 text-lg font-semibold tabular-nums text-emerald-400">{money(totalIncome)}</p>{passiveIncome > 0 && <p className="mt-0.5 text-[9px] text-muted-foreground">{money(passiveIncome)} passive income included</p>}</div>
               <div><p className="text-[10px] text-muted-foreground">Expenses</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(totalSpent)}</p></div>
               <div><p className="text-[10px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-lg font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(netCashFlow)}</p></div>
               <div><p className="text-[10px] text-muted-foreground">Yearly spend</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(yearTotal)}</p></div>
