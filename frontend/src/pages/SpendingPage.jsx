@@ -675,7 +675,7 @@ const unhideTransaction = async (id) => {
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Reports</h2><span className="text-[11px] text-muted-foreground">{selectedYear} spending by month</span>
             </div>
             <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-4">
-              <div><p className="text-[10px] text-muted-foreground">Income</p><p className="mt-1 text-lg font-semibold tabular-nums text-emerald-400">{money(totalIncome)}</p>{passiveIncome > 0 && <p className="mt-0.5 text-[9px] text-muted-foreground">{money(passiveIncome)} passive income included</p>}</div>
+              <div><p className="text-[10px] text-muted-foreground">Income</p><p className="mt-1 text-lg font-semibold tabular-nums text-emerald-400">{money(totalIncome)}</p></div>
               <div><p className="text-[10px] text-muted-foreground">Expenses</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(totalSpent)}</p></div>
               <div><p className="text-[10px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-lg font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(netCashFlow)}</p></div>
               <div><p className="text-[10px] text-muted-foreground">Yearly spend</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(yearTotal)}</p></div>
