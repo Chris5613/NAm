@@ -312,6 +312,9 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
       const connections = await api.get("/api/simplefin/connections");
       const selected = itemId ? connections.filter((connection) => connection.id === itemId) : connections;
       if (!selected.length) throw new Error("No SimpleFIN connections found.");
+      // SimpleFIN counts provider requests toward its daily allowance even
+      // when a request fails, so reserve this hour immediately before fetch.
+      reserveSimplefinHour();
       let accountCount = 0;
       let receivedCount = 0;
       let incoming = [];
@@ -344,8 +347,15 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
       try {
         const connections = await api.get("/api/simplefin/connections");
         if (!mounted || !Array.isArray(connections) || connections.length === 0) return;
+
+        // Keep Spending fresh automatically, but never request SimpleFIN
+        // more than once in the same local hour from this browser.
+        if (!simplefinHourLock().isLocked) {
+          await sync();
+        }
       } catch {
-        // No SimpleFIN connection configured; skip the background sync.
+        // No SimpleFIN connection configured or background sync failed.
+        // The page still shows the last successfully saved transactions.
       }
     };
 
@@ -358,7 +368,7 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
     return () => {
       mounted = false;
     };
-  }, [loadAll]);
+  }, [loadAll, sync]);
 
   const addCategory = (value) => {
     const category = value.trim().replace(/\s+/g, " ");
