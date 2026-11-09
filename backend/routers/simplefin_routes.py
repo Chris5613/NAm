@@ -7,7 +7,7 @@ import json
 import os
 import urllib.error
 import urllib.request
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
@@ -129,6 +129,18 @@ def normalize_access_url(access_url: str) -> tuple[str, str | None]:
     )
 
     query_params.setdefault("version", "2")
+
+    # SimpleFIN limits transaction windows to 90 days and recommends
+    # overlapping recent fetches so newly-posted or revised transactions
+    # are not missed. Always request the most recent 89 days.
+    query_params["start-date"] = str(
+        int(
+            (
+                datetime.now(timezone.utc)
+                - timedelta(days=89)
+            ).timestamp()
+        )
+    )
 
     # SimpleFIN only returns pending transactions when requested.
     query_params["pending"] = "1"
@@ -1081,15 +1093,16 @@ def save_simplefin_payload(
 
             posted = (
                 normalize_transaction_date(
-                    transaction.get(
-                        "posted"
-                    )
-                    or transaction.get(
-                        "date"
-                    )
-                    or transaction.get(
-                        "transacted"
-                    )
+                    transaction.get("posted")
+                )
+                or normalize_transaction_date(
+                    transaction.get("date")
+                )
+                or normalize_transaction_date(
+                    transaction.get("transacted_at")
+                )
+                or normalize_transaction_date(
+                    transaction.get("transacted")
                 )
             )
 
