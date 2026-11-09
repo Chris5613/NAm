@@ -3,6 +3,48 @@ import { withUnetworkDatedEarnings } from "./unetworkDailyIncome";
 import { luloSourcesForChartDay } from "./luloUtcDaily";
 import { stockPayoutTotal } from "./stockDividendPayouts";
 
+
+function pacificDayKey(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+function saladObservedTodayUsd(tracker, todayKey) {
+  const dated = Number(tracker?.daily?.[todayKey]);
+  if (Number.isFinite(dated) && dated > 0) return dated;
+
+  const snapshots = (Array.isArray(tracker?.earningSnapshots)
+    ? tracker.earningSnapshots
+    : [])
+    .map(entry => ({
+      timestamp: Date.parse(entry?.syncedAt || ""),
+      day: pacificDayKey(entry?.syncedAt),
+      lifetimeBalance: Number(entry?.lifetimeBalance),
+    }))
+    .filter(entry =>
+      Number.isFinite(entry.timestamp) &&
+      Number.isFinite(entry.lifetimeBalance) &&
+      entry.day === todayKey
+    )
+    .sort((a, b) => a.timestamp - b.timestamp);
+
+  if (snapshots.length < 2) return 0;
+
+  return Math.max(
+    0,
+    Number((
+      snapshots[snapshots.length - 1].lifetimeBalance -
+      snapshots[0].lifetimeBalance
+    ).toFixed(8))
+  );
+}
+
 /**
  * Build the earnings source map for a specific calendar day.
  * This is pure calculation logic: it never writes storage or mutates trackers.
@@ -40,7 +82,7 @@ export function buildSourceTotalsForDay(key, context) {
     const allocation = unetworkTracker?.daily?.[key];
     const datedAmounts = {
       Kryptex: Number(kryptexTracker?.kryptexMiningDaily?.[key]) || 0,
-      Salad: saladTracker?.daily?.[key],
+      Salad: saladObservedTodayUsd(saladTracker, key),
       RollerCoin: rollerCoinTracker?.daily?.[key]?.usd
         ?? earningsLedger.days?.[key]?.sources?.RollerCoin
         ?? (Number(rollerCoinTracker?.walletDaily?.[key]?.usd) > 0
