@@ -31,14 +31,28 @@ export const timeLabel = (date) =>
 export const simplefinHourLock = (date = new Date()) => {
   const nextHour = nextHourOf(date);
   const currentHour = hourKeyOf(date);
+  let reservedHour = null;
+
+  try {
+    reservedHour = window.localStorage.getItem(SIMPLEFIN_REQUEST_HOUR_KEY);
+  } catch {
+    // Storage can be unavailable in private/restricted browser contexts.
+  }
+
   return {
-    isLocked: false,
+    isLocked: reservedHour === currentHour,
     currentHour,
     nextHourLabel: timeLabel(nextHour),
   };
 };
 
-export const reserveSimplefinHour = () => undefined;
+export const reserveSimplefinHour = (date = new Date()) => {
+  try {
+    window.localStorage.setItem(SIMPLEFIN_REQUEST_HOUR_KEY, hourKeyOf(date));
+  } catch {
+    // A failed storage write should not prevent a user-initiated sync.
+  }
+};
 
 export const money = (amount, fallback = "$0") =>
   amount === null || amount === undefined || Number.isNaN(Number(amount))
