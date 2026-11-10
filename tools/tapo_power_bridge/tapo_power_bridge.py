@@ -1,6 +1,7 @@
 """Read Tapo P115 wall power locally and publish it to NAm."""
 
 import asyncio
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 import sys
@@ -8,6 +9,8 @@ import time
 
 import requests
 from kasa import Discover
+from tapo import ApiClient
+from tapo.requests import EnergyDataInterval
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
@@ -83,6 +86,40 @@ async def collect(config):
     return devices
 
 
+async def collect_hourly_history(config, lookback_days=7):
+    """Read recent hourly Wh history from each P115 and combine by UTC hour."""
+    client = ApiClient(config["tapo_username"], config["tapo_password"])
+    now = datetime.now(timezone.utc)
+    lookback_days = max(1, min(int(lookback_days), 7))
+    start_date = (now - timedelta(days=lookback_days)).date()
+    end_date = now.date()
+    combined = {}
+
+    for plug in config["plugs"]:
+        try:
+            device = await client.p110(plug["host"])
+            timezone_result = await device.get_timezone()
+            history = await device.get_energy_data(
+                EnergyDataInterval.Hourly,
+                start_date,
+                end_date,
+                timezone=timezone_result.timezone,
+            )
+            for entry in history.entries:
+                if entry.energy is None:
+                    continue
+                start_at = entry.start_date_time.astimezone(timezone.utc)
+                key = start_at.replace(minute=0, second=0, microsecond=0).isoformat()
+                combined[key] = combined.get(key, 0.0) + max(0.0, float(entry.energy)) / 1000.0
+        except Exception as error:
+            print(f"[WARN] {plug['label']} history: {error}", flush=True)
+
+    return [
+        {"startAt": start_at, "kwh": round(kwh, 6)}
+        for start_at, kwh in sorted(combined.items())
+    ]
+
+
 def publish(config, devices):
     if not devices:
         raise RuntimeError("No Tapo readings were available.")
@@ -98,18 +135,55 @@ def publish(config, devices):
     print(f"[OK] {body.get('totalWatts', 0):.0f} W total -> NAm", flush=True)
 
 
+def publish_history(config, intervals):
+    if not intervals:
+        print("[INFO] No P115 history was available to backfill.", flush=True)
+        return
+
+    url = config["nam_url"].rstrip("/") + "/api/power/backfill"
+    response = requests.post(
+        url,
+        json={"intervals": intervals},
+        headers={"Authorization": f"Bearer {config['token']}"},
+        timeout=30,
+    )
+    response.raise_for_status()
+    body = response.json()
+    print(
+        f"[HISTORY] Imported {body.get('imported', 0)} hourly intervals "
+        f"({body.get('importedKwh', 0):.2f} kWh) -> NAm",
+        flush=True,
+    )
+
+
 def main():
     config = load_config()
     interval = max(5, int(config.get("interval_seconds", 15)))
+    history_pending = True
     print("NAm Tapo P115 bridge started. Press Ctrl+C to stop.", flush=True)
+
     while True:
         try:
             devices = asyncio.run(collect(config))
             publish(config, devices)
+
+            if history_pending:
+                history_pending = False
+                try:
+                    intervals = asyncio.run(
+                        collect_hourly_history(
+                            config,
+                            config.get("history_lookback_days", 7),
+                        )
+                    )
+                    publish_history(config, intervals)
+                except Exception as history_error:
+                    print(f"[WARN] P115 history import: {history_error}", flush=True)
         except KeyboardInterrupt:
             return
         except Exception as error:
             print(f"[ERROR] {error}", file=sys.stderr, flush=True)
+
         time.sleep(interval)
 
 
