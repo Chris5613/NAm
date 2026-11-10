@@ -384,3 +384,6 @@ credentials.json
 # Plaid local secrets
 backend/.plaid_key
 backend/.plaid_items.json
+
+# Local Tapo bridge credentials
+tools/tapo_power_bridge/config.json
