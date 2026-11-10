@@ -295,7 +295,6 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
         : incomingBalance;
 
     const payload = {
-      id: `simplefin-asset-${account.providerAccountId}`,
       name: account.name,
       category: isDebt ? "debts" : "cash",
       symbol: null,
