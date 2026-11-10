@@ -22,6 +22,9 @@ SERVER_OWNED_SETTING_KEYS = frozenset({
     # Validated project feed and sync health belong to project_tracking.
     "yield_project_latest_balance_feed_v1",
     "yield_project_sync_alerts_v1",
+    # Smart-plug bridge secrets and telemetry are only written by /api/power.
+    "power_ingest_token_v1",
+    "power_telemetry_v1",
 })
 
 SERVER_OWNED_SETTING_PREFIXES = (
