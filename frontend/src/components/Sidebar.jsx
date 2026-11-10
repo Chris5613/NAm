@@ -4,10 +4,10 @@ import { authApi } from "@/lib/apiClient";
 import { NavLink } from "react-router-dom";
 import ImportDataDialog from "@/components/ImportDataDialog";
 import { useAuth } from "@/lib/AuthContext";
-import { Home, CreditCard, CalendarDays, ChartNoAxesCombined, Target, Download, LogOut, KeyRound, Cpu, Menu, X } from "lucide-react";
+import { Home, CreditCard, CalendarDays, ChartNoAxesCombined, Target, Download, LogOut, KeyRound, Cpu, Zap, Menu, X } from "lucide-react";
 
 const mainLinks = [{ to: "/", label: "Home", Icon: Home }, { to: "/spending", label: "Spending", Icon: CreditCard }];
-const financeLinks = [{ to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/income-history", label: "Income History", Icon: ChartNoAxesCombined }, { to: "/project-break-even", label: "Project Break-Even", Icon: Target }, { to: "/hardware-payback", label: "Hardware Payback", Icon: Cpu }];
+const financeLinks = [{ to: "/yield-farming", label: "Passive Income", Icon: CalendarDays }, { to: "/income-history", label: "Income History", Icon: ChartNoAxesCombined }, { to: "/project-break-even", label: "Project Break-Even", Icon: Target }, { to: "/hardware-payback", label: "Hardware Payback", Icon: Cpu }, { to: "/mining-power", label: "Mining Power", Icon: Zap }];
 
 export default function Sidebar() {
   const [importOpen, setImportOpen] = useState(false);
