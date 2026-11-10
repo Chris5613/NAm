@@ -14,6 +14,7 @@ import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import IncomeHistoryPage from "@/pages/IncomeHistoryPage";
 import ProjectBreakEvenPage from "@/pages/ProjectBreakEvenPage";
 import HardwarePaybackPage from "@/pages/HardwarePaybackPage";
+import MiningPowerPage from "@/pages/MiningPowerPage";
 import { Toaster } from "@/components/ui/sonner";
 import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
 import SpendingPage from "@/pages/SpendingPage";
@@ -107,6 +108,7 @@ function App() {
               <Route path="/income-history" element={<IncomeHistoryPage />} />
               <Route path="/project-break-even" element={<ProjectBreakEvenPage />} />
               <Route path="/hardware-payback" element={<HardwarePaybackPage />} />
+              <Route path="/mining-power" element={<MiningPowerPage />} />
 
               <Route
   path="/doordash"
