@@ -163,8 +163,10 @@ def publish_history(config, intervals):
     response.raise_for_status()
     body = response.json()
     print(
-        f"[HISTORY] Imported {body.get('imported', 0)} hourly intervals "
-        f"({body.get('importedKwh', 0):.2f} kWh) -> NAm",
+        f"[HISTORY] Combined: {body.get('imported', 0)} new hours "
+        f"({body.get('importedKwh', 0):.2f} kWh); "
+        f"per-GPU: {body.get('deviceImported', 0)} entries "
+        f"({body.get('deviceImportedKwh', 0):.2f} kWh) -> NAm",
         flush=True,
     )
 
