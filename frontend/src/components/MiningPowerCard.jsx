@@ -97,10 +97,8 @@ function usageCost(usage, settings) {
   );
 }
 
-function DeviceCard({ device, rate, monthlyUsage, settings }) {
+function DeviceCard({ device, monthlyUsage, settings }) {
   const watts = Number(device?.watts) || 0;
-  const dailyKwh = watts * 24 / 1000;
-  const dailyCost = dailyKwh * rate;
   const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
   const monthlyCost = usageCost(monthlyUsage, settings);
   const meta = DEVICE_META[device?.id] || null;
@@ -148,34 +146,20 @@ function DeviceCard({ device, rate, monthlyUsage, settings }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-y-4 border-t border-border/35 pt-4 sm:grid-cols-4 sm:divide-x sm:divide-border/40">
-        <div className="sm:pr-3">
-          <div className="flex items-center gap-2 text-cyan-300">
-            <Zap className="h-4 w-4" />
-            <span className="text-sm font-semibold tabular-nums">{dailyKwh.toFixed(2)} kWh</span>
-          </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">24h usage</p>
-        </div>
-        <div className="sm:px-3">
-          <div className="flex items-center gap-2 text-amber-400">
-            <Coins className="h-4 w-4" />
-            <span className="text-sm font-semibold tabular-nums">{money(dailyCost)}</span>
-          </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">24h cost</p>
-        </div>
-        <div className="sm:px-3">
+      <div className="grid grid-cols-2 divide-x divide-border/40 border-t border-border/35 pt-4">
+        <div className="pr-4">
           <div className="flex items-center gap-2 text-cyan-300">
             <CalendarDays className="h-4 w-4" />
             <span className="text-sm font-semibold tabular-nums">{monthlyKwh.toFixed(2)} kWh</span>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">This month</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">Total kWh this month</p>
         </div>
-        <div className="sm:pl-3">
+        <div className="pl-4">
           <div className="flex items-center gap-2 text-amber-400">
             <Coins className="h-4 w-4" />
             <span className="text-sm font-semibold tabular-nums">{money(monthlyCost)}</span>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">Month cost</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">Total monthly cost</p>
         </div>
       </div>
     </section>
@@ -356,7 +340,6 @@ export default function MiningPowerCard() {
           <DeviceCard
             key={device.id}
             device={device}
-            rate={rateInfo.rate}
             monthlyUsage={monthlyDevices[device.id]}
             settings={settings}
           />
