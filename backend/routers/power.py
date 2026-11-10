@@ -331,6 +331,8 @@ async def backfill_power_history(
 
     imported = 0
     imported_kwh = 0.0
+    device_imported = 0
+    device_imported_kwh = 0.0
 
     for raw in raw_intervals:
         if not isinstance(raw, dict):
@@ -349,10 +351,20 @@ async def backfill_power_history(
             continue
 
         interval_end = start_at + timedelta(hours=1)
-        if cutoff is not None and interval_end > cutoff:
+        normalized_start = start_at.replace(minute=0, second=0, microsecond=0)
+        aggregate_key = "tapo-hour:" + normalized_start.isoformat()
+        aggregate_already_imported = aggregate_key in seen
+
+        # If this combined Tapo hour was already accepted in an earlier backfill,
+        # allow a later bridge version to attach per-device history to it even
+        # though the month's startedAt may now point back to that imported history.
+        if (
+            cutoff is not None
+            and interval_end > cutoff
+            and not aggregate_already_imported
+        ):
             continue
 
-        normalized_start = start_at.replace(minute=0, second=0, microsecond=0)
         midpoint = normalized_start + timedelta(minutes=30)
         key = _month_key(midpoint)
         day = _day_key(midpoint)
@@ -363,8 +375,7 @@ async def backfill_power_history(
         days = dict(month.get("days") or {})
         month_devices = dict(month.get("devices") or {})
 
-        aggregate_key = "tapo-hour:" + normalized_start.isoformat()
-        if aggregate_key not in seen:
+        if not aggregate_already_imported:
             tiers.setdefault("offPeak", 0.0)
             tiers.setdefault("midPeak", 0.0)
             tiers.setdefault("peak", 0.0)
@@ -436,6 +447,8 @@ async def backfill_power_history(
                 month_devices[device_id] = device_usage
                 seen.add(device_key)
                 seen_keys.append(device_key)
+                device_imported += 1
+                device_imported_kwh += device_kwh
 
         started_at = month.get("startedAt")
         if not started_at:
@@ -485,5 +498,7 @@ async def backfill_power_history(
         "ok": True,
         "imported": imported,
         "importedKwh": round(imported_kwh, 6),
+        "deviceImported": device_imported,
+        "deviceImportedKwh": round(device_imported_kwh, 6),
         "cutoff": cutoff.isoformat() if cutoff else None,
     }
