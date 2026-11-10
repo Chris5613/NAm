@@ -16,3 +16,12 @@ This helper runs on one Windows PC on the same LAN as both Tapo P115 plugs. It r
 Default NAm backend: `https://nam1-dmte.onrender.com`
 
 The bridge defaults to a 15-second polling interval. `config.json` is intentionally ignored by Git. The Tapo password and NAm bridge token never need to be committed or sent to the frontend.
+
+## Run automatically with Windows
+
+After the bridge works with `run.bat`, run `install_autostart.bat` once.
+It creates a per-user Windows Scheduled Task named `NAm Tapo Power Bridge`, starts it immediately, and runs the bridge hidden at each Windows sign-in.
+
+Background output is saved to `bridge.log` in this folder.
+
+To remove the automatic startup task, run `remove_autostart.bat`.
