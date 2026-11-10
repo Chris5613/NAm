@@ -26,7 +26,7 @@ PACIFIC = ZoneInfo("America/Los_Angeles")
 MAX_INTEGRATION_GAP_SECONDS = 300
 USAGE_MONTH_LIMIT = 13
 MAX_BACKFILL_INTERVALS = 24 * 8
-BACKFILL_KEY_LIMIT = 24 * 31
+BACKFILL_KEY_LIMIT = 24 * 31 * (MAX_DEVICES + 1)
 
 
 def _now_iso() -> str:
@@ -209,6 +209,7 @@ async def ingest_power(
             month = dict(months.get(key) or {})
             tiers = dict(month.get("tiers") or {})
             days = dict(month.get("days") or {})
+            month_devices = dict(month.get("devices") or {})
 
             if not month.get("startedAt"):
                 month["startedAt"] = previous_time.astimezone(timezone.utc).isoformat()
@@ -226,6 +227,43 @@ async def ingest_power(
             day_entry["trackedSeconds"] = float(day_entry.get("trackedSeconds") or 0) + elapsed_seconds
             days[day] = day_entry
 
+            previous_devices = {
+                str(item.get("id")): item
+                for item in (previous_latest.get("devices") or [])
+                if isinstance(item, dict) and item.get("id")
+            }
+            for device in devices:
+                device_id = str(device["id"])
+                previous_device = previous_devices.get(device_id) or {}
+                previous_device_watts = float(previous_device.get("watts") or device["watts"])
+                average_device_watts = max(
+                    0.0,
+                    (previous_device_watts + float(device["watts"])) / 2,
+                )
+                device_kwh = average_device_watts * elapsed_seconds / 3_600_000
+
+                device_usage = dict(month_devices.get(device_id) or {})
+                device_tiers = dict(device_usage.get("tiers") or {})
+                device_tiers.setdefault("offPeak", 0.0)
+                device_tiers.setdefault("midPeak", 0.0)
+                device_tiers.setdefault("peak", 0.0)
+                device_tiers[tier] = float(device_tiers.get(tier) or 0) + device_kwh
+
+                device_usage.update({
+                    "id": device_id,
+                    "label": device.get("label") or device_id,
+                    "kwh": round(float(device_usage.get("kwh") or 0) + device_kwh, 6),
+                    "trackedSeconds": round(
+                        float(device_usage.get("trackedSeconds") or 0) + elapsed_seconds,
+                        2,
+                    ),
+                    "tiers": {
+                        name: round(float(value or 0), 6)
+                        for name, value in device_tiers.items()
+                    },
+                })
+                month_devices[device_id] = device_usage
+
             month.update({
                 "month": key,
                 "lastUpdatedAt": observed_at,
@@ -233,6 +271,7 @@ async def ingest_power(
                 "trackedSeconds": round(tracked_seconds, 2),
                 "tiers": {name: round(float(value or 0), 6) for name, value in tiers.items()},
                 "days": days,
+                "devices": month_devices,
             })
             months[key] = month
 
@@ -314,10 +353,6 @@ async def backfill_power_history(
             continue
 
         normalized_start = start_at.replace(minute=0, second=0, microsecond=0)
-        import_key = "tapo-hour:" + normalized_start.isoformat()
-        if import_key in seen:
-            continue
-
         midpoint = normalized_start + timedelta(minutes=30)
         key = _month_key(midpoint)
         day = _day_key(midpoint)
@@ -326,16 +361,81 @@ async def backfill_power_history(
         month = dict(months.get(key) or {})
         tiers = dict(month.get("tiers") or {})
         days = dict(month.get("days") or {})
+        month_devices = dict(month.get("devices") or {})
 
-        tiers.setdefault("offPeak", 0.0)
-        tiers.setdefault("midPeak", 0.0)
-        tiers.setdefault("peak", 0.0)
-        tiers[tier] = float(tiers.get(tier) or 0) + kwh
+        aggregate_key = "tapo-hour:" + normalized_start.isoformat()
+        if aggregate_key not in seen:
+            tiers.setdefault("offPeak", 0.0)
+            tiers.setdefault("midPeak", 0.0)
+            tiers.setdefault("peak", 0.0)
+            tiers[tier] = float(tiers.get(tier) or 0) + kwh
 
-        day_entry = dict(days.get(day) or {})
-        day_entry["kwh"] = float(day_entry.get("kwh") or 0) + kwh
-        day_entry["trackedSeconds"] = float(day_entry.get("trackedSeconds") or 0) + 3600
-        days[day] = day_entry
+            day_entry = dict(days.get(day) or {})
+            day_entry["kwh"] = float(day_entry.get("kwh") or 0) + kwh
+            day_entry["trackedSeconds"] = float(day_entry.get("trackedSeconds") or 0) + 3600
+            days[day] = day_entry
+
+            month["totalKwh"] = round(float(month.get("totalKwh") or 0) + kwh, 6)
+            month["trackedSeconds"] = round(
+                float(month.get("trackedSeconds") or 0) + 3600,
+                2,
+            )
+
+            seen.add(aggregate_key)
+            seen_keys.append(aggregate_key)
+            imported += 1
+            imported_kwh += kwh
+
+        raw_devices = raw.get("devices")
+        if isinstance(raw_devices, list):
+            for raw_device in raw_devices:
+                if not isinstance(raw_device, dict):
+                    continue
+                device_id = str(raw_device.get("id") or "").strip()[:64]
+                if not device_id:
+                    continue
+                try:
+                    device_kwh = float(raw_device.get("kwh"))
+                except (TypeError, ValueError):
+                    continue
+                if device_kwh < 0 or device_kwh > 10:
+                    continue
+
+                device_key = (
+                    "tapo-device:"
+                    + device_id
+                    + ":"
+                    + normalized_start.isoformat()
+                )
+                if device_key in seen:
+                    continue
+
+                device_usage = dict(month_devices.get(device_id) or {})
+                device_tiers = dict(device_usage.get("tiers") or {})
+                device_tiers.setdefault("offPeak", 0.0)
+                device_tiers.setdefault("midPeak", 0.0)
+                device_tiers.setdefault("peak", 0.0)
+                device_tiers[tier] = float(device_tiers.get(tier) or 0) + device_kwh
+
+                device_usage.update({
+                    "id": device_id,
+                    "label": str(raw_device.get("label") or device_id)[:80],
+                    "kwh": round(
+                        float(device_usage.get("kwh") or 0) + device_kwh,
+                        6,
+                    ),
+                    "trackedSeconds": round(
+                        float(device_usage.get("trackedSeconds") or 0) + 3600,
+                        2,
+                    ),
+                    "tiers": {
+                        name: round(float(value or 0), 6)
+                        for name, value in device_tiers.items()
+                    },
+                })
+                month_devices[device_id] = device_usage
+                seen.add(device_key)
+                seen_keys.append(device_key)
 
         started_at = month.get("startedAt")
         if not started_at:
@@ -353,20 +453,14 @@ async def backfill_power_history(
         month.update({
             "month": key,
             "lastUpdatedAt": _now_iso(),
-            "totalKwh": round(float(month.get("totalKwh") or 0) + kwh, 6),
-            "trackedSeconds": round(float(month.get("trackedSeconds") or 0) + 3600, 2),
             "tiers": {
                 name: round(float(value or 0), 6)
                 for name, value in tiers.items()
             },
             "days": days,
+            "devices": month_devices,
         })
         months[key] = month
-
-        seen.add(import_key)
-        seen_keys.append(import_key)
-        imported += 1
-        imported_kwh += kwh
 
     if len(months) > USAGE_MONTH_LIMIT:
         for old_key in sorted(months.keys())[:-USAGE_MONTH_LIMIT]:
