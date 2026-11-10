@@ -28,7 +28,7 @@ const DEFAULTS = {
 const DEVICE_META = {
   rtx5070: {
     brand: "MSI",
-    image: "https://asset.msi.com/resize/image/global/product/product_1737614531616969f440cd220f4182a4f0f6ddd4ab.png62405b38c58fe0f07fcef2367d8a9ba1/1024.png",
+    image: "https://doto.vtexassets.com/arquivos/ids/361600/image-f757ad96c08b4e26acb9f841ba6c8468.jpg?v=638846475177530000&nam=front",
     alt: "MSI GeForce RTX 5070",
     glow: "from-sky-400/18 via-sky-400/5",
   },
