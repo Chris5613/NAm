@@ -1,2 +1,2 @@
-python-kasa>=0.10.2,<1.0
+python-kasa @ git+https://github.com/ZeliardM/python-kasa.git@feature/tpap
 requests>=2.32.0,<3.0
