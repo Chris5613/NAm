@@ -87,7 +87,7 @@ async def collect(config):
 
 
 async def collect_hourly_history(config, lookback_days=7):
-    """Read recent hourly Wh history from each P115 and combine by UTC hour."""
+    """Read recent hourly Wh history from each P115, preserving per-device totals."""
     client = ApiClient(config["tapo_username"], config["tapo_password"])
     now = datetime.now(timezone.utc)
     lookback_days = max(1, min(int(lookback_days), 7))
@@ -111,14 +111,26 @@ async def collect_hourly_history(config, lookback_days=7):
                     continue
                 start_at = entry.start_date_time.astimezone(timezone.utc)
                 key = start_at.replace(minute=0, second=0, microsecond=0).isoformat()
-                combined[key] = combined.get(key, 0.0) + max(0.0, float(entry.energy)) / 1000.0
+                device_kwh = max(0.0, float(entry.energy)) / 1000.0
+                bucket = combined.setdefault(
+                    key,
+                    {"startAt": key, "kwh": 0.0, "devices": []},
+                )
+                bucket["kwh"] += device_kwh
+                bucket["devices"].append({
+                    "id": plug["id"],
+                    "label": plug["label"],
+                    "kwh": round(device_kwh, 6),
+                })
         except Exception as error:
             print(f"[WARN] {plug['label']} history: {error}", flush=True)
 
-    return [
-        {"startAt": start_at, "kwh": round(kwh, 6)}
-        for start_at, kwh in sorted(combined.items())
-    ]
+    rows = []
+    for key in sorted(combined):
+        bucket = combined[key]
+        bucket["kwh"] = round(bucket["kwh"], 6)
+        rows.append(bucket)
+    return rows
 
 
 def publish(config, devices):
