@@ -249,7 +249,7 @@ export default function MiningPowerCard() {
         <StatCard title="Net Profit / Day" value={money(dailyNet)} subtitle="Est. after electricity cost" icon={TrendingUp} accent="green" />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))]">
         {deviceRows.map(device => <DeviceCard key={device.id} device={device} rate={rateInfo.rate} />)}
       </div>
 
