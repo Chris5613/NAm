@@ -5,6 +5,7 @@ import hashlib
 import hmac
 import secrets
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy import select
@@ -21,10 +22,40 @@ TELEMETRY_KEY = "power_telemetry_v1"
 MAX_WATTS_PER_DEVICE = 3000.0
 MAX_DEVICES = 8
 HISTORY_LIMIT = 288
+PACIFIC = ZoneInfo("America/Los_Angeles")
+MAX_INTEGRATION_GAP_SECONDS = 300
+USAGE_MONTH_LIMIT = 13
 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _usage_tier(moment: datetime) -> str:
+    """Return the Time of Day bucket for a Pacific-local timestamp."""
+    local = moment.astimezone(PACIFIC)
+    if local.weekday() >= 5:
+        return "offPeak"
+    hour = local.hour
+    if 17 <= hour < 21:
+        return "peak"
+    if hour >= 21 or hour < 7:
+        return "offPeak"
+    return "midPeak"
+
+
+def _month_key(moment: datetime) -> str:
+    return moment.astimezone(PACIFIC).strftime("%Y-%m")
+
+
+def _day_key(moment: datetime) -> str:
+    return moment.astimezone(PACIFIC).strftime("%Y-%m-%d")
+
+
+def _current_month_usage(value: dict[str, Any], now: datetime) -> dict[str, Any] | None:
+    usage = dict(value.get("usage") or {})
+    months = dict(usage.get("months") or {})
+    return months.get(_month_key(now))
 
 
 def _setting(db: Session, user_id: int, key: str) -> Setting | None:
@@ -84,10 +115,12 @@ async def power_status(user: User = Depends(current_user), db: Session = Depends
     token_row = _setting(db, user.id, TOKEN_KEY)
     telemetry = _setting(db, user.id, TELEMETRY_KEY)
     value = dict(telemetry.value or {}) if telemetry else {}
+    now = datetime.now(timezone.utc)
     return {
         "configured": bool(token_row and (token_row.value or {}).get("sha256")),
         "latest": value.get("latest"),
         "history": value.get("history") or [],
+        "currentMonth": _current_month_usage(value, now),
     }
 
 
@@ -133,7 +166,8 @@ async def ingest_power(
                 device["today_kwh"] = round(today_kwh, 4)
         devices.append(device)
 
-    observed_at = _now_iso()
+    now = datetime.now(timezone.utc)
+    observed_at = now.isoformat()
     latest = {
         "observedAt": observed_at,
         "devices": devices,
@@ -146,6 +180,71 @@ async def ingest_power(
     history.append({"observedAt": observed_at, "totalWatts": latest["totalWatts"]})
     history = history[-HISTORY_LIMIT:]
 
-    _write_setting(db, user_id, TELEMETRY_KEY, {"latest": latest, "history": history})
+    usage = dict(previous.get("usage") or {})
+    months = dict(usage.get("months") or {})
+    previous_latest = previous.get("latest") if isinstance(previous.get("latest"), dict) else None
+
+    if previous_latest and previous_latest.get("observedAt") is not None:
+        try:
+            previous_time = datetime.fromisoformat(str(previous_latest["observedAt"]))
+            if previous_time.tzinfo is None:
+                previous_time = previous_time.replace(tzinfo=timezone.utc)
+            elapsed_seconds = (now - previous_time.astimezone(timezone.utc)).total_seconds()
+        except (TypeError, ValueError):
+            elapsed_seconds = 0.0
+            previous_time = now
+
+        if 0 < elapsed_seconds <= MAX_INTEGRATION_GAP_SECONDS:
+            midpoint = previous_time + (now - previous_time) / 2
+            key = _month_key(midpoint)
+            day = _day_key(midpoint)
+            tier = _usage_tier(midpoint)
+
+            previous_watts = float(previous_latest.get("totalWatts") or latest["totalWatts"])
+            average_watts = max(0.0, (previous_watts + latest["totalWatts"]) / 2)
+            interval_kwh = average_watts * elapsed_seconds / 3_600_000
+
+            month = dict(months.get(key) or {})
+            tiers = dict(month.get("tiers") or {})
+            days = dict(month.get("days") or {})
+
+            if not month.get("startedAt"):
+                month["startedAt"] = previous_time.astimezone(timezone.utc).isoformat()
+
+            tiers.setdefault("offPeak", 0.0)
+            tiers.setdefault("midPeak", 0.0)
+            tiers.setdefault("peak", 0.0)
+
+            tiers[tier] = float(tiers.get(tier) or 0) + interval_kwh
+            total_kwh = float(month.get("totalKwh") or 0) + interval_kwh
+            tracked_seconds = float(month.get("trackedSeconds") or 0) + elapsed_seconds
+
+            day_entry = dict(days.get(day) or {})
+            day_entry["kwh"] = float(day_entry.get("kwh") or 0) + interval_kwh
+            day_entry["trackedSeconds"] = float(day_entry.get("trackedSeconds") or 0) + elapsed_seconds
+            days[day] = day_entry
+
+            month.update({
+                "month": key,
+                "lastUpdatedAt": observed_at,
+                "totalKwh": round(total_kwh, 6),
+                "trackedSeconds": round(tracked_seconds, 2),
+                "tiers": {name: round(float(value or 0), 6) for name, value in tiers.items()},
+                "days": days,
+            })
+            months[key] = month
+
+    if len(months) > USAGE_MONTH_LIMIT:
+        for old_key in sorted(months.keys())[:-USAGE_MONTH_LIMIT]:
+            months.pop(old_key, None)
+
+    usage["months"] = months
+
+    _write_setting(
+        db,
+        user_id,
+        TELEMETRY_KEY,
+        {"latest": latest, "history": history, "usage": usage},
+    )
     db.commit()
     return {"ok": True, **latest}
