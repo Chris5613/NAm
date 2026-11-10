@@ -1,14 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
-  ChevronDown,
-  ChevronUp,
   Coins,
-  Copy,
   Cpu,
   Gauge,
-  KeyRound,
-  Layers3,
   PlugZap,
   RefreshCw,
   TrendingUp,
@@ -173,8 +168,6 @@ function DeviceCard({ device, combined = false, rate }) {
 export default function MiningPowerCard() {
   const [status, setStatus] = useState(null);
   const [settings, setSettings] = useState(DEFAULTS);
-  const [token, setToken] = useState("");
-  const [editing, setEditing] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async (manual = false) => {
@@ -212,43 +205,8 @@ export default function MiningPowerCard() {
   const dailyNet = dailyRevenue - dailyCost;
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
 
-  const combinedDevice = useMemo(() => ({
-    label: "Combined",
-    watts: totalWatts,
-  }), [totalWatts]);
 
-  const createToken = async () => {
-    try {
-      const result = await api.post("/api/power/token", {});
-      setToken(result?.token || "");
-      toast.success("New power bridge token generated");
-      await refresh();
-    } catch (error) {
-      toast.error(error.message || "Could not generate token");
-    }
-  };
 
-  const copyToken = async () => {
-    if (!token) return;
-    await navigator.clipboard.writeText(token);
-    toast.success("Power bridge token copied");
-  };
-
-  const saveSettings = async () => {
-    const next = {
-      dailyRevenueUsd: Math.max(0, Number(settings.dailyRevenueUsd) || 0),
-      offPeakRate: Math.max(0, Number(settings.offPeakRate) || 0),
-      midPeakRate: Math.max(0, Number(settings.midPeakRate) || 0),
-      peakRate: Math.max(0, Number(settings.peakRate) || 0),
-    };
-    try {
-      await settingsApi.set(SETTINGS_KEY, next);
-      setSettings(next);
-      toast.success("Mining power settings saved");
-    } catch (error) {
-      toast.error(error.message || "Could not save mining power settings");
-    }
-  };
 
   if (!deviceRows.length) {
     return (
@@ -256,10 +214,6 @@ export default function MiningPowerCard() {
         <Activity className="mx-auto h-7 w-7 text-muted-foreground" />
         <p className="mt-3 text-sm font-medium">Waiting for Tapo power readings</p>
         <p className="mt-1 text-xs text-muted-foreground">Start the Windows bridge and this page will populate automatically.</p>
-        <button type="button" onClick={createToken} className="mt-5 inline-flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground hover:text-foreground">
-          <KeyRound className="h-3.5 w-3.5" />
-          {status?.configured ? "Rotate bridge token" : "Generate bridge token"}
-        </button>
       </div>
     );
   }
@@ -296,7 +250,6 @@ export default function MiningPowerCard() {
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
         {deviceRows.map(device => <DeviceCard key={device.id} device={device} rate={rateInfo.rate} />)}
-        <DeviceCard device={combinedDevice} combined rate={rateInfo.rate} />
       </div>
 
       <section className="rounded-2xl border border-border/55 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
@@ -339,57 +292,6 @@ export default function MiningPowerCard() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-border/55 bg-card">
-        <button type="button" onClick={() => setEditing(value => !value)} className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-secondary/20">
-          <div className="flex items-center gap-2">
-            <KeyRound className="h-4 w-4 text-muted-foreground" />
-            <div>
-              <p className="text-sm font-semibold">Settings</p>
-              <p className="text-[10px] text-muted-foreground">Rates, revenue, and bridge token</p>
-            </div>
-          </div>
-          {editing ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-        </button>
-
-        {editing && (
-          <div className="border-t border-border/40 p-5">
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <label className="text-[10px] text-muted-foreground">Mining revenue / day ($)
-                <input type="number" step="0.01" min="0" value={settings.dailyRevenueUsd} onChange={event => setSettings({...settings, dailyRevenueUsd:event.target.value})} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground" />
-              </label>
-              <label className="text-[10px] text-muted-foreground">Off-peak ($/kWh)
-                <input type="number" step="0.0001" min="0" value={settings.offPeakRate} onChange={event => setSettings({...settings, offPeakRate:event.target.value})} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground" />
-              </label>
-              <label className="text-[10px] text-muted-foreground">Mid-peak ($/kWh)
-                <input type="number" step="0.0001" min="0" value={settings.midPeakRate} onChange={event => setSettings({...settings, midPeakRate:event.target.value})} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground" />
-              </label>
-              <label className="text-[10px] text-muted-foreground">Peak ($/kWh)
-                <input type="number" step="0.0001" min="0" value={settings.peakRate} onChange={event => setSettings({...settings, peakRate:event.target.value})} className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground" />
-              </label>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <button type="button" onClick={saveSettings} className="rounded-lg bg-foreground px-4 py-2 text-xs font-medium text-background">Save settings</button>
-              <button type="button" onClick={createToken} className="inline-flex items-center gap-2 rounded-lg border border-border/60 px-3 py-2 text-xs text-muted-foreground hover:text-foreground">
-                <KeyRound className="h-3.5 w-3.5" />
-                {status?.configured ? "Rotate bridge token" : "Generate bridge token"}
-              </button>
-            </div>
-
-            {token && (
-              <div className="mt-4 rounded-lg border border-amber-400/25 bg-amber-400/5 p-3">
-                <p className="text-[10px] font-medium text-amber-300">Copy this token now. NAm only stores its hash.</p>
-                <div className="mt-2 flex items-center gap-2">
-                  <code className="min-w-0 flex-1 truncate text-[10px] text-muted-foreground">{token}</code>
-                  <button type="button" onClick={copyToken} className="rounded p-1 hover:bg-secondary" aria-label="Copy power bridge token">
-                    <Copy className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
