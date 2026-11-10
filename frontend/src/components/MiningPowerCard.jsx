@@ -231,8 +231,6 @@ export default function MiningPowerCard() {
     offPeakKwh * Number(settings.offPeakRate || 0) +
     midPeakKwh * Number(settings.midPeakRate || 0) +
     peakKwh * Number(settings.peakRate || 0);
-  const basicServiceCost = monthKwh * Number(settings.basicRate || DEFAULTS.basicRate);
-  const monthSavingsVsBasic = basicServiceCost - monthCost;
   const monthEstimatedRevenue = dailyRevenue * monthTrackedDays;
   const monthEstimatedNet = monthEstimatedRevenue - monthCost;
   const monthDays = daysInPacificMonth();
@@ -332,26 +330,6 @@ export default function MiningPowerCard() {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-px border-t border-border/35 bg-border/30 lg:grid-cols-4">
-          <div className="bg-card px-5 py-4">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Off-peak</p>
-            <p className="mt-1 text-sm font-semibold tabular-nums">{offPeakKwh.toFixed(2)} kWh</p>
-          </div>
-          <div className="bg-card px-5 py-4">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Mid-peak</p>
-            <p className="mt-1 text-sm font-semibold tabular-nums">{midPeakKwh.toFixed(2)} kWh</p>
-          </div>
-          <div className="bg-card px-5 py-4">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Peak</p>
-            <p className="mt-1 text-sm font-semibold tabular-nums">{peakKwh.toFixed(2)} kWh</p>
-          </div>
-          <div className="bg-card px-5 py-4">
-            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Savings vs Basic</p>
-            <p className={"mt-1 text-sm font-semibold tabular-nums " + (monthSavingsVsBasic >= 0 ? "text-emerald-400" : "text-rose-400")}>
-              {monthSavingsVsBasic >= 0 ? "+" : ""}{money(monthSavingsVsBasic)}
-            </p>
-          </div>
-        </div>
       </section>
 
       <div className={"grid gap-4 " + gpuGridClass}>
