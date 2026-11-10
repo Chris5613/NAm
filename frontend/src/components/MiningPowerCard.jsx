@@ -28,13 +28,13 @@ const DEFAULTS = {
 const DEVICE_META = {
   rtx5070: {
     brand: "MSI",
-    image: "https://asset-us-store.msi.com/image/cache/catalog/Pd_page/VGA/2025/RTX5070/RTX507012GVentus2XOC/RTX507012GVentus2XOC-4-1024x1024.png",
+    image: "https://storage-asset.msi.com/global/picture/product/product_1737614531616969f440cd220f4182a4f0f6ddd4ab.webp",
     alt: "MSI GeForce RTX 5070",
     glow: "from-sky-400/18 via-sky-400/5",
   },
   rtx2080super: {
     brand: "GIGABYTE",
-    image: "https://static.gigabyte.com/StaticFile/Image/Global/271c8816051e94f4bbbc9307bec7d796/ProductRemoveBg/23688",
+    image: "https://static.gigabyte.com/StaticFile/Image/Global/f319d9951022c28ae6cbd7bd1a04309a/ProductRemoveBg/23467",
     alt: "Gigabyte GeForce RTX 2080 Super",
     glow: "from-orange-400/16 via-orange-400/5",
   },
@@ -144,7 +144,7 @@ function DeviceCard({ device, combined = false, rate }) {
               alt={meta.alt}
               loading="lazy"
               referrerPolicy="no-referrer"
-              className="pointer-events-none absolute -bottom-1 right-1 z-10 h-[132px] w-[52%] scale-[1.08] object-contain object-right opacity-95 drop-shadow-[0_18px_28px_rgba(0,0,0,0.58)]"
+              className="pointer-events-none absolute -bottom-1 right-2 z-10 h-[128px] w-[50%] object-contain object-right opacity-95 drop-shadow-[0_18px_28px_rgba(0,0,0,0.58)]"
             />
           </>
         )}
