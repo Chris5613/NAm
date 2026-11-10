@@ -4,8 +4,6 @@ import {
   CalendarDays,
   Coins,
   Cpu,
-  Gauge,
-  Layers3,
   PlugZap,
   RefreshCw,
   TrendingUp,
@@ -113,20 +111,20 @@ function StatCard({ title, value, subtitle, icon: Icon, accent = "sky" }) {
   );
 }
 
-function DeviceCard({ device, combined = false, rate }) {
+function DeviceCard({ device, rate }) {
   const watts = Number(device?.watts) || 0;
   const dailyKwh = watts * 24 / 1000;
   const dailyCost = dailyKwh * rate;
-  const meta = !combined ? DEVICE_META[device?.id] : null;
+  const meta = DEVICE_META[device?.id] || null;
   return (
-    <section className={"rounded-2xl border bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)] " + (combined ? "border-cyan-400/55" : "border-border/55")}>
+    <section className="rounded-2xl border border-border/55 bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-2.5">
-          <div className={"rounded-lg p-2 " + (combined ? "bg-cyan-400/10 text-cyan-300" : "bg-sky-400/10 text-sky-300")}>
-            {combined ? <Layers3 className="h-4 w-4" /> : <Cpu className="h-4 w-4" />}
+          <div className="rounded-lg bg-sky-400/10 p-2 text-sky-300">
+            <Cpu className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="text-base font-semibold">{device?.label || (combined ? "Combined" : "PC")}</h2>
+            <h2 className="text-base font-semibold">{device?.label || "PC"}</h2>
             {meta?.brand && (
               <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 {meta.brand}
@@ -142,7 +140,7 @@ function DeviceCard({ device, combined = false, rate }) {
 
       <div className="relative mt-4 min-h-[126px] overflow-hidden rounded-xl">
         <div className={meta ? "relative z-20 max-w-[52%] pt-3" : "relative z-20 pt-3"}>
-          <p className={"text-[38px] font-semibold leading-none tracking-tight tabular-nums " + (combined ? "text-cyan-300" : "text-foreground")}>
+          <p className="text-[38px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
             {watts.toFixed(0)} W
           </p>
         </div>
@@ -296,10 +294,6 @@ export default function MiningPowerCard() {
         <StatCard title="Net Profit / Day" value={money(dailyNet)} subtitle="Est. after electricity cost" icon={TrendingUp} accent="green" />
       </div>
 
-      <div className={"grid gap-4 " + gpuGridClass}>
-        {deviceRows.map(device => <DeviceCard key={device.id} device={device} rate={rateInfo.rate} />)}
-      </div>
-
       <section className="rounded-2xl border border-border/55 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -360,45 +354,12 @@ export default function MiningPowerCard() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-border/55 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
-        <div className="border-b border-border/40 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <Gauge className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold">Profitability (24h)</h2>
-          </div>
-        </div>
+      <div className={"grid gap-4 " + gpuGridClass}>
+        {deviceRows.map(device => <DeviceCard key={device.id} device={device} rate={rateInfo.rate} />)}
+      </div>
 
-        <div className="grid grid-cols-1 divide-y divide-border/35 md:grid-cols-4 md:divide-x md:divide-y-0">
-          <div className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-amber-500/10 p-2 text-amber-400"><Coins className="h-4 w-4" /></div>
-              <div><p className="text-xs text-muted-foreground">Power Cost (24h)</p><p className="mt-1 text-2xl font-semibold text-amber-400 tabular-nums">{money(dailyCost)}</p></div>
-            </div>
-          </div>
-          <div className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-cyan-400/10 p-2 text-cyan-300"><Layers3 className="h-4 w-4" /></div>
-              <div><p className="text-xs text-muted-foreground">Estimated Revenue (24h)</p><p className="mt-1 text-2xl font-semibold text-cyan-300 tabular-nums">{money(dailyRevenue)}</p></div>
-            </div>
-          </div>
-          <div className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-400"><TrendingUp className="h-4 w-4" /></div>
-              <div><p className="text-xs text-muted-foreground">Net Profit (24h)</p><p className={"mt-1 text-2xl font-semibold tabular-nums " + (dailyNet >= 0 ? "text-emerald-400" : "text-rose-400")}>{money(dailyNet)}</p></div>
-            </div>
-          </div>
-          <div className="p-5">
-            <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-sky-400/10 p-2 text-sky-300"><Zap className="h-4 w-4" /></div>
-              <div>
-                <p className="text-xs text-muted-foreground">Utility Tier</p>
-                <p className="mt-1 text-xl font-semibold text-cyan-300">{rateInfo.label}</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">{(rateInfo.rate * 100).toFixed(2)}¢/kWh</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
+
+
 
     </div>
   );
