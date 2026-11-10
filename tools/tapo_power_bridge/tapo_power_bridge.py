@@ -7,7 +7,7 @@ import sys
 import time
 
 import requests
-from kasa import Credentials, Device
+from kasa import Discover
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
@@ -19,14 +19,30 @@ def load_config():
         return json.load(handle)
 
 
-async def read_plug(plug, credentials):
-    device = await Device.connect(host=plug["host"], credentials=credentials)
+async def read_plug(plug, username, password):
+    # python-kasa's current public API authenticates Tapo devices through
+    # discover_single(host, username=..., password=...). Using credentials=
+    # directly with Device.connect() is not supported in current releases.
+    device = await Discover.discover_single(
+        plug["host"],
+        username=username,
+        password=password,
+    )
+    if device is None:
+        raise RuntimeError("device did not respond")
     await device.update()
 
     watts = None
     today_kwh = None
 
-    energy = getattr(device, "modules", {}).get("Energy")
+    modules = getattr(device, "modules", {}) or {}
+    energy = modules.get("Energy") or modules.get("energy")
+    if energy is None:
+        for key, module in modules.items():
+            if "energy" in str(key).lower():
+                energy = module
+                break
+
     if energy is not None:
         current = getattr(energy, "current_consumption", None)
         if current is not None:
@@ -52,9 +68,10 @@ async def read_plug(plug, credentials):
 
 
 async def collect(config):
-    credentials = Credentials(config["tapo_username"], config["tapo_password"])
+    username = config["tapo_username"]
+    password = config["tapo_password"]
     results = await asyncio.gather(
-        *(read_plug(plug, credentials) for plug in config["plugs"]),
+        *(read_plug(plug, username, password) for plug in config["plugs"]),
         return_exceptions=True,
     )
     devices = []
