@@ -1,6 +1,6 @@
 """Secure ingestion and readback for local smart-plug power telemetry."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
 import secrets
@@ -25,6 +25,8 @@ HISTORY_LIMIT = 288
 PACIFIC = ZoneInfo("America/Los_Angeles")
 MAX_INTEGRATION_GAP_SECONDS = 300
 USAGE_MONTH_LIMIT = 13
+MAX_BACKFILL_INTERVALS = 24 * 8
+BACKFILL_KEY_LIMIT = 24 * 31
 
 
 def _now_iso() -> str:
@@ -248,3 +250,146 @@ async def ingest_power(
     )
     db.commit()
     return {"ok": True, **latest}
+
+
+@router.post("/backfill")
+async def backfill_power_history(
+    payload: dict[str, Any],
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Import completed hourly P115 energy history before live tracking began."""
+    user_id = _authorize_ingest(db, authorization)
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+    if user is None:
+        raise HTTPException(401, "Invalid power ingest token.")
+
+    raw_intervals = payload.get("intervals")
+    if not isinstance(raw_intervals, list) or len(raw_intervals) > MAX_BACKFILL_INTERVALS:
+        raise HTTPException(422, "Expected up to 192 hourly history intervals.")
+
+    row = _setting(db, user_id, TELEMETRY_KEY)
+    previous = dict(row.value or {}) if row else {}
+    usage = dict(previous.get("usage") or {})
+    months = dict(usage.get("months") or {})
+    seen_keys = list(usage.get("backfillKeys") or [])
+    seen = set(str(key) for key in seen_keys)
+
+    latest = previous.get("latest") if isinstance(previous.get("latest"), dict) else {}
+    cutoff = None
+    current_key = _month_key(datetime.now(timezone.utc))
+    current_month = dict(months.get(current_key) or {})
+
+    cutoff_raw = current_month.get("startedAt") or latest.get("observedAt")
+    if cutoff_raw:
+        try:
+            cutoff = datetime.fromisoformat(str(cutoff_raw))
+            if cutoff.tzinfo is None:
+                cutoff = cutoff.replace(tzinfo=timezone.utc)
+            cutoff = cutoff.astimezone(timezone.utc)
+        except (TypeError, ValueError):
+            cutoff = None
+
+    imported = 0
+    imported_kwh = 0.0
+
+    for raw in raw_intervals:
+        if not isinstance(raw, dict):
+            continue
+
+        try:
+            start_at = datetime.fromisoformat(str(raw.get("startAt")))
+            if start_at.tzinfo is None:
+                start_at = start_at.replace(tzinfo=timezone.utc)
+            start_at = start_at.astimezone(timezone.utc)
+            kwh = float(raw.get("kwh"))
+        except (TypeError, ValueError):
+            continue
+
+        if kwh < 0 or kwh > 20:
+            continue
+
+        interval_end = start_at + timedelta(hours=1)
+        if cutoff is not None and interval_end > cutoff:
+            continue
+
+        normalized_start = start_at.replace(minute=0, second=0, microsecond=0)
+        import_key = "tapo-hour:" + normalized_start.isoformat()
+        if import_key in seen:
+            continue
+
+        midpoint = normalized_start + timedelta(minutes=30)
+        key = _month_key(midpoint)
+        day = _day_key(midpoint)
+        tier = _usage_tier(midpoint)
+
+        month = dict(months.get(key) or {})
+        tiers = dict(month.get("tiers") or {})
+        days = dict(month.get("days") or {})
+
+        tiers.setdefault("offPeak", 0.0)
+        tiers.setdefault("midPeak", 0.0)
+        tiers.setdefault("peak", 0.0)
+        tiers[tier] = float(tiers.get(tier) or 0) + kwh
+
+        day_entry = dict(days.get(day) or {})
+        day_entry["kwh"] = float(day_entry.get("kwh") or 0) + kwh
+        day_entry["trackedSeconds"] = float(day_entry.get("trackedSeconds") or 0) + 3600
+        days[day] = day_entry
+
+        started_at = month.get("startedAt")
+        if not started_at:
+            month["startedAt"] = normalized_start.isoformat()
+        else:
+            try:
+                existing_start = datetime.fromisoformat(str(started_at))
+                if existing_start.tzinfo is None:
+                    existing_start = existing_start.replace(tzinfo=timezone.utc)
+                if normalized_start < existing_start.astimezone(timezone.utc):
+                    month["startedAt"] = normalized_start.isoformat()
+            except (TypeError, ValueError):
+                month["startedAt"] = normalized_start.isoformat()
+
+        month.update({
+            "month": key,
+            "lastUpdatedAt": _now_iso(),
+            "totalKwh": round(float(month.get("totalKwh") or 0) + kwh, 6),
+            "trackedSeconds": round(float(month.get("trackedSeconds") or 0) + 3600, 2),
+            "tiers": {
+                name: round(float(value or 0), 6)
+                for name, value in tiers.items()
+            },
+            "days": days,
+        })
+        months[key] = month
+
+        seen.add(import_key)
+        seen_keys.append(import_key)
+        imported += 1
+        imported_kwh += kwh
+
+    if len(months) > USAGE_MONTH_LIMIT:
+        for old_key in sorted(months.keys())[:-USAGE_MONTH_LIMIT]:
+            months.pop(old_key, None)
+
+    usage["months"] = months
+    usage["backfillKeys"] = seen_keys[-BACKFILL_KEY_LIMIT:]
+
+    _write_setting(
+        db,
+        user_id,
+        TELEMETRY_KEY,
+        {
+            "latest": previous.get("latest"),
+            "history": previous.get("history") or [],
+            "usage": usage,
+        },
+    )
+    db.commit()
+
+    return {
+        "ok": True,
+        "imported": imported,
+        "importedKwh": round(imported_kwh, 6),
+        "cutoff": cutoff.isoformat() if cutoff else None,
+    }
