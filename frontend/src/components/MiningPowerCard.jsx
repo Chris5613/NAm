@@ -88,6 +88,15 @@ function trackedDays(seconds) {
   return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
+function usageCost(usage, settings) {
+  const tiers = usage?.tiers || {};
+  return (
+    (Number(tiers.offPeak) || 0) * Number(settings.offPeakRate || 0) +
+    (Number(tiers.midPeak) || 0) * Number(settings.midPeakRate || 0) +
+    (Number(tiers.peak) || 0) * Number(settings.peakRate || 0)
+  );
+}
+
 function StatCard({ title, value, subtitle, icon: Icon, accent = "sky" }) {
   const accents = {
     sky: "border-sky-500/35 bg-sky-500/[0.035] text-sky-400",
@@ -111,10 +120,12 @@ function StatCard({ title, value, subtitle, icon: Icon, accent = "sky" }) {
   );
 }
 
-function DeviceCard({ device, rate }) {
+function DeviceCard({ device, rate, monthlyUsage, settings }) {
   const watts = Number(device?.watts) || 0;
   const dailyKwh = watts * 24 / 1000;
   const dailyCost = dailyKwh * rate;
+  const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
+  const monthlyCost = usageCost(monthlyUsage, settings);
   const meta = DEVICE_META[device?.id] || null;
   return (
     <section className="rounded-2xl border border-border/55 bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
@@ -160,20 +171,34 @@ function DeviceCard({ device, rate }) {
         )}
       </div>
 
-      <div className="grid grid-cols-2 divide-x divide-border/40 border-t border-border/35 pt-4">
-        <div className="pr-4">
+      <div className="grid grid-cols-2 gap-y-4 border-t border-border/35 pt-4 sm:grid-cols-4 sm:divide-x sm:divide-border/40">
+        <div className="sm:pr-3">
           <div className="flex items-center gap-2 text-cyan-300">
             <Zap className="h-4 w-4" />
             <span className="text-sm font-semibold tabular-nums">{dailyKwh.toFixed(2)} kWh</span>
           </div>
           <p className="mt-1 text-[10px] text-muted-foreground">24h usage</p>
         </div>
-        <div className="pl-4">
+        <div className="sm:px-3">
           <div className="flex items-center gap-2 text-amber-400">
             <Coins className="h-4 w-4" />
             <span className="text-sm font-semibold tabular-nums">{money(dailyCost)}</span>
           </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">24h power cost</p>
+          <p className="mt-1 text-[10px] text-muted-foreground">24h cost</p>
+        </div>
+        <div className="sm:px-3">
+          <div className="flex items-center gap-2 text-cyan-300">
+            <CalendarDays className="h-4 w-4" />
+            <span className="text-sm font-semibold tabular-nums">{monthlyKwh.toFixed(2)} kWh</span>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">This month</p>
+        </div>
+        <div className="sm:pl-3">
+          <div className="flex items-center gap-2 text-amber-400">
+            <Coins className="h-4 w-4" />
+            <span className="text-sm font-semibold tabular-nums">{money(monthlyCost)}</span>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">Month cost</p>
         </div>
       </div>
     </section>
@@ -239,6 +264,7 @@ export default function MiningPowerCard() {
     ? monthCost / monthTrackedDays * monthDays
     : 0;
 
+  const monthlyDevices = currentMonth?.devices || {};
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
   const gpuGridClass =
     deviceRows.length <= 1
@@ -274,7 +300,6 @@ export default function MiningPowerCard() {
               {live ? "Live" : "Stale"}
             </span>
           </div>
-          <p className="mt-1 pl-11 text-sm text-muted-foreground">Live Tapo P115 wall-power readings, electricity cost, and mining profitability.</p>
         </div>
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -285,11 +310,8 @@ export default function MiningPowerCard() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="max-w-sm">
         <StatCard title="Total Power" value={totalWatts.toFixed(0) + " W"} subtitle="Live draw (combined)" icon={Zap} accent="sky" />
-        <StatCard title="Cost / Hour" value={money(hourlyCost)} subtitle={"≈ " + money(dailyCost) + " / 24h"} icon={Coins} accent="amber" />
-        <StatCard title="Current Rate" value={(rateInfo.rate * 100).toFixed(2) + "¢/kWh"} subtitle={rateInfo.label + " rate"} icon={PlugZap} accent="cyan" />
-        <StatCard title="Net Profit / Day" value={money(dailyNet)} subtitle="Est. after electricity cost" icon={TrendingUp} accent="green" />
       </div>
 
       <section className="rounded-2xl border border-border/55 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
@@ -330,10 +352,37 @@ export default function MiningPowerCard() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border/35 px-5 py-4 text-sm">
+          <div className="flex items-center gap-2">
+            <Coins className="h-4 w-4 text-amber-400" />
+            <span className="text-muted-foreground">Cost / Hour</span>
+            <span className="font-semibold tabular-nums">{money(hourlyCost)}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <PlugZap className="h-4 w-4 text-cyan-300" />
+            <span className="text-muted-foreground">Current Rate</span>
+            <span className="font-semibold tabular-nums">{(rateInfo.rate * 100).toFixed(2)}¢/kWh</span>
+            <span className="text-xs text-muted-foreground">{rateInfo.label}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-emerald-400" />
+            <span className="text-muted-foreground">Net Profit / Day</span>
+            <span className={"font-semibold tabular-nums " + (dailyNet >= 0 ? "text-emerald-400" : "text-rose-400")}>{money(dailyNet)}</span>
+          </div>
+        </div>
+
       </section>
 
       <div className={"grid gap-4 " + gpuGridClass}>
-        {deviceRows.map(device => <DeviceCard key={device.id} device={device} rate={rateInfo.rate} />)}
+        {deviceRows.map(device => (
+          <DeviceCard
+            key={device.id}
+            device={device}
+            rate={rateInfo.rate}
+            monthlyUsage={monthlyDevices[device.id]}
+            settings={settings}
+          />
+        ))}
       </div>
 
 
