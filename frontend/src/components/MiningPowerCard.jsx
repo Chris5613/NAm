@@ -28,13 +28,13 @@ const DEFAULTS = {
 const DEVICE_META = {
   rtx5070: {
     brand: "MSI",
-    image: "/gpu/rtx5070-msi.webp",
+    image: "/gpu/rtx2080-super.webp",
     alt: "MSI GeForce RTX 5070",
     glow: "from-sky-400/18 via-sky-400/5",
   },
   rtx2080super: {
     brand: "GIGABYTE",
-    image: "/gpu/rtx2080-super.webp",
+    image: "/gpu/rtx5070-msi.webp",
     alt: "Gigabyte GeForce RTX 2080 Super",
     glow: "from-orange-400/16 via-orange-400/5",
   },
