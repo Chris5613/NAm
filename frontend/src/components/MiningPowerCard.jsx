@@ -97,29 +97,6 @@ function usageCost(usage, settings) {
   );
 }
 
-function StatCard({ title, value, subtitle, icon: Icon, accent = "sky" }) {
-  const accents = {
-    sky: "border-sky-500/35 bg-sky-500/[0.035] text-sky-400",
-    amber: "border-amber-500/35 bg-amber-500/[0.035] text-amber-400",
-    cyan: "border-cyan-400/35 bg-cyan-400/[0.035] text-cyan-300",
-    green: "border-emerald-500/35 bg-emerald-500/[0.04] text-emerald-400",
-  };
-  return (
-    <section className={"rounded-2xl border bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)] " + accents[accent]}>
-      <div className="flex items-start gap-3">
-        <div className="rounded-xl bg-background/70 p-2.5">
-          <Icon className="h-5 w-5" />
-        </div>
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-foreground">{title}</p>
-          <p className="mt-2 text-[clamp(28px,2.6vw,38px)] font-semibold leading-none tracking-tight text-foreground tabular-nums">{value}</p>
-          <p className="mt-2 text-xs text-muted-foreground">{subtitle}</p>
-        </div>
-      </div>
-    </section>
-  );
-}
-
 function DeviceCard({ device, rate, monthlyUsage, settings }) {
   const watts = Number(device?.watts) || 0;
   const dailyKwh = watts * 24 / 1000;
@@ -310,10 +287,6 @@ export default function MiningPowerCard() {
         </div>
       </header>
 
-      <div className="max-w-sm">
-        <StatCard title="Total Power" value={totalWatts.toFixed(0) + " W"} subtitle="Live draw (combined)" icon={Zap} accent="sky" />
-      </div>
-
       <section className="rounded-2xl border border-border/55 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-4">
           <div className="flex items-center gap-2">
@@ -353,6 +326,11 @@ export default function MiningPowerCard() {
         </div>
 
         <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border/35 px-5 py-4 text-sm">
+          <div className="flex items-center gap-2">
+            <Zap className="h-4 w-4 text-sky-400" />
+            <span className="text-muted-foreground">Total Power</span>
+            <span className="font-semibold tabular-nums">{totalWatts.toFixed(0)} W</span>
+          </div>
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4 text-amber-400" />
             <span className="text-muted-foreground">Cost / Hour</span>
