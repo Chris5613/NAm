@@ -1,0 +1,11 @@
+{
+  "nam_url": "https://YOUR-BACKEND.onrender.com",
+  "token": "PASTE_TOKEN_FROM_NAM",
+  "interval_seconds": 15,
+  "tapo_username": "YOUR_TAPO_EMAIL",
+  "tapo_password": "YOUR_TAPO_PASSWORD",
+  "plugs": [
+    {"id": "rtx5070", "label": "RTX 5070 PC", "host": "192.168.1.101"},
+    {"id": "rtx2080super", "label": "RTX 2080 Super PC", "host": "192.168.1.102"}
+  ]
+}
