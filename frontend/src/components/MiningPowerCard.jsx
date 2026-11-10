@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  CalendarDays,
   Coins,
   Cpu,
   Gauge,
@@ -19,6 +20,7 @@ const DEFAULTS = {
   offPeakRate: 0.0893,
   midPeakRate: 0.1670,
   peakRate: 0.4313,
+  basicRate: 0.1691,
 };
 
 const DEVICE_META = {
@@ -72,6 +74,20 @@ function formatUpdated(value) {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+function daysInPacificMonth(date = new Date()) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric",
+    month: "numeric",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
+  return new Date(Number(values.year), Number(values.month), 0).getDate();
+}
+
+function trackedDays(seconds) {
+  return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
 function StatCard({ title, value, subtitle, icon: Icon, accent = "sky" }) {
@@ -204,6 +220,29 @@ export default function MiningPowerCard() {
   const dailyCost = hourlyCost * 24;
   const dailyRevenue = Math.max(0, Number(settings.dailyRevenueUsd) || 0);
   const dailyNet = dailyRevenue - dailyCost;
+
+  const currentMonth = status?.currentMonth || null;
+  const monthTiers = currentMonth?.tiers || {};
+  const offPeakKwh = Number(monthTiers.offPeak) || 0;
+  const midPeakKwh = Number(monthTiers.midPeak) || 0;
+  const peakKwh = Number(monthTiers.peak) || 0;
+  const monthKwh = Number(currentMonth?.totalKwh) || 0;
+  const monthTrackedSeconds = Number(currentMonth?.trackedSeconds) || 0;
+  const monthTrackedDays = trackedDays(monthTrackedSeconds);
+  const monthCost =
+    offPeakKwh * Number(settings.offPeakRate || 0) +
+    midPeakKwh * Number(settings.midPeakRate || 0) +
+    peakKwh * Number(settings.peakRate || 0);
+  const basicServiceCost = monthKwh * Number(settings.basicRate || DEFAULTS.basicRate);
+  const monthSavingsVsBasic = basicServiceCost - monthCost;
+  const monthEstimatedRevenue = dailyRevenue * monthTrackedDays;
+  const monthEstimatedNet = monthEstimatedRevenue - monthCost;
+  const monthDays = daysInPacificMonth();
+  const projectionReady = monthTrackedSeconds >= 900;
+  const projectedMonthCost = projectionReady && monthTrackedDays > 0
+    ? monthCost / monthTrackedDays * monthDays
+    : 0;
+
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
   const gpuGridClass =
     deviceRows.length <= 1
@@ -260,6 +299,66 @@ export default function MiningPowerCard() {
       <div className={"grid gap-4 " + gpuGridClass}>
         {deviceRows.map(device => <DeviceCard key={device.id} device={device} rate={rateInfo.rate} />)}
       </div>
+
+      <section className="rounded-2xl border border-border/55 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-4">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-base font-semibold">This Month</h2>
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            {currentMonth?.startedAt ? "Tracking since " + formatUpdated(currentMonth.startedAt) : "Tracking starts with the new meter"}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 divide-y divide-border/35 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
+          <div className="p-5">
+            <p className="text-xs text-muted-foreground">Energy used</p>
+            <p className="mt-1 text-2xl font-semibold text-cyan-300 tabular-nums">{monthKwh.toFixed(2)} kWh</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">{monthTrackedDays.toFixed(2)} tracked days</p>
+          </div>
+          <div className="p-5">
+            <p className="text-xs text-muted-foreground">Cost so far</p>
+            <p className="mt-1 text-2xl font-semibold text-amber-400 tabular-nums">{money(monthCost)}</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">Actual TOD buckets</p>
+          </div>
+          <div className="p-5">
+            <p className="text-xs text-muted-foreground">Projected month-end cost</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums">
+              {projectionReady ? money(projectedMonthCost) : "Collecting…"}
+            </p>
+            <p className="mt-1 text-[10px] text-muted-foreground">Based on tracked usage rate</p>
+          </div>
+          <div className="p-5">
+            <p className="text-xs text-muted-foreground">Est. net since tracking</p>
+            <p className={"mt-1 text-2xl font-semibold tabular-nums " + (monthEstimatedNet >= 0 ? "text-emerald-400" : "text-rose-400")}>
+              {money(monthEstimatedNet)}
+            </p>
+            <p className="mt-1 text-[10px] text-muted-foreground">Uses {money(dailyRevenue)}/day revenue estimate</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-px border-t border-border/35 bg-border/30 lg:grid-cols-4">
+          <div className="bg-card px-5 py-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Off-peak</p>
+            <p className="mt-1 text-sm font-semibold tabular-nums">{offPeakKwh.toFixed(2)} kWh</p>
+          </div>
+          <div className="bg-card px-5 py-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Mid-peak</p>
+            <p className="mt-1 text-sm font-semibold tabular-nums">{midPeakKwh.toFixed(2)} kWh</p>
+          </div>
+          <div className="bg-card px-5 py-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Peak</p>
+            <p className="mt-1 text-sm font-semibold tabular-nums">{peakKwh.toFixed(2)} kWh</p>
+          </div>
+          <div className="bg-card px-5 py-4">
+            <p className="text-[10px] uppercase tracking-wide text-muted-foreground">Savings vs Basic</p>
+            <p className={"mt-1 text-sm font-semibold tabular-nums " + (monthSavingsVsBasic >= 0 ? "text-emerald-400" : "text-rose-400")}>
+              {monthSavingsVsBasic >= 0 ? "+" : ""}{money(monthSavingsVsBasic)}
+            </p>
+          </div>
+        </div>
+      </section>
 
       <section className="rounded-2xl border border-border/55 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
         <div className="border-b border-border/40 px-5 py-4">
