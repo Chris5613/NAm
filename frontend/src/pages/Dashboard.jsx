@@ -39,7 +39,6 @@ import { toast } from "sonner";
 import CryptoBreakdown from "@/components/CryptoBreakdown";
 import AssetBreakdown from "@/components/AssetBreakdown";
 import AddAssetDialog from "@/components/AddAssetDialog";
-import MiningPowerCard from "@/components/MiningPowerCard";
 
 import { Button } from "@/components/ui/button";
 
@@ -1259,8 +1258,6 @@ export default function Dashboard() {
             </div>
           </div>
         </section>
-
-        <MiningPowerCard className={card} />
 
         <section className={card} aria-label="Asset allocation">
           <div className="border-b border-border/40 px-4 py-3">
