@@ -51,9 +51,9 @@ def valid_write_origin(origin: str | None, referer: str | None, allowed: set[str
 @app.middleware("http")
 async def reject_cross_origin_mutations(request: Request, call_next):
     if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
-        # The local Tapo bridge authenticates with a per-user Bearer token and
-        # is not a browser, so it has no Origin/Referer header.
-        if request.url.path == "/api/power/ingest":
+        # The local Tapo bridge authenticates these endpoints with a per-user
+        # Bearer token and is not a browser, so it has no Origin/Referer header.
+        if request.url.path in {"/api/power/ingest", "/api/power/backfill"}:
             return await call_next(request)
         allowed = {o.rstrip("/") for o in CORS_ORIGINS}
         # Local API docs are intentionally usable during local development.
