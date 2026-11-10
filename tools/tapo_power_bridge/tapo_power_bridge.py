@@ -91,14 +91,15 @@ async def collect_hourly_history(config, lookback_days=7):
     client = ApiClient(config["tapo_username"], config["tapo_password"])
     now = datetime.now(timezone.utc)
     lookback_days = max(1, min(int(lookback_days), 7))
-    start_date = (now - timedelta(days=lookback_days)).date()
-    end_date = now.date()
     combined = {}
 
     for plug in config["plugs"]:
         try:
             device = await client.p110(plug["host"])
             timezone_result = await device.get_timezone()
+            device_now = now.astimezone(timezone_result.timezone)
+            start_date = (device_now - timedelta(days=lookback_days)).date()
+            end_date = device_now.date()
             history = await device.get_energy_data(
                 EnergyDataInterval.Hourly,
                 start_date,
