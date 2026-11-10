@@ -205,6 +205,14 @@ export default function MiningPowerCard() {
   const dailyRevenue = Math.max(0, Number(settings.dailyRevenueUsd) || 0);
   const dailyNet = dailyRevenue - dailyCost;
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
+  const gpuGridClass =
+    deviceRows.length <= 1
+      ? "grid-cols-1"
+      : deviceRows.length === 2
+        ? "grid-cols-1 sm:grid-cols-2"
+        : deviceRows.length === 3
+          ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"
+          : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
 
 
 
@@ -249,7 +257,7 @@ export default function MiningPowerCard() {
         <StatCard title="Net Profit / Day" value={money(dailyNet)} subtitle="Est. after electricity cost" icon={TrendingUp} accent="green" />
       </div>
 
-      <div className="grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,380px),1fr))]">
+      <div className={"grid gap-4 " + gpuGridClass}>
         {deviceRows.map(device => <DeviceCard key={device.id} device={device} rate={rateInfo.rate} />)}
       </div>
 
