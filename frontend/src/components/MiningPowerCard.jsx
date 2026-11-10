@@ -27,12 +27,16 @@ const DEFAULTS = {
 
 const DEVICE_META = {
   rtx5070: {
-    image: "https://iprsoftwaremedia.com/219/files/20250/202501271934/6797dfce3d6332c6cd77c43b_geforce-rtx-5070/geforce-rtx-5070_0a8c3f1a-8080-4bfe-a202-f8f49c8108a7-prv.jpg?v=0a8c3f1a-8080-4bfe-a202-f8f49c8108a7",
-    alt: "NVIDIA GeForce RTX 5070",
+    brand: "MSI",
+    image: "https://asset-us-store.msi.com/image/cache/catalog/Pd_page/VGA/2025/RTX5070/RTX507012GVentus2XOC/RTX507012GVentus2XOC-4-1024x1024.png",
+    alt: "MSI GeForce RTX 5070",
+    glow: "from-sky-400/18 via-sky-400/5",
   },
   rtx2080super: {
-    image: "https://nvidianews.nvidia.com/_gallery/get_file/?file_id=5d1b83192cfac25fdf677895",
-    alt: "NVIDIA GeForce RTX 2080 Super",
+    brand: "GIGABYTE",
+    image: "https://static.gigabyte.com/StaticFile/Image/Global/271c8816051e94f4bbbc9307bec7d796/ProductRemoveBg/23688",
+    alt: "Gigabyte GeForce RTX 2080 Super",
+    glow: "from-orange-400/16 via-orange-400/5",
   },
 };
 
@@ -109,7 +113,14 @@ function DeviceCard({ device, combined = false, rate }) {
           <div className={"rounded-lg p-2 " + (combined ? "bg-cyan-400/10 text-cyan-300" : "bg-sky-400/10 text-sky-300")}>
             {combined ? <Layers3 className="h-4 w-4" /> : <Cpu className="h-4 w-4" />}
           </div>
-          <h2 className="text-base font-semibold">{device?.label || (combined ? "Combined" : "PC")}</h2>
+          <div>
+            <h2 className="text-base font-semibold">{device?.label || (combined ? "Combined" : "PC")}</h2>
+            {meta?.brand && (
+              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
+                {meta.brand}
+              </p>
+            )}
+          </div>
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -117,22 +128,23 @@ function DeviceCard({ device, combined = false, rate }) {
         </span>
       </div>
 
-      <div className="relative mt-5 min-h-[112px] overflow-hidden">
-        <div className={meta ? "relative z-10 max-w-[58%]" : "relative z-10"}>
-          <p className={"text-[36px] font-semibold leading-none tracking-tight tabular-nums " + (combined ? "text-cyan-300" : "text-foreground")}>
+      <div className="relative mt-4 min-h-[126px] overflow-hidden rounded-xl">
+        <div className={meta ? "relative z-20 max-w-[52%] pt-3" : "relative z-20 pt-3"}>
+          <p className={"text-[38px] font-semibold leading-none tracking-tight tabular-nums " + (combined ? "text-cyan-300" : "text-foreground")}>
             {watts.toFixed(0)} W
           </p>
         </div>
 
         {meta?.image && (
           <>
-            <div className="pointer-events-none absolute inset-y-0 right-0 w-[46%] bg-gradient-to-l from-card via-card/45 to-transparent" />
+            <div className={"pointer-events-none absolute -right-10 -top-8 h-44 w-72 rounded-full bg-gradient-to-l " + meta.glow + " to-transparent blur-2xl"} />
+            <div className="pointer-events-none absolute inset-y-0 right-[40%] z-10 w-24 bg-gradient-to-r from-card via-card/70 to-transparent" />
             <img
               src={meta.image}
               alt={meta.alt}
               loading="lazy"
               referrerPolicy="no-referrer"
-              className="pointer-events-none absolute -bottom-2 right-0 h-[118px] w-[47%] object-contain object-right drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)]"
+              className="pointer-events-none absolute -bottom-1 right-1 z-10 h-[132px] w-[52%] scale-[1.08] object-contain object-right opacity-95 drop-shadow-[0_18px_28px_rgba(0,0,0,0.58)]"
             />
           </>
         )}
