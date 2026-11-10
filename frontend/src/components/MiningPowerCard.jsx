@@ -4,6 +4,7 @@ import {
   Coins,
   Cpu,
   Gauge,
+  Layers3,
   PlugZap,
   RefreshCw,
   TrendingUp,
