@@ -25,6 +25,17 @@ const DEFAULTS = {
   peakRate: 0.4313,
 };
 
+const DEVICE_META = {
+  rtx5070: {
+    image: "https://iprsoftwaremedia.com/219/files/20250/202501271934/6797dfce3d6332c6cd77c43b_geforce-rtx-5070/geforce-rtx-5070_0a8c3f1a-8080-4bfe-a202-f8f49c8108a7-prv.jpg?v=0a8c3f1a-8080-4bfe-a202-f8f49c8108a7",
+    alt: "NVIDIA GeForce RTX 5070",
+  },
+  rtx2080super: {
+    image: "https://nvidianews.nvidia.com/_gallery/get_file/?file_id=5d1b83192cfac25fdf677895",
+    alt: "NVIDIA GeForce RTX 2080 Super",
+  },
+};
+
 function pacificParts(date = new Date()) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles",
@@ -90,6 +101,7 @@ function DeviceCard({ device, combined = false, rate }) {
   const watts = Number(device?.watts) || 0;
   const dailyKwh = watts * 24 / 1000;
   const dailyCost = dailyKwh * rate;
+  const meta = !combined ? DEVICE_META[device?.id] : null;
   return (
     <section className={"rounded-2xl border bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)] " + (combined ? "border-cyan-400/55" : "border-border/55")}>
       <div className="flex items-start justify-between gap-3">
@@ -105,11 +117,28 @@ function DeviceCard({ device, combined = false, rate }) {
         </span>
       </div>
 
-      <p className={"mt-5 text-[36px] font-semibold leading-none tracking-tight tabular-nums " + (combined ? "text-cyan-300" : "text-foreground")}>
-        {watts.toFixed(0)} W
-      </p>
+      <div className="relative mt-5 min-h-[112px] overflow-hidden">
+        <div className={meta ? "relative z-10 max-w-[58%]" : "relative z-10"}>
+          <p className={"text-[36px] font-semibold leading-none tracking-tight tabular-nums " + (combined ? "text-cyan-300" : "text-foreground")}>
+            {watts.toFixed(0)} W
+          </p>
+        </div>
 
-      <div className="mt-5 grid grid-cols-2 divide-x divide-border/40 border-t border-border/35 pt-4">
+        {meta?.image && (
+          <>
+            <div className="pointer-events-none absolute inset-y-0 right-0 w-[46%] bg-gradient-to-l from-card via-card/45 to-transparent" />
+            <img
+              src={meta.image}
+              alt={meta.alt}
+              loading="lazy"
+              referrerPolicy="no-referrer"
+              className="pointer-events-none absolute -bottom-2 right-0 h-[118px] w-[47%] object-contain object-right drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)]"
+            />
+          </>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 divide-x divide-border/40 border-t border-border/35 pt-4">
         <div className="pr-4">
           <div className="flex items-center gap-2 text-cyan-300">
             <Zap className="h-4 w-4" />
