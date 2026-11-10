@@ -79,7 +79,9 @@ export const assetsApi = {
   update: async (id, data) => {
     const all = normalizeItems(storage.getAssets());
     const updated = all.map((item) =>
-      item.id === id ? normalizeId({ ...item, ...data }) : item
+      item.id === id
+        ? normalizeId({ ...item, ...data, id: item.id, _id: item.id })
+        : item
     );
     storage.setAssets(updated);
     await flushKey(STORAGE_KEYS.ASSETS);
