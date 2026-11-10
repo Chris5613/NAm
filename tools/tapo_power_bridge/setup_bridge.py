@@ -73,18 +73,23 @@ def main():
     p115s = [row for row in rows if "P115" in row["model"].upper()]
     selectable = p115s or rows
     if not selectable:
-        raise SystemExit(
-            "No supported Tapo/Kasa devices were discovered. "
-            "Make sure this PC and the P115 plugs are on the same home network."
-        )
-
-    if p115s:
-        print(f"\nFound {len(p115s)} Tapo P115 device(s).")
+        print("\nNo Tapo/Kasa devices were auto-discovered.")
+        print("This can happen when broadcast discovery is blocked even though the plugs are reachable.")
+        print("You can continue by entering the P115 LAN IP addresses manually.")
+        plug1 = ask("RTX 5070 P115 IP address")
+        plug2 = ask("RTX 2080 Super P115 IP address")
+        if not plug1 or not plug2 or plug1 == plug2:
+            raise SystemExit("Two different P115 IP addresses are required.")
+        gpu5070 = {"host": plug1, "model": "P115", "alias": "RTX 5070 PC"}
+        gpu2080 = {"host": plug2, "model": "P115", "alias": "RTX 2080 Super PC"}
     else:
-        print("\nNo device identified itself specifically as P115, so all discovered devices are shown.")
+        if p115s:
+            print(f"\nFound {len(p115s)} Tapo P115 device(s).")
+        else:
+            print("\nNo device identified itself specifically as P115, so all discovered devices are shown.")
 
-    gpu5070 = choose_device(selectable, "RTX 5070 PC")
-    gpu2080 = choose_device(selectable, "RTX 2080 Super PC", exclude_host=gpu5070["host"])
+        gpu5070 = choose_device(selectable, "RTX 5070 PC")
+        gpu2080 = choose_device(selectable, "RTX 2080 Super PC", exclude_host=gpu5070["host"])
 
     config = {
         "nam_url": nam_url.rstrip("/"),
