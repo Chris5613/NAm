@@ -397,6 +397,9 @@ export default function SideHustleDashboard() {
   const powerMonth = power?.currentMonth || null;
   const monthKwh = Number(powerMonth?.totalKwh) || 0;
   const monthPowerCost = usageCost(powerMonth, powerSettings, powerMonth?.month);
+  const miningDailyRevenue = Math.max(0, Number(powerSettings.dailyRevenueUsd) || 0);
+  const miningDailyCost = totalWatts / 1000 * Number(rateInfo.rate || 0) * 24;
+  const miningDailyNet = miningDailyRevenue - miningDailyCost;
   const deviceRows = Array.isArray(latest?.devices) ? latest.devices : [];
   const deviceUsage = powerMonth?.devices || {};
 
@@ -606,28 +609,43 @@ export default function SideHustleDashboard() {
         </div>
       </section>
 
-      <section className={panel + " min-w-0 p-4"}>
-        <SectionTitle icon={Zap} title="Mining Power" to="/mining-power"/>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-5">
-          {[
-            ["Total Power", `${totalWatts.toFixed(0)} W`, "text-white"],
-            ["Monthly Energy", `${monthKwh.toFixed(2)} kWh`, "text-cyan-300"],
-            ["Monthly Cost", money(monthPowerCost), "text-amber-400"],
-            ["Current Rate", `${(rateInfo.rate * 100).toFixed(2)}¢/kWh`, "text-white"],
-            ["Income / Day", money(dailyIncome), "text-emerald-400"],
-          ].map(([label, value, color]) => <div key={label} className="min-w-0 border-l border-[#28323b] pl-3 first:border-0 first:pl-0">
-            <p className="truncate text-[9px] text-[#778491]">{label}</p><strong className={`mt-1 block truncate text-[16px] tabular-nums ${color}`}>{value}</strong>
-          </div>)}
+      <section className={panel + " min-w-0 overflow-hidden px-5 pb-5 pt-4"}>
+        <div className="flex items-center justify-between gap-3">
+          <Link to="/mining-power" className="flex items-center gap-2.5">
+            <Zap className="h-5 w-5 text-emerald-400"/>
+            <h2 className="text-[16px] font-semibold">Mining Power</h2>
+          </Link>
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-medium ${live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[#303842] bg-[#13181e] text-[#8e9aa6]"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-[#6f7a84]"}`}/>
+            {live ? "Live" : "Stale"}
+          </span>
         </div>
-        <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          {deviceRows.map(device => {
-            const usage = deviceUsage[device.id] || {};
-            const meta = GPU_META[device.id];
-            return <div key={device.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-[#222c35] bg-[#10151a] p-3">
-              <div className="min-w-0 flex-1"><p className="truncate text-xs font-semibold">{device.label}</p><strong className="mt-1 block text-xl tabular-nums">{(Number(device.watts) || 0).toFixed(0)} W</strong><p className="mt-1 text-[9px] text-cyan-300">{(Number(usage.kwh) || 0).toFixed(2)} kWh this month</p></div>
-              {meta && <img src={meta.image} alt="" className="h-14 w-24 object-contain opacity-90"/>}
-            </div>;
-          })}
+
+        <div className="mt-7 grid grid-cols-2 gap-y-5 sm:grid-cols-5 sm:gap-y-0">
+          <div className="min-w-0 pr-4 sm:border-r sm:border-[#26313a]">
+            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Zap className="h-4 w-4 text-cyan-300"/><span>Total Power</span></div>
+            <strong className="mt-2 block text-[31px] font-semibold leading-none tracking-tight tabular-nums text-white">{totalWatts.toFixed(0)} W</strong>
+          </div>
+
+          <div className="min-w-0 px-0 sm:border-r sm:border-[#26313a] sm:px-4">
+            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><CalendarDays className="h-4 w-4 text-cyan-300"/><span>Monthly Energy</span></div>
+            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{monthKwh.toFixed(2)} kWh</strong>
+          </div>
+
+          <div className="min-w-0 pr-4 sm:border-r sm:border-[#26313a] sm:px-4">
+            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Coins className="h-4 w-4 text-amber-400"/><span>Monthly Cost</span></div>
+            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-amber-400">{money(monthPowerCost)}</strong>
+          </div>
+
+          <div className="min-w-0 px-0 sm:border-r sm:border-[#26313a] sm:px-4">
+            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Zap className="h-4 w-4 text-cyan-300"/><span>Current Rate</span></div>
+            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{(rateInfo.rate * 100).toFixed(2)}¢/kWh</strong>
+          </div>
+
+          <div className="col-span-2 min-w-0 sm:col-span-1 sm:pl-4">
+            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><TrendingUp className="h-4 w-4 text-emerald-400"/><span>Net Profit / Day</span></div>
+            <strong className={`mt-2 block text-[18px] font-semibold leading-none tabular-nums ${miningDailyNet >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(miningDailyNet)}</strong>
+          </div>
         </div>
       </section>
     </div>
