@@ -785,12 +785,11 @@ export default function SideHustleDashboard() {
         </div>
 
         <div className="mt-3 min-w-[620px] overflow-x-auto">
-          <div className="grid grid-cols-[1.4fr_.9fr_1fr_1.05fr_.75fr_.75fr] items-center gap-x-3 border-b border-[#25303a] px-1 pb-1.5 text-[9px] text-[#8a96a3]">
+          <div className="grid grid-cols-[1.5fr_.9fr_1fr_1.05fr_.75fr] items-center gap-x-3 border-b border-[#25303a] px-1 pb-1.5 text-[9px] text-[#8a96a3]">
             <span>Project</span>
             <span>Type</span>
             <span className="text-right">Income (Today)</span>
             <span className="text-right">Income (MTD)</span>
-            <span className="text-right">ROI</span>
             <span className="text-right">Status</span>
           </div>
 
@@ -806,7 +805,6 @@ export default function SideHustleDashboard() {
                 </div>
                 <strong className="text-right font-semibold tabular-nums text-[#eef2f6]">{money(row.daily)}</strong>
                 <strong className="text-right font-semibold tabular-nums text-[#eef2f6]">{money(row.amount)}</strong>
-                <strong className="text-right font-semibold tabular-nums text-emerald-400">{row.roi > 0 ? `+${row.roi.toFixed(1)}%` : "—"}</strong>
                 <div className="flex justify-end">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-medium text-emerald-400">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Active
