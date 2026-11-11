@@ -2091,12 +2091,7 @@ const summary =
         <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
           <h2 className="text-[14px] font-semibold">Today's Earnings</h2>
 
-          <div className="mt-3 flex flex-1 flex-col rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-3">
-            <div className="mb-2 flex items-center justify-between gap-3">
-              <h3 className="text-[12px] font-semibold">Where today's earnings came from</h3>
-              <span className="text-[10px] text-muted-foreground">Daily earnings and payouts</span>
-            </div>
-
+          <div className="mt-3 flex flex-1 flex-col px-1">
             {todayBreakdown.length ? (
               <div className="flex flex-1 flex-col justify-evenly gap-1">
                 {todayBreakdown.map(source => (
