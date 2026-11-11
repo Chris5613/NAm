@@ -9,6 +9,7 @@ import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/
 import {
   formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome,
   buildProjectIncome, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills,
+  getRollerCoinTrackerStats, groupManualPositions, loadPositions,
   loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker,
   PROJECT_QUICK_CACHE_KEY, readObject,
 } from "@/lib/yieldFarmingAccounting";
@@ -52,6 +53,39 @@ function portfolioBalances() {
   return balances;
 }
 // Match the Bitcoin holding displayed on Home rather than including project balances.
+function readLiveProjectBalances() {
+  const balances = portfolioBalances();
+  const quick = readObject(PROJECT_QUICK_CACHE_KEY);
+  const set = (name, value) => {
+    const number = Number(value);
+    if (Number.isFinite(number) && number >= 0) balances.set(name.toLowerCase(), number);
+  };
+  // These are the same project sources used by the Passive Income dashboard.
+  for (const project of groupManualPositions(loadPositions())) {
+    set(project.platform, project.totalBalance);
+  }
+  const lulo = (quick.projects || []).filter(project => project?.yield_tracking === "lulo_lending");
+  if (lulo.length) set("Lulo", lulo.reduce((sum, project) => sum + (Number(project.lulo_total_balance_usd) || 0), 0));
+  if (quick.loopscaleSnapshot && Number.isFinite(Number(quick.loopscaleSnapshot.positionValueUsd))) {
+    set("Loopscale", quick.loopscaleSnapshot.positionValueUsd);
+  }
+  const salad = loadSaladTracker();
+  if (salad.initialized || salad.lastSyncedAt) set("Salad", salad.currentBalance);
+  const roller = loadRollerCoinTracker();
+  if (roller.initialized || roller.lastSyncedAt || roller.currentTrxBalance != null) {
+    const stats = getRollerCoinTrackerStats(roller);
+    const balance = Number(stats.currentBalanceUsd);
+    // Avoid replacing a known value with a zero caused by unavailable TRX price.
+    if (Number.isFinite(balance) && (balance > 0 || (roller.currentTrxBalance === 0 && Number(roller.lastTrxPrice) > 0))) {
+      set("RollerCoin", balance);
+    }
+  }
+  const unetwork = loadUnetworkTracker();
+  if (unetwork.initialized || unetwork.lastSyncedAt) set("Unetwork", unetwork.currentBalance);
+  const kryptex = loadKryptexTracker();
+  if (kryptex.initialized && kryptex.lastSyncedAt) set("Kryptex", kryptex.currentBalance);
+  return Object.fromEntries(balances);
+}
 function readHomeBitcoin() {
   const home = appStorage.getCryptoCache()?.projectPortfolio?.bitcoin;
   const homeValue = home?.value ?? home?.balance;
@@ -128,6 +162,7 @@ export default function MonthlyChangesPage() {
   const [bitcoinAmount, setBitcoinAmount] = useState(readHomeBitcoinAmount);
   const [bitcoinPrice, setBitcoinPrice] = useState(() => Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
   const [incomeSources, setIncomeSources] = useState(readIncomeSources);
+  const [liveProjectBalances, setLiveProjectBalances] = useState(readLiveProjectBalances);
   const [backendReady, setBackendReady] = useState(false);
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [editing, setEditing] = useState(null);
@@ -139,6 +174,7 @@ export default function MonthlyChangesPage() {
   useEffect(() => subscribe(() => {
     setRecords(readRecords());
     setPortfolioItems(readPortfolioItems());
+    setLiveProjectBalances(readLiveProjectBalances());
     setLiveBitcoin(readHomeBitcoin());
     setBitcoinAmount(readHomeBitcoinAmount());
     setBitcoinPrice(Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
@@ -186,6 +222,7 @@ export default function MonthlyChangesPage() {
   useEffect(() => {
     const refresh = () => {
       setLiveBitcoin(readHomeBitcoin());
+      setLiveProjectBalances(readLiveProjectBalances());
       setBitcoinAmount(readHomeBitcoinAmount());
       setBitcoinPrice(Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
     };
@@ -252,15 +289,14 @@ export default function MonthlyChangesPage() {
       const start = parseAmount(current?.start) ?? (record.locked ? null : inferredStart);
       // Current month shows the live BTC USD holding from Home; historical months stay saved.
       const nowMonth = month === getCurrentMonthKey();
-      const kryptexLive = incomeSources.kryptex?.reachable && incomeSources.kryptex?.lastSyncedAt
-        ? Number(incomeSources.kryptex.currentBalance) : null;
-      const end = name.toLowerCase() === "btc" && nowMonth && liveBitcoin !== null
+      const liveBalance = liveProjectBalances[name.toLowerCase()];
+      const end = nowMonth && name.toLowerCase() === "btc" && liveBitcoin !== null
         ? liveBitcoin
-        : name.toLowerCase() === "kryptex" && nowMonth && Number.isFinite(kryptexLive)
-          ? kryptexLive : parseAmount(current?.end);
+        : nowMonth && liveBalance !== undefined && Number.isFinite(liveBalance)
+          ? liveBalance : parseAmount(current?.end);
       return { name, start, end, estimated: Boolean(current?.estimated), change: start === null || end === null ? null : round(end - start) };
     });
-  }, [portfolioItems, record.items, record.locked, previous.items, month, liveBitcoin, incomeSources.kryptex]);
+  }, [portfolioItems, record.items, record.locked, previous.items, month, liveBitcoin, liveProjectBalances]);
   const lastNet = Array.isArray(previous.items)
     ? round(previous.items.reduce((sum, row) => sum + (parseAmount(row.end) || 0), 0))
     : null;
