@@ -51,10 +51,6 @@ export default function MonthlyChangesPage() {
       return { name, start, end, change: start === null || end === null ? null : round(end - start) };
     });
   }, [record.items, previous.items]);
-  const hasValues = items.some(row => row.start !== null || row.end !== null);
-  const totalStart = round(items.reduce((n, row) => n + (row.start || 0), 0));
-  const totalEnd = round(items.reduce((n, row) => n + (row.end || 0), 0));
-  const monthlyChange = round(totalEnd - totalStart);
   const lastNet = Array.isArray(previous.items)
     ? round(previous.items.reduce((sum, row) => sum + (parseAmount(row.end) || 0), 0))
     : null;
@@ -101,7 +97,7 @@ export default function MonthlyChangesPage() {
     const existing = Array.isArray(record.items) ? record.items : [];
     const updated = existing.filter(item => item.name !== editing && item.name !== name);
     updated.push({ name, start: draft.start, end: draft.end });
-    save({ ...record, items: updated });
+    save({ ...record, items: updated, excluded: (record.excluded || []).filter(item => item !== name) });
     setEditing(null);
   };
   const deleteItem = () => {
@@ -115,8 +111,9 @@ export default function MonthlyChangesPage() {
   const netStart = round(visibleItems.reduce((n, row) => n + (row.start || 0), 0));
   const netEnd = round(visibleItems.reduce((n, row) => n + (row.end || 0), 0));
   const netChange = round(netEnd - netStart);
-  const netReady = visibleItems.some(row => row.end !== null);
+  const netReady = visibleItems.some(row => row.end !== null) && visibleItems.every(row => row.end !== null || row.start === null);
   const moM = netStart !== 0 ? netChange / Math.abs(netStart) * 100 : null;
+  const hasValues = visibleItems.some(row => row.start !== null || row.end !== null);
   const stat = (title, value, prior, Icon, tone) => {
     const diff = compare(value, prior);
     return <section className={`${box} relative min-w-0 overflow-hidden border-t-2 p-4 ${tone.border}`}>
@@ -155,7 +152,7 @@ export default function MonthlyChangesPage() {
         </div>
         <dl className="space-y-0 border-[#263342] md:border-l md:pl-7">
           {[
-            ["Previous Month", lastNet !== null ? formatMoney(lastNet) : netReady ? formatMoney(netStart) : "—"],
+            ["Previous Month", lastNet !== null ? formatMoney(lastNet) : hasValues ? formatMoney(netStart) : "—"],
             ["Monthly Change", netReady ? signedMoney(netChange) : "—"],
             ["YTD Change", netReady && ytdStart !== null ? signedMoney(round(netEnd - ytdStart)) : "—"],
           ].map(([name, value]) => <div key={name} className="flex justify-between gap-4 border-b border-[#263342] py-2.5 last:border-0">
