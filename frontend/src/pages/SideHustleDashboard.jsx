@@ -8,6 +8,7 @@ import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import IncomeHistoryPage from "@/pages/IncomeHistoryPage";
+import MonthlyChangesPage from "@/pages/MonthlyChangesPage";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
@@ -697,6 +698,7 @@ export default function SideHustleDashboard() {
         { id: "overview", label: "Overview", Icon: Home },
         { id: "passive", label: "Passive Income", Icon: Layers3 },
         { id: "history", label: "Income History", Icon: ChartNoAxesCombined },
+        { id: "changes", label: "Monthly Changes", Icon: CalendarDays },
       ].map(({ id, label, Icon }) => {
         const active = activeView === id;
         return <button
@@ -1014,9 +1016,13 @@ export default function SideHustleDashboard() {
       <div className="pt-1">
         <YieldFarmingPage/>
       </div>
-    ) : (
+    ) : activeView === "history" ? (
       <div className="pt-1">
         <IncomeHistoryPage/>
+      </div>
+    ) : (
+      <div className="pt-1">
+        <MonthlyChangesPage/>
       </div>
     )}
     {addModal && (
