@@ -339,16 +339,54 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
   }));
 }
 
-function SummaryCard({ icon: Icon, title, value, detail, accent = "text-white", sparkColor = "#2dd4bf", detailClass = "text-emerald-400" }) {
-  return <section className={panel + " relative min-w-0 overflow-hidden px-4 py-3.5"}>
-    <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-cyan-400/[0.035] to-transparent" />
-    <div className="relative flex items-start justify-between gap-3">
-      <div className="min-w-0">
-        <div className="flex items-center gap-2 text-[10px] text-[#9aa7b4]"><Icon className="h-4 w-4"/><span className="truncate">{title}</span></div>
-        <strong className={`mt-1.5 block truncate text-[23px] font-semibold tracking-tight tabular-nums ${accent}`}>{value}</strong>
-        <p className={`mt-1 truncate text-[9px] ${detailClass}`}>{detail}</p>
+function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClass = "text-white" }) {
+  const tones = {
+    emerald: {
+      border: "border-emerald-500/20",
+      background: "bg-[radial-gradient(circle_at_100%_100%,rgba(16,185,129,0.24),transparent_52%),linear-gradient(135deg,rgba(16,185,129,0.10),rgba(8,13,15,0.96)_48%)]",
+      iconWrap: "border-emerald-400/20 bg-emerald-400/15 text-emerald-400 shadow-[0_0_18px_rgba(16,185,129,0.16)]",
+      spark: "#22d39a",
+    },
+    sky: {
+      border: "border-sky-500/20",
+      background: "bg-[radial-gradient(circle_at_100%_100%,rgba(14,165,233,0.24),transparent_52%),linear-gradient(135deg,rgba(14,165,233,0.09),rgba(8,13,15,0.96)_48%)]",
+      iconWrap: "border-sky-400/20 bg-sky-400/15 text-sky-300 shadow-[0_0_18px_rgba(14,165,233,0.15)]",
+      spark: "#38bdf8",
+    },
+    violet: {
+      border: "border-violet-500/20",
+      background: "bg-[radial-gradient(circle_at_100%_100%,rgba(139,92,246,0.24),transparent_52%),linear-gradient(135deg,rgba(139,92,246,0.09),rgba(8,13,15,0.96)_48%)]",
+      iconWrap: "border-violet-400/20 bg-violet-400/15 text-violet-300 shadow-[0_0_18px_rgba(139,92,246,0.15)]",
+      spark: "#a78bfa",
+    },
+    amber: {
+      border: "border-amber-500/20",
+      background: "bg-[radial-gradient(circle_at_100%_100%,rgba(245,158,11,0.24),transparent_52%),linear-gradient(135deg,rgba(245,158,11,0.09),rgba(8,13,15,0.96)_48%)]",
+      iconWrap: "border-amber-400/20 bg-amber-400/15 text-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)]",
+      spark: "#fbbf24",
+    },
+  };
+  const theme = tones[tone] || tones.emerald;
+
+  return <section className={`relative min-w-0 overflow-hidden rounded-2xl border px-4 py-3.5 ${theme.border} ${theme.background} shadow-[0_12px_34px_rgba(0,0,0,0.20)]`}>
+    <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.025),transparent_35%)]"/>
+    <div className="relative z-10">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${theme.iconWrap}`}>
+          <Icon className="h-4 w-4"/>
+        </span>
+        <span className="truncate text-[11px] font-semibold text-[#dfe7ee]">{title}</span>
       </div>
-      <div className="self-end"><Sparkline color={sparkColor}/></div>
+
+      <div className="mt-2 flex items-end justify-between gap-3">
+        <div className="min-w-0">
+          <strong className={`block truncate text-[25px] font-semibold leading-none tracking-tight tabular-nums ${valueClass}`}>{value}</strong>
+          <p className="mt-2 truncate text-[9px] text-[#a0acb7]">{detail}</p>
+        </div>
+        <div className="-mb-2 -mr-2 shrink-0 self-end opacity-95">
+          <Sparkline color={theme.spark}/>
+        </div>
+      </div>
     </div>
   </section>;
 }
@@ -450,6 +488,12 @@ export default function SideHustleDashboard() {
   const passiveIncomeToday = Number.isFinite(Number(serverTodayIncome))
     ? Math.max(0, Number(serverTodayIncome))
     : Math.max(0, localTodayIncome);
+  const yesterdayDate = new Date(new Date(`${todayKey}T12:00:00Z`).getTime() - 86400000);
+  const yesterdayKey = yesterdayDate.toISOString().slice(0, 10);
+  const yesterdayIncome = Math.max(0, Number(dailyRows.find(row => row.date === yesterdayKey)?.income) || 0);
+  const todayVsYesterday = yesterdayIncome > 0
+    ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
+    : null;
   const dailyIncomeMap = new Map(dailyRows.map(row => [row.date, Number(row.income) || 0]));
   const rollingEndDay = pacificDayKey(clock);
   const rollingEnd = new Date(`${rollingEndDay}T12:00:00Z`);
@@ -545,19 +589,36 @@ export default function SideHustleDashboard() {
     </header>
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <SummaryCard
+      <KpiCard
         icon={Layers3}
         title="Total Net Worth"
         value={money(totalProjectBalance)}
-        detail="Combined balance across all projects"
-        detailClass="text-[#8d98a4]"
-        sparkColor="#0ea5e9"
+        detail="All project balances"
+        tone="violet"
       />
-      <SummaryCard icon={Coins} title="Passive Income Today" value={money(passiveIncomeToday)} detail="Actual earnings recorded today" accent="text-emerald-400" sparkColor="#10b981"/>
-      <SummaryCard icon={CalendarDays} title="Passive Income This Month" value={money(currentMonth.total)} detail={previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"} sparkColor="#10b981"/>
-      <SummaryCard icon={Zap} title="Mining Power Live" value={`${totalWatts.toFixed(0)} W`} detail={`${deviceRows.length} GPUs · ${monthKwh.toFixed(2)} kWh (MTD)`} accent="text-white" sparkColor="#06b6d4" detailClass="text-[#8d98a4]"/>
+      <KpiCard
+        icon={Coins}
+        title="Passive Income Today"
+        value={money(passiveIncomeToday)}
+        detail={todayVsYesterday == null ? "Actual earnings today" : `${todayVsYesterday >= 0 ? "▲" : "▼"} ${Math.abs(todayVsYesterday).toFixed(1)}% vs. yesterday`}
+        tone="emerald"
+        valueClass="text-emerald-400"
+      />
+      <KpiCard
+        icon={CalendarDays}
+        title="Monthly Income"
+        value={money(currentMonth.total)}
+        detail={previousMonth ? `${monthChange >= 0 ? "▲" : "▼"} ${Math.abs(monthChange).toFixed(1)}% vs. last month` : "Current month total"}
+        tone="sky"
+      />
+      <KpiCard
+        icon={Zap}
+        title="Total Power"
+        value={`${totalWatts.toFixed(0)} W`}
+        detail={`${deviceRows.length} GPUs • ${live ? "Live" : "Stale"}`}
+        tone="amber"
+      />
     </div>
-
     <div className="grid gap-3 xl:grid-cols-[1.6fr_.78fr_1.12fr]">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
