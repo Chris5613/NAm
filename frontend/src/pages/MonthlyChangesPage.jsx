@@ -254,7 +254,7 @@ export default function MonthlyChangesPage() {
   useEffect(() => {
     if (getCurrentMonthKey() !== "2026-11") return;
     const tracker = loadUnetworkTracker();
-    if (!tracker.lastSyncedAt || !tracker.initialized) return;
+    if (!tracker.lastSyncedAt || !Number.isFinite(Date.parse(tracker.lastSyncedAt))) return;
     const balance = Number(tracker.currentBalance);
     if (!Number.isFinite(balance) || balance < 0) return;
 
