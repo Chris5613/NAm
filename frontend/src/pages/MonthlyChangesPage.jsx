@@ -81,7 +81,7 @@ function readLiveProjectBalances() {
     }
   }
   const unetwork = loadUnetworkTracker();
-  if (unetwork.initialized || unetwork.lastSyncedAt) set("Unetwork", unetwork.currentBalance);
+  if (unetwork.initialized || unetwork.lastSyncedAt || unetwork.currentBalance > 0) set("Unetwork", unetwork.currentBalance);
   const kryptex = loadKryptexTracker();
   if (kryptex.initialized && kryptex.lastSyncedAt) set("Kryptex", kryptex.currentBalance);
   return Object.fromEntries(balances);
@@ -123,7 +123,7 @@ function readPortfolioItems() {
     ["Loopscale", Boolean(quick.loopscaleSnapshot)],
     ["Salad", Boolean(loadSaladTracker().initialized || loadSaladTracker().lastSyncedAt)],
     ["RollerCoin", Boolean(loadRollerCoinTracker().initialized || loadRollerCoinTracker().lastSyncedAt || loadRollerCoinTracker().currentTrxBalance != null)],
-    ["Unetwork", Boolean(loadUnetworkTracker().initialized || loadUnetworkTracker().lastSyncedAt || loadUnetworkTracker().currentBalance != null)],
+    ["Unetwork", true],
     ["Kryptex", Boolean(loadKryptexTracker().initialized || loadKryptexTracker().lastSyncedAt)],
   ].filter(([, present]) => present).map(([name]) => name);
   const names = [...entries.map(entry => entry.platform), ...quickProjects
@@ -412,7 +412,7 @@ export default function MonthlyChangesPage() {
     save({ ...record, items: existing.filter(item => item.name !== editing), excluded: [...excluded] });
     setEditing(null);
   };
-  const visibleItems = items.filter(item => !(record.excluded || []).includes(item.name))
+  const visibleItems = items.filter(item => item.name.toLowerCase() === "unetwork" || !(record.excluded || []).includes(item.name))
     .sort((a, b) => (b.end ?? b.start ?? -Infinity) - (a.end ?? a.start ?? -Infinity));
   const netStart = round(visibleItems.reduce((n, row) => n + (row.start || 0), 0));
   const netEnd = round(visibleItems.reduce((n, row) => n + (row.end || 0), 0));
