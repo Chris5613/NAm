@@ -194,6 +194,97 @@ function Sparkline({ color = "#2dd4bf" }) {
   </svg>;
 }
 
+const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
+
+function canonicalSourceName(source) {
+  const value = String(source || "").trim().replace(/\s+/g, " ");
+  const normalized = value.toLowerCase();
+  if (["unity network", "unitynetwork", "unetwork"].includes(normalized)) return "Unetwork";
+  if (normalized === "roller coin") return "RollerCoin";
+  return value;
+}
+
+function pacificDayKey(time) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(new Date(time)).map(part => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function monthPosition(time) {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "numeric",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  }).formatToParts(new Date(time)).map(part => [part.type, Number(part.value)]));
+  const days = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
+  return parts.year * 12 + parts.month - 1 +
+    (parts.day - 1 + (parts.hour + parts.minute / 60 + parts.second / 3600) / 24) / days;
+}
+
+function confirmedKryptexIncome(tracker, startDay, endDay) {
+  return Object.entries(tracker?.kryptexMiningDaily || {}).reduce((sum, [day, value]) =>
+    day >= startDay && day <= endDay && tracker?.kryptexConfirmedDays?.[day]
+      ? sum + Math.max(0, Number(value) || 0)
+      : sum, 0);
+}
+
+function confirmedKryptexIncomeByMonth(tracker, startMonth, endMonth) {
+  return Object.entries(tracker?.kryptexMiningDaily || {}).reduce((sum, [day, value]) => {
+    const month = day.slice(0, 7);
+    return month >= startMonth && month <= endMonth && tracker?.kryptexConfirmedDays?.[day]
+      ? sum + Math.max(0, Number(value) || 0)
+      : sum;
+  }, 0);
+}
+
+function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now()) {
+  const costsBySource = devices.reduce((totals, device) => {
+    const source = canonicalSourceName(device.source);
+    if (source) totals[source] = (totals[source] || 0) + (Number(device.cost) || 0);
+    return totals;
+  }, {});
+
+  return Object.fromEntries(devices.map(device => {
+    const source = canonicalSourceName(device.source);
+    const checkpoint = device.checkpoint;
+    if (!checkpoint || !source) return [device.id, 0];
+
+    if (source === "Kryptex") {
+      if (checkpoint.ledger !== KRYPTEX_PAYBACK_LEDGER) return [device.id, 0];
+
+      const sourceCost = costsBySource[source] || 0;
+      if (!sourceCost) return [device.id, 0];
+
+      const allocation = (Number(device.cost) || 0) / sourceCost;
+      const powerStart = device.powerStartTime || checkpoint.time;
+      const power = Math.max(0, monthPosition(now) - monthPosition(powerStart)) * (Number(device.power) || 0);
+
+      if (device.earningsStartDay) {
+        const accrued = confirmedKryptexIncome(tracker, device.earningsStartDay, pacificDayKey(now));
+        return [device.id, Math.max(0, accrued * allocation - power)];
+      }
+
+      const income = confirmedKryptexIncomeByMonth(tracker, checkpoint.month, currentMonth);
+      const today = pacificDayKey(now);
+      const checkpointDay = pacificDayKey(checkpoint.time);
+      if (checkpointDay === today) {
+        const todayIncome = tracker?.kryptexConfirmedDays?.[today]
+          ? Math.max(0, Number(tracker?.kryptexMiningDaily?.[today]) || 0)
+          : 0;
+        return [device.id, Math.max(0, todayIncome * allocation - power)];
+      }
+
+      return [device.id, Math.max(0,
+        (Number(checkpoint.carried) || 0) +
+        Math.max(0, income - (Number(checkpoint.baseline) || 0)) * allocation -
+        power
+      )];
+    }
+
+    return [device.id, Math.max(0, Number(checkpoint.carried) || 0)];
+  }));
+}
+
 function SummaryCard({ icon: Icon, title, value, detail, accent = "text-white", sparkColor = "#2dd4bf", detailClass = "text-emerald-400" }) {
   return <section className={panel + " relative min-w-0 overflow-hidden px-4 py-3.5"}>
     <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-cyan-400/[0.035] to-transparent" />
@@ -310,7 +401,10 @@ export default function SideHustleDashboard() {
   const deviceUsage = powerMonth?.devices || {};
 
   const hardwareCost = hardware.reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
-  const hardwareRecovered = hardware.reduce((sum, row) => sum + Math.max(0, Number(row.checkpoint?.carried) || 0), 0);
+  const kryptexTracker = loadKryptexTracker();
+  const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock);
+  const hardwareRecovered = Object.values(hardwareEarnings)
+    .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
   const hardwareProgress = hardwareCost > 0 ? hardwareRecovered / hardwareCost * 100 : 0;
 
   const projectSummary = readObject("project_income_portfolio_summary_v1");
@@ -455,7 +549,7 @@ export default function SideHustleDashboard() {
             );
 
             const cost = Math.max(0, Number(row.cost) || 0);
-            const recovered = Math.max(0, Number(row.checkpoint?.carried) || 0);
+            const recovered = Math.max(0, Number(hardwareEarnings[row.id]) || 0);
             const progress = cost > 0 ? recovered / cost * 100 : 0;
             const monthlyPowerCost = Math.max(0, Number(row.power) || 0);
             const grossMonthlyIncome = Math.max(0, Number(sourceProject?.daily) || 0) * 30.4375;
