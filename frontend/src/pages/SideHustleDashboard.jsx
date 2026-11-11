@@ -364,7 +364,6 @@ function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClas
       </div>
       <div className="min-w-0">
         <strong className={`block truncate text-[27px] font-semibold leading-none tracking-tight tabular-nums ${valueClass}`}>{value}</strong>
-        <p className="mt-2 max-w-[55%] truncate text-[9px] text-[#a0acb7]">{detail}</p>
       </div>
     </div>
   </section>;
