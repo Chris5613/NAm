@@ -13,6 +13,7 @@ import {
   PROJECT_QUICK_CACHE_KEY, readObject,
 } from "@/lib/yieldFarmingAccounting";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
+import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { localStorage as appStorage } from "@/lib/localStorage";
 
 const KEY = "monthly_business_changes_v1";
@@ -36,7 +37,7 @@ function readIncomeSources() {
     loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(),
     rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(),
     backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(),
-    legacyProjects, manualIncome: {}, luloBackfills: {},
+    legacyProjects, payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {},
   };
 }
 function portfolioBalances() {
@@ -128,6 +129,9 @@ export default function MonthlyChangesPage() {
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState({ name: "", start: "", end: "" });
   const [error, setError] = useState("");
+  const [expenseEditorOpen, setExpenseEditorOpen] = useState(false);
+  const [expenseDraft, setExpenseDraft] = useState("");
+  const [expenseError, setExpenseError] = useState("");
   useEffect(() => subscribe(() => {
     setRecords(readRecords());
     setPortfolioItems(readPortfolioItems());
@@ -170,7 +174,7 @@ export default function MonthlyChangesPage() {
       incomeSources.backfills, incomeSources.luloBackfills, getCurrentMonthKey(),
       incomeSources.luloProjects, getTodayKey(),
     );
-    const recorded = buildIncomeHistory(effective, {}, getCurrentMonthKey(),
+    const recorded = buildIncomeHistory(effective, incomeSources.payouts, getCurrentMonthKey(),
       legacyProjectIncome(incomeSources.legacyProjects));
     return mergeManualIncome(recorded, incomeSources.manualIncome?.monthly || {}, getCurrentMonthKey());
   }, [backendMonths, incomeSources]);
@@ -352,12 +356,14 @@ export default function MonthlyChangesPage() {
     .map(([, value]) => value)
     .find(value => Array.isArray(value.items) && value.items.some(row => parseAmount(row.start) !== null));
   const ytdStart = yearStart ? round(yearStart.items.reduce((n, row) => n + (parseAmount(row.start) || 0), 0)) : null;
-  const revenue = parseAmount(record.revenue);
-  const expenses = parseAmount(record.expenses);
-  const profit = revenue === null || expenses === null ? null : round(revenue - expenses);
-  const previousRevenue = parseAmount(previous.revenue);
-  const previousExpenses = parseAmount(previous.expenses);
-  const previousProfit = previousRevenue !== null && previousExpenses !== null ? round(previousRevenue - previousExpenses) : null;
+  // Revenue is sourced from Income History's reconciled recorded monthly earnings.
+  // Do not add this to balance-sheet net worth: project balances already include earnings.
+  const revenue = parseAmount(monthEarnings.find(row => row.monthKey === month)?.total);
+  const expenses = parseAmount(record.expenses) ?? 0;
+  const profit = revenue === null ? null : round(revenue - expenses);
+  const previousRevenue = parseAmount(monthEarnings.find(row => row.monthKey === prevMonth(month))?.total);
+  const previousExpenses = parseAmount(previous.expenses) ?? 0;
+  const previousProfit = previousRevenue === null ? null : round(previousRevenue - previousExpenses);
   const compare = (value, prior) => value !== null && prior !== null && prior !== 0
     ? (value - prior) / Math.abs(prior) * 100 : null;
 
@@ -365,6 +371,22 @@ export default function MonthlyChangesPage() {
     const updated = { ...records, [month]: next };
     remoteStorage.setItem(KEY, JSON.stringify(updated));
     setRecords(updated);
+  };
+  const openExpenseEditor = () => {
+    setExpenseDraft(record.expenses == null ? "" : String(record.expenses));
+    setExpenseError("");
+    setExpenseEditorOpen(true);
+  };
+  const saveExpenses = event => {
+    event.preventDefault();
+    const value = expenseDraft.trim() === "" ? 0 : Number(expenseDraft);
+    if (!Number.isFinite(value) || value < 0) {
+      setExpenseError("Enter an expense amount of $0 or more.");
+      return;
+    }
+    save({ ...record, expenses: String(round(value)) });
+    setExpenseEditorOpen(false);
+    setExpenseError("");
   };
   const showEdit = item => {
     setError("");
@@ -456,7 +478,13 @@ export default function MonthlyChangesPage() {
 
     <div className="grid gap-3 md:grid-cols-3">
       {stat("Revenue (MTD)", revenue, previousRevenue, Coins, {border:"border-t-sky-500",text:"text-sky-400"})}
-      {stat("Expenses (MTD)", expenses, previousExpenses, CreditCard, {border:"border-t-purple-500",text:"text-purple-400"})}
+      <div className="relative min-w-0">
+        {stat("Expenses (MTD)", expenses, previousExpenses, CreditCard, {border:"border-t-purple-500",text:"text-purple-400"})}
+        <button type="button" onClick={openExpenseEditor} aria-label="Add or edit monthly expenses"
+          className="absolute right-3 top-3 inline-flex items-center gap-1 rounded-lg border border-purple-500/35 bg-purple-500/10 px-2 py-1 text-[11px] font-semibold text-purple-300 hover:bg-purple-500/20">
+          <Plus size={13}/> {record.expenses == null ? "Add" : "Edit"}
+        </button>
+      </div>
       {stat("Profit (MTD)", profit, previousProfit, TrendingUp, {border:"border-t-teal-400",text:"text-teal-400"})}
     </div>
 
@@ -487,6 +515,29 @@ export default function MonthlyChangesPage() {
         </table>
       </div>
     </section>
+
+    {expenseEditorOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+      onMouseDown={event => { if (event.target === event.currentTarget) setExpenseEditorOpen(false); }}>
+      <form role="dialog" aria-modal="true" aria-label="Monthly expenses" onSubmit={saveExpenses}
+        className={`${box} w-full max-w-md space-y-4 p-6 shadow-2xl`}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-xl font-semibold">Expenses — {monthLabel(month)}</h2>
+          <button type="button" onClick={() => setExpenseEditorOpen(false)} aria-label="Close"><X size={20}/></button>
+        </div>
+        <label className="block text-sm">Total expenses ($)
+          <input autoFocus type="number" required min="0" step="0.01" value={expenseDraft}
+            onChange={event => setExpenseDraft(event.target.value)}
+            placeholder="0.00" className={input}/>
+        </label>
+        <p className="text-xs text-[#93a5b5]">Saved separately for each month. Profit is calculated as recorded revenue minus these expenses.</p>
+        {expenseError && <p role="alert" className="text-sm text-rose-400">{expenseError}</p>}
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setExpenseEditorOpen(false)}
+            className="rounded-lg border border-[#3c5267] px-4 py-2">Cancel</button>
+          <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#061810]">Save expenses</button>
+        </div>
+      </form>
+    </div>}
 
     {editing && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(null); }}>
       <form onSubmit={saveItem} role="dialog" aria-modal="true" aria-label={editing === "new" ? "Add financial item" : "Edit financial item"} className={`${box} w-full max-w-md space-y-4 p-6 shadow-2xl`}>
