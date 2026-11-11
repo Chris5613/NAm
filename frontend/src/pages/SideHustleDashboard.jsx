@@ -2,10 +2,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3,
-  Settings, Target, TrendingUp, Zap,
+  Target, TrendingUp, Zap,
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
+import YieldFarmingPage from "@/pages/YieldFarmingPage";
+import IncomeHistoryPage from "@/pages/IncomeHistoryPage";
 import {
   buildProjectIncome,
   formatCurrency,
@@ -429,6 +431,7 @@ export default function SideHustleDashboard() {
   const [power, setPower] = useState(null);
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
   const [serverTodayIncome, setServerTodayIncome] = useState(null);
+  const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
 
   const refreshTodayIncome = useCallback(async () => {
@@ -552,7 +555,7 @@ export default function SideHustleDashboard() {
       <div>
         <div className="flex items-center gap-3">
           <ChartNoAxesCombined className="h-7 w-7 text-emerald-400"/>
-          <h1 className="text-[30px] font-semibold tracking-tight">Overview</h1>
+          <h1 className="text-[30px] font-semibold tracking-tight">Dashboard</h1>
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium ${live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[#303842] bg-[#13181e] text-[#8e9aa6]"}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-[#6f7a84]"}`}/>{live ? "Live" : "Stale"}
           </span>
@@ -563,53 +566,28 @@ export default function SideHustleDashboard() {
     </header>
 
     <nav aria-label="Dashboard sections" className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-2xl border border-[#242b33] bg-[#0d1014] px-2 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] [scrollbar-width:none]">
-      <Link
-        to="/side-hustle-dashboard"
-        className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-sky-400/70 bg-[#171d24] px-4 text-[11px] font-semibold text-white shadow-[0_0_0_1px_rgba(56,189,248,0.08),0_0_18px_rgba(56,189,248,0.08)]"
-      >
-        <Home className="h-4 w-4"/>
-        Overview
-      </Link>
-      <Link
-        to="/yield-farming"
-        className="flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] font-medium text-[#aab5bf] transition-colors hover:bg-white/[0.04] hover:text-white"
-      >
-        <Layers3 className="h-4 w-4"/>
-        Passive Income
-      </Link>
-      <span className="h-5 w-px shrink-0 bg-white/[0.06]"/>
-      <Link
-        to="/income-history"
-        className="flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] font-medium text-[#aab5bf] transition-colors hover:bg-white/[0.04] hover:text-white"
-      >
-        <ChartNoAxesCombined className="h-4 w-4"/>
-        Income History
-      </Link>
-      <Link
-        to="/project-break-even"
-        className="flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] font-medium text-[#aab5bf] transition-colors hover:bg-white/[0.04] hover:text-white"
-      >
-        <Target className="h-4 w-4"/>
-        Project Break-Even
-      </Link>
-      <Link
-        to="/hardware-payback"
-        className="flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] font-medium text-[#aab5bf] transition-colors hover:bg-white/[0.04] hover:text-white"
-      >
-        <Cpu className="h-4 w-4"/>
-        Hardware Payback
-      </Link>
-      <div className="ml-auto pl-2">
-        <button
+      {[
+        { id: "overview", label: "Overview", Icon: Home },
+        { id: "passive", label: "Passive Income", Icon: Layers3 },
+        { id: "history", label: "Income History", Icon: ChartNoAxesCombined },
+      ].map(({ id, label, Icon }) => {
+        const active = activeView === id;
+        return <button
+          key={id}
           type="button"
-          className="flex h-8 shrink-0 items-center gap-2 rounded-xl border border-[#313943] bg-[#15191f] px-3 text-[10px] font-medium text-[#c5ced6] transition-colors hover:border-[#44515e] hover:text-white"
+          onClick={() => setActiveView(id)}
+          aria-pressed={active}
+          className={`flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] transition-colors ${active
+            ? "border border-sky-400/70 bg-[#171d24] font-semibold text-white shadow-[0_0_0_1px_rgba(56,189,248,0.08),0_0_18px_rgba(56,189,248,0.08)]"
+            : "font-medium text-[#aab5bf] hover:bg-white/[0.04] hover:text-white"}`}
         >
-          <Settings className="h-3.5 w-3.5"/>
-          Customize
-        </button>
-      </div>
+          <Icon className="h-4 w-4"/>
+          {label}
+        </button>;
+      })}
     </nav>
 
+    {activeView === "overview" ? <>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <KpiCard
         icon={Layers3}
@@ -910,5 +888,14 @@ export default function SideHustleDashboard() {
         </div>
       </section>
     </div>
+    </> : activeView === "passive" ? (
+      <div className="pt-1">
+        <YieldFarmingPage/>
+      </div>
+    ) : (
+      <div className="pt-1">
+        <IncomeHistoryPage/>
+      </div>
+    )}
   </div>;
 }
