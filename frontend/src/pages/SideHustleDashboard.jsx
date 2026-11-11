@@ -514,7 +514,7 @@ export default function SideHustleDashboard() {
       <p className="text-[10px] text-[#73808d]">Updated {new Date(clock).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
     </header>
 
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <SummaryCard
         icon={Layers3}
         title="Total Net Worth"
@@ -526,7 +526,6 @@ export default function SideHustleDashboard() {
       <SummaryCard icon={Coins} title="Passive Income Today" value={money(dailyIncome)} detail="+ current daily pace" accent="text-emerald-400" sparkColor="#10b981"/>
       <SummaryCard icon={CalendarDays} title="Passive Income This Month" value={money(currentMonth.total)} detail={previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"} sparkColor="#10b981"/>
       <SummaryCard icon={Zap} title="Mining Power Live" value={`${totalWatts.toFixed(0)} W`} detail={`${deviceRows.length} GPUs · ${monthKwh.toFixed(2)} kWh (MTD)`} accent="text-white" sparkColor="#06b6d4" detailClass="text-[#8d98a4]"/>
-      <HardwareSummaryCard progress={hardwareProgress} earned={hardwareRecovered} cost={hardwareCost}/>
     </div>
 
     <div className="grid gap-3 xl:grid-cols-[1.6fr_.78fr_1.12fr]">
