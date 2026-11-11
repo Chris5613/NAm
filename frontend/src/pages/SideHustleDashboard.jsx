@@ -355,14 +355,14 @@ function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClas
 
   return <section className={`relative min-h-[112px] min-w-0 overflow-hidden rounded-2xl border px-4 py-3.5 ${theme.border} ${theme.background} shadow-[0_12px_34px_rgba(0,0,0,0.20)]`}>
     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.025),transparent_35%)]"/>
-    <div className="relative z-10 flex h-full min-h-[82px] flex-col justify-between">
+    <div className="relative z-10 flex h-full min-h-[82px] flex-col">
       <div className="flex min-w-0 items-center gap-2.5">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${theme.iconWrap}`}>
           <Icon className="h-4 w-4"/>
         </span>
         <span className="truncate text-[11px] font-semibold text-[#dfe7ee]">{title}</span>
       </div>
-      <div className="min-w-0">
+      <div className="mt-3 min-w-0">
         <strong className={`block truncate text-[27px] font-semibold leading-none tracking-tight tabular-nums ${valueClass}`}>{value}</strong>
       </div>
     </div>
@@ -762,7 +762,7 @@ export default function SideHustleDashboard() {
 
           <div className="min-w-0 px-0 sm:border-r sm:border-[#26313a] sm:px-4">
             <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Zap className="h-4 w-4 text-cyan-300"/><span>Current Rate</span></div>
-            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{(rateInfo.rate * 100).toFixed(2)}¢/kWh</strong>
+            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{"$" + Number(rateInfo.rate || 0).toFixed(4) + "/kWh"}</strong>
           </div>
 
           <div className="col-span-2 min-w-0 sm:col-span-1 sm:pl-4">
