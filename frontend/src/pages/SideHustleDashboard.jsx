@@ -4,8 +4,8 @@ import {
   Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Layers3,
-  Target, TrendingUp, Zap,
+  CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3,
+  Settings, Target, TrendingUp, Zap,
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
@@ -587,6 +587,54 @@ export default function SideHustleDashboard() {
       </div>
       <p className="text-[10px] text-[#73808d]">Updated {new Date(clock).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
     </header>
+
+    <nav aria-label="Dashboard sections" className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-2xl border border-[#242b33] bg-[#0d1014] px-2 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] [scrollbar-width:none]">
+      <Link
+        to="/side-hustle-dashboard"
+        className="flex h-9 shrink-0 items-center gap-2 rounded-xl border border-sky-400/70 bg-[#171d24] px-4 text-[11px] font-semibold text-white shadow-[0_0_0_1px_rgba(56,189,248,0.08),0_0_18px_rgba(56,189,248,0.08)]"
+      >
+        <Home className="h-4 w-4"/>
+        Overview
+      </Link>
+      <Link
+        to="/yield-farming"
+        className="flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] font-medium text-[#aab5bf] transition-colors hover:bg-white/[0.04] hover:text-white"
+      >
+        <Layers3 className="h-4 w-4"/>
+        Passive Income
+      </Link>
+      <span className="h-5 w-px shrink-0 bg-white/[0.06]"/>
+      <Link
+        to="/income-history"
+        className="flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] font-medium text-[#aab5bf] transition-colors hover:bg-white/[0.04] hover:text-white"
+      >
+        <ChartNoAxesCombined className="h-4 w-4"/>
+        Income History
+      </Link>
+      <Link
+        to="/project-break-even"
+        className="flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] font-medium text-[#aab5bf] transition-colors hover:bg-white/[0.04] hover:text-white"
+      >
+        <Target className="h-4 w-4"/>
+        Project Break-Even
+      </Link>
+      <Link
+        to="/hardware-payback"
+        className="flex h-9 shrink-0 items-center gap-2 rounded-xl px-4 text-[11px] font-medium text-[#aab5bf] transition-colors hover:bg-white/[0.04] hover:text-white"
+      >
+        <Cpu className="h-4 w-4"/>
+        Hardware Payback
+      </Link>
+      <div className="ml-auto pl-2">
+        <button
+          type="button"
+          className="flex h-8 shrink-0 items-center gap-2 rounded-xl border border-[#313943] bg-[#15191f] px-3 text-[10px] font-medium text-[#c5ced6] transition-colors hover:border-[#44515e] hover:text-white"
+        >
+          <Settings className="h-3.5 w-3.5"/>
+          Customize
+        </button>
+      </div>
+    </nav>
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <KpiCard
