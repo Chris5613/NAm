@@ -417,7 +417,8 @@ export default function MonthlyChangesPage() {
   const netStart = round(visibleItems.reduce((n, row) => n + (row.start || 0), 0));
   const netEnd = round(visibleItems.reduce((n, row) => n + (row.end || 0), 0));
   const netChange = round(netEnd - netStart);
-  const netReady = visibleItems.some(row => row.end !== null) && visibleItems.every(row => row.end !== null || row.start === null);
+  const netReady = visibleItems.length > 0 && visibleItems.every(row => row.end !== null);
+  const changeReady = netReady && visibleItems.every(row => row.start !== null);
   const moM = netStart !== 0 ? netChange / Math.abs(netStart) * 100 : null;
   const hasValues = visibleItems.some(row => row.start !== null || row.end !== null);
   const stat = (title, value, prior, Icon, tone) => {
@@ -469,13 +470,13 @@ export default function MonthlyChangesPage() {
           <h2 className="text-lg font-semibold">Net Worth</h2>
           <strong className="mt-2 block text-4xl font-bold tracking-tight tabular-nums text-emerald-400 sm:text-5xl">{netReady ? formatMoney(netEnd) : "—"}</strong>
           <div className="mt-3 inline-flex rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">
-            {netReady && moM !== null ? `${signedMoney(netChange)} (${moM > 0 ? "+" : ""}${moM.toFixed(1)}% MoM)` : "Enter balances to track changes"}
+            {changeReady && moM !== null ? `${signedMoney(netChange)} (${moM > 0 ? "+" : ""}${moM.toFixed(1)}% MoM)` : "Enter balances to track changes"}
           </div>
         </div>
         <dl className="space-y-0 border-[#263342] md:border-l md:pl-7">
           {[
-            ["Previous Month", lastNet !== null ? formatMoney(lastNet) : hasValues ? formatMoney(netStart) : "—"],
-            ["Monthly Change", netReady ? signedMoney(netChange) : "—"],
+            ["Previous Month", lastNet !== null ? formatMoney(lastNet) : changeReady ? formatMoney(netStart) : "—"],
+            ["Monthly Change", changeReady ? signedMoney(netChange) : "—"],
             ["YTD Change", netReady && ytdStart !== null ? signedMoney(round(netEnd - ytdStart)) : "—"],
           ].map(([name, value]) => <div key={name} className="flex justify-between gap-4 border-b border-[#263342] py-2.5 last:border-0">
             <dt className="text-sm text-[#a4b4c4]">{name}</dt>
@@ -515,8 +516,8 @@ export default function MonthlyChangesPage() {
             </tr>)}
             <tr className="border-t-2 border-cyan-500 text-base font-bold">
               <td className="py-3 uppercase tracking-[0.15em] text-cyan-400">Net Worth</td>
-              <td className="py-3 text-right tabular-nums">{hasValues ? formatMoney(netStart) : "—"}</td>
-              <td className={`py-3 text-right tabular-nums ${netChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{netReady ? signedMoney(netChange) : "—"}</td>
+              <td className="py-3 text-right tabular-nums">{changeReady ? formatMoney(netStart) : "—"}</td>
+              <td className={`py-3 text-right tabular-nums ${netChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{changeReady ? signedMoney(netChange) : "—"}</td>
               <td className="py-3 text-right tabular-nums text-emerald-400">{netReady ? formatMoney(netEnd) : "—"}</td>
               <td/>
             </tr>
