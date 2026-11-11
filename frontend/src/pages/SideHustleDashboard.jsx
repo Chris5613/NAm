@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3,
-  Plus, Target, TrendingUp, Zap,
+  Plus, Target, TrendingUp, Zap, X,
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
@@ -30,6 +30,7 @@ import {
   loadMonthlySnapshots,
   loadPositions,
   loadProjectPayback,
+  saveProjectPayback,
   loadRollerCoinTracker,
   loadSaladTracker,
   loadUnetworkTracker,
@@ -442,6 +443,10 @@ export default function SideHustleDashboard() {
   const [recordedHistory, setRecordedHistory] = useState(readRecordedHistory);
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
+  const [addModal, setAddModal] = useState(null);
+  const [hardwareDraft, setHardwareDraft] = useState({ name: "", cost: "", power: "", source: "", startMonth: getCurrentMonthKey() });
+  const [projectDraft, setProjectDraft] = useState({ id: "", cost: "" });
+  const [addError, setAddError] = useState("");
 
   const refreshIncomeMetrics = useCallback(async () => {
     const today = pacificDayKey(Date.now());
@@ -613,6 +618,65 @@ export default function SideHustleDashboard() {
     };
   });
 
+  const addSourceOptions = [...new Set([
+    ...income.projects.map(project => project.name),
+    ...Object.keys(recordedCurrentMonth?.sources || {}),
+  ].map(canonicalSourceName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const projectAddOptions = [...income.projects]
+    .filter(project => project.id && project.name && !project.id.endsWith("-live"))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  function openAddModal(kind) {
+    setAddError("");
+    if (kind === "hardware") setHardwareDraft({
+      name: "", cost: "", power: "", source: "", startMonth: currentMonthKey,
+    });
+    if (kind === "project") setProjectDraft({ id: "", cost: "" });
+    setAddModal(kind);
+  }
+  function saveHardware(event) {
+    event.preventDefault();
+    const name = hardwareDraft.name.trim();
+    const source = canonicalSourceName(hardwareDraft.source);
+    const cost = Number(hardwareDraft.cost);
+    const power = Number(hardwareDraft.power || 0);
+    if (!name || !source || !/^\d{4}-\d{2}$/.test(hardwareDraft.startMonth) ||
+        hardwareDraft.startMonth > currentMonthKey || !Number.isFinite(cost) || cost <= 0 ||
+        !Number.isFinite(power) || power < 0) {
+      setAddError("Enter a name, purchase cost, valid purchase month, and income source.");
+      return;
+    }
+    const now = Date.now();
+    const device = {
+      id: crypto.randomUUID(), name, source, cost, power,
+      startMonth: hardwareDraft.startMonth,
+      checkpoint: {
+        time: now, month: currentMonthKey,
+        baseline: source === "Kryptex" ? 0 : Number(recordedCurrentMonth?.sources?.[source]) || 0,
+        carried: 0,
+        ...(source === "Kryptex" ? { ledger: KRYPTEX_PAYBACK_LEDGER } : {}),
+      },
+    };
+    const next = [...readHardware(), device];
+    remoteStorage.setItem(HARDWARE_KEY, JSON.stringify(next));
+    setHardware(next);
+    setAddModal(null);
+  }
+  function saveProjectCost(event) {
+    event.preventDefault();
+    const selected = projectAddOptions.find(project => project.id === projectDraft.id);
+    const cost = Number(projectDraft.cost);
+    if (!selected || !projectDraft.cost.trim() || !Number.isFinite(cost) || cost <= 0) {
+      setAddError("Choose an existing project and enter a cost greater than $0.");
+      return;
+    }
+    const next = { ...loadProjectPayback(), [selected.id]: {
+      totalSpent: cost, updatedAt: new Date().toISOString(),
+    } };
+    saveProjectPayback(next);
+    setIncome(readIncomeData());
+    setAddModal(null);
+  }
+
   return <div className="min-w-0 space-y-3 pb-8 text-white" data-testid="side-hustle-dashboard">
     <header className="flex flex-wrap items-end justify-between gap-3 px-1">
       <div>
@@ -691,13 +755,14 @@ export default function SideHustleDashboard() {
               <h2 className="text-[15px] font-semibold leading-none">Hardware Payback</h2>
             </div>
           </div>
-          <Link
-            to="/hardware-payback"
+          <button
+            type="button"
+            onClick={() => openAddModal("hardware")}
             className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] px-2.5 text-[10px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/15"
           >
             <Plus className="h-3.5 w-3.5"/>
             Add
-          </Link>
+          </button>
         </div>
 
         <div className="mt-3 space-y-2">
@@ -778,13 +843,14 @@ export default function SideHustleDashboard() {
               <h2 className="text-[15px] font-semibold leading-none">Project Break-Even</h2>
             </div>
           </div>
-          <Link
-            to="/project-break-even"
+          <button
+            type="button"
+            onClick={() => openAddModal("project")}
             className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] px-2.5 text-[10px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/15"
           >
             <Plus className="h-3.5 w-3.5"/>
             Add
-          </Link>
+          </button>
         </div>
 
         <div className="mt-3 divide-y divide-[#202932]">
@@ -951,6 +1017,81 @@ export default function SideHustleDashboard() {
     ) : (
       <div className="pt-1">
         <IncomeHistoryPage/>
+      </div>
+    )}
+    {addModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+        onMouseDown={event => { if (event.target === event.currentTarget) setAddModal(null); }}>
+        <form onSubmit={addModal === "hardware" ? saveHardware : saveProjectCost}
+          role="dialog" aria-modal="true" aria-label={addModal === "hardware" ? "Add hardware" : "Add project break-even cost"}
+          className="w-full max-w-md space-y-4 rounded-2xl border border-[#263342] bg-[#0b1017] p-6 text-white shadow-2xl">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xl font-semibold">{addModal === "hardware" ? "Add hardware" : "Add project break-even cost"}</h2>
+            <button type="button" aria-label="Close" onClick={() => setAddModal(null)}
+              className="rounded-lg p-1 text-[#91a4b8] hover:bg-white/10 hover:text-white"><X className="h-5 w-5"/></button>
+          </div>
+          {addModal === "hardware" ? (
+            <>
+              <label className="block text-sm">Hardware name
+                <input autoFocus required value={hardwareDraft.name} onChange={event => setHardwareDraft(current => ({ ...current, name: event.target.value }))}
+                  placeholder="RTX 5070" className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
+              </label>
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-sm">Purchase cost ($)
+                  <input required type="number" min="0.01" step="0.01" value={hardwareDraft.cost}
+                    onChange={event => setHardwareDraft(current => ({ ...current, cost: event.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
+                </label>
+                <label className="block text-sm">Power cost / month
+                  <input type="number" min="0" step="0.01" value={hardwareDraft.power}
+                    onChange={event => setHardwareDraft(current => ({ ...current, power: event.target.value }))}
+                    className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
+                </label>
+              </div>
+              <label className="block text-sm">Income source
+                <select required value={hardwareDraft.source}
+                  onChange={event => setHardwareDraft(current => ({ ...current, source: event.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3">
+                  <option value="" disabled>Select a source</option>
+                  {addSourceOptions.map(source => <option key={source} value={source}>{source}</option>)}
+                </select>
+              </label>
+              <label className="block text-sm">Purchase month
+                <input required type="month" max={currentMonthKey} value={hardwareDraft.startMonth}
+                  onChange={event => setHardwareDraft(current => ({ ...current, startMonth: event.target.value }))}
+                  className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
+              </label>
+            </>
+          ) : (
+            <>
+              <label className="block text-sm">Project
+                <select autoFocus required value={projectDraft.id}
+                  onChange={event => {
+                    const project = projectAddOptions.find(row => row.id === event.target.value);
+                    setProjectDraft({ id: event.target.value, cost: project?.spent > 0 ? String(project.spent) : "" });
+                  }}
+                  className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3">
+                  <option value="" disabled>Select a project</option>
+                  {projectAddOptions.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </select>
+              </label>
+              <label className="block text-sm">Total spent ($)
+                <input required type="number" min="0.01" step="0.01" value={projectDraft.cost}
+                  onChange={event => setProjectDraft(current => ({ ...current, cost: event.target.value }))}
+                  placeholder="0.00" className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
+              </label>
+              <p className="text-xs text-[#91a4b8]">This sets the purchase cost for an existing project. Its tracked earnings are unchanged.</p>
+            </>
+          )}
+          {addError && <p role="alert" className="text-sm text-rose-400">{addError}</p>}
+          <div className="flex gap-2">
+            <button type="button" onClick={() => setAddModal(null)}
+              className="rounded-lg border border-[#3c5267] px-4 py-3 text-sm">Cancel</button>
+            <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-3 text-sm font-semibold text-[#061810]">
+              {addModal === "hardware" ? "Save hardware" : "Save project cost"}
+            </button>
+          </div>
+        </form>
       </div>
     )}
   </div>;
