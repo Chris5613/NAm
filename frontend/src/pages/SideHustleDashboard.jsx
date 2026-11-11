@@ -427,11 +427,18 @@ export default function SideHustleDashboard() {
   const recentMonths = income.months.slice(-12);
   const dailyIncome = income.projects.reduce((sum, project) => sum + project.daily, 0);
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
-  const chartData = recentMonths.map(row => ({
-    monthKey: row.monthKey,
-    label: new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${row.monthKey}-15T12:00:00Z`)),
-    income: Number(row.total) || 0,
-  }));
+  const dailyIncomeMap = new Map(dailyRows.map(row => [row.date, Number(row.income) || 0]));
+  const rollingEndDay = pacificDayKey(clock);
+  const rollingEnd = new Date(`${rollingEndDay}T12:00:00Z`);
+  const chartData = Array.from({ length: 30 }, (_, index) => {
+    const date = new Date(rollingEnd.getTime() - (29 - index) * 86400000);
+    const day = date.toISOString().slice(0, 10);
+    return {
+      date: day,
+      label: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(date),
+      income: dailyIncomeMap.get(day) || 0,
+    };
+  });
   const historyRows = [...dailyRows].reverse().slice(0, 5).map((row, index, reversed) => {
     const chronological = [...dailyRows];
     const sourceIndex = chronological.findIndex(item => item.date === row.date);
@@ -535,7 +542,7 @@ export default function SideHustleDashboard() {
             <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
             <div>
               <h2 className="text-[15px] font-semibold leading-none">Income Trend</h2>
-              <p className="mt-1 text-[10px] text-[#7f8b97]">Total passive income over time</p>
+              <p className="mt-1 text-[10px] text-[#7f8b97]">Total passive income over the last 30 days</p>
             </div>
           </div>
         </div>
@@ -553,8 +560,8 @@ export default function SideHustleDashboard() {
               <YAxis stroke="#74818d" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={value => `$${Number(value).toFixed(0)}`}/>
               <Tooltip
                 contentStyle={{ background: "#0a0f13", border: "1px solid #2b3946", borderRadius: 10, fontSize: 10 }}
-                labelFormatter={(_, items) => items?.[0]?.payload?.monthKey
-                  ? new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${items[0].payload.monthKey}-15T12:00:00Z`))
+                labelFormatter={(_, items) => items?.[0]?.payload?.date
+                  ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${items[0].payload.date}T12:00:00Z`))
                   : ""}
                 formatter={value => [money(value), "Income"]}
               />
