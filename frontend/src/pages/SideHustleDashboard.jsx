@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
-import { calculateNetWorth, getDailyNetWorthChange } from "@/lib/dashboardMetrics";
-import { localStorage as appStorage } from "@/lib/localStorage";
 import {
   buildProjectIncome,
   formatCurrency,
@@ -244,14 +242,8 @@ export default function SideHustleDashboard() {
   const hardwareRecovered = hardware.reduce((sum, row) => sum + Math.max(0, Number(row.checkpoint?.carried) || 0), 0);
   const hardwareProgress = hardwareCost > 0 ? hardwareRecovered / hardwareCost * 100 : 0;
 
-  const storedAssets = appStorage.getAssets?.() || [];
-  const cryptoCache = appStorage.getCryptoCache?.() || {};
-  const projectSummary = appStorage.get?.("project_income_portfolio_summary_v1") || null;
-  const projectBalance = Number(projectSummary?.portfolioBalance);
-  const bitcoinBalance = Number(cryptoCache?.projectPortfolio?.bitcoin?.value ?? cryptoCache?.projectPortfolio?.bitcoin?.balance) || 0;
-  const cryptoTotal = Number.isFinite(projectBalance) ? projectBalance + bitcoinBalance : Number(cryptoCache.total) || 0;
-  const totalNetWorth = calculateNetWorth(storedAssets, cryptoTotal).total_net_worth || 0;
-  const netWorthDaily = getDailyNetWorthChange(totalNetWorth) || {};
+  const projectSummary = readObject("project_income_portfolio_summary_v1");
+  const totalProjectBalance = Math.max(0, Number(projectSummary?.portfolioBalance) || 0);
   const sourceRows = [...(currentMonth.platforms || [])].sort((a, b) => b.amount - a.amount);
   const maxSource = Math.max(1, ...sourceRows.map(row => Number(row.amount) || 0));
 
@@ -274,9 +266,9 @@ export default function SideHustleDashboard() {
       <SummaryCard
         icon={Layers3}
         title="Total Net Worth"
-        value={money(totalNetWorth)}
-        detail={`${Number(netWorthDaily?.change || 0) >= 0 ? "+" : ""}${money(netWorthDaily?.change || 0)} today · ${Number(netWorthDaily?.percent || 0).toFixed(2)}%`}
-        detailClass={Number(netWorthDaily?.change || 0) >= 0 ? "text-emerald-400" : "text-rose-400"}
+        value={money(totalProjectBalance)}
+        detail="Combined balance across all projects"
+        detailClass="text-[#8d98a4]"
         sparkColor="#0ea5e9"
       />
       <SummaryCard icon={Coins} title="Passive Income Today" value={money(dailyIncome)} detail="+ current daily pace" accent="text-emerald-400" sparkColor="#10b981"/>
