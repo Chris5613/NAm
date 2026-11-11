@@ -15,7 +15,7 @@ import {
   readObject,
 } from "@/lib/yieldFarmingAccounting";
 
-const panel = "min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017]";
+const panel = "min-w-0 rounded-2xl border border-[#242b33] bg-[#0d1014]";
 const monthLabel = key => new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" })
   .format(new Date(`${key}-15T12:00:00Z`));
 const shortMonth = key => new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" })
@@ -161,8 +161,8 @@ export default function IncomeHistoryPage() {
             className={`group relative h-[58px] w-[96px] shrink-0 rounded-xl border px-2.5 py-2 text-left transition-all duration-150 ${active
               ? "w-[104px] border-emerald-400/80 bg-emerald-500/[0.10] shadow-[0_0_0_1px_rgba(52,211,153,0.08),0_0_18px_rgba(16,185,129,0.08)]"
               : recorded
-                ? "border-[#2b3848] bg-[#0e141c] hover:border-[#465665] hover:bg-[#121a23]"
-                : "cursor-not-allowed border-[#222d37] bg-[#0b1117] opacity-45"}`}
+                ? "border-[#303842] bg-[#13181e] hover:border-[#3b4650] hover:bg-[#13181e]"
+                : "cursor-not-allowed border-[#202a33] bg-[#0a0e12] opacity-45"}`}
           >
             <span className={`block text-[10px] font-medium ${active ? "text-emerald-300" : "text-[#9fb0c1]"}`}>{monthYear}</span>
             <span className={`mt-1.5 block truncate text-[14px] font-semibold leading-none tabular-nums ${recorded ? "text-white" : "text-[#617487]"}`}>
@@ -180,18 +180,18 @@ export default function IncomeHistoryPage() {
           <div className="flex shrink-0 gap-1">
             <button type="button" aria-label="Previous recorded month" disabled={selectedIndex <= 0}
               onClick={() => setSelectedMonth(recordedVisible[selectedIndex - 1].monthKey)}
-              className="rounded-md border border-[#2b3848] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronLeft className="h-4 w-4"/></button>
+              className="rounded-md border border-[#303842] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronLeft className="h-4 w-4"/></button>
             <button type="button" aria-label="Next recorded month" disabled={selectedIndex < 0 || selectedIndex >= recordedVisible.length - 1}
               onClick={() => setSelectedMonth(recordedVisible[selectedIndex + 1].monthKey)}
-              className="rounded-md border border-[#2b3848] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronRight className="h-4 w-4"/></button>
+              className="rounded-md border border-[#303842] p-1.5 text-muted-foreground hover:text-white disabled:opacity-30"><ChevronRight className="h-4 w-4"/></button>
           </div>
         </div>
         <p className="mt-3 text-4xl font-semibold tracking-tight tabular-nums sm:text-[40px]">{selected ? formatCurrency(selected.total) : "—"}</p>
         <p className="mt-1 text-xs text-muted-foreground">Recorded income</p>
-        <div className="my-5 border-t border-[#263747]"/>
+        <div className="my-5 border-t border-[#242d35]"/>
         {sources.length ? <>
           <h3 className="text-sm font-semibold">{sources.length} income {sources.length === 1 ? "source" : "sources"}</h3>
-          <div className="mt-5 flex h-2.5 overflow-hidden rounded-full bg-[#233341]" aria-hidden="true">
+          <div className="mt-5 flex h-2.5 overflow-hidden rounded-full bg-[#2a333c]" aria-hidden="true">
             {sources.map(([name, amount]) => <span key={name} style={{ width: `${selected.total > 0 ? Math.max(0, amount) / selected.total * 100 : 0}%`, backgroundColor: sourceColor(name) }}/>) }
           </div>
           <div className="mt-5 space-y-3">
@@ -213,10 +213,10 @@ export default function IncomeHistoryPage() {
             <AreaChart data={chartData} margin={{ top: 15, right: 12, bottom: 0, left: -6 }}
               onClick={event => { const month = event?.activePayload?.[0]?.payload; if (month?.value != null) setSelectedMonth(month.monthKey); }}>
               <defs><linearGradient id="incomeHistoryFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#30d991" stopOpacity={0.27}/><stop offset="100%" stopColor="#30d991" stopOpacity={0}/></linearGradient></defs>
-              <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+              <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
               <XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: "#91a1b2" }} minTickGap={16}/>
               <YAxis axisLine={false} tickLine={false} width={52} tick={{ fontSize: 10, fill: "#91a1b2" }} domain={[0, chartMax * 1.15]} tickFormatter={value => `$${value.toFixed(0)}`}/>
-              <Tooltip contentStyle={{ background: "#111b27", border: "1px solid #33465a", borderRadius: 10, fontSize: 12 }}
+              <Tooltip contentStyle={{ background: "#13181e", border: "1px solid #303842", borderRadius: 10, fontSize: 12 }}
                 labelFormatter={(_, items) => items?.[0]?.payload?.monthKey ? monthLabel(items[0].payload.monthKey) : ""}
                 formatter={value => [formatCurrency(value), "Recorded income"]}/>
               <Area type="monotone" dataKey="value" stroke="#30e69b" strokeWidth={2.75} fill="url(#incomeHistoryFill)" connectNulls={false}

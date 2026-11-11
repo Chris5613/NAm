@@ -48,12 +48,12 @@ function KryptexProjectCard({
         rounded-2xl
         border
         border-border/60
-        bg-[#0e1218]
+        bg-[#13181e]
         shadow-sm
         transition-all
         duration-200
         hover:border-border
-        hover:bg-[#151e28]
+        hover:bg-[#171d24]
       "
     >
       <button
@@ -564,12 +564,12 @@ function ProjectCard({
         rounded-2xl
         border
         border-border/60
-        bg-[#0e1218]
+        bg-[#13181e]
         shadow-sm
         transition-all
         duration-200
         hover:border-border
-        hover:bg-[#151e28]
+        hover:bg-[#171d24]
       "
     >
       <button
@@ -658,12 +658,12 @@ function UnetworkProjectCard({
         rounded-2xl
         border
         border-border/60
-        bg-[#0e1218]
+        bg-[#13181e]
         shadow-sm
         transition-all
         duration-200
         hover:border-border
-        hover:bg-[#151e28]
+        hover:bg-[#171d24]
       "
     >
       <button
@@ -844,12 +844,12 @@ function SaladProjectCard({
         rounded-2xl
         border
         border-border/60
-        bg-[#0e1218]
+        bg-[#13181e]
         shadow-sm
         transition-all
         duration-200
         hover:border-border
-        hover:bg-[#151e28]
+        hover:bg-[#171d24]
       "
     >
       <button
@@ -1022,12 +1022,12 @@ return (
       rounded-2xl
       border
       border-border/60
-      bg-[#0e1218]
+      bg-[#13181e]
       shadow-sm
       transition-all
       duration-200
       hover:border-border
-      hover:bg-[#151e28]
+      hover:bg-[#171d24]
     "
   >
     <button
@@ -1634,7 +1634,7 @@ function ProjectIncomeSection({
   }
 
   return (
-    <section className="space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-3">
+    <section className="space-y-2 rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
@@ -2198,7 +2198,7 @@ function ProjectIncomeModal({
 
 function Metric({ label, value, icon: Icon }) {
   return (
-    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#2a3039] bg-[#0e141c] px-3 py-2">
+    <div className="flex min-w-0 flex-col justify-center rounded-xl border border-[#303842] bg-[#13181e] px-3 py-2">
       <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
         <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.6} />
         <span className="leading-snug">{label}</span>

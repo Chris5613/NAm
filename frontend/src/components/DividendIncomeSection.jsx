@@ -124,7 +124,7 @@ export default function DividendIncomeSection({ onEstimateChange, payouts = {}, 
     .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5);
 
   return (
-    <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5" aria-label="Stock dividends">
+    <section className="min-w-0 space-y-2 rounded-2xl border border-[#242b33] bg-[#0d1014] p-2.5" aria-label="Stock dividends">
       <div className="flex items-center justify-between gap-2 px-1">
         <h2 className="text-[15px] font-semibold">Stock dividends (2)</h2>
         <span className="text-[11px] text-muted-foreground">VTI · VOO</span>
@@ -134,7 +134,7 @@ export default function DividendIncomeSection({ onEstimateChange, payouts = {}, 
           const next = nextPayment(schedule, symbol, today);
           return (
             <button key={symbol} type="button" onClick={() => { setPayoutDate(getTodayKey()); setSelected(symbol); }}
-              className="flex w-full min-w-0 items-start gap-2 rounded-2xl border border-border/60 bg-[#0e1218] px-3.5 py-2.5 text-left shadow-sm transition-all duration-200 hover:border-border hover:bg-[#151e28]"
+              className="flex w-full min-w-0 items-start gap-2 rounded-2xl border border-border/60 bg-[#13181e] px-3.5 py-2.5 text-left shadow-sm transition-all duration-200 hover:border-border hover:bg-[#171d24]"
               aria-label={`View ${symbol} dividend details`}>
               <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#a52b32] text-xs font-bold text-white">V</span>
               <span className="min-w-0 flex-1">
@@ -182,10 +182,10 @@ export default function DividendIncomeSection({ onEstimateChange, payouts = {}, 
                 </div>}
                 <div className="flex flex-wrap items-end gap-2">
                   <label className="flex min-w-[130px] flex-1 flex-col gap-1 text-muted-foreground">Payment date
-                    <input type="date" required max={today} value={payoutDate} onChange={event => setPayoutDate(event.target.value)} className="h-9 rounded-md border border-border/70 bg-[#0e141c] px-2 text-foreground" />
+                    <input type="date" required max={today} value={payoutDate} onChange={event => setPayoutDate(event.target.value)} className="h-9 rounded-md border border-border/70 bg-[#13181e] px-2 text-foreground" />
                   </label>
                   <label className="flex min-w-[110px] flex-1 flex-col gap-1 text-muted-foreground">Correct amount (USD)
-                    <input type="number" required min="0.01" step="0.01" value={payoutAmount} onChange={event => setPayoutAmount(event.target.value)} className="h-9 rounded-md border border-border/70 bg-[#0e141c] px-2 text-foreground" />
+                    <input type="number" required min="0.01" step="0.01" value={payoutAmount} onChange={event => setPayoutAmount(event.target.value)} className="h-9 rounded-md border border-border/70 bg-[#13181e] px-2 text-foreground" />
                   </label>
                   <button type="submit" className="h-9 rounded-md bg-emerald-500 px-3 font-semibold text-black hover:bg-emerald-400">{selectedPayout?.amount > 0 ? "Correct payout" : "Record payout"}</button>
                 </div>

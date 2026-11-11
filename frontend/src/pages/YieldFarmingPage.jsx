@@ -1901,7 +1901,7 @@ const summary =
           <div className="shrink-0">
             <Dialog>
               <DialogTrigger asChild>
-                <Button type="button" variant="outline" size="sm" className="border-[#2b3848] bg-[#0e141c] text-muted-foreground hover:text-white">
+                <Button type="button" variant="outline" size="sm" className="border-[#303842] bg-[#13181e] text-muted-foreground hover:text-white">
                   Inactive projects ({inactiveProgramCards.length})
                 </Button>
               </DialogTrigger>
@@ -1928,21 +1928,21 @@ const summary =
         </div>
       </header>
       <div className="grid items-stretch gap-2.5 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
-        <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
+        <section className="flex min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-[14px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : earningsChartRange === "monthly" ? "This Month" : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}</h2>
               <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : earningsChartRange === "weekly" ? weekEarnings : earningsChartRange === "monthly" ? thisMonthEarned : thisYearEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex rounded-lg border border-[#2b3848] bg-[#0e141c] p-0.5" aria-label="Earnings chart period">
+              <div className="flex rounded-lg border border-[#303842] bg-[#13181e] p-0.5" aria-label="Earnings chart period">
                 {["daily", "weekly", "monthly", "yearly"].map(period => (
                   <button
                     key={period}
                     type="button"
                     onClick={() => { setEarningsChartRange(period); setSelectedEarningsPoint(null); }}
                     aria-pressed={earningsChartRange === period}
-                    className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${earningsChartRange === period ? "bg-[#293747] text-white" : "text-muted-foreground hover:text-white"}`}
+                    className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${earningsChartRange === period ? "bg-[#283039] text-white" : "text-muted-foreground hover:text-white"}`}
                   >
                     {period === "daily" ? "Daily" : period === "weekly" ? "Weekly" : period === "monthly" ? "Monthly" : "Yearly"}
                   </button>
@@ -1956,7 +1956,7 @@ const summary =
                     setEarningsChartYear(event.target.value);
                     setSelectedEarningsPoint(null);
                   }}
-                  className="rounded-lg border border-[#2b3848] bg-[#0e141c] px-2 py-1 text-[10px] font-medium text-white outline-none"
+                  className="rounded-lg border border-[#303842] bg-[#13181e] px-2 py-1 text-[10px] font-medium text-white outline-none"
                 >
                   {availableEarningsYears.map(year => (
                     <option key={year} value={year}>{year}</option>
@@ -1979,10 +1979,10 @@ const summary =
                       <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="x" type="number" domain={[0,dailyChartEnd]} ticks={dailyChartTicks} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} tickFormatter={hour => hour === 0 ? "12am" : hour === 12 ? "12pm" : hour === 24 ? "12am" : hour < 12 ? hour+"am" : (hour-12)+"pm"}/>
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[dailyChartMin,dailyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={hour => {
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={hour => {
                     const rounded = Math.max(0, Math.min(24,Number(hour)));
                     const hours = Math.floor(rounded);
                     const mins = Math.floor((rounded-hours)*60);
@@ -1998,23 +1998,23 @@ const summary =
                       <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} interval={0} tick={{fontSize:11,fill:"#91a1b2"}} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,observedWeekMaximum*1.15]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
                   <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldWeeklyLiveFill)"
                     dot={props => {
                       const day = props?.payload?.key;
                       if (!day || day > todayKey || props?.payload?.value == null) return null;
                       return <circle cx={props.cx} cy={props.cy} r={6} fill="#30e69b"
-                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => setSelectedEarningsPoint({range:"weekly",key:day})}/>;
                     }}
                     activeDot={props => {
                       const day = props?.payload?.key;
                       if (!day || day > todayKey || props?.payload?.value == null) return null;
                       return <circle cx={props.cx} cy={props.cy} r={8} fill="#30e69b"
-                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => setSelectedEarningsPoint({range:"weekly",key:day})}/>;
                     }}
                     connectNulls={false} isAnimationActive={false}>
@@ -2029,23 +2029,23 @@ const summary =
                       <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize:9,fill:"#91a1b2"}} interval={2} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)}/>
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings"]}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings"]}/>
                   <Area type="monotone" dataKey="value" name="Daily earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)"
                     dot={props => {
                       const day = props?.payload?.key;
                       if (!day || day > todayKey || props?.payload?.value == null) return null;
                       return <circle cx={props.cx} cy={props.cy} r={4} fill="#30e69b"
-                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => setSelectedEarningsPoint({range:"monthly",key:day})}/>;
                     }}
                     activeDot={props => {
                       const day = props?.payload?.key;
                       if (!day || day > todayKey || props?.payload?.value == null) return null;
                       return <circle cx={props.cx} cy={props.cy} r={7} fill="#30e69b"
-                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => setSelectedEarningsPoint({range:"monthly",key:day})}/>;
                     }}
                     connectNulls={false}
@@ -2060,23 +2060,23 @@ const summary =
                       <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
                     </linearGradient>
                   </defs>
-                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="label" axisLine={false} tickLine={false} interval={0} tick={{fontSize:10,fill:"#91a1b2"}} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,yearlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(0)}/>
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} formatter={value=>[formatCurrency(value),"Monthly earnings"]}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} formatter={value=>[formatCurrency(value),"Monthly earnings"]}/>
                   <Area type="monotone" dataKey="value" name="Monthly earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldYearlyFill)"
                     dot={props => {
                       const monthKey = props?.payload?.monthKey;
                       if (!monthKey || props?.payload?.value == null) return null;
                       return <circle cx={props.cx} cy={props.cy} r={5} fill="#30e69b"
-                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => setSelectedEarningsPoint({range:"yearly",key:monthKey})}/>;
                     }}
                     activeDot={props => {
                       const monthKey = props?.payload?.monthKey;
                       if (!monthKey || props?.payload?.value == null) return null;
                       return <circle cx={props.cx} cy={props.cy} r={8} fill="#30e69b"
-                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => setSelectedEarningsPoint({range:"yearly",key:monthKey})}/>;
                     }}
                     connectNulls={false}
@@ -2088,7 +2088,7 @@ const summary =
             </ResponsiveContainer>
           </div>
         </section>
-        <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
+        <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
           <h2 className="text-[14px] font-semibold">Today's Earnings</h2>
 
           <div className="mt-3 flex flex-1 flex-col px-1">
@@ -2139,7 +2139,7 @@ const summary =
           onAnnouncedPayouts={recordAnnouncedStockPayouts}
         />
         </div>
-      <section className="h-full min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
+      <section className="h-full min-w-0 space-y-2 rounded-2xl border border-[#242b33] bg-[#0d1014] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
           <span className="text-[11px] text-muted-foreground">Sorted by balance · {activeProgramCards.length} projects</span>
@@ -2506,7 +2506,7 @@ if (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
           onMouseDown={event => { if (event.target === event.currentTarget) setSelectedEarningsPoint(null); }}>
           <div role="dialog" aria-modal="true" aria-label={`Earnings by project for ${selectedBreakdown.label}`}
-            className="w-full max-w-[480px] rounded-2xl border border-[#33465a] bg-[#0b1017] p-5 shadow-2xl">
+            className="w-full max-w-[480px] rounded-2xl border border-[#303842] bg-[#0d1014] p-5 shadow-2xl">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <h3 className="text-base font-semibold">Earnings by project</h3>
@@ -2525,7 +2525,7 @@ if (
                   <span className="font-semibold tabular-nums">{formatCurrency(item.amount)}</span>
                 </div>
               )) : <p className="text-sm text-muted-foreground">No recorded project earnings for this point.</p>}
-              <div className="flex items-center justify-between border-t border-[#33465a] pt-3 text-sm font-semibold">
+              <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm font-semibold">
                 <span>Total</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
               </div>
             </div>
