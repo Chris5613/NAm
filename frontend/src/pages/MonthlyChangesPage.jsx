@@ -1,11 +1,47 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Coins, CreditCard, TrendingUp, Plus, Pencil, Trash2, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
-import { formatCurrency, getCurrentMonthKey, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
+import { api } from "@/lib/apiClient";
+import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
+import { mergeManualIncome } from "@/lib/manualIncomeHistory";
+import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
+import {
+  formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome,
+  buildProjectIncome, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills,
+  loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker,
+  PROJECT_QUICK_CACHE_KEY, readObject,
+} from "@/lib/yieldFarmingAccounting";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 
 const KEY = "monthly_business_changes_v1";
 // Track each existing investment/project individually; Bitcoin holdings have their own row.
+function readIncomeSources() {
+  let legacyProjects = [];
+  try {
+    const stored = JSON.parse(remoteStorage.getItem("networth_projects") || "[]");
+    if (Array.isArray(stored)) legacyProjects = stored;
+  } catch { /* Other income history remains available. */ }
+  const quick = readObject(PROJECT_QUICK_CACHE_KEY);
+  return {
+    luloProjects: (quick.projects || []).filter(p => p?.yield_tracking === "lulo_lending"),
+    loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(),
+    rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(),
+    backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(),
+    legacyProjects, manualIncome: {}, luloBackfills: {},
+  };
+}
+function portfolioBalances() {
+  const portfolio = getStoredProjectCryptoPortfolio();
+  const balances = new Map();
+  for (const project of portfolio?.projectEntries || []) {
+    const name = String(project?.platform || "").trim();
+    const value = Number(project?.balance);
+    // Do not treat unavailable or zero-valued balances as historical proof.
+    if (name && Number.isFinite(value) && value > 0) balances.set(name.toLowerCase(), value);
+  }
+  return balances;
+}
 function readPortfolioItems() {
   const portfolio = getStoredProjectCryptoPortfolio();
   const quick = readObject(PROJECT_QUICK_CACHE_KEY);
@@ -50,12 +86,101 @@ const input = "mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] px-3 
 export default function MonthlyChangesPage() {
   const [records, setRecords] = useState(readRecords);
   const [portfolioItems, setPortfolioItems] = useState(readPortfolioItems);
+  const [incomeSources, setIncomeSources] = useState(readIncomeSources);
+  const [backendReady, setBackendReady] = useState(false);
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState({ name: "", start: "", end: "" });
   const [error, setError] = useState("");
-  useEffect(() => subscribe(() => { setRecords(readRecords()); setPortfolioItems(readPortfolioItems()); }), []);
+  useEffect(() => subscribe(() => {
+    setRecords(readRecords());
+    setPortfolioItems(readPortfolioItems());
+    setIncomeSources(current => ({ ...readIncomeSources(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
+  }), []);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const result = await api.get("/api/yield-sources/earnings");
+        if (!active || !result) return;
+        setIncomeSources(current => ({
+          ...current,
+          loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory),
+          manualIncome: result.manualIncomeHistory || current.manualIncome,
+          luloBackfills: result.luloBackfills || current.luloBackfills,
+        }));
+        setBackendReady(true);
+      } catch { /* Existing saved records remain editable offline. */ }
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 90000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, []);
+  const trackers = useMemo(() => ({
+    salad: incomeSources.salad, rollercoin: incomeSources.rollercoin,
+    unetwork: incomeSources.unetwork, kryptex: incomeSources.kryptex,
+  }), [incomeSources.salad, incomeSources.rollercoin, incomeSources.unetwork, incomeSources.kryptex]);
+  const localMonths = useMemo(() => buildProjectIncome(
+    incomeSources.luloProjects, incomeSources.loopscale, incomeSources.salad,
+    incomeSources.backfills, incomeSources.rollercoin, incomeSources.unetwork, incomeSources.kryptex,
+  ), [incomeSources]);
+  const backendMonths = useBackendMonthlyIncome(trackers, localMonths);
+  const monthEarnings = useMemo(() => {
+    const effective = reconcileLuloIncome(
+      getEffectiveProjectIncome(backendMonths, incomeSources.snapshots),
+      incomeSources.backfills, incomeSources.luloBackfills, getCurrentMonthKey(),
+      incomeSources.luloProjects, getTodayKey(),
+    );
+    const recorded = buildIncomeHistory(effective, {}, getCurrentMonthKey(),
+      legacyProjectIncome(incomeSources.legacyProjects));
+    return mergeManualIncome(recorded, incomeSources.manualIncome?.monthly || {}, getCurrentMonthKey());
+  }, [backendMonths, incomeSources]);
 
+  // One-time historical income-only estimates. Preserve every existing user-entered value.
+  // October ending balance is approximated from the current live project balance
+  // minus November-to-date income; September and October openings then subtract
+  // their own recorded earnings. This cannot reconstruct deposits or price moves.
+  useEffect(() => {
+    if (!backendReady || getCurrentMonthKey() !== "2026-11") return;
+    const balances = portfolioBalances();
+    const incomeFor = (monthKey, name) => {
+      const row = monthEarnings.find(item => item.monthKey === monthKey);
+      const match = Object.entries(row?.sources || {}).find(([source]) => source.toLowerCase() === name.toLowerCase());
+      return match ? Number(match[1]) : null;
+    };
+    const existing = readRecords();
+    const updated = { ...existing };
+    let changed = false;
+    for (const name of portfolioItems) {
+      // A BTC wallet's value changes with market prices, not mining income:
+      // only real historical BTC snapshots should be used for this row.
+      if (name.toLowerCase() === "btc") continue;
+      const balance = balances.get(name.toLowerCase());
+      const nov = incomeFor("2026-11", name);
+      const oct = incomeFor("2026-10", name);
+      const sep = incomeFor("2026-09", name);
+      if (!(balance > 0) || nov === null || oct === null || sep === null) continue;
+      const octoberEnd = round(balance - nov);
+      const octoberStart = round(octoberEnd - oct);
+      const septemberStart = round(octoberStart - sep);
+      for (const [key, start, end] of [
+        ["2026-09", septemberStart, octoberStart],
+        ["2026-10", octoberStart, octoberEnd],
+      ]) {
+        const saved = updated[key] || {};
+        const rows = Array.isArray(saved.items) ? saved.items : [];
+        if (rows.some(row => row.name.toLowerCase() === name.toLowerCase())) continue;
+        updated[key] = {
+          ...saved, items: [...rows, { name, start, end, estimated: true }],
+        };
+        changed = true;
+      }
+    }
+    if (changed) {
+      remoteStorage.setItem(KEY, JSON.stringify(updated));
+      setRecords(updated);
+    }
+  }, [backendReady, monthEarnings, portfolioItems]);
   const record = records[month] || {};
   const previous = records[prevMonth(month)] || {};
   const items = useMemo(() => {
@@ -68,7 +193,7 @@ export default function MonthlyChangesPage() {
       const inferredStart = parseAmount(earlier?.end);
       const start = parseAmount(current?.start) ?? inferredStart;
       const end = parseAmount(current?.end);
-      return { name, start, end, change: start === null || end === null ? null : round(end - start) };
+      return { name, start, end, estimated: Boolean(current?.estimated), change: start === null || end === null ? null : round(end - start) };
     });
   }, [portfolioItems, record.items, previous.items]);
   const lastNet = Array.isArray(previous.items)
@@ -199,7 +324,7 @@ export default function MonthlyChangesPage() {
           <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-widest text-[#9bafc1]"><th className="pb-2">Item</th><th className="pb-2 text-right">Start</th><th className="pb-2 text-right">Change</th><th className="pb-2 text-right">End</th><th className="w-9"/></tr></thead>
           <tbody>
             {visibleItems.map(row => <tr key={row.name} className="group border-b border-[#1e2b38] odd:bg-white/[0.025]">
-              <td className="py-2 pl-1 font-medium">{row.name}</td>
+              <td className="py-2 pl-1 font-medium">{row.name}{row.estimated && <span className="ml-2 text-[10px] text-amber-300">Est.</span>}</td>
               <td className="py-2 text-right tabular-nums">{row.start === null ? "—" : formatMoney(row.start)}</td>
               <td className={`py-2 text-right font-semibold tabular-nums ${row.change === null ? "text-[#8495a7]" : row.change > 0 ? "text-emerald-400" : row.change < 0 ? "text-rose-400" : "text-[#8495a7]"}`}>{row.change === null ? "—" : signedMoney(row.change)}</td>
               <td className="py-2 text-right font-semibold tabular-nums">{row.end === null ? "—" : formatMoney(row.end)}</td>
@@ -223,7 +348,7 @@ export default function MonthlyChangesPage() {
           <input type="number" step="0.01" value={record.expenses ?? ""} placeholder="Enter expenses" onChange={event => setMetric("expenses", event.target.value)} className={input}/>
         </label>
       </div>
-      <p className="mt-3 text-xs text-[#8396a7]">Project names and BTC are loaded from your portfolio. Enter each month’s actual start and end USD values; prior month-end amounts can carry forward as starting balances. Historical values are not replaced by live prices.</p>
+      <p className="mt-3 text-xs text-[#8396a7]">September and October rows marked “Est.” were back-calculated from saved project balances and monthly income; they are estimates, not verified historic balances. Edit them to account for deposits, withdrawals, and price changes. BTC needs actual historic wallet values.</p>
     </section>
 
     {editing && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(null); }}>
