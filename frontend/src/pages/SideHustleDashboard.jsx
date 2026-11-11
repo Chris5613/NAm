@@ -612,9 +612,6 @@ export default function SideHustleDashboard() {
               <p className="mt-1 text-[10px] text-[#7f8b97]">GPU / rig ROI and payback estimates</p>
             </div>
           </div>
-          <Link to="/hardware-payback" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">
-            View All <ChevronRight className="h-3 w-3"/>
-          </Link>
         </div>
 
         <div className="mt-3 space-y-2">
@@ -706,9 +703,6 @@ export default function SideHustleDashboard() {
               <p className="mt-1 text-[10px] text-[#7f8b97]">Time to break even on active projects</p>
             </div>
           </div>
-          <Link to="/project-break-even" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">
-            View All <ChevronRight className="h-3 w-3"/>
-          </Link>
         </div>
 
         <div className="mt-3 divide-y divide-[#202932]">
@@ -789,7 +783,6 @@ export default function SideHustleDashboard() {
               <p className="mt-1 text-[10px] text-[#7f8b97]">Passive income projects and performance</p>
             </div>
           </div>
-          <Link to="/yield-farming" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">View All <ChevronRight className="h-3 w-3"/></Link>
         </div>
 
         <div className="mt-3 min-w-[620px] overflow-x-auto">
