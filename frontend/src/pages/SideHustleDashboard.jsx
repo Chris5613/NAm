@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
-  Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis,
-} from "recharts";
-import {
   CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3,
   Settings, Target, TrendingUp, Zap,
 } from "lucide-react";
@@ -241,10 +238,10 @@ function readIncomeData() {
 function Sparkline({ color = "#2dd4bf" }) {
   const points = [6, 8, 7, 10, 11, 13, 12, 15, 18, 17, 20, 23];
   const d = points.map((value, index) => `${index === 0 ? "M" : "L"} ${index * 7.2} ${28 - value}`).join(" ");
-  return <svg aria-hidden="true" viewBox="0 0 80 28" className="h-16 w-36 overflow-visible opacity-95">
-    <defs><linearGradient id={`spark-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".28"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
+  return <svg aria-hidden="true" viewBox="0 0 80 28" preserveAspectRatio="none" className="h-full w-full overflow-visible opacity-95">
+    <defs><linearGradient id={`spark-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".34"/><stop offset="100%" stopColor={color} stopOpacity=".02"/></linearGradient></defs>
     <path d={`${d} L 80 28 L 0 28 Z`} fill={`url(#spark-${color.replace("#","")})`}/>
-    <path d={d} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d={d} fill="none" stroke={color} strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round"/>
   </svg>;
 }
 
@@ -368,24 +365,21 @@ function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClas
   };
   const theme = tones[tone] || tones.emerald;
 
-  return <section className={`relative min-w-0 overflow-hidden rounded-2xl border px-4 py-3.5 ${theme.border} ${theme.background} shadow-[0_12px_34px_rgba(0,0,0,0.20)]`}>
+  return <section className={`relative min-h-[112px] min-w-0 overflow-hidden rounded-2xl border px-4 py-3.5 ${theme.border} ${theme.background} shadow-[0_12px_34px_rgba(0,0,0,0.20)]`}>
     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.025),transparent_35%)]"/>
-    <div className="relative z-10">
+    <div className="pointer-events-none absolute -bottom-3 -right-3 h-[82%] w-[62%] opacity-90">
+      <Sparkline color={theme.spark}/>
+    </div>
+    <div className="relative z-10 flex h-full min-h-[82px] flex-col justify-between">
       <div className="flex min-w-0 items-center gap-2.5">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${theme.iconWrap}`}>
           <Icon className="h-4 w-4"/>
         </span>
         <span className="truncate text-[11px] font-semibold text-[#dfe7ee]">{title}</span>
       </div>
-
-      <div className="mt-2 flex items-end justify-between gap-3">
-        <div className="min-w-0">
-          <strong className={`block truncate text-[25px] font-semibold leading-none tracking-tight tabular-nums ${valueClass}`}>{value}</strong>
-          <p className="mt-2 truncate text-[9px] text-[#a0acb7]">{detail}</p>
-        </div>
-        <div className="-mb-3 -mr-3 shrink-0 self-end opacity-95">
-          <Sparkline color={theme.spark}/>
-        </div>
+      <div className="min-w-0">
+        <strong className={`block truncate text-[27px] font-semibold leading-none tracking-tight tabular-nums ${valueClass}`}>{value}</strong>
+        <p className="mt-2 max-w-[55%] truncate text-[9px] text-[#a0acb7]">{detail}</p>
       </div>
     </div>
   </section>;
@@ -481,7 +475,6 @@ export default function SideHustleDashboard() {
   const currentMonthKey = getCurrentMonthKey();
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) || { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recentMonths = income.months.slice(-12);
-  const dailyIncome = income.projects.reduce((sum, project) => sum + project.daily, 0);
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
   const todayKey = pacificDayKey(clock);
   const localTodayIncome = Number(dailyRows.find(row => row.date === todayKey)?.income) || 0;
@@ -494,25 +487,6 @@ export default function SideHustleDashboard() {
   const todayVsYesterday = yesterdayIncome > 0
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
     : null;
-  const dailyIncomeMap = new Map(dailyRows.map(row => [row.date, Number(row.income) || 0]));
-  const rollingEndDay = pacificDayKey(clock);
-  const rollingEnd = new Date(`${rollingEndDay}T12:00:00Z`);
-  const chartData = Array.from({ length: 30 }, (_, index) => {
-    const date = new Date(rollingEnd.getTime() - (29 - index) * 86400000);
-    const day = date.toISOString().slice(0, 10);
-    return {
-      date: day,
-      label: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(date),
-      income: dailyIncomeMap.get(day) || 0,
-    };
-  });
-  const historyRows = [...dailyRows].reverse().slice(0, 5).map((row, index, reversed) => {
-    const chronological = [...dailyRows];
-    const sourceIndex = chronological.findIndex(item => item.date === row.date);
-    const previous = sourceIndex > 0 ? chronological[sourceIndex - 1] : null;
-    const change = previous?.income > 0 ? (row.income - previous.income) / previous.income * 100 : null;
-    return { ...row, change };
-  });
   const previousMonth = recentMonths.length > 1 ? recentMonths[recentMonths.length - 2] : null;
   const monthChange = previousMonth?.total > 0 ? ((currentMonth.total - previousMonth.total) / previousMonth.total * 100) : 0;
 
@@ -666,68 +640,6 @@ export default function SideHustleDashboard() {
         detail={`${deviceRows.length} GPUs • ${live ? "Live" : "Stale"}`}
         tone="amber"
       />
-    </div>
-    <div className="grid gap-3 xl:grid-cols-[1.7fr_.8fr]">
-      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-2.5">
-            <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
-            <div>
-              <h2 className="text-[15px] font-semibold leading-none">Income Trend</h2>
-              <p className="mt-1 text-[10px] text-[#7f8b97]">Total passive income over the last 30 days</p>
-            </div>
-          </div>
-        </div>
-        <div className="mt-3 h-[190px]">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
-              <defs>
-                <linearGradient id="sideHustleIncome" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#21d6a4" stopOpacity={0.38}/>
-                  <stop offset="100%" stopColor="#21d6a4" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#26323b" strokeDasharray="2 3" opacity={0.52}/>
-              <XAxis dataKey="label" stroke="#74818d" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={28}/>
-              <YAxis stroke="#74818d" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={value => `$${Number(value).toFixed(0)}`}/>
-              <Tooltip
-                contentStyle={{ background: "#0a0f13", border: "1px solid #2b3946", borderRadius: 10, fontSize: 10 }}
-                labelFormatter={(_, items) => items?.[0]?.payload?.date
-                  ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${items[0].payload.date}T12:00:00Z`))
-                  : ""}
-                formatter={value => [money(value), "Income"]}
-              />
-              <Area type="monotone" dataKey="income" stroke="#22e0a3" strokeWidth={2.2} fill="url(#sideHustleIncome)" activeDot={{ r: 4 }} isAnimationActive={false}/>
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-[#a8b6c4]"/>
-            <h2 className="text-[15px] font-semibold">Income History</h2>
-          </div>
-          <Link to="/income-history" className="flex items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">
-            View All <ChevronRight className="h-3 w-3"/>
-          </Link>
-        </div>
-        <div className="mt-3 grid grid-cols-[1.35fr_.85fr] gap-x-3 border-b border-[#26313a] pb-2 text-[9px] text-[#8a96a3]">
-          <span>Date</span><span className="text-right">Income</span>
-        </div>
-        <div className="divide-y divide-[#202932]">
-          {historyRows.map(row => (
-            <div key={row.date} className="grid grid-cols-[1.35fr_.85fr] items-center gap-x-3 py-2.5 text-[10px]">
-              <span className="text-[#e5ebf1]">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${row.date}T12:00:00Z`))}</span>
-              <strong className="text-right tabular-nums text-[#eef2f6]">{money(row.income)}</strong>
-            </div>
-          ))}
-          {!historyRows.length && <p className="py-8 text-center text-xs text-[#778491]">No daily income history yet.</p>}
-        </div>
-      </section>
-
-
     </div>
     <div className="grid gap-3 xl:grid-cols-2">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
