@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarDays, Coins, CreditCard, TrendingUp, Plus, Pencil, Trash2, X } from "lucide-react";
+import { CalendarDays, ChevronLeft, ChevronRight, Coins, CreditCard, TrendingUp, Plus, Pencil, Trash2, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
@@ -105,6 +105,10 @@ const prevMonth = month => {
   const [year, number] = month.split("-").map(Number);
   const date = new Date(Date.UTC(year, number - 2, 15));
   return date.toISOString().slice(0, 7);
+};
+const nextMonth = month => {
+  const [year, number] = month.split("-").map(Number);
+  return new Date(Date.UTC(year, number, 15)).toISOString().slice(0, 7);
 };
 const monthLabel = month => new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" })
   .format(new Date(month + "-15T12:00:00Z"));
@@ -224,6 +228,17 @@ export default function MonthlyChangesPage() {
     }
   }, [backendReady, monthEarnings]);
 
+  const selectableMonths = useMemo(() => {
+    const current = getCurrentMonthKey();
+    const earliestSaved = Object.keys(records).filter(key => /^\\d{4}-\\d{2}$/.test(key)).sort()[0];
+    const earliest = earliestSaved && earliestSaved < "2026-09" ? earliestSaved : "2026-09";
+    const list = [];
+    for (let key = current, count = 0; key >= earliest && count < 240; key = prevMonth(key), count += 1) {
+      list.push(key);
+    }
+    if (!list.includes(month)) list.push(month);
+    return list.sort((a, b) => b.localeCompare(a));
+  }, [records, month]);
   const record = records[month] || {};
   const previous = records[prevMonth(month)] || {};
   const items = useMemo(() => {
@@ -345,12 +360,28 @@ export default function MonthlyChangesPage() {
 
   return <div className="min-w-0 space-y-3 pb-8 text-white" data-testid="monthly-changes-page">
     <div className="flex justify-end">
-      <label className="inline-flex items-center gap-2 rounded-xl border border-[#344657] bg-[#101821] px-3 py-2 text-sm">
-        <CalendarDays size={16} className="text-cyan-400"/>
-        <span className="sr-only">Select month</span>
-        <input type="month" value={month} max={getCurrentMonthKey()} onChange={event => event.target.value && setMonth(event.target.value)}
-          className="bg-transparent text-white outline-none [color-scheme:dark]"/>
-      </label>
+      <div className="inline-flex items-center gap-1 rounded-xl border border-[#344657] bg-[#101821] p-1.5 shadow-sm" aria-label="Monthly Changes month navigation">
+        <button type="button" aria-label="Previous month" title="Previous month"
+          disabled={month === selectableMonths[selectableMonths.length - 1]}
+          onClick={() => setMonth(prev => prevMonth(prev))}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-[#c7d6e5] transition hover:bg-[#253548] hover:text-white disabled:cursor-not-allowed disabled:opacity-30">
+          <ChevronLeft size={19}/>
+        </button>
+        <div className="flex items-center gap-2 px-1">
+          <CalendarDays size={16} className="shrink-0 text-cyan-400"/>
+          <label className="sr-only" htmlFor="monthly-changes-month">Select month</label>
+          <select id="monthly-changes-month" value={month} onChange={event => setMonth(event.target.value)}
+            className="min-w-[145px] cursor-pointer bg-[#101821] py-2 text-center text-sm font-semibold text-white outline-none [color-scheme:dark] sm:min-w-[165px]">
+            {selectableMonths.map(key => <option key={key} value={key}>{monthLabel(key)}</option>)}
+          </select>
+        </div>
+        <button type="button" aria-label="Next month" title="Next month"
+          disabled={month >= getCurrentMonthKey()}
+          onClick={() => setMonth(prev => nextMonth(prev))}
+          className="flex h-9 w-9 items-center justify-center rounded-lg text-[#c7d6e5] transition hover:bg-[#253548] hover:text-white disabled:cursor-not-allowed disabled:opacity-30">
+          <ChevronRight size={19}/>
+        </button>
+      </div>
     </div>
 
     <section className={`${box} border-t-2 border-t-cyan-500 px-5 py-5 sm:px-7`}>
