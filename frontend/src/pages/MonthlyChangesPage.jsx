@@ -261,10 +261,10 @@ export default function MonthlyChangesPage() {
     const novemberStart = round(balance - 6.95);
     const octoberStart = round(novemberStart - 22.48);
     const septemberStart = round(octoberStart - 17.64);
-    // Negative inferred holdings signal withdrawals/adjustments. Keep unknown
-    // values blank rather than introducing fictional negative account balances.
+    // Treat a negative inferred September opening as $0 rather than blank.
+    // Keep the other months anchored to the known earnings and synced balance.
     const estimates = {
-      "2026-09": { start: septemberStart >= 0 ? septemberStart : null, end: octoberStart >= 0 ? octoberStart : null },
+      "2026-09": { start: Math.max(0, septemberStart), end: octoberStart >= 0 ? octoberStart : null },
       "2026-10": { start: octoberStart >= 0 ? octoberStart : null, end: novemberStart >= 0 ? novemberStart : null },
       "2026-11": { start: novemberStart >= 0 ? novemberStart : null },
     };
