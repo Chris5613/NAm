@@ -23,6 +23,7 @@ MAX_WATTS_PER_DEVICE = 3000.0
 MAX_DEVICES = 8
 HISTORY_LIMIT = 288
 PACIFIC = ZoneInfo("America/Los_Angeles")
+TOD_EFFECTIVE_DATE = datetime(2026, 12, 10, 0, 0, tzinfo=PACIFIC)
 MAX_INTEGRATION_GAP_SECONDS = 300
 USAGE_MONTH_LIMIT = 13
 MAX_BACKFILL_INTERVALS = 24 * 8
@@ -34,8 +35,10 @@ def _now_iso() -> str:
 
 
 def _usage_tier(moment: datetime) -> str:
-    """Return the Time of Day bucket for a Pacific-local timestamp."""
+    """Return the billing bucket for a Pacific-local timestamp."""
     local = moment.astimezone(PACIFIC)
+    if local < TOD_EFFECTIVE_DATE:
+        return "basic"
     if local.weekday() >= 5:
         return "offPeak"
     hour = local.hour
@@ -214,6 +217,7 @@ async def ingest_power(
             if not month.get("startedAt"):
                 month["startedAt"] = previous_time.astimezone(timezone.utc).isoformat()
 
+            tiers.setdefault("basic", 0.0)
             tiers.setdefault("offPeak", 0.0)
             tiers.setdefault("midPeak", 0.0)
             tiers.setdefault("peak", 0.0)
@@ -244,6 +248,7 @@ async def ingest_power(
 
                 device_usage = dict(month_devices.get(device_id) or {})
                 device_tiers = dict(device_usage.get("tiers") or {})
+                device_tiers.setdefault("basic", 0.0)
                 device_tiers.setdefault("offPeak", 0.0)
                 device_tiers.setdefault("midPeak", 0.0)
                 device_tiers.setdefault("peak", 0.0)
