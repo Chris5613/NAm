@@ -397,7 +397,6 @@ export default function SideHustleDashboard() {
   const [power, setPower] = useState(null);
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
   const [clock, setClock] = useState(Date.now());
-  const [trendRange, setTrendRange] = useState("3M");
 
   const refreshPower = useCallback(async () => {
     try {
@@ -425,18 +424,13 @@ export default function SideHustleDashboard() {
 
   const currentMonthKey = getCurrentMonthKey();
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) || { monthKey: currentMonthKey, total: 0, platforms: [] };
-  const recentMonths = income.months.slice(-8);
+  const recentMonths = income.months.slice(-12);
   const dailyIncome = income.projects.reduce((sum, project) => sum + project.daily, 0);
-  const rangeDays = trendRange === "1W" ? 7 : trendRange === "1M" ? 30 : trendRange === "3M" ? 90 : trendRange === "6M" ? 180 : 365;
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
-  const latestDailyDate = dailyRows.at(-1)?.date || null;
-  const rangeCutoff = latestDailyDate
-    ? new Date(new Date(`${latestDailyDate}T12:00:00Z`).getTime() - (rangeDays - 1) * 86400000)
-    : null;
-  const trendRows = dailyRows.filter(row => !rangeCutoff || new Date(`${row.date}T12:00:00Z`) >= rangeCutoff);
-  const chartData = trendRows.map(row => ({
-    ...row,
-    label: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${row.date}T12:00:00Z`)),
+  const chartData = recentMonths.map(row => ({
+    monthKey: row.monthKey,
+    label: new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${row.monthKey}-15T12:00:00Z`)),
+    income: Number(row.total) || 0,
   }));
   const historyRows = [...dailyRows].reverse().slice(0, 5).map((row, index, reversed) => {
     const chronological = [...dailyRows];
@@ -545,18 +539,6 @@ export default function SideHustleDashboard() {
               <p className="mt-1 text-[10px] text-[#7f8b97]">Total passive income over time</p>
             </div>
           </div>
-          <div className="flex shrink-0 items-center rounded-xl border border-[#252f38] bg-[#0b0f13] p-1">
-            {["1W", "1M", "3M", "6M", "1Y"].map(range => (
-              <button
-                key={range}
-                type="button"
-                onClick={() => setTrendRange(range)}
-                className={`rounded-lg px-2.5 py-1 text-[9px] font-medium transition-colors ${trendRange === range ? "border border-cyan-400/40 bg-cyan-400/20 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.18)]" : "text-[#91a0ad] hover:text-white"}`}
-              >
-                {range}
-              </button>
-            ))}
-          </div>
         </div>
         <div className="mt-3 h-[190px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -572,8 +554,8 @@ export default function SideHustleDashboard() {
               <YAxis stroke="#74818d" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={value => `$${Number(value).toFixed(0)}`}/>
               <Tooltip
                 contentStyle={{ background: "#0a0f13", border: "1px solid #2b3946", borderRadius: 10, fontSize: 10 }}
-                labelFormatter={(_, items) => items?.[0]?.payload?.date
-                  ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${items[0].payload.date}T12:00:00Z`))
+                labelFormatter={(_, items) => items?.[0]?.payload?.monthKey
+                  ? new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric", timeZone: "UTC" }).format(new Date(`${items[0].payload.monthKey}-15T12:00:00Z`))
                   : ""}
                 formatter={value => [money(value), "Income"]}
               />
