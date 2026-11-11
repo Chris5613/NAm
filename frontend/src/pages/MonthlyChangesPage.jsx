@@ -265,6 +265,37 @@ export default function MonthlyChangesPage() {
     }
   }, [backendReady, monthEarnings]);
 
+  // Repair only missing historical ending balances using the *saved starting
+  // value of the following month*. This is a balance carry-forward, not a
+  // recalculation from today's prices or income. Once copied it stays fixed.
+  useEffect(() => {
+    const saved = readRecords();
+    const currentMonth = getCurrentMonthKey();
+    const updated = { ...saved };
+    let changed = false;
+    for (const [key, entry] of Object.entries(saved)) {
+      if (key >= currentMonth || !entry?.locked || !Array.isArray(entry.items)) continue;
+      const followingMonth = saved[nextMonth(key)];
+      if (!Array.isArray(followingMonth?.items)) continue;
+      const newItems = entry.items.map(row => {
+        if (parseAmount(row.end) !== null) return row;
+        const following = followingMonth.items.find(other =>
+          String(other?.name || "").trim().toLowerCase() === String(row?.name || "").trim().toLowerCase());
+        const carry = parseAmount(following?.start);
+        if (carry === null) return row;
+        changed = true;
+        return { ...row, end: carry, carriedFromNextMonth: true };
+      });
+      if (newItems.some((row, i) => row !== entry.items[i])) {
+        updated[key] = { ...entry, items: newItems };
+      }
+    }
+    if (changed) {
+      remoteStorage.setItem(KEY, JSON.stringify(updated));
+      setRecords(updated);
+    }
+  }, [records]);
+
   const selectableMonths = useMemo(() => {
     const current = getCurrentMonthKey();
     const earliestSaved = Object.keys(records).filter(key => /^\\d{4}-\\d{2}$/.test(key)).sort()[0];
