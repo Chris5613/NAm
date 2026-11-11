@@ -543,7 +543,7 @@ export default function SideHustleDashboard() {
             <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-[#6f7a84]"}`}/>{live ? "Live" : "Stale"}
           </span>
         </div>
-        <p className="mt-1 text-xs text-[#788491]">Your income-generating side hustles at a glance.</p>
+        
       </div>
       <p className="text-[10px] text-[#73808d]">Updated {new Date(clock).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
     </header>
@@ -609,7 +609,7 @@ export default function SideHustleDashboard() {
             <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
             <div className="min-w-0">
               <h2 className="text-[15px] font-semibold leading-none">Hardware Payback</h2>
-              <p className="mt-1 text-[10px] text-[#7f8b97]">GPU / rig ROI and payback estimates</p>
+              
             </div>
           </div>
         </div>
@@ -700,7 +700,7 @@ export default function SideHustleDashboard() {
             <Target className="mt-0.5 h-4 w-4 text-[#a8b6c4]"/>
             <div>
               <h2 className="text-[15px] font-semibold leading-none">Project Break-Even</h2>
-              <p className="mt-1 text-[10px] text-[#7f8b97]">Time to break even on active projects</p>
+              
             </div>
           </div>
         </div>
@@ -780,7 +780,7 @@ export default function SideHustleDashboard() {
             <Layers3 className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
             <div className="min-w-0">
               <h2 className="text-[15px] font-semibold leading-none">Top Projects</h2>
-              <p className="mt-1 text-[10px] text-[#7f8b97]">Passive income projects and performance</p>
+              
             </div>
           </div>
         </div>
@@ -842,12 +842,12 @@ export default function SideHustleDashboard() {
               <div className="border-r border-[#242d35] pt-5 pr-5">
                 <p className="text-[10px] text-[#83909d]">Mining Cost</p>
                 <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-amber-400">{money(monthPowerCost)}</strong>
-                <p className="mt-1 text-[9px] text-[#7f8b97]">{rateInfo.label} electricity pricing</p>
+                
               </div>
               <div className="pt-5 pl-5">
                 <p className="text-[10px] text-[#83909d]">Est. Net Profit (MTD)</p>
                 <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(Math.max(0, currentMonth.total - monthPowerCost))}</strong>
-                <p className="mt-1 text-[9px] text-[#7f8b97]">Income minus mining power</p>
+                
               </div>
             </div>
           </div>
