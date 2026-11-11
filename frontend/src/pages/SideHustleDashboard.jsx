@@ -241,7 +241,7 @@ function readIncomeData() {
 function Sparkline({ color = "#2dd4bf" }) {
   const points = [6, 8, 7, 10, 11, 13, 12, 15, 18, 17, 20, 23];
   const d = points.map((value, index) => `${index === 0 ? "M" : "L"} ${index * 7.2} ${28 - value}`).join(" ");
-  return <svg aria-hidden="true" viewBox="0 0 80 28" className="h-10 w-20 overflow-visible opacity-90">
+  return <svg aria-hidden="true" viewBox="0 0 80 28" className="h-16 w-36 overflow-visible opacity-95">
     <defs><linearGradient id={`spark-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".28"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
     <path d={`${d} L 80 28 L 0 28 Z`} fill={`url(#spark-${color.replace("#","")})`}/>
     <path d={d} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
@@ -383,7 +383,7 @@ function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClas
           <strong className={`block truncate text-[25px] font-semibold leading-none tracking-tight tabular-nums ${valueClass}`}>{value}</strong>
           <p className="mt-2 truncate text-[9px] text-[#a0acb7]">{detail}</p>
         </div>
-        <div className="-mb-2 -mr-2 shrink-0 self-end opacity-95">
+        <div className="-mb-3 -mr-3 shrink-0 self-end opacity-95">
           <Sparkline color={theme.spark}/>
         </div>
       </div>
@@ -619,7 +619,7 @@ export default function SideHustleDashboard() {
         tone="amber"
       />
     </div>
-    <div className="grid gap-3 xl:grid-cols-[1.6fr_.78fr_1.12fr]">
+    <div className="grid gap-3 xl:grid-cols-[1.7fr_.8fr]">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
@@ -679,48 +679,9 @@ export default function SideHustleDashboard() {
         </div>
       </section>
 
-      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-start gap-2.5">
-            <Target className="mt-0.5 h-4 w-4 text-[#a8b6c4]"/>
-            <div>
-              <h2 className="text-[15px] font-semibold leading-none">Project Break-Even</h2>
-              <p className="mt-1 text-[10px] text-[#7f8b97]">Time to break even on active projects</p>
-            </div>
-          </div>
-          <Link to="/project-break-even" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">
-            View All <ChevronRight className="h-3 w-3"/>
-          </Link>
-        </div>
 
-        <div className="mt-3 divide-y divide-[#202932]">
-          {incompleteProjects.slice(0, 3).map(row => {
-            const spent = Math.max(0, Number(row.spent) || 0);
-            const earned = Math.max(0, Number(row.earned) || 0);
-            const ratio = spent > 0 ? Math.min(100, earned / spent * 100) : 0;
-            const remaining = Math.max(0, spent - earned);
-            const days = Number(row.daily) > 0 ? Math.ceil(remaining / Number(row.daily)) : null;
-            const meta = projectTableMeta(row.name);
-            return <div key={row.id} className="grid grid-cols-[minmax(0,.85fr)_minmax(120px,1.4fr)_52px_65px] items-center gap-3 py-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${meta.iconClass}`}>{meta.icon}</span>
-                <span className="truncate text-[11px] font-medium text-[#eef2f6]">{row.name}</span>
-              </div>
-              <div className="min-w-0">
-                <div className="h-2 overflow-hidden rounded-full bg-[#2a333c]">
-                  <div className="h-full rounded-full bg-emerald-400" style={{ width: `${ratio}%` }}/>
-                </div>
-                <p className="mt-1 text-[9px] tabular-nums text-[#7f8b97]">{money(earned)} / {money(spent)}</p>
-              </div>
-              <strong className="text-right text-[11px] font-semibold tabular-nums text-emerald-400">{ratio.toFixed(0)}%</strong>
-              <span className="text-right text-[9px] tabular-nums text-[#c0c8d0]">{days != null ? `~${days} days` : "—"}</span>
-            </div>;
-          })}
-          {!incompleteProjects.length && <p className="py-8 text-center text-xs text-[#778491]">All configured projects have broken even.</p>}
-        </div>
-      </section>
     </div>
-    <div className="grid gap-3 xl:grid-cols-[1fr_1.15fr]">
+    <div className="grid gap-3 xl:grid-cols-2">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
@@ -815,8 +776,49 @@ export default function SideHustleDashboard() {
           {!hardware.length && <p className="rounded-xl border border-dashed border-[#2a343e] py-8 text-center text-xs text-[#778491]">No hardware tracked yet.</p>}
         </div>
       </section>
+      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <Target className="mt-0.5 h-4 w-4 text-[#a8b6c4]"/>
+            <div>
+              <h2 className="text-[15px] font-semibold leading-none">Project Break-Even</h2>
+              <p className="mt-1 text-[10px] text-[#7f8b97]">Time to break even on active projects</p>
+            </div>
+          </div>
+          <Link to="/project-break-even" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">
+            View All <ChevronRight className="h-3 w-3"/>
+          </Link>
+        </div>
 
-      <section className={panel + " min-w-0 overflow-hidden px-5 pb-5 pt-4"}>
+        <div className="mt-3 divide-y divide-[#202932]">
+          {incompleteProjects.slice(0, 3).map(row => {
+            const spent = Math.max(0, Number(row.spent) || 0);
+            const earned = Math.max(0, Number(row.earned) || 0);
+            const ratio = spent > 0 ? Math.min(100, earned / spent * 100) : 0;
+            const remaining = Math.max(0, spent - earned);
+            const days = Number(row.daily) > 0 ? Math.ceil(remaining / Number(row.daily)) : null;
+            const meta = projectTableMeta(row.name);
+            return <div key={row.id} className="grid grid-cols-[minmax(0,.85fr)_minmax(120px,1.4fr)_52px_65px] items-center gap-3 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${meta.iconClass}`}>{meta.icon}</span>
+                <span className="truncate text-[11px] font-medium text-[#eef2f6]">{row.name}</span>
+              </div>
+              <div className="min-w-0">
+                <div className="h-2 overflow-hidden rounded-full bg-[#2a333c]">
+                  <div className="h-full rounded-full bg-emerald-400" style={{ width: `${ratio}%` }}/>
+                </div>
+                <p className="mt-1 text-[9px] tabular-nums text-[#7f8b97]">{money(earned)} / {money(spent)}</p>
+              </div>
+              <strong className="text-right text-[11px] font-semibold tabular-nums text-emerald-400">{ratio.toFixed(0)}%</strong>
+              <span className="text-right text-[9px] tabular-nums text-[#c0c8d0]">{days != null ? `~${days} days` : "—"}</span>
+            </div>;
+          })}
+          {!incompleteProjects.length && <p className="py-8 text-center text-xs text-[#778491]">All configured projects have broken even.</p>}
+        </div>
+      </section>
+    </div>
+
+    <section className={panel + " min-w-0 overflow-hidden px-5 pb-5 pt-4"}>
         <div className="flex items-center justify-between gap-3">
           <Link to="/mining-power" className="flex items-center gap-2.5">
             <Zap className="h-5 w-5 text-emerald-400"/>
@@ -854,8 +856,7 @@ export default function SideHustleDashboard() {
             <strong className={`mt-2 block text-[18px] font-semibold leading-none tabular-nums ${miningDailyNet >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(miningDailyNet)}</strong>
           </div>
         </div>
-      </section>
-    </div>
+    </section>
 
     <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
