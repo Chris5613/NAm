@@ -623,7 +623,7 @@ export default function SideHustleDashboard() {
     ...Object.keys(recordedCurrentMonth?.sources || {}),
   ].map(canonicalSourceName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const projectAddOptions = [...income.projects]
-    .filter(project => project.id && project.name && !project.id.endsWith("-live"))
+    .filter(project => project.id && project.name)
     .sort((a, b) => a.name.localeCompare(b.name));
   function openAddModal(kind) {
     setAddError("");
