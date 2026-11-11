@@ -474,6 +474,45 @@ async def read_daily_earnings(
     }
 
 
+@router.get("/monthly-daily-earnings/{month}")
+async def read_monthly_daily_earnings(
+    month: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Return the recorded daily earnings ledger for one YYYY-MM month."""
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=422, detail="Invalid month.")
+
+    prefix = f"yield_server_daily_income_{month}-"
+    rows = db.scalars(select(Setting).where(
+        Setting.user_id == user.id,
+        Setting.key.like(f"{prefix}%")
+    )).all()
+
+    days = []
+    total = 0.0
+    for row in rows:
+        value = row.value if isinstance(row.value, dict) else {}
+        day = str(value.get("date") or row.key.removeprefix("yield_server_daily_income_"))
+        amount = number(value.get("totalUsd"))
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or amount is None:
+            continue
+        days.append({
+            "date": day,
+            "totalUsd": amount,
+            "sources": value.get("sources") if isinstance(value.get("sources"), dict) else {},
+            "lastRecordedAt": value.get("lastRecordedAt"),
+        })
+        total += amount
+
+    days.sort(key=lambda item: item["date"])
+    return {
+        "month": month,
+        "totalUsd": round(total, 8),
+        "days": days,
+        "calculatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @router.get("/provider-stats")
 async def calculate_provider_stats(
     user: User = Depends(current_user), db: Session = Depends(get_db)
