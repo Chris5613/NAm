@@ -247,6 +247,55 @@ export default function MonthlyChangesPage() {
     };
   }, []);
 
+  // One-time Unetwork balance reconstruction from user-confirmed mining income:
+  // September $17.64, October $22.48, November-to-date $6.95.
+  // A live balance is the anchor; never overwrite saved historical values.
+  // Earnings and balances can diverge because of withdrawals or adjustments.
+  useEffect(() => {
+    if (getCurrentMonthKey() !== "2026-11") return;
+    const tracker = loadUnetworkTracker();
+    if (!tracker.lastSyncedAt || !tracker.initialized) return;
+    const balance = Number(tracker.currentBalance);
+    if (!Number.isFinite(balance) || balance < 0) return;
+
+    const novemberStart = round(balance - 6.95);
+    const octoberStart = round(novemberStart - 22.48);
+    const septemberStart = round(octoberStart - 17.64);
+    // Negative inferred holdings signal withdrawals/adjustments. Keep unknown
+    // values blank rather than introducing fictional negative account balances.
+    const estimates = {
+      "2026-09": { start: septemberStart >= 0 ? septemberStart : null, end: octoberStart >= 0 ? octoberStart : null },
+      "2026-10": { start: octoberStart >= 0 ? octoberStart : null, end: novemberStart >= 0 ? novemberStart : null },
+      "2026-11": { start: novemberStart >= 0 ? novemberStart : null },
+    };
+    const existing = readRecords();
+    const updated = { ...existing };
+    let changed = false;
+    for (const [key, values] of Object.entries(estimates)) {
+      const saved = updated[key] || {};
+      const rows = Array.isArray(saved.items) ? saved.items : [];
+      const index = rows.findIndex(row => String(row?.name || "").trim().toLowerCase() === "unetwork");
+      const prior = index >= 0 ? rows[index] : { name: "Unetwork" };
+      const nextRow = { ...prior };
+      let updatedRow = false;
+      for (const [field, value] of Object.entries(values)) {
+        if (value === null || parseAmount(prior[field]) !== null) continue;
+        nextRow[field] = value;
+        updatedRow = true;
+      }
+      if (!updatedRow) continue;
+      const nextRows = [...rows];
+      if (index >= 0) nextRows[index] = nextRow;
+      else nextRows.push(nextRow);
+      updated[key] = { ...saved, items: nextRows };
+      changed = true;
+    }
+    if (changed) {
+      remoteStorage.setItem(KEY, JSON.stringify(updated));
+      setRecords(updated);
+    }
+  }, [liveProjectBalances.unetwork]);
+
   // Seal past months once, using the values already saved. Future live syncs and
   // changes in project lists cannot rewrite those months. Existing entries stay intact.
   useEffect(() => {
