@@ -2128,7 +2128,8 @@ const summary =
         </section>
       </div>
 
-      <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+      <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+        <div className="h-full [&>section]:h-full">
         <DividendIncomeSection
           onEstimateChange={updateStockDividendEstimate}
           payouts={stockPayouts}
@@ -2137,7 +2138,8 @@ const summary =
           onRestorePayout={restoreStockPayout}
           onAnnouncedPayouts={recordAnnouncedStockPayouts}
         />
-      <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
+        </div>
+      <section className="h-full min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
           <span className="text-[11px] text-muted-foreground">Sorted by balance · {activeProgramCards.length} projects</span>
