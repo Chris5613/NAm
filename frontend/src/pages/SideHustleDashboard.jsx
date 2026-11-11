@@ -9,6 +9,8 @@ import {
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
+import { calculateNetWorth, getDailyNetWorthChange } from "@/lib/dashboardMetrics";
+import { localStorage as appStorage } from "@/lib/localStorage";
 import {
   buildProjectIncome,
   formatCurrency,
@@ -131,12 +133,40 @@ function readIncomeData() {
   };
 }
 
-function SummaryCard({ icon: Icon, title, value, detail, accent = "text-white" }) {
-  return <section className={panel + " relative min-w-0 overflow-hidden p-4"}>
-    <div className="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-emerald-400/[0.045] to-transparent" />
-    <div className="relative flex items-center gap-2 text-[11px] text-[#9aa7b4]"><Icon className="h-4 w-4"/>{title}</div>
-    <strong className={`relative mt-2 block truncate text-[27px] font-semibold tracking-tight tabular-nums ${accent}`}>{value}</strong>
-    <p className="relative mt-1 truncate text-[10px] text-[#7f8b98]">{detail}</p>
+function Sparkline({ color = "#2dd4bf" }) {
+  const points = [6, 8, 7, 10, 11, 13, 12, 15, 18, 17, 20, 23];
+  const d = points.map((value, index) => `${index === 0 ? "M" : "L"} ${index * 7.2} ${28 - value}`).join(" ");
+  return <svg aria-hidden="true" viewBox="0 0 80 28" className="h-10 w-20 overflow-visible opacity-90">
+    <defs><linearGradient id={`spark-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".28"/><stop offset="100%" stopColor={color} stopOpacity="0"/></linearGradient></defs>
+    <path d={`${d} L 80 28 L 0 28 Z`} fill={`url(#spark-${color.replace("#","")})`}/>
+    <path d={d} fill="none" stroke={color} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>;
+}
+
+function SummaryCard({ icon: Icon, title, value, detail, accent = "text-white", sparkColor = "#2dd4bf", detailClass = "text-emerald-400" }) {
+  return <section className={panel + " relative min-w-0 overflow-hidden px-4 py-3.5"}>
+    <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-cyan-400/[0.035] to-transparent" />
+    <div className="relative flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-[10px] text-[#9aa7b4]"><Icon className="h-4 w-4"/><span className="truncate">{title}</span></div>
+        <strong className={`mt-1.5 block truncate text-[23px] font-semibold tracking-tight tabular-nums ${accent}`}>{value}</strong>
+        <p className={`mt-1 truncate text-[9px] ${detailClass}`}>{detail}</p>
+      </div>
+      <div className="self-end"><Sparkline color={sparkColor}/></div>
+    </div>
+  </section>;
+}
+
+function HardwareSummaryCard({ progress, earned, cost }) {
+  return <section className={panel + " min-w-0 px-4 py-3.5"}>
+    <div className="flex items-center gap-2 text-[10px] text-[#9aa7b4]"><Target className="h-4 w-4"/><span>Hardware Payback</span></div>
+    <div className="mt-2 flex items-center gap-3">
+      <strong className="text-[25px] font-semibold tracking-tight text-emerald-400 tabular-nums">{cost ? percent(progress) : "—"}</strong>
+      <div className="min-w-0 flex-1">
+        <div className="h-2 overflow-hidden rounded-full bg-[#283039]"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}/></div>
+        <p className="mt-1 text-center text-[9px] text-[#8d98a4]">{cost ? `${money(earned)} / ${money(cost)}` : "No hardware tracked"}</p>
+      </div>
+    </div>
   </section>;
 }
 
@@ -214,6 +244,14 @@ export default function SideHustleDashboard() {
   const hardwareRecovered = hardware.reduce((sum, row) => sum + Math.max(0, Number(row.checkpoint?.carried) || 0), 0);
   const hardwareProgress = hardwareCost > 0 ? hardwareRecovered / hardwareCost * 100 : 0;
 
+  const storedAssets = appStorage.getAssets?.() || [];
+  const cryptoCache = appStorage.getCryptoCache?.() || {};
+  const projectSummary = appStorage.get?.("project_income_portfolio_summary_v1") || null;
+  const projectBalance = Number(projectSummary?.portfolioBalance);
+  const bitcoinBalance = Number(cryptoCache?.projectPortfolio?.bitcoin?.value ?? cryptoCache?.projectPortfolio?.bitcoin?.balance) || 0;
+  const cryptoTotal = Number.isFinite(projectBalance) ? projectBalance + bitcoinBalance : Number(cryptoCache.total) || 0;
+  const totalNetWorth = calculateNetWorth(storedAssets, cryptoTotal).total_net_worth || 0;
+  const netWorthDaily = getDailyNetWorthChange(totalNetWorth) || {};
   const sourceRows = [...(currentMonth.platforms || [])].sort((a, b) => b.amount - a.amount);
   const maxSource = Math.max(1, ...sourceRows.map(row => Number(row.amount) || 0));
 
@@ -233,11 +271,18 @@ export default function SideHustleDashboard() {
     </header>
 
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-      <SummaryCard icon={Coins} title="Passive Income Today" value={money(dailyIncome)} detail="Current estimated daily pace" accent="text-emerald-400"/>
-      <SummaryCard icon={CalendarDays} title="Passive Income This Month" value={money(currentMonth.total)} detail={previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"}/>
-      <SummaryCard icon={Zap} title="Mining Power Live" value={`${totalWatts.toFixed(0)} W`} detail={`${deviceRows.length} GPUs · ${monthKwh.toFixed(2)} kWh MTD`} accent="text-cyan-300"/>
-      <SummaryCard icon={Target} title="Project Break-Even" value={projectSpent ? percent(projectProgress) : "—"} detail={projectSpent ? `${money(projectEarned)} / ${money(projectSpent)}` : "Add project costs to track"}/>
-      <SummaryCard icon={Cpu} title="Hardware Payback" value={hardwareCost ? percent(hardwareProgress) : "—"} detail={hardware.length ? `${hardware.length} tracked devices` : "No hardware tracked"} accent="text-emerald-400"/>
+      <SummaryCard
+        icon={Layers3}
+        title="Total Net Worth"
+        value={money(totalNetWorth)}
+        detail={`${Number(netWorthDaily?.change || 0) >= 0 ? "+" : ""}${money(netWorthDaily?.change || 0)} today · ${Number(netWorthDaily?.percent || 0).toFixed(2)}%`}
+        detailClass={Number(netWorthDaily?.change || 0) >= 0 ? "text-emerald-400" : "text-rose-400"}
+        sparkColor="#0ea5e9"
+      />
+      <SummaryCard icon={Coins} title="Passive Income Today" value={money(dailyIncome)} detail="+ current daily pace" accent="text-emerald-400" sparkColor="#10b981"/>
+      <SummaryCard icon={CalendarDays} title="Passive Income This Month" value={money(currentMonth.total)} detail={previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"} sparkColor="#10b981"/>
+      <SummaryCard icon={Zap} title="Mining Power Live" value={`${totalWatts.toFixed(0)} W`} detail={`${deviceRows.length} GPUs · ${monthKwh.toFixed(2)} kWh (MTD)`} accent="text-white" sparkColor="#06b6d4" detailClass="text-[#8d98a4]"/>
+      <HardwareSummaryCard progress={hardwareProgress} earned={hardwareRecovered} cost={hardwareCost}/>
     </div>
 
     <div className="grid gap-3 xl:grid-cols-[1.6fr_.7fr_1fr]">
