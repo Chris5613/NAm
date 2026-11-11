@@ -1,16 +1,35 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, Coins, CreditCard, TrendingUp, Plus, Pencil, Trash2, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
-import { formatCurrency, getCurrentMonthKey } from "@/lib/yieldFarmingAccounting";
+import { formatCurrency, getCurrentMonthKey, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
+import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 
 const KEY = "monthly_business_changes_v1";
-const DEFAULT_ITEMS = ["Inventory", "Cash", "Stocks / Investments", "Truck / Trailer", "Real Estate Value", "Real Estate Loan", "Forklift"];
+// Track each existing investment/project individually; Bitcoin holdings have their own row.
+function readPortfolioItems() {
+  const portfolio = getStoredProjectCryptoPortfolio();
+  const quick = readObject(PROJECT_QUICK_CACHE_KEY);
+  const entries = Array.isArray(portfolio?.projectEntries) ? portfolio.projectEntries : [];
+  const quickProjects = Array.isArray(quick?.projects) ? quick.projects : [];
+  const names = [...entries.map(entry => entry.platform), ...quickProjects
+    .filter(project => project?.inactive !== true && project?.is_inactive !== true)
+    .map(project => project.name)];
+  const seen = new Set();
+  return [...names, "BTC"].map(name => String(name || "").trim())
+    .filter(name => {
+      if (!name) return false;
+      const key = name.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
 const formatMoney = value => formatCurrency(Number(value) || 0);
 const signedMoney = value => (value > 0 ? "+" : value < 0 ? "−" : "") + formatMoney(Math.abs(value));
 const round = n => Math.round((Number(n) || 0) * 100) / 100;
 const parseAmount = value => {
   const n = Number(value);
-  return value !== "" && Number.isFinite(n) ? n : null;
+  return value !== "" && value !== null && value !== undefined && Number.isFinite(n) ? n : null;
 };
 const prevMonth = month => {
   const [year, number] = month.split("-").map(Number);
@@ -30,18 +49,19 @@ const input = "mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] px-3 
 
 export default function MonthlyChangesPage() {
   const [records, setRecords] = useState(readRecords);
+  const [portfolioItems, setPortfolioItems] = useState(readPortfolioItems);
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState({ name: "", start: "", end: "" });
   const [error, setError] = useState("");
-  useEffect(() => subscribe(() => setRecords(readRecords())), []);
+  useEffect(() => subscribe(() => { setRecords(readRecords()); setPortfolioItems(readPortfolioItems()); }), []);
 
   const record = records[month] || {};
   const previous = records[prevMonth(month)] || {};
   const items = useMemo(() => {
     const own = Array.isArray(record.items) ? record.items : [];
     const prior = Array.isArray(previous.items) ? previous.items : [];
-    const names = [...new Set([...DEFAULT_ITEMS, ...prior.map(r => r.name), ...own.map(r => r.name)])];
+    const names = [...new Set([...portfolioItems, ...prior.map(r => r.name), ...own.map(r => r.name)])];
     return names.filter(Boolean).map(name => {
       const current = own.find(row => row.name === name);
       const earlier = prior.find(row => row.name === name);
@@ -50,7 +70,7 @@ export default function MonthlyChangesPage() {
       const end = parseAmount(current?.end);
       return { name, start, end, change: start === null || end === null ? null : round(end - start) };
     });
-  }, [record.items, previous.items]);
+  }, [portfolioItems, record.items, previous.items]);
   const lastNet = Array.isArray(previous.items)
     ? round(previous.items.reduce((sum, row) => sum + (parseAmount(row.end) || 0), 0))
     : null;
@@ -203,7 +223,7 @@ export default function MonthlyChangesPage() {
           <input type="number" step="0.01" value={record.expenses ?? ""} placeholder="Enter expenses" onChange={event => setMetric("expenses", event.target.value)} className={input}/>
         </label>
       </div>
-      <p className="mt-3 text-xs text-[#8396a7]">Amounts are saved for the selected month. The next month can inherit previous ending balances. Negative amounts represent liabilities.</p>
+      <p className="mt-3 text-xs text-[#8396a7]">Project names and BTC are loaded from your portfolio. Enter each month’s actual start and end USD values; prior month-end amounts can carry forward as starting balances. Historical values are not replaced by live prices.</p>
     </section>
 
     {editing && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(null); }}>
