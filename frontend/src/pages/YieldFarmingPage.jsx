@@ -1926,6 +1926,212 @@ const summary =
         <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
         </div>
       </header>
+      <div className="grid items-stretch gap-2.5 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
+        <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="text-[14px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : earningsChartRange === "monthly" ? "This Month" : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}</h2>
+              <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : earningsChartRange === "weekly" ? weekEarnings : earningsChartRange === "monthly" ? thisMonthEarned : thisYearEarned)}</div>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="flex rounded-lg border border-[#2b3848] bg-[#0e141c] p-0.5" aria-label="Earnings chart period">
+                {["daily", "weekly", "monthly", "yearly"].map(period => (
+                  <button
+                    key={period}
+                    type="button"
+                    onClick={() => { setEarningsChartRange(period); setSelectedEarningsPoint(null); }}
+                    aria-pressed={earningsChartRange === period}
+                    className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${earningsChartRange === period ? "bg-[#293747] text-white" : "text-muted-foreground hover:text-white"}`}
+                  >
+                    {period === "daily" ? "Daily" : period === "weekly" ? "Weekly" : period === "monthly" ? "Monthly" : "Yearly"}
+                  </button>
+                ))}
+              </div>
+              {earningsChartRange === "yearly" && (
+                <select
+                  aria-label="Earnings chart year"
+                  value={earningsChartYear}
+                  onChange={event => {
+                    setEarningsChartYear(event.target.value);
+                    setSelectedEarningsPoint(null);
+                  }}
+                  className="rounded-lg border border-[#2b3848] bg-[#0e141c] px-2 py-1 text-[10px] font-medium text-white outline-none"
+                >
+                  {availableEarningsYears.map(year => (
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              )}
+              <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-400">
+                <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                {earningsChartRange === "yearly" && earningsChartYear !== todayKey.slice(0, 4) ? "Historical" : "Live"}
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 h-[190px] w-full lg:h-[200px]">
+            <ResponsiveContainer width="100%" height="100%">
+              {earningsChartRange === "daily" ? (
+                <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}}>
+                  <defs>
+                    <linearGradient id="yieldDailyFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <XAxis dataKey="x" type="number" domain={[0,dailyChartEnd]} ticks={dailyChartTicks} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} tickFormatter={hour => hour === 0 ? "12am" : hour === 12 ? "12pm" : hour === 24 ? "12am" : hour < 12 ? hour+"am" : (hour-12)+"pm"}/>
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[dailyChartMin,dailyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={hour => {
+                    const rounded = Math.max(0, Math.min(24,Number(hour)));
+                    const hours = Math.floor(rounded);
+                    const mins = Math.floor((rounded-hours)*60);
+                    return `${String(hours).padStart(2,"0")}:${String(mins).padStart(2,"0")} PT`;
+                  }} formatter={(value, name, item)=>[formatCurrency(value), item?.payload?.displayBaseline ? "Display baseline · no reading" : "Recorded today"]}/>
+                  <Area type="monotoneX" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
+                </AreaChart>
+              ) : earningsChartRange === "weekly" ? (
+                <AreaChart data={weekDays} margin={{top:28,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? weekDays[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly",key:day}); }}>
+                  <defs>
+                    <linearGradient id="yieldWeeklyLiveFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} interval={0} tick={{fontSize:11,fill:"#91a1b2"}} />
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,observedWeekMaximum*1.15]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.date || label} formatter={value=>[formatCurrency(value),"Recorded earnings"]} />
+                  <Area type="monotone" dataKey="value" name="Earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldWeeklyLiveFill)"
+                    dot={props => {
+                      const day = props?.payload?.key;
+                      if (!day || day > todayKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={6} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"weekly",key:day})}/>;
+                    }}
+                    activeDot={props => {
+                      const day = props?.payload?.key;
+                      if (!day || day > todayKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={8} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"weekly",key:day})}/>;
+                    }}
+                    connectNulls={false} isAnimationActive={false}>
+                    <LabelList dataKey="value" position="top" offset={12} formatter={value => value == null ? "" : formatCurrency(value)} style={{fill:"#c7f9e5",fontSize:10,fontWeight:600}} />
+                  </Area>
+                </AreaChart>
+              ) : earningsChartRange === "monthly" ? (
+                <AreaChart data={monthlyChartData} margin={{top:18,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? monthlyChartData[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"monthly",key:day}); }}>
+                  <defs>
+                    <linearGradient id="yieldMonthlyFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize:9,fill:"#91a1b2"}} interval={2} />
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings"]}/>
+                  <Area type="monotone" dataKey="value" name="Daily earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)"
+                    dot={props => {
+                      const day = props?.payload?.key;
+                      if (!day || day > todayKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={4} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"monthly",key:day})}/>;
+                    }}
+                    activeDot={props => {
+                      const day = props?.payload?.key;
+                      if (!day || day > todayKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={7} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"monthly",key:day})}/>;
+                    }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                </AreaChart>
+              ) : (
+                <AreaChart data={yearlyChartData} margin={{top:28,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const month = point?.activePayload?.[0]?.payload?.monthKey || (Number.isInteger(index) ? yearlyChartData[index]?.monthKey : null); if (month && month <= todayKey.slice(0,7)) setSelectedEarningsPoint({range:"yearly",key:month}); }}>
+                  <defs>
+                    <linearGradient id="yieldYearlyFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#344454" opacity={0.35} strokeDasharray="3 4"/>
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} interval={0} tick={{fontSize:10,fill:"#91a1b2"}} />
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,yearlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(0)}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#111b27",border:"1px solid #33465a",borderRadius:10,fontSize:12}} formatter={value=>[formatCurrency(value),"Monthly earnings"]}/>
+                  <Area type="monotone" dataKey="value" name="Monthly earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldYearlyFill)"
+                    dot={props => {
+                      const monthKey = props?.payload?.monthKey;
+                      if (!monthKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={5} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"yearly",key:monthKey})}/>;
+                    }}
+                    activeDot={props => {
+                      const monthKey = props?.payload?.monthKey;
+                      if (!monthKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={8} fill="#30e69b"
+                        stroke="#0c141e" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"yearly",key:monthKey})}/>;
+                    }}
+                    connectNulls={false}
+                    isAnimationActive={false}>
+                    <LabelList dataKey="value" position="top" offset={12} formatter={value => value == null ? "" : formatCurrency(value)} style={{fill:"#c7f9e5",fontSize:10,fontWeight:600}} />
+                  </Area>
+                </AreaChart>
+              )}
+            </ResponsiveContainer>
+          </div>
+        </section>
+        <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
+          <h2 className="text-[14px] font-semibold">Today's Earnings</h2>
+          <div className="mt-2 grid items-center gap-3 sm:grid-cols-[104px_minmax(0,1fr)]">
+            <div className="flex flex-col items-center">
+              <div className="flex h-24 w-24 items-center justify-center rounded-full" style={{background:`conic-gradient(#36e69b ${Math.max(0,Math.min(100,todayEarnings/Math.max(summary.monthlyYield/30.4375,0.01)*100))}%, #25313d 0)`}}>
+                <div className="flex h-[78%] w-[78%] flex-col items-center justify-center rounded-full bg-[#0b1017]">
+                  <strong className="text-[16px] font-semibold tabular-nums">{formatCurrency(todayEarnings)}</strong>
+                  <span className="text-[9px] text-muted-foreground">Today so far</span>
+                </div>
+              </div>
+              <p className="mt-1.5 text-center text-[9px] text-muted-foreground">{formatCurrency(summary.monthlyYield / 30.4375)} est. daily</p>
+            </div>
+
+            <div className="min-w-0 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-2">
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <h3 className="truncate text-[11px] font-semibold">Today's sources</h3>
+                <span className="shrink-0 text-[9px] text-muted-foreground">Income + payouts</span>
+              </div>
+              {todayBreakdown.length ? (
+                <div className="space-y-1">
+                  {todayBreakdown.map(source => (
+                    <div key={source.name} className="flex items-center justify-between gap-2 text-[10px]">
+                      <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
+                      <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{formatCurrency(source.amount)}</span>
+                    </div>
+                  ))}
+                  {!todayBreakdown.some(source => source.name === "Loopscale") && (
+                    <div className="flex items-center justify-between gap-2 text-[10px]">
+                      <span className="min-w-0 truncate text-muted-foreground">Loopscale</span>
+                      <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{formatCurrency(0)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t border-white/10 pt-1 text-[10px]">
+                    <span className="font-medium">Total</span>
+                    <span className="font-semibold tabular-nums">{formatCurrency(todayEarnings)}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="py-4 text-center text-[10px] text-muted-foreground">No new earnings recorded yet.</p>
+              )}
+            </div>
+          </div>
+        </section>
+      </div>
+
       <div>
       <section className="min-w-0 space-y-2 rounded-2xl border border-[#252a32] bg-[#0b1017] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
