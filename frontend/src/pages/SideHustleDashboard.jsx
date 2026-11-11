@@ -413,17 +413,28 @@ export default function SideHustleDashboard() {
   const [power, setPower] = useState(null);
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
   const [serverTodayIncome, setServerTodayIncome] = useState(null);
+  const [serverMonthIncome, setServerMonthIncome] = useState(null);
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
 
-  const refreshTodayIncome = useCallback(async () => {
+  const refreshIncomeMetrics = useCallback(async () => {
     const today = pacificDayKey(Date.now());
-    try {
-      const result = await api.get(`/api/project-tracking/daily-earnings/${today}`);
+    const month = getCurrentMonthKey();
+    const [dailyResult, monthlyResult] = await Promise.allSettled([
+      api.get(`/api/project-tracking/daily-earnings/${today}`),
+      api.get(`/api/project-tracking/monthly-daily-earnings/${month}`),
+    ]);
+
+    if (dailyResult.status === "fulfilled") {
+      const result = dailyResult.value;
       const total = Number(result?.totalUsd);
-      setServerTodayIncome(result?.date === today && Number.isFinite(total) ? total : null);
-    } catch {
-      setServerTodayIncome(null);
+      if (result?.date === today && Number.isFinite(total)) setServerTodayIncome(total);
+    }
+
+    if (monthlyResult.status === "fulfilled") {
+      const result = monthlyResult.value;
+      const total = Number(result?.totalUsd);
+      if (result?.month === month && Number.isFinite(total)) setServerMonthIncome(total);
     }
   }, []);
 
@@ -443,22 +454,26 @@ export default function SideHustleDashboard() {
   useEffect(() => subscribe(() => {
     setIncome(readIncomeData());
     setHardware(readHardware());
-  }), []);
+    refreshIncomeMetrics();
+  }), [refreshIncomeMetrics]);
   useEffect(() => {
     refreshPower();
-    refreshTodayIncome();
+    refreshIncomeMetrics();
     const powerTimer = window.setInterval(refreshPower, 15000);
-    const incomeTimer = window.setInterval(refreshTodayIncome, 60000);
+    const incomeTimer = window.setInterval(refreshIncomeMetrics, 5000);
     const clockTimer = window.setInterval(() => setClock(Date.now()), 60000);
     return () => {
       window.clearInterval(powerTimer);
       window.clearInterval(incomeTimer);
       window.clearInterval(clockTimer);
     };
-  }, [refreshPower, refreshTodayIncome]);
+  }, [refreshPower, refreshIncomeMetrics]);
 
   const currentMonthKey = getCurrentMonthKey();
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) || { monthKey: currentMonthKey, total: 0, platforms: [] };
+  const monthlyIncome = Number.isFinite(Number(serverMonthIncome))
+    ? Math.max(0, Number(serverMonthIncome))
+    : Math.max(0, Number(currentMonth.total) || 0);
   const recentMonths = income.months.slice(-12);
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
   const todayKey = pacificDayKey(clock);
@@ -580,7 +595,7 @@ export default function SideHustleDashboard() {
       />
       <KpiCard
         icon={Coins}
-        title="Passive Income Today"
+        title="Income Today"
         value={money(passiveIncomeToday)}
         detail={todayVsYesterday == null ? "Actual earnings today" : `${todayVsYesterday >= 0 ? "▲" : "▼"} ${Math.abs(todayVsYesterday).toFixed(1)}% vs. yesterday`}
         tone="emerald"
@@ -589,7 +604,7 @@ export default function SideHustleDashboard() {
       <KpiCard
         icon={CalendarDays}
         title="Monthly Income"
-        value={money(currentMonth.total)}
+        value={money(monthlyIncome)}
         detail={previousMonth ? `${monthChange >= 0 ? "▲" : "▼"} ${Math.abs(monthChange).toFixed(1)}% vs. last month` : "Current month total"}
         tone="sky"
       />
@@ -602,7 +617,7 @@ export default function SideHustleDashboard() {
       />
     </div>
     <div className="grid gap-3 xl:grid-cols-2">
-      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
+      <section className={panel + " min-h-[210px] min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
             <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
@@ -699,7 +714,7 @@ export default function SideHustleDashboard() {
           {!hardware.length && <p className="rounded-xl border border-dashed border-[#2a343e] py-8 text-center text-xs text-[#778491]">No hardware tracked yet.</p>}
         </div>
       </section>
-      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
+      <section className={panel + " min-h-[210px] min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-2.5">
             <Target className="mt-0.5 h-4 w-4 text-[#a8b6c4]"/>
@@ -807,7 +822,7 @@ export default function SideHustleDashboard() {
 
           <div className="divide-y divide-[#202932]">
             {sourceTableRows.map(row => (
-              <div key={row.platform} className="grid grid-cols-[1.4fr_.9fr_1fr_1.05fr_.75fr_.75fr] items-center gap-x-3 px-1 py-2 text-[11px]">
+              <div key={row.platform} className="grid grid-cols-[1.5fr_.9fr_1fr_1.05fr_.75fr] items-center gap-x-3 px-1 py-2 text-[11px]">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${row.meta.iconClass}`}>{row.meta.icon}</span>
                   <span className="truncate font-medium text-[#e8edf2]">{row.platform}</span>
@@ -840,7 +855,7 @@ export default function SideHustleDashboard() {
             <div className="mt-5 grid grid-cols-2 gap-x-0 gap-y-0">
               <div className="border-b border-r border-[#242d35] pb-5 pr-5">
                 <p className="text-[10px] text-[#83909d]">Passive Income (MTD)</p>
-                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(currentMonth.total)}</strong>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(monthlyIncome)}</strong>
                 <p className="mt-1 text-[9px] text-emerald-400/80">{previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"}</p>
               </div>
               <div className="border-b border-[#242d35] pb-5 pl-5">
@@ -855,7 +870,7 @@ export default function SideHustleDashboard() {
               </div>
               <div className="pt-5 pl-5">
                 <p className="text-[10px] text-[#83909d]">Est. Net Profit (MTD)</p>
-                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(Math.max(0, currentMonth.total - monthPowerCost))}</strong>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(Math.max(0, monthlyIncome - monthPowerCost))}</strong>
                 
               </div>
             </div>
