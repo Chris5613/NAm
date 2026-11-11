@@ -1926,7 +1926,7 @@ const summary =
         <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
         </div>
       </header>
-      <div className="grid items-stretch gap-2.5 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
+      <div className="grid items-start gap-2.5 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
         <section className="flex min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -2087,35 +2087,33 @@ const summary =
             </ResponsiveContainer>
           </div>
         </section>
-        <section className="rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <h2 className="text-[14px] font-semibold">Today's sources</h2>
-            <span className="text-[9px] text-muted-foreground">Income + payouts</span>
+        <section className="self-start rounded-2xl border border-[#263342] bg-[#0b1017] px-3 py-3">
+          <div className="flex items-end justify-between gap-4 border-b border-white/[0.08] pb-2.5">
+            <div>
+              <h2 className="text-[14px] font-semibold text-white">Today's Earnings</h2>
+              <p className="mt-0.5 text-[9px] text-muted-foreground">Income + payouts by source</p>
+            </div>
+            <strong className="shrink-0 text-[22px] font-semibold leading-none tabular-nums text-emerald-400">{formatCurrency(todayEarnings)}</strong>
           </div>
 
           {todayBreakdown.length ? (
-            <div className="space-y-1.5">
+            <div className="divide-y divide-white/[0.055]">
               {todayBreakdown.map(source => (
-                <div key={source.name} className="flex items-center justify-between gap-2 text-[10px]">
-                  <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
+                <div key={source.name} className="flex items-center justify-between gap-3 py-1.5 text-[10px]">
+                  <span className="min-w-0 truncate text-[#9aa7b4]">{source.name}</span>
                   <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{formatCurrency(source.amount)}</span>
                 </div>
               ))}
 
               {!todayBreakdown.some(source => source.name === "Loopscale") && (
-                <div className="flex items-center justify-between gap-2 text-[10px]">
-                  <span className="min-w-0 truncate text-muted-foreground">Loopscale</span>
+                <div className="flex items-center justify-between gap-3 py-1.5 text-[10px]">
+                  <span className="min-w-0 truncate text-[#9aa7b4]">Loopscale</span>
                   <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{formatCurrency(0)}</span>
                 </div>
               )}
-
-              <div className="mt-1 flex items-center justify-between border-t border-white/10 pt-1.5 text-[10px]">
-                <span className="font-medium text-white">Total</span>
-                <span className="font-semibold tabular-nums text-white">{formatCurrency(todayEarnings)}</span>
-              </div>
             </div>
           ) : (
-            <p className="py-4 text-center text-[10px] text-muted-foreground">No new earnings recorded yet.</p>
+            <p className="py-5 text-center text-[10px] text-muted-foreground">No new earnings recorded yet.</p>
           )}
         </section>
       </div>
