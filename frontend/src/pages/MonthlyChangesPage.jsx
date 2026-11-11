@@ -480,9 +480,6 @@ export default function MonthlyChangesPage() {
           <strong className="mt-1 block text-2xl font-bold tabular-nums text-white">{value === null ? "—" : formatMoney(value)}</strong>
           <p className={`mt-2 text-xs ${diff === null ? "text-[#8da0b2]" : diff >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{diff === null ? "No prior month comparison" : `${diff > 0 ? "+" : ""}${diff.toFixed(1)}% vs. last month`}</p>
         </div>
-        <svg viewBox="0 0 100 42" className={`mt-5 h-11 w-24 shrink-0 opacity-75 ${tone.text}`} aria-hidden="true">
-          <polyline fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" points="2,38 22,32 36,24 51,26 70,11 82,13 98,3"/>
-        </svg>
       </div>
     </section>;
   };
