@@ -608,9 +608,15 @@ export default function SideHustleDashboard() {
             <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
             <div className="min-w-0">
               <h2 className="text-[15px] font-semibold leading-none">Hardware Payback</h2>
-              
             </div>
           </div>
+          <Link
+            to="/hardware-payback"
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] px-2.5 text-[10px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/15"
+          >
+            <Plus className="h-3.5 w-3.5"/>
+            Add
+          </Link>
         </div>
 
         <div className="mt-3 space-y-2">
@@ -699,9 +705,15 @@ export default function SideHustleDashboard() {
             <Target className="mt-0.5 h-4 w-4 text-[#a8b6c4]"/>
             <div>
               <h2 className="text-[15px] font-semibold leading-none">Project Break-Even</h2>
-              
             </div>
           </div>
+          <Link
+            to="/project-break-even"
+            className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] px-2.5 text-[10px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/15"
+          >
+            <Plus className="h-3.5 w-3.5"/>
+            Add
+          </Link>
         </div>
 
         <div className="mt-3 divide-y divide-[#202932]">
