@@ -29,6 +29,7 @@ import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { currentLuloUtcDaily } from "@/lib/luloUtcDaily";
 import { useLegacyLuloMonthlyAccounting } from "@/hooks/useLegacyLuloMonthlyAccounting";
 import { Card, CardContent } from "@/components/ui/card";
+import DividendIncomeSection from "@/components/DividendIncomeSection";
 import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
