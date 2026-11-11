@@ -396,7 +396,19 @@ export default function SideHustleDashboard() {
   const [hardware, setHardware] = useState(readHardware);
   const [power, setPower] = useState(null);
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
+  const [serverTodayIncome, setServerTodayIncome] = useState(null);
   const [clock, setClock] = useState(Date.now());
+
+  const refreshTodayIncome = useCallback(async () => {
+    const today = pacificDayKey(Date.now());
+    try {
+      const result = await api.get(`/api/project-tracking/daily-earnings/${today}`);
+      const total = Number(result?.totalUsd);
+      setServerTodayIncome(result?.date === today && Number.isFinite(total) ? total : null);
+    } catch {
+      setServerTodayIncome(null);
+    }
+  }, []);
 
   const refreshPower = useCallback(async () => {
     try {
@@ -417,16 +429,27 @@ export default function SideHustleDashboard() {
   }), []);
   useEffect(() => {
     refreshPower();
+    refreshTodayIncome();
     const powerTimer = window.setInterval(refreshPower, 15000);
+    const incomeTimer = window.setInterval(refreshTodayIncome, 60000);
     const clockTimer = window.setInterval(() => setClock(Date.now()), 60000);
-    return () => { window.clearInterval(powerTimer); window.clearInterval(clockTimer); };
-  }, [refreshPower]);
+    return () => {
+      window.clearInterval(powerTimer);
+      window.clearInterval(incomeTimer);
+      window.clearInterval(clockTimer);
+    };
+  }, [refreshPower, refreshTodayIncome]);
 
   const currentMonthKey = getCurrentMonthKey();
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) || { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recentMonths = income.months.slice(-12);
   const dailyIncome = income.projects.reduce((sum, project) => sum + project.daily, 0);
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
+  const todayKey = pacificDayKey(clock);
+  const localTodayIncome = Number(dailyRows.find(row => row.date === todayKey)?.income) || 0;
+  const passiveIncomeToday = Number.isFinite(Number(serverTodayIncome))
+    ? Math.max(0, Number(serverTodayIncome))
+    : Math.max(0, localTodayIncome);
   const dailyIncomeMap = new Map(dailyRows.map(row => [row.date, Number(row.income) || 0]));
   const rollingEndDay = pacificDayKey(clock);
   const rollingEnd = new Date(`${rollingEndDay}T12:00:00Z`);
@@ -530,7 +553,7 @@ export default function SideHustleDashboard() {
         detailClass="text-[#8d98a4]"
         sparkColor="#0ea5e9"
       />
-      <SummaryCard icon={Coins} title="Passive Income Today" value={money(dailyIncome)} detail="+ current daily pace" accent="text-emerald-400" sparkColor="#10b981"/>
+      <SummaryCard icon={Coins} title="Passive Income Today" value={money(passiveIncomeToday)} detail="Actual earnings recorded today" accent="text-emerald-400" sparkColor="#10b981"/>
       <SummaryCard icon={CalendarDays} title="Passive Income This Month" value={money(currentMonth.total)} detail={previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"} sparkColor="#10b981"/>
       <SummaryCard icon={Zap} title="Mining Power Live" value={`${totalWatts.toFixed(0)} W`} detail={`${deviceRows.length} GPUs · ${monthKwh.toFixed(2)} kWh (MTD)`} accent="text-white" sparkColor="#06b6d4" detailClass="text-[#8d98a4]"/>
     </div>
