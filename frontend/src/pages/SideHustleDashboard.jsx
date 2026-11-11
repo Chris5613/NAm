@@ -593,17 +593,14 @@ export default function SideHustleDashboard() {
             View All <ChevronRight className="h-3 w-3"/>
           </Link>
         </div>
-        <div className="mt-3 grid grid-cols-[1.25fr_.8fr_.8fr] gap-x-3 border-b border-[#26313a] pb-2 text-[9px] text-[#8a96a3]">
-          <span>Date</span><span className="text-right">Income</span><span className="text-right">Change</span>
+        <div className="mt-3 grid grid-cols-[1.35fr_.85fr] gap-x-3 border-b border-[#26313a] pb-2 text-[9px] text-[#8a96a3]">
+          <span>Date</span><span className="text-right">Income</span>
         </div>
         <div className="divide-y divide-[#202932]">
           {historyRows.map(row => (
-            <div key={row.date} className="grid grid-cols-[1.25fr_.8fr_.8fr] items-center gap-x-3 py-2.5 text-[10px]">
+            <div key={row.date} className="grid grid-cols-[1.35fr_.85fr] items-center gap-x-3 py-2.5 text-[10px]">
               <span className="text-[#e5ebf1]">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${row.date}T12:00:00Z`))}</span>
               <strong className="text-right tabular-nums text-[#eef2f6]">{money(row.income)}</strong>
-              <strong className={`text-right tabular-nums ${row.change == null ? "text-[#778491]" : row.change >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
-                {row.change == null ? "—" : `${row.change >= 0 ? "+" : ""}${row.change.toFixed(1)}%`}
-              </strong>
             </div>
           ))}
           {!historyRows.length && <p className="py-8 text-center text-xs text-[#778491]">No daily income history yet.</p>}
