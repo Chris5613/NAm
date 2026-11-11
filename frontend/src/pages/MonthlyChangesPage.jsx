@@ -219,7 +219,6 @@ export default function MonthlyChangesPage() {
     remoteStorage.setItem(KEY, JSON.stringify(updated));
     setRecords(updated);
   };
-  const setMetric = (key, value) => save({ ...record, [key]: value });
   const showEdit = item => {
     setError("");
     setDraft(item ? {
@@ -340,15 +339,6 @@ export default function MonthlyChangesPage() {
           </tbody>
         </table>
       </div>
-      <div className="mt-4 grid gap-3 border-t border-[#263342] pt-4 sm:grid-cols-2">
-        <label className="text-sm text-[#bdccd9]">Monthly revenue ($)
-          <input type="number" step="0.01" value={record.revenue ?? ""} placeholder="Enter revenue" onChange={event => setMetric("revenue", event.target.value)} className={input}/>
-        </label>
-        <label className="text-sm text-[#bdccd9]">Monthly expenses ($)
-          <input type="number" step="0.01" value={record.expenses ?? ""} placeholder="Enter expenses" onChange={event => setMetric("expenses", event.target.value)} className={input}/>
-        </label>
-      </div>
-      <p className="mt-3 text-xs text-[#8396a7]">September and October rows marked “Est.” were back-calculated from saved project balances and monthly income; they are estimates, not verified historic balances. Edit them to account for deposits, withdrawals, and price changes. BTC needs actual historic wallet values.</p>
     </section>
 
     {editing && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event => { if (event.target === event.currentTarget) setEditing(null); }}>
