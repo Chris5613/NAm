@@ -13,6 +13,7 @@ import {
   PROJECT_QUICK_CACHE_KEY, readObject,
 } from "@/lib/yieldFarmingAccounting";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
+import { localStorage as appStorage } from "@/lib/localStorage";
 
 const KEY = "monthly_business_changes_v1";
 // Track each existing investment/project individually; Bitcoin holdings have their own row.
@@ -41,6 +42,18 @@ function portfolioBalances() {
     if (name && Number.isFinite(value) && value > 0) balances.set(name.toLowerCase(), value);
   }
   return balances;
+}
+// Match the Bitcoin holding displayed on Home rather than including project balances.
+function readHomeBitcoin() {
+  const home = appStorage.getCryptoCache()?.projectPortfolio?.bitcoin;
+  const homeValue = home?.value ?? home?.balance;
+  if (homeValue !== undefined && homeValue !== null && Number.isFinite(Number(homeValue))) {
+    return Number(homeValue);
+  }
+  const portfolio = getStoredProjectCryptoPortfolio();
+  const balance = portfolio?.bitcoin?.value;
+  return balance !== undefined && balance !== null && Number.isFinite(Number(balance))
+    ? Number(balance) : null;
 }
 function readPortfolioItems() {
   const portfolio = getStoredProjectCryptoPortfolio();
@@ -86,6 +99,7 @@ const input = "mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] px-3 
 export default function MonthlyChangesPage() {
   const [records, setRecords] = useState(readRecords);
   const [portfolioItems, setPortfolioItems] = useState(readPortfolioItems);
+  const [liveBitcoin, setLiveBitcoin] = useState(readHomeBitcoin);
   const [incomeSources, setIncomeSources] = useState(readIncomeSources);
   const [backendReady, setBackendReady] = useState(false);
   const [month, setMonth] = useState(getCurrentMonthKey);
@@ -95,6 +109,7 @@ export default function MonthlyChangesPage() {
   useEffect(() => subscribe(() => {
     setRecords(readRecords());
     setPortfolioItems(readPortfolioItems());
+    setLiveBitcoin(readHomeBitcoin());
     setIncomeSources(current => ({ ...readIncomeSources(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
   }), []);
   useEffect(() => {
@@ -181,6 +196,18 @@ export default function MonthlyChangesPage() {
       setRecords(updated);
     }
   }, [backendReady, monthEarnings, portfolioItems]);
+  useEffect(() => {
+    const refresh = () => setLiveBitcoin(readHomeBitcoin());
+    const interval = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("project-crypto-updated", refresh);
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("project-crypto-updated", refresh);
+    };
+  }, []);
+
   const record = records[month] || {};
   const previous = records[prevMonth(month)] || {};
   const items = useMemo(() => {
@@ -192,10 +219,12 @@ export default function MonthlyChangesPage() {
       const earlier = prior.find(row => row.name === name);
       const inferredStart = parseAmount(earlier?.end);
       const start = parseAmount(current?.start) ?? inferredStart;
-      const end = parseAmount(current?.end);
+      // Current month shows the live BTC USD holding from Home; historical months stay saved.
+      const end = name.toLowerCase() === "btc" && month === getCurrentMonthKey() && liveBitcoin !== null
+        ? liveBitcoin : parseAmount(current?.end);
       return { name, start, end, estimated: Boolean(current?.estimated), change: start === null || end === null ? null : round(end - start) };
     });
-  }, [portfolioItems, record.items, previous.items]);
+  }, [portfolioItems, record.items, previous.items, month, liveBitcoin]);
   const lastNet = Array.isArray(previous.items)
     ? round(previous.items.reduce((sum, row) => sum + (parseAmount(row.end) || 0), 0))
     : null;
