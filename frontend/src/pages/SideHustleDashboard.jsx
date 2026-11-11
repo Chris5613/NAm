@@ -426,10 +426,11 @@ export default function SideHustleDashboard() {
             <div className="absolute inset-y-0 left-0 z-10 hidden w-28 bg-gradient-to-r from-[#0d1014] via-[#0d1014]/80 to-transparent lg:block"/>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_60%_45%,rgba(34,211,238,0.15),transparent_38%)]"/>
             <img
-              src="/gpu/rtx5070-msi.webp"
-              alt="MSI GeForce RTX 5070"
-              className="absolute bottom-2 right-4 h-[78%] w-[88%] object-contain object-right opacity-95 drop-shadow-[0_18px_32px_rgba(0,0,0,0.62)] lg:bottom-0 lg:right-5 lg:h-[88%] lg:w-[95%]"
+              src="/gpu/month-glance-pc.webp"
+              alt="RTX 5070 mining PC"
+              className="absolute inset-0 h-full w-full object-cover object-center opacity-95"
             />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#0d1014] via-[#0d1014]/30 to-transparent lg:from-[#0d1014]/95 lg:via-[#0d1014]/15 lg:to-transparent" />
           </div>
         </div>
       </section>
