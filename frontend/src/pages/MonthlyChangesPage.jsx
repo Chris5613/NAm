@@ -323,7 +323,7 @@ export default function MonthlyChangesPage() {
           <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-widest text-[#9bafc1]"><th className="pb-2">Item</th><th className="pb-2 text-right">Start</th><th className="pb-2 text-right">Change</th><th className="pb-2 text-right">End</th><th className="w-9"/></tr></thead>
           <tbody>
             {visibleItems.map(row => <tr key={row.name} className="group border-b border-[#1e2b38] odd:bg-white/[0.025]">
-              <td className="py-2 pl-1 font-medium">{row.name}{row.estimated && <span className="ml-2 text-[10px] text-amber-300">Est.</span>}</td>
+              <td className="py-2 pl-1 font-medium">{row.name}</td>
               <td className="py-2 text-right tabular-nums">{row.start === null ? "—" : formatMoney(row.start)}</td>
               <td className={`py-2 text-right font-semibold tabular-nums ${row.change === null ? "text-[#8495a7]" : row.change > 0 ? "text-emerald-400" : row.change < 0 ? "text-rose-400" : "text-[#8495a7]"}`}>{row.change === null ? "—" : signedMoney(row.change)}</td>
               <td className="py-2 text-right font-semibold tabular-nums">{row.end === null ? "—" : formatMoney(row.end)}</td>
