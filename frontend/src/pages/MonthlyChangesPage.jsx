@@ -469,9 +469,11 @@ export default function MonthlyChangesPage() {
         <div>
           <h2 className="text-lg font-semibold">Net Worth</h2>
           <strong className="mt-2 block text-4xl font-bold tracking-tight tabular-nums text-emerald-400 sm:text-5xl">{netReady ? formatMoney(netEnd) : "—"}</strong>
-          <div className="mt-3 inline-flex rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">
-            {changeReady && moM !== null ? `${signedMoney(netChange)} (${moM > 0 ? "+" : ""}${moM.toFixed(1)}% MoM)` : "Enter balances to track changes"}
-          </div>
+          {changeReady && moM !== null && (
+            <div className="mt-3 inline-flex rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">
+              {`${signedMoney(netChange)} (${moM > 0 ? "+" : ""}${moM.toFixed(1)}% MoM)`}
+            </div>
+          )}
         </div>
         <dl className="space-y-0 border-[#263342] md:border-l md:pl-7">
           {[
