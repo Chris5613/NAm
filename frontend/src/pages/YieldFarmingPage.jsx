@@ -2088,34 +2088,48 @@ const summary =
             </ResponsiveContainer>
           </div>
         </section>
-        <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] px-3 py-3">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 className="text-[14px] font-semibold text-white">Today's Earnings</h2>
-              <p className="mt-0.5 text-[9px] text-muted-foreground">Income + payouts by source</p>
+        <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#263342] bg-[#0b1017] p-3">
+          <h2 className="text-[14px] font-semibold">Today's Earnings</h2>
+
+          <div className="mt-3 flex flex-1 flex-col rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-3">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <h3 className="text-[12px] font-semibold">Where today's earnings came from</h3>
+              <span className="text-[10px] text-muted-foreground">Daily earnings and payouts</span>
             </div>
-            <strong className="shrink-0 text-[22px] font-semibold leading-none tabular-nums text-emerald-400">{formatCurrency(todayEarnings)}</strong>
+
+            {todayBreakdown.length ? (
+              <div className="flex flex-1 flex-col justify-evenly gap-1">
+                {todayBreakdown.map(source => (
+                  <div key={source.name} className="flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
+                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{formatCurrency(source.amount)}</span>
+                  </div>
+                ))}
+
+                {!todayBreakdown.some(source => source.name === "Loopscale") && (
+                  <div className="flex items-center justify-between gap-3 text-xs">
+                    <span className="min-w-0 text-muted-foreground">Loopscale</span>
+                    <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{formatCurrency(0)}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs">
+                  <span className="font-medium">Total</span>
+                  <span className="font-semibold tabular-nums">{formatCurrency(todayEarnings)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-1 flex-col justify-center gap-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">Loopscale</span>
+                  <span className="font-semibold tabular-nums text-emerald-400">{formatCurrency(0)}</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  No new increases recorded yet.
+                </p>
+              </div>
+            )}
           </div>
-
-          {todayBreakdown.length ? (
-            <div className="mt-3 flex flex-1 flex-col justify-evenly gap-1">
-              {todayBreakdown.map(source => (
-                <div key={source.name} className="flex items-center justify-between gap-3 py-1 text-[10px]">
-                  <span className="min-w-0 truncate text-[#9aa7b4]">{source.name}</span>
-                  <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{formatCurrency(source.amount)}</span>
-                </div>
-              ))}
-
-              {!todayBreakdown.some(source => source.name === "Loopscale") && (
-                <div className="flex items-center justify-between gap-3 py-1 text-[10px]">
-                  <span className="min-w-0 truncate text-[#9aa7b4]">Loopscale</span>
-                  <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{formatCurrency(0)}</span>
-                </div>
-              )}
-            </div>
-          ) : (
-            <p className="flex flex-1 items-center justify-center py-5 text-center text-[10px] text-muted-foreground">No new earnings recorded yet.</p>
-          )}
         </section>
       </div>
 
