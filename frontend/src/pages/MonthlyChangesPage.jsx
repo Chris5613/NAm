@@ -334,7 +334,8 @@ export default function MonthlyChangesPage() {
     save({ ...record, items: existing.filter(item => item.name !== editing), excluded: [...excluded] });
     setEditing(null);
   };
-  const visibleItems = items.filter(item => !(record.excluded || []).includes(item.name));
+  const visibleItems = items.filter(item => !(record.excluded || []).includes(item.name))
+    .sort((a, b) => (b.end ?? b.start ?? -Infinity) - (a.end ?? a.start ?? -Infinity));
   const netStart = round(visibleItems.reduce((n, row) => n + (row.start || 0), 0));
   const netEnd = round(visibleItems.reduce((n, row) => n + (row.end || 0), 0));
   const netChange = round(netEnd - netStart);
