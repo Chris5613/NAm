@@ -237,16 +237,6 @@ function readIncomeData() {
   };
 }
 
-function Sparkline({ color = "#2dd4bf" }) {
-  const points = [6, 8, 7, 10, 11, 13, 12, 15, 18, 17, 20, 23];
-  const d = points.map((value, index) => `${index === 0 ? "M" : "L"} ${index * 7.2} ${28 - value}`).join(" ");
-  return <svg aria-hidden="true" viewBox="0 0 80 28" preserveAspectRatio="none" className="h-full w-full overflow-visible opacity-95">
-    <defs><linearGradient id={`spark-${color.replace("#","")}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={color} stopOpacity=".34"/><stop offset="100%" stopColor={color} stopOpacity=".02"/></linearGradient></defs>
-    <path d={`${d} L 80 28 L 0 28 Z`} fill={`url(#spark-${color.replace("#","")})`}/>
-    <path d={d} fill="none" stroke={color} strokeWidth="2.15" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>;
-}
-
 const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
 
 function canonicalSourceName(source) {
@@ -344,34 +334,27 @@ function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClas
       border: "border-emerald-500/20",
       background: "bg-[radial-gradient(circle_at_100%_100%,rgba(16,185,129,0.24),transparent_52%),linear-gradient(135deg,rgba(16,185,129,0.10),rgba(8,13,15,0.96)_48%)]",
       iconWrap: "border-emerald-400/20 bg-emerald-400/15 text-emerald-400 shadow-[0_0_18px_rgba(16,185,129,0.16)]",
-      spark: "#22d39a",
     },
     sky: {
       border: "border-sky-500/20",
       background: "bg-[radial-gradient(circle_at_100%_100%,rgba(14,165,233,0.24),transparent_52%),linear-gradient(135deg,rgba(14,165,233,0.09),rgba(8,13,15,0.96)_48%)]",
       iconWrap: "border-sky-400/20 bg-sky-400/15 text-sky-300 shadow-[0_0_18px_rgba(14,165,233,0.15)]",
-      spark: "#38bdf8",
     },
     violet: {
       border: "border-violet-500/20",
       background: "bg-[radial-gradient(circle_at_100%_100%,rgba(139,92,246,0.24),transparent_52%),linear-gradient(135deg,rgba(139,92,246,0.09),rgba(8,13,15,0.96)_48%)]",
       iconWrap: "border-violet-400/20 bg-violet-400/15 text-violet-300 shadow-[0_0_18px_rgba(139,92,246,0.15)]",
-      spark: "#a78bfa",
     },
     amber: {
       border: "border-amber-500/20",
       background: "bg-[radial-gradient(circle_at_100%_100%,rgba(245,158,11,0.24),transparent_52%),linear-gradient(135deg,rgba(245,158,11,0.09),rgba(8,13,15,0.96)_48%)]",
       iconWrap: "border-amber-400/20 bg-amber-400/15 text-amber-300 shadow-[0_0_18px_rgba(245,158,11,0.16)]",
-      spark: "#fbbf24",
     },
   };
   const theme = tones[tone] || tones.emerald;
 
   return <section className={`relative min-h-[112px] min-w-0 overflow-hidden rounded-2xl border px-4 py-3.5 ${theme.border} ${theme.background} shadow-[0_12px_34px_rgba(0,0,0,0.20)]`}>
     <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.025),transparent_35%)]"/>
-    <div className="pointer-events-none absolute -bottom-3 -right-3 h-[82%] w-[62%] opacity-90">
-      <Sparkline color={theme.spark}/>
-    </div>
     <div className="relative z-10 flex h-full min-h-[82px] flex-col justify-between">
       <div className="flex min-w-0 items-center gap-2.5">
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${theme.iconWrap}`}>
