@@ -590,7 +590,12 @@ export default function SideHustleDashboard() {
 
   const projectSummary = readObject("project_income_portfolio_summary_v1");
   const totalProjectBalance = Math.max(0, Number(projectSummary?.portfolioBalance) || 0);
-  const sourceRows = [...(currentMonth.platforms || [])].sort((a, b) => b.amount - a.amount);
+  // Use the same reconciled per-source monthly totals as Income History.
+  // This includes Lulo earnings even when the quick dashboard cache lacks a Lulo row.
+  const sourceRows = Object.entries(recordedCurrentMonth?.sources || {})
+    .filter(([, amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
+    .map(([platform, amount]) => ({ platform, amount: Number(amount) }))
+    .sort((a, b) => b.amount - a.amount);
   const sourceProjectMap = new Map();
   income.projects.forEach(project => {
     const key = String(project?.name || "").trim().toLowerCase();
@@ -598,7 +603,7 @@ export default function SideHustleDashboard() {
     const existing = sourceProjectMap.get(key);
     if (!existing || Number(project.balance) > Number(existing.balance)) sourceProjectMap.set(key, project);
   });
-  const sourceTableRows = sourceRows.slice(0, 6).map(row => {
+  const sourceTableRows = sourceRows.map(row => {
     const project = sourceProjectMap.get(String(row.platform || "").trim().toLowerCase()) || {};
     return {
       ...row,
