@@ -417,21 +417,95 @@ export default function SideHustleDashboard() {
     </div>
 
     <div className="grid gap-3 xl:grid-cols-[1fr_1.15fr]">
-      <section className={panel + " min-w-0 p-4"}>
-        <SectionTitle icon={Cpu} title="Hardware Payback" to="/hardware-payback"/>
-        <p className="mt-1 text-[10px] text-[#778491]">GPU / rig ROI and payback tracking</p>
+      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <Cpu className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-semibold leading-none">Hardware Payback</h2>
+              <p className="mt-1 text-[10px] text-[#7f8b97]">GPU / rig ROI and payback estimates</p>
+            </div>
+          </div>
+          <Link to="/hardware-payback" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">
+            View All <ChevronRight className="h-3 w-3"/>
+          </Link>
+        </div>
+
         <div className="mt-3 space-y-2">
-          {hardware.slice(0, 4).map((row, index) => {
+          {hardware.slice(0, 4).map(row => {
+            const name = String(row.name || "");
+            const lowerName = name.toLowerCase();
+            const meta = lowerName.includes("2080")
+              ? GPU_META.rtx2080super
+              : lowerName.includes("5070")
+                ? GPU_META.rtx5070
+                : null;
+
+            const liveDevice = deviceRows.find(device => {
+              const label = String(device?.label || device?.id || "").toLowerCase();
+              return lowerName.includes("2080")
+                ? label.includes("2080")
+                : lowerName.includes("5070")
+                  ? label.includes("5070")
+                  : false;
+            });
+
+            const sourceProject = income.projects.find(project =>
+              String(project?.name || "").trim().toLowerCase() === String(row.source || "").trim().toLowerCase()
+            );
+
+            const cost = Math.max(0, Number(row.cost) || 0);
             const recovered = Math.max(0, Number(row.checkpoint?.carried) || 0);
-            const progress = Number(row.cost) > 0 ? recovered / Number(row.cost) * 100 : 0;
-            const meta = index === 0 ? GPU_META.rtx5070 : index === 1 ? GPU_META.rtx2080super : null;
-            return <div key={row.id} className="grid grid-cols-[54px_minmax(0,1fr)_auto_auto] items-center gap-3 rounded-xl border border-[#222c35] bg-[#10151a] px-3 py-2.5">
-              <div className="flex h-10 items-center justify-center overflow-hidden rounded-lg bg-black/20">
-                {meta ? <img src={meta.image} alt="" className="h-9 w-full object-contain"/> : <Cpu className="h-5 w-5 text-[#8fa0b0]"/>}
+            const progress = cost > 0 ? recovered / cost * 100 : 0;
+            const monthlyPowerCost = Math.max(0, Number(row.power) || 0);
+            const grossMonthlyIncome = Math.max(0, Number(sourceProject?.daily) || 0) * 30.4375;
+            const estMonthlyIncome = Math.max(0, grossMonthlyIncome - monthlyPowerCost);
+            const remaining = Math.max(0, cost - recovered);
+            const paybackMonths = remaining <= 0 ? 0 : estMonthlyIncome > 0 ? remaining / estMonthlyIncome : null;
+            const watts = Math.max(0, Number(liveDevice?.watts) || 0);
+
+            return <div
+              key={row.id}
+              className="grid grid-cols-[minmax(0,1.7fr)_.9fr_.68fr_.82fr_.52fr] items-center gap-x-3 rounded-xl border border-[#202a33] bg-[linear-gradient(180deg,#10151a_0%,#0d1217_100%)] px-3 py-2"
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <div className="flex h-11 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#26313b] bg-[#0a0e12]">
+                  {meta ? (
+                    <img
+                      src={meta.image}
+                      alt={lowerName.includes("2080") ? "RTX 2080 Super" : "RTX 5070"}
+                      className="h-full w-full object-contain px-1"
+                    />
+                  ) : (
+                    <Cpu className="h-5 w-5 text-[#8fa0b0]"/>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[12px] font-semibold text-[#eef2f6]">{row.name}</p>
+                  <p className="mt-0.5 text-[9px] uppercase tracking-[0.13em] text-[#7f8b97]">{meta?.brand || row.source || "Hardware"}</p>
+                </div>
               </div>
-              <div className="min-w-0"><p className="truncate text-xs font-semibold">{row.name}</p><p className="mt-0.5 text-[9px] uppercase tracking-[0.13em] text-[#778491]">{meta?.brand || row.source || "Hardware"}</p></div>
-              <div className="text-right"><strong className="text-xs text-amber-400">{money(Number(row.power) || 0)}/mo</strong><p className="text-[9px] text-[#778491]">Power</p></div>
-              <div className="min-w-[55px] text-right"><strong className="text-xs text-emerald-400">{row.cost ? percent(progress) : "—"}</strong><p className="text-[9px] text-[#778491]">Payback</p></div>
+
+              <div className="min-w-0">
+                <strong className="block truncate text-[12px] font-semibold tabular-nums text-amber-400">{money(estMonthlyIncome)} /mo</strong>
+                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Est. income</p>
+              </div>
+
+              <div className="min-w-0">
+                <strong className="block text-[12px] font-semibold tabular-nums text-[#eef2f6]">{watts > 0 ? `${watts.toFixed(0)} W` : "—"}</strong>
+                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Power</p>
+              </div>
+
+              <div className="min-w-0">
+                <strong className="block text-[12px] font-semibold tabular-nums text-[#eef2f6]">{paybackMonths === 0 ? "Recovered" : paybackMonths != null ? `~${paybackMonths.toFixed(1)} mo` : "—"}</strong>
+                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Payback</p>
+              </div>
+
+              <div className="flex justify-end">
+                <span className="inline-flex min-w-[54px] items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-emerald-400">
+                  {cost > 0 ? percent(progress) : "—"}
+                </span>
+              </div>
             </div>;
           })}
           {!hardware.length && <p className="rounded-xl border border-dashed border-[#2a343e] py-8 text-center text-xs text-[#778491]">No hardware tracked yet.</p>}
