@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3,
-  Target, TrendingUp, Zap,
+  Plus, Target, TrendingUp, Zap,
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
