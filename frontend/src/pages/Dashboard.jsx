@@ -1204,30 +1204,20 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <section className={card} aria-label="Connected accounts">
-          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Accounts</h2>
-            <span className="text-[10px] text-muted-foreground">{bankAccounts.length} connected</span>
+        <section className={card} aria-label="Asset allocation">
+          <div className="border-b border-border/40 px-4 py-3">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Asset allocation</h2>
           </div>
-          <div className="px-4 pb-2 pt-3">
-            <p className="text-[11px] text-muted-foreground">Connected account balances</p>
-            <p className="mt-1 text-[23px] font-semibold leading-tight tracking-tight tabular-nums">{formatCurrency(bankTotal)}</p>
-            <div className="mt-2 divide-y divide-border/35">
-              {sortedBankAccounts.length ? sortedBankAccounts.map((account, index) => (
-                <div key={account.id || index} className="flex min-w-0 items-center justify-between gap-3 py-2 transition-colors hover:bg-white/[0.015]">
-                  <div className="flex min-w-0 items-center gap-2.5">
-                    <WalletCards className="h-4 w-4 shrink-0 text-sky-400/80" />
-                    <span className="truncate text-[12px]">{account.name || account.displayName || account.institution || "Account"}</span>
-                  </div>
-                  <span className="shrink-0 text-[12px] font-medium tabular-nums">
-                    {account.currentBalance == null ? "Unavailable" : formatCurrency(account.currentBalance)}
-                  </span>
-                </div>
-              )) : <p className="py-5 text-xs text-muted-foreground">No connected accounts yet. Connect accounts from the Spending page.</p>}
-            </div>
+          <div className="space-y-2 px-4 py-3">
+            {[...allocationCategories].sort((a, b) => Math.abs(Number(breakdown[b]) || 0) - Math.abs(Number(breakdown[a]) || 0)).map(category => (
+              <button key={category} type="button" onClick={() => openCategoryModal(category)}
+                className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-secondary/35"
+                aria-label={`View ${category} allocation details`}>
+                <AllocationBar category={category} value={breakdown[category] || 0} maxValue={maxAllocation} />
+              </button>
+            ))}
           </div>
         </section>
-
         <section className={card} aria-label="Cash flow">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/40 px-4 py-3">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Cash flow</h2>
@@ -1259,54 +1249,6 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <section className={card} aria-label="Asset allocation">
-          <div className="border-b border-border/40 px-4 py-3">
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Asset allocation</h2>
-          </div>
-          <div className="space-y-2 px-4 py-3">
-            {[...allocationCategories].sort((a, b) => Math.abs(Number(breakdown[b]) || 0) - Math.abs(Number(breakdown[a]) || 0)).map(category => (
-              <button key={category} type="button" onClick={() => openCategoryModal(category)}
-                className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-secondary/35"
-                aria-label={`View ${category} allocation details`}>
-                <AllocationBar category={category} value={breakdown[category] || 0} maxValue={maxAllocation} />
-              </button>
-            ))}
-          </div>
-        </section>
-      </div>
-
-      <div className="grid items-start gap-[13px] lg:grid-cols-2 2xl:grid-cols-3">
-        <section className={card} aria-label="Financial goals">
-          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Financial goals</h2>
-            <button type="button" className="text-[11px] text-sky-400 hover:text-sky-300" onClick={() => openFinanceEditor("goal")}>+ Add goal</button>
-          </div>
-          <div className="space-y-3 px-4 py-3">
-            {financialGoals.length ? financialGoals.map(goal => {
-              const amount = Math.max(0,Number(goal.saved)||0);
-              const target = Number(goal.target)||0;
-              const percent = target > 0 ? Math.min(100,amount/target*100) : 0;
-              return (
-                <button key={goal.id} type="button" onClick={() => openFinanceEditor("goal",goal)} className="block w-full rounded-md px-1 py-1 text-left transition hover:bg-secondary/30">
-                  <div className="mb-1.5 flex items-center justify-between gap-3 text-xs">
-                    <span className="truncate font-medium">{goal.title}</span>
-                    <span className="shrink-0 tabular-nums text-muted-foreground">{formatCurrency(amount)} / {formatCurrency(target)}</span>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
-                    <div className="h-full rounded-full bg-emerald-400" style={{width: `${percent}%`}} />
-                  </div>
-                  <p className="mt-1 text-[10px] text-muted-foreground">{Math.round(percent)}% of goal reached</p>
-                </button>
-              );
-            }) : (
-              <div className="flex min-h-[118px] flex-col items-center justify-center gap-2 text-center">
-                <Target className="h-5 w-5 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">No goals added yet.</p>
-                <button type="button" onClick={() => openFinanceEditor("goal")} className="text-xs font-medium text-sky-400">Create a savings goal</button>
-              </div>
-            )}
-          </div>
-        </section>
         <section className={card} aria-label="Net worth change breakdown">
           <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
             <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Net worth change</h2>
@@ -1326,28 +1268,6 @@ export default function Dashboard() {
                   </div>;
                 })}
                 {!hasDailyChange && <p className="pt-1 text-[10px] text-muted-foreground">No category changes recorded today.</p>}
-              </div>
-            )}
-          </div>
-        </section>
-        <section className={`${card} lg:col-span-2 2xl:col-span-1`} aria-label="Upcoming recurring bills">
-          <div className="flex items-center justify-between border-b border-border/40 px-4 py-3">
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Upcoming recurring bills</h2>
-            <button type="button" className="text-[11px] text-sky-400 hover:text-sky-300" onClick={() => openFinanceEditor("bill")}>+ Add bill</button>
-          </div>
-          <div className="space-y-1 px-4 py-3">
-            {nextBills.length ? nextBills.map(bill => (
-              <button key={bill.id} type="button" onClick={() => openFinanceEditor("bill",bill)} className="flex w-full items-center gap-2 rounded-md px-1 py-2 text-left text-xs transition hover:bg-secondary/30">
-                <CalendarClock className="h-4 w-4 shrink-0 text-sky-400" />
-                <span className="min-w-0 flex-1 truncate">{bill.title}</span>
-                <span className="shrink-0 text-[10px] text-muted-foreground">{bill.nextDate.toLocaleDateString("en-US",{month:"short",day:"numeric"})}</span>
-                <span className="w-20 shrink-0 text-right font-medium tabular-nums">{formatCurrency(bill.amount)}</span>
-              </button>
-            )) : (
-              <div className="flex min-h-[118px] flex-col items-center justify-center gap-2 text-center">
-                <CalendarClock className="h-5 w-5 text-muted-foreground" />
-                <p className="text-xs text-muted-foreground">No upcoming bills scheduled.</p>
-                <button type="button" onClick={() => openFinanceEditor("bill")} className="text-xs font-medium text-sky-400">Add a recurring bill</button>
               </div>
             )}
           </div>
