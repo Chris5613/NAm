@@ -426,7 +426,7 @@ export default function SideHustleDashboard() {
             <div className="absolute inset-y-0 left-0 z-10 hidden w-28 bg-gradient-to-r from-[#0d1014] via-[#0d1014]/80 to-transparent lg:block"/>
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_60%_45%,rgba(34,211,238,0.15),transparent_38%)]"/>
             <img
-              src="/gpu/month-glance-pc.webp"
+              src="/gpu/month-glance-pc-clean.webp"
               alt="RTX 5070 mining PC"
               className="absolute inset-0 h-full w-full object-cover object-center opacity-95"
             />
