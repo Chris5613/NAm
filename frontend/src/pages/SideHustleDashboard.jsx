@@ -107,17 +107,70 @@ function readIncomeData() {
   const roller = getRollerCoinTrackerStats(rollerTracker);
   const unetwork = getUnetworkTrackerStats(unetworkTracker);
   const kryptex = getKryptexStats(kryptexTracker);
+  const luloBalance = lulo.reduce((sum, project) => sum + (Number(project?.lulo_total_balance_usd) || 0), 0);
+  const luloApyWeighted = luloBalance > 0
+    ? lulo.reduce((sum, project) => sum + (Number(project?.lulo_total_balance_usd) || 0) * (Number(project?.lulo_weighted_apy) || 0), 0) / luloBalance
+    : 0;
+  const loopscaleSnapshot = quick.loopscaleSnapshot || null;
+  const loopscaleBalance = Number(loopscaleSnapshot?.positionValueUsd) || 0;
+  const loopscaleApy = Number(loopscaleSnapshot?.netApy) || 0;
   const projects = [
     ...manual.map(project => ({
       id: project.id,
       name: project.platform,
       earned: Number(project.earned) || 0,
+      balance: Number(project.totalBalance) || 0,
+      roi: Number(project.weightedApy) || 0,
       daily: (Number(project.totalBalance) || 0) * (Number(project.weightedApy) || 0) / 100 / 365,
     })),
-    { id: "salad-project", name: "Salad", earned: salad.lifetimeUsd, daily: salad.estimatedDailyUsd },
-    { id: "rollercoin-project", name: "RollerCoin", earned: roller.lifetimeUsd, daily: Math.max(0, Number(roller.todayUsd) || 0) },
-    { id: "unetwork-project", name: "Unetwork", earned: unetwork.lifetimeUsd, daily: unetwork.estimatedDailyUsd },
-    { id: "kryptex-project", name: "Kryptex", earned: kryptex.lifetimeUsd, daily: kryptex.dailyUsd },
+    {
+      id: "lulo-live",
+      name: "Lulo",
+      earned: lulo.reduce((sum, project) => sum + (Number(project?.lulo_lifetime_interest_usd) || 0), 0),
+      balance: luloBalance,
+      roi: luloApyWeighted,
+      daily: luloBalance * luloApyWeighted / 100 / 365,
+    },
+    {
+      id: "loopscale-live",
+      name: "Loopscale",
+      earned: Number(loopscaleSnapshot?.pnlUsd) || 0,
+      balance: loopscaleBalance,
+      roi: loopscaleApy,
+      daily: loopscaleBalance * loopscaleApy / 100 / 365,
+    },
+    {
+      id: "salad-project",
+      name: "Salad",
+      earned: salad.lifetimeUsd,
+      balance: Number(salad.currentBalance) || 0,
+      roi: Number(salad.currentBalance) > 0 ? (Number(salad.estimatedDailyUsd) || 0) * 365 / Number(salad.currentBalance) * 100 : 0,
+      daily: salad.estimatedDailyUsd,
+    },
+    {
+      id: "rollercoin-project",
+      name: "RollerCoin",
+      earned: roller.lifetimeUsd,
+      balance: Number(roller.currentBalanceUsd) || 0,
+      roi: Number(roller.currentBalanceUsd) > 0 ? (Number(roller.todayUsd) || 0) * 365 / Number(roller.currentBalanceUsd) * 100 : 0,
+      daily: Math.max(0, Number(roller.todayUsd) || 0),
+    },
+    {
+      id: "unetwork-project",
+      name: "Unetwork",
+      earned: unetwork.lifetimeUsd,
+      balance: Number(unetwork.currentBalance) || 0,
+      roi: Number(unetwork.currentBalance) > 0 ? (Number(unetwork.estimatedDailyUsd) || 0) * 365 / Number(unetwork.currentBalance) * 100 : 0,
+      daily: unetwork.estimatedDailyUsd,
+    },
+    {
+      id: "kryptex-project",
+      name: "Kryptex",
+      earned: kryptex.lifetimeUsd,
+      balance: Number(kryptex.currentBalanceUsd) || 0,
+      roi: Number(kryptex.currentBalanceUsd) > 0 ? (Number(kryptex.dailyUsd) || 0) * 365 / Number(kryptex.currentBalanceUsd) * 100 : 0,
+      daily: kryptex.dailyUsd,
+    },
   ];
   const payback = loadProjectPayback();
   return {
@@ -166,6 +219,24 @@ function HardwareSummaryCard({ progress, earned, cost }) {
       </div>
     </div>
   </section>;
+}
+
+const PROJECT_TABLE_META = {
+  Lulo: { type: "Lending", typeClass: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300", icon: "L", iconClass: "border-rose-500/30 bg-rose-500/10 text-rose-300" },
+  Loopscale: { type: "Lending", typeClass: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300", icon: "∞", iconClass: "border-violet-500/30 bg-violet-500/10 text-violet-300" },
+  Kryptex: { type: "Mining", typeClass: "border-amber-500/25 bg-amber-500/10 text-amber-300", icon: "◆", iconClass: "border-sky-500/30 bg-sky-500/10 text-sky-300" },
+  Salad: { type: "Compute", typeClass: "border-teal-500/25 bg-teal-500/10 text-teal-300", icon: "●", iconClass: "border-lime-500/30 bg-lime-500/10 text-lime-300" },
+  Unetwork: { type: "Node", typeClass: "border-violet-500/25 bg-violet-500/10 text-violet-300", icon: "U", iconClass: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300" },
+  RollerCoin: { type: "Gaming", typeClass: "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-300", icon: "◉", iconClass: "border-amber-500/30 bg-amber-500/10 text-amber-300" },
+};
+
+function projectTableMeta(name) {
+  return PROJECT_TABLE_META[name] || {
+    type: "Income",
+    typeClass: "border-slate-500/25 bg-slate-500/10 text-slate-300",
+    icon: String(name || "?").slice(0, 1).toUpperCase(),
+    iconClass: "border-slate-500/30 bg-slate-500/10 text-slate-300",
+  };
 }
 
 function SectionTitle({ icon: Icon, title, to }) {
@@ -245,7 +316,22 @@ export default function SideHustleDashboard() {
   const projectSummary = readObject("project_income_portfolio_summary_v1");
   const totalProjectBalance = Math.max(0, Number(projectSummary?.portfolioBalance) || 0);
   const sourceRows = [...(currentMonth.platforms || [])].sort((a, b) => b.amount - a.amount);
-  const maxSource = Math.max(1, ...sourceRows.map(row => Number(row.amount) || 0));
+  const sourceProjectMap = new Map();
+  income.projects.forEach(project => {
+    const key = String(project?.name || "").trim().toLowerCase();
+    if (!key) return;
+    const existing = sourceProjectMap.get(key);
+    if (!existing || Number(project.balance) > Number(existing.balance)) sourceProjectMap.set(key, project);
+  });
+  const sourceTableRows = sourceRows.slice(0, 6).map(row => {
+    const project = sourceProjectMap.get(String(row.platform || "").trim().toLowerCase()) || {};
+    return {
+      ...row,
+      daily: Math.max(0, Number(project.daily) || 0),
+      roi: Math.max(0, Number(project.roi) || 0),
+      meta: projectTableMeta(row.platform),
+    };
+  });
 
   return <div className="min-w-0 space-y-3 pb-8 text-white" data-testid="side-hustle-dashboard">
     <header className="flex flex-wrap items-end justify-between gap-3 px-1">
@@ -379,15 +465,50 @@ export default function SideHustleDashboard() {
     </div>
 
     <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
-      <section className={panel + " min-w-0 p-4"}>
-        <SectionTitle icon={Layers3} title="Top Income Sources" to="/yield-farming"/>
-        <div className="mt-3 space-y-2">
-          {sourceRows.slice(0, 6).map(row => <div key={row.platform} className="grid grid-cols-[120px_minmax(0,1fr)_80px] items-center gap-3 text-[11px]">
-            <span className="truncate font-medium">{row.platform}</span>
-            <div className="h-1.5 overflow-hidden rounded-full bg-[#25303a]"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.max(3, (Number(row.amount) || 0) / maxSource * 100)}%` }}/></div>
-            <strong className="text-right tabular-nums">{money(row.amount)}</strong>
-          </div>)}
-          {!sourceRows.length && <p className="py-6 text-center text-xs text-[#778491]">No income recorded this month yet.</p>}
+      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <Layers3 className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
+            <div className="min-w-0">
+              <h2 className="text-[15px] font-semibold leading-none">Top Projects</h2>
+              <p className="mt-1 text-[10px] text-[#7f8b97]">Passive income projects and performance</p>
+            </div>
+          </div>
+          <Link to="/yield-farming" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">View All <ChevronRight className="h-3 w-3"/></Link>
+        </div>
+
+        <div className="mt-3 min-w-[620px] overflow-x-auto">
+          <div className="grid grid-cols-[1.4fr_.9fr_1fr_1.05fr_.75fr_.75fr] items-center gap-x-3 border-b border-[#25303a] px-1 pb-1.5 text-[9px] text-[#8a96a3]">
+            <span>Project</span>
+            <span>Type</span>
+            <span className="text-right">Income (Today)</span>
+            <span className="text-right">Income (MTD)</span>
+            <span className="text-right">ROI</span>
+            <span className="text-right">Status</span>
+          </div>
+
+          <div className="divide-y divide-[#202932]">
+            {sourceTableRows.map(row => (
+              <div key={row.platform} className="grid grid-cols-[1.4fr_.9fr_1fr_1.05fr_.75fr_.75fr] items-center gap-x-3 px-1 py-2 text-[11px]">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${row.meta.iconClass}`}>{row.meta.icon}</span>
+                  <span className="truncate font-medium text-[#e8edf2]">{row.platform}</span>
+                </div>
+                <div>
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-medium ${row.meta.typeClass}`}>{row.meta.type}</span>
+                </div>
+                <strong className="text-right font-semibold tabular-nums text-[#eef2f6]">{money(row.daily)}</strong>
+                <strong className="text-right font-semibold tabular-nums text-[#eef2f6]">{money(row.amount)}</strong>
+                <strong className="text-right font-semibold tabular-nums text-emerald-400">{row.roi > 0 ? `+${row.roi.toFixed(1)}%` : "—"}</strong>
+                <div className="flex justify-end">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-medium text-emerald-400">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Active
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {!sourceTableRows.length && <p className="py-7 text-center text-xs text-[#778491]">No income projects recorded this month yet.</p>}
         </div>
       </section>
 
