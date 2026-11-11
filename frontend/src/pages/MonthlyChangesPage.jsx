@@ -16,6 +16,13 @@ import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { localStorage as appStorage } from "@/lib/localStorage";
 
 const KEY = "monthly_business_changes_v1";
+// USD daily closing prices for BTC-USD on Yahoo Finance (UTC daily candles).
+// These price anchors do not establish how much BTC was held on each date.
+const BTC_CLOSE_USD = Object.freeze({
+  "2026-08-31": 78548.63,
+  "2026-09-30": 83553.85,
+  "2026-10-31": 77434.75,
+});
 // Track each existing investment/project individually; Bitcoin holdings have their own row.
 function readIncomeSources() {
   let legacyProjects = [];
@@ -54,6 +61,19 @@ function readHomeBitcoin() {
   const balance = portfolio?.bitcoin?.value;
   return balance !== undefined && balance !== null && Number.isFinite(Number(balance))
     ? Number(balance) : null;
+}
+function readHomeBitcoinAmount() {
+  const home = appStorage.getCryptoCache()?.projectPortfolio?.bitcoin;
+  const portfolio = getStoredProjectCryptoPortfolio()?.bitcoin;
+  // Prefer the same aggregated Bitcoin holding displayed in Home / Crypto Breakdown.
+  for (const entry of [home, portfolio]) {
+    const quantity = Number(entry?.amount);
+    if (Number.isFinite(quantity) && quantity > 0) return quantity;
+    const wallets = Array.isArray(entry?.wallets) ? entry.wallets : [];
+    const walletTotal = wallets.reduce((sum, wallet) => sum + (Number(wallet?.amount) || 0), 0);
+    if (walletTotal > 0) return walletTotal;
+  }
+  return null;
 }
 function readPortfolioItems() {
   const portfolio = getStoredProjectCryptoPortfolio();
@@ -100,6 +120,7 @@ export default function MonthlyChangesPage() {
   const [records, setRecords] = useState(readRecords);
   const [portfolioItems, setPortfolioItems] = useState(readPortfolioItems);
   const [liveBitcoin, setLiveBitcoin] = useState(readHomeBitcoin);
+  const [bitcoinAmount, setBitcoinAmount] = useState(readHomeBitcoinAmount);
   const [incomeSources, setIncomeSources] = useState(readIncomeSources);
   const [backendReady, setBackendReady] = useState(false);
   const [month, setMonth] = useState(getCurrentMonthKey);
@@ -110,6 +131,7 @@ export default function MonthlyChangesPage() {
     setRecords(readRecords());
     setPortfolioItems(readPortfolioItems());
     setLiveBitcoin(readHomeBitcoin());
+    setBitcoinAmount(readHomeBitcoinAmount());
     setIncomeSources(current => ({ ...readIncomeSources(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
   }), []);
   useEffect(() => {
@@ -197,7 +219,10 @@ export default function MonthlyChangesPage() {
     }
   }, [backendReady, monthEarnings, portfolioItems]);
   useEffect(() => {
-    const refresh = () => setLiveBitcoin(readHomeBitcoin());
+    const refresh = () => {
+      setLiveBitcoin(readHomeBitcoin());
+      setBitcoinAmount(readHomeBitcoinAmount());
+    };
     const interval = window.setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
     window.addEventListener("project-crypto-updated", refresh);
@@ -207,6 +232,38 @@ export default function MonthlyChangesPage() {
       window.removeEventListener("project-crypto-updated", refresh);
     };
   }, []);
+
+  useEffect(() => {
+    if (!(bitcoinAmount > 0)) return;
+    const savedRecords = readRecords();
+    const next = { ...savedRecords };
+    let changed = false;
+    // Backfill only when no BTC row exists. Never overwrite manual historic values.
+    for (const [key, startDay, endDay] of [
+      ["2026-09", "2026-08-31", "2026-09-30"],
+      ["2026-10", "2026-09-30", "2026-10-31"],
+    ]) {
+      const old = next[key] || {};
+      const rows = Array.isArray(old.items) ? old.items : [];
+      if (rows.some(row => String(row?.name).toLowerCase() === "btc")) continue;
+      next[key] = {
+        ...old,
+        items: [...rows, {
+          name: "BTC",
+          start: round(bitcoinAmount * BTC_CLOSE_USD[startDay]),
+          end: round(bitcoinAmount * BTC_CLOSE_USD[endDay]),
+          estimated: true,
+          priceBased: true,
+          btcQuantityAssumed: bitcoinAmount,
+        }],
+      };
+      changed = true;
+    }
+    if (changed) {
+      remoteStorage.setItem(KEY, JSON.stringify(next));
+      setRecords(next);
+    }
+  }, [bitcoinAmount]);
 
   const record = records[month] || {};
   const previous = records[prevMonth(month)] || {};
