@@ -134,29 +134,41 @@ export default function IncomeHistoryPage() {
     <header className="px-1">
       <h1 className="text-[22px] font-semibold tracking-tight">Income History</h1>
     </header>
-    <section className={`${panel} p-4`} aria-label="Last 12 months of income">
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-        <h2 className="text-base font-semibold">Choose a month</h2>
-        <span className="text-[11px] text-muted-foreground">Select a recorded month to see its sources</span>
+    <section className={`${panel} p-3`} aria-label="Last 12 months of income">
+      <div className="mb-2.5 flex items-center justify-between gap-3 px-0.5">
+        <div>
+          <h2 className="text-[14px] font-semibold">Choose a month</h2>
+          <p className="mt-0.5 text-[9px] text-muted-foreground">Last 12 months</p>
+        </div>
+        <span className="text-[10px] text-muted-foreground">Select a month to view its income sources</span>
       </div>
-      <div className="grid grid-flow-col auto-cols-[minmax(112px,1fr)] gap-2 overflow-x-auto pb-1 [scrollbar-width:thin]">
+
+      <div className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
         {lastTwelveMonths.map(month => {
           const recorded = month.total != null;
           const active = selected?.monthKey === month.monthKey;
-          return <button key={month.monthKey} type="button" disabled={!recorded} aria-pressed={recorded ? active : undefined}
+          const monthYear = month.monthKey.slice(0, 4) === currentMonth.slice(0, 4)
+            ? shortMonth(month.monthKey)
+            : `${shortMonth(month.monthKey)} '${month.monthKey.slice(2, 4)}`;
+
+          return <button
+            key={month.monthKey}
+            type="button"
+            disabled={!recorded}
+            aria-pressed={recorded ? active : undefined}
             aria-label={`${monthLabel(month.monthKey)}: ${recorded ? formatCurrency(month.total) : "no recorded income"}`}
             onClick={() => setSelectedMonth(month.monthKey)}
-            className={`min-w-0 rounded-xl border px-3 py-3 text-left transition-colors ${active
-              ? "border-emerald-500/60 bg-emerald-500/[0.08]"
-              : recorded ? "border-[#2b3848] bg-[#0e141c] hover:border-[#4a6674] hover:bg-[#14202a]"
-                : "border-[#25313d] bg-[#0c1219] opacity-60"}`}>
-            <span className="block text-[11px] font-medium text-[#a7bbcf]">{shortMonth(month.monthKey)} '{month.monthKey.slice(2, 4)}</span>
-            <span className={`mt-3 block text-[18px] font-semibold leading-none tabular-nums ${recorded ? "text-white" : "text-[#677b90]"}`}>
+            className={`group relative h-[58px] w-[96px] shrink-0 rounded-xl border px-2.5 py-2 text-left transition-all duration-150 ${active
+              ? "w-[104px] border-emerald-400/80 bg-emerald-500/[0.10] shadow-[0_0_0_1px_rgba(52,211,153,0.08),0_0_18px_rgba(16,185,129,0.08)]"
+              : recorded
+                ? "border-[#2b3848] bg-[#0e141c] hover:border-[#465665] hover:bg-[#121a23]"
+                : "cursor-not-allowed border-[#222d37] bg-[#0b1117] opacity-45"}`}
+          >
+            <span className={`block text-[10px] font-medium ${active ? "text-emerald-300" : "text-[#9fb0c1]"}`}>{monthYear}</span>
+            <span className={`mt-1.5 block truncate text-[14px] font-semibold leading-none tabular-nums ${recorded ? "text-white" : "text-[#617487]"}`}>
               {recorded ? formatCurrency(month.total) : "—"}
             </span>
-            <span className={`mt-2 block text-[10px] ${active ? "text-emerald-400" : "text-muted-foreground"}`}>
-              {active ? "Selected" : recorded ? month.monthKey === currentMonth ? "This month" : "View sources" : "No record"}
-            </span>
+            {active && <span className="absolute inset-x-2 bottom-0 h-px rounded-full bg-emerald-400"/>}
           </button>;
         })}
       </div>
