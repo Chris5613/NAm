@@ -115,9 +115,20 @@ function readPortfolioItems() {
   const quick = readObject(PROJECT_QUICK_CACHE_KEY);
   const entries = Array.isArray(portfolio?.projectEntries) ? portfolio.projectEntries : [];
   const quickProjects = Array.isArray(quick?.projects) ? quick.projects : [];
+  // The Home / Project Income dashboard can have live-tracked projects
+  // that are absent from the crypto portfolio project's cached entry list.
+  // Include those tracked sources explicitly so Net Worth cannot omit them.
+  const liveSources = [
+    ["Lulo", (quick.projects || []).some(project => project?.yield_tracking === "lulo_lending")],
+    ["Loopscale", Boolean(quick.loopscaleSnapshot)],
+    ["Salad", Boolean(loadSaladTracker().initialized || loadSaladTracker().lastSyncedAt)],
+    ["RollerCoin", Boolean(loadRollerCoinTracker().initialized || loadRollerCoinTracker().lastSyncedAt || loadRollerCoinTracker().currentTrxBalance != null)],
+    ["Unetwork", Boolean(loadUnetworkTracker().initialized || loadUnetworkTracker().lastSyncedAt || loadUnetworkTracker().currentBalance != null)],
+    ["Kryptex", Boolean(loadKryptexTracker().initialized || loadKryptexTracker().lastSyncedAt)],
+  ].filter(([, present]) => present).map(([name]) => name);
   const names = [...entries.map(entry => entry.platform), ...quickProjects
     .filter(project => project?.inactive !== true && project?.is_inactive !== true)
-    .map(project => project.name)];
+    .map(project => project.name), ...liveSources];
   const seen = new Set();
   return [...names, "BTC"].map(name => String(name || "").trim())
     .filter(name => {
