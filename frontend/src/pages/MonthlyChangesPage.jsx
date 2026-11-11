@@ -121,6 +121,7 @@ export default function MonthlyChangesPage() {
   const [portfolioItems, setPortfolioItems] = useState(readPortfolioItems);
   const [liveBitcoin, setLiveBitcoin] = useState(readHomeBitcoin);
   const [bitcoinAmount, setBitcoinAmount] = useState(readHomeBitcoinAmount);
+  const [bitcoinPrice, setBitcoinPrice] = useState(() => Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
   const [incomeSources, setIncomeSources] = useState(readIncomeSources);
   const [backendReady, setBackendReady] = useState(false);
   const [month, setMonth] = useState(getCurrentMonthKey);
@@ -132,6 +133,7 @@ export default function MonthlyChangesPage() {
     setPortfolioItems(readPortfolioItems());
     setLiveBitcoin(readHomeBitcoin());
     setBitcoinAmount(readHomeBitcoinAmount());
+    setBitcoinPrice(Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
     setIncomeSources(current => ({ ...readIncomeSources(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
   }), []);
   useEffect(() => {
@@ -189,6 +191,7 @@ export default function MonthlyChangesPage() {
     const updated = { ...existing };
     let changed = false;
     for (const name of portfolioItems) {
+      if (name.toLowerCase() === "kryptex") continue;
       // A BTC wallet's value changes with market prices, not mining income:
       // only real historical BTC snapshots should be used for this row.
       if (name.toLowerCase() === "btc") continue;
@@ -218,10 +221,63 @@ export default function MonthlyChangesPage() {
       setRecords(updated);
     }
   }, [backendReady, monthEarnings, portfolioItems]);
+  // Historical Kryptex USD values fluctuate with BTC prices, independent of income.
+  useEffect(() => {
+    if (!backendReady || getCurrentMonthKey() !== "2026-11" || !(bitcoinPrice > 0)) return;
+    const tracker = loadKryptexTracker();
+    const current = Number(tracker.currentBalance);
+    const synced = Date.parse(tracker.lastSyncedAt || "");
+    if (!tracker.reachable || !Number.isFinite(synced) ||
+        Date.now() - synced > 7 * 86400000 || !Number.isFinite(current) || current < 0) return;
+    const monthIncome = month => {
+      const row = monthEarnings.find(entry => entry.monthKey === month);
+      const value = Object.entries(row?.sources || {}).find(([name]) => name.toLowerCase() === "kryptex")?.[1];
+      return value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
+    };
+    const sep = monthIncome("2026-09"), oct = monthIncome("2026-10"), nov = monthIncome("2026-11");
+    if (sep === null || oct === null || nov === null) return;
+    const actual = day => {
+      const value = tracker.dailyBalanceDays?.[day]?.lastBalanceUsd;
+      return value != null && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
+    };
+    // Approximate historic BTC quantity from current BTC-denominated value,
+    // reversing earned BTC using the best available month-end USD prices.
+    const octBtc = Math.max(0, (current - nov) / bitcoinPrice);
+    const sepBtc = Math.max(0, octBtc - oct / BTC_CLOSE_USD["2026-10-31"]);
+    const augBtc = Math.max(0, sepBtc - sep / BTC_CLOSE_USD["2026-09-30"]);
+    const augustEnd = actual("2026-08-31") ?? round(augBtc * BTC_CLOSE_USD["2026-08-31"]);
+    const septemberEnd = actual("2026-09-30") ?? round(sepBtc * BTC_CLOSE_USD["2026-09-30"]);
+    const octoberEnd = actual("2026-10-31") ?? round(octBtc * BTC_CLOSE_USD["2026-10-31"]);
+    const existing = readRecords();
+    const next = { ...existing };
+    let changed = false;
+    for (const [month, start, end] of [
+      ["2026-09", augustEnd, septemberEnd],
+      ["2026-10", septemberEnd, octoberEnd],
+    ]) {
+      const record = next[month] || {};
+      const rows = Array.isArray(record.items) ? record.items : [];
+      const old = rows.find(row => String(row.name).toLowerCase() === "kryptex");
+      // Leave deliberate user edits untouched; replace older earnings-only estimates.
+      if (old && !old.estimated) continue;
+      if (old?.priceBased && Number(old.start) === start && Number(old.end) === end) continue;
+      next[month] = { ...record, items: [
+        ...rows.filter(row => String(row.name).toLowerCase() !== "kryptex"),
+        { name: "Kryptex", start, end, estimated: true, priceBased: true },
+      ] };
+      changed = true;
+    }
+    if (changed) {
+      remoteStorage.setItem(KEY, JSON.stringify(next));
+      setRecords(next);
+    }
+  }, [backendReady, bitcoinPrice, monthEarnings]);
+
   useEffect(() => {
     const refresh = () => {
       setLiveBitcoin(readHomeBitcoin());
       setBitcoinAmount(readHomeBitcoinAmount());
+      setBitcoinPrice(Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
     };
     const interval = window.setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
@@ -277,11 +333,16 @@ export default function MonthlyChangesPage() {
       const inferredStart = parseAmount(earlier?.end);
       const start = parseAmount(current?.start) ?? inferredStart;
       // Current month shows the live BTC USD holding from Home; historical months stay saved.
-      const end = name.toLowerCase() === "btc" && month === getCurrentMonthKey() && liveBitcoin !== null
-        ? liveBitcoin : parseAmount(current?.end);
+      const nowMonth = month === getCurrentMonthKey();
+      const kryptexLive = incomeSources.kryptex?.reachable && incomeSources.kryptex?.lastSyncedAt
+        ? Number(incomeSources.kryptex.currentBalance) : null;
+      const end = name.toLowerCase() === "btc" && nowMonth && liveBitcoin !== null
+        ? liveBitcoin
+        : name.toLowerCase() === "kryptex" && nowMonth && Number.isFinite(kryptexLive)
+          ? kryptexLive : parseAmount(current?.end);
       return { name, start, end, estimated: Boolean(current?.estimated), change: start === null || end === null ? null : round(end - start) };
     });
-  }, [portfolioItems, record.items, previous.items, month, liveBitcoin]);
+  }, [portfolioItems, record.items, previous.items, month, liveBitcoin, incomeSources.kryptex]);
   const lastNet = Array.isArray(previous.items)
     ? round(previous.items.reduce((sum, row) => sum + (parseAmount(row.end) || 0), 0))
     : null;
