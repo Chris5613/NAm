@@ -13,6 +13,8 @@ import { api, settingsApi } from "@/lib/apiClient";
 import { toast } from "sonner";
 
 const SETTINGS_KEY = "mining_power_dashboard_v1";
+const TOD_EFFECTIVE_AT = new Date("2026-12-10T00:00:00-08:00");
+const TOD_EFFECTIVE_MONTH = "2026-12";
 const DEFAULTS = {
   dailyRevenueUsd: 3.55,
   offPeakRate: 0.0893,
@@ -47,6 +49,7 @@ function pacificParts(date = new Date()) {
 }
 
 function currentRate(settings, date = new Date()) {
+  if (date < TOD_EFFECTIVE_AT) return { rate: settings.basicRate, label: "Basic" };
   const parts = pacificParts(date);
   if (["Sat", "Sun"].includes(parts.weekday)) return { rate: settings.offPeakRate, label: "Off-peak" };
   const hour = Number(parts.hour) % 24;
@@ -88,19 +91,27 @@ function trackedDays(seconds) {
   return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
-function usageCost(usage, settings) {
+function usageCost(usage, settings, monthKey) {
   const tiers = usage?.tiers || {};
+  const totalKwh = Number(usage?.totalKwh ?? usage?.kwh) || 0;
+
+  // Months before TOD activation were billed entirely on Basic Service.
+  if (monthKey && monthKey < TOD_EFFECTIVE_MONTH) {
+    return totalKwh * Number(settings.basicRate || 0);
+  }
+
   return (
+    (Number(tiers.basic) || 0) * Number(settings.basicRate || 0) +
     (Number(tiers.offPeak) || 0) * Number(settings.offPeakRate || 0) +
     (Number(tiers.midPeak) || 0) * Number(settings.midPeakRate || 0) +
     (Number(tiers.peak) || 0) * Number(settings.peakRate || 0)
   );
 }
 
-function DeviceCard({ device, monthlyUsage, settings }) {
+function DeviceCard({ device, monthlyUsage, settings, monthKey }) {
   const watts = Number(device?.watts) || 0;
   const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
-  const monthlyCost = usageCost(monthlyUsage, settings);
+  const monthlyCost = usageCost(monthlyUsage, settings, monthKey);
   const meta = DEVICE_META[device?.id] || null;
   return (
     <section className="rounded-2xl border border-border/55 bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
@@ -342,6 +353,7 @@ export default function MiningPowerCard() {
             device={device}
             monthlyUsage={monthlyDevices[device.id]}
             settings={settings}
+            monthKey={currentMonth?.month}
           />
         ))}
       </div>
