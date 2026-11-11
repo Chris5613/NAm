@@ -354,13 +354,46 @@ export default function SideHustleDashboard() {
         </div>
       </section>
 
-      <section className={panel + " min-w-0 p-4"}>
-        <SectionTitle icon={Coins} title="This Month at a Glance"/>
-        <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-5">
-          <div><p className="text-[10px] text-[#778491]">Passive Income (MTD)</p><strong className="mt-1 block text-xl text-emerald-400">{money(currentMonth.total)}</strong></div>
-          <div><p className="text-[10px] text-[#778491]">Mining Energy</p><strong className="mt-1 block text-xl text-cyan-300">{monthKwh.toFixed(2)} kWh</strong></div>
-          <div><p className="text-[10px] text-[#778491]">Mining Cost</p><strong className="mt-1 block text-xl text-amber-400">{money(monthPowerCost)}</strong></div>
-          <div><p className="text-[10px] text-[#778491]">Est. Income after Mining Power</p><strong className="mt-1 block text-xl text-emerald-400">{money(Math.max(0, currentMonth.total - monthPowerCost))}</strong></div>
+      <section className={panel + " relative min-w-0 overflow-hidden p-0"}>
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_42%,rgba(34,211,238,0.11),transparent_32%),linear-gradient(90deg,rgba(13,16,20,1)_0%,rgba(13,16,20,0.99)_47%,rgba(13,16,20,0.7)_67%,rgba(13,16,20,0.16)_100%)]" />
+        <div className="grid min-h-[230px] grid-cols-1 lg:grid-cols-[1.05fr_.95fr]">
+          <div className="relative z-10 p-5 sm:p-6">
+            <div className="flex items-center gap-2">
+              <ChartNoAxesCombined className="h-4 w-4 text-emerald-400"/>
+              <h2 className="text-[15px] font-semibold">This Month at a Glance</h2>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-x-0 gap-y-0">
+              <div className="border-b border-r border-[#242d35] pb-5 pr-5">
+                <p className="text-[10px] text-[#83909d]">Passive Income (MTD)</p>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(currentMonth.total)}</strong>
+                <p className="mt-1 text-[9px] text-emerald-400/80">{previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"}</p>
+              </div>
+              <div className="border-b border-[#242d35] pb-5 pl-5">
+                <p className="text-[10px] text-[#83909d]">Mining Energy</p>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-cyan-300">{monthKwh.toFixed(2)} kWh</strong>
+                <p className="mt-1 text-[9px] text-cyan-300/80">{deviceRows.length} GPUs tracked</p>
+              </div>
+              <div className="border-r border-[#242d35] pt-5 pr-5">
+                <p className="text-[10px] text-[#83909d]">Mining Cost</p>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-amber-400">{money(monthPowerCost)}</strong>
+                <p className="mt-1 text-[9px] text-[#7f8b97]">{rateInfo.label} electricity pricing</p>
+              </div>
+              <div className="pt-5 pl-5">
+                <p className="text-[10px] text-[#83909d]">Est. Net Profit (MTD)</p>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(Math.max(0, currentMonth.total - monthPowerCost))}</strong>
+                <p className="mt-1 text-[9px] text-[#7f8b97]">Income minus mining power</p>
+              </div>
+            </div>
+          </div>
+          <div className="relative min-h-[210px] overflow-hidden lg:min-h-full">
+            <div className="absolute inset-y-0 left-0 z-10 hidden w-28 bg-gradient-to-r from-[#0d1014] via-[#0d1014]/80 to-transparent lg:block"/>
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_60%_45%,rgba(34,211,238,0.15),transparent_38%)]"/>
+            <img
+              src="/gpu/rtx5070-msi.webp"
+              alt="MSI GeForce RTX 5070"
+              className="absolute bottom-2 right-4 h-[78%] w-[88%] object-contain object-right opacity-95 drop-shadow-[0_18px_32px_rgba(0,0,0,0.62)] lg:bottom-0 lg:right-5 lg:h-[88%] lg:w-[95%]"
+            />
+          </div>
         </div>
       </section>
     </div>
