@@ -8,10 +8,17 @@ import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import IncomeHistoryPage from "@/pages/IncomeHistoryPage";
+import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
+import { mergeManualIncome } from "@/lib/manualIncomeHistory";
+import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
+import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
 import {
   buildProjectIncome,
   formatCurrency,
   getCurrentMonthKey,
+  getEffectiveProjectIncome,
+  getTodayKey,
   getKryptexStats,
   getRollerCoinTrackerStats,
   getSaladTrackerStats,
@@ -20,6 +27,7 @@ import {
   loadKryptexTracker,
   loadLoopscaleHistory,
   loadMonthlyBackfills,
+  loadMonthlySnapshots,
   loadPositions,
   loadProjectPayback,
   loadRollerCoinTracker,
@@ -128,6 +136,24 @@ function buildDailyIncomeHistory({ luloProjects, loopscaleHistory, saladTracker,
   return [...totals.entries()]
     .map(([date, income]) => ({ date, income: Number(income.toFixed(6)) }))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function readRecordedHistory() {
+  let legacyProjects = [];
+  try {
+    const saved = JSON.parse(remoteStorage.getItem("networth_projects") || "[]");
+    if (Array.isArray(saved)) legacyProjects = saved;
+  } catch { /* Keep other recorded income available. */ }
+  return {
+    legacyProjects,
+    luloProjects: (readObject(PROJECT_QUICK_CACHE_KEY).projects || []).filter(project => project?.yield_tracking === "lulo_lending"),
+    loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(),
+    unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(),
+    backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(),
+    payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
+    manualIncome: {},
+    luloBackfills: {},
+  };
 }
 
 function readIncomeData() {
@@ -413,16 +439,14 @@ export default function SideHustleDashboard() {
   const [power, setPower] = useState(null);
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
   const [serverTodayIncome, setServerTodayIncome] = useState(null);
-  const [serverMonthIncome, setServerMonthIncome] = useState(null);
+  const [recordedHistory, setRecordedHistory] = useState(readRecordedHistory);
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
 
   const refreshIncomeMetrics = useCallback(async () => {
     const today = pacificDayKey(Date.now());
-    const month = getCurrentMonthKey();
-    const [dailyResult, monthlyResult] = await Promise.allSettled([
+    const [dailyResult] = await Promise.allSettled([
       api.get(`/api/project-tracking/daily-earnings/${today}`),
-      api.get(`/api/project-tracking/monthly-daily-earnings/${month}`),
     ]);
 
     if (dailyResult.status === "fulfilled") {
@@ -431,12 +455,49 @@ export default function SideHustleDashboard() {
       if (result?.date === today && Number.isFinite(total)) setServerTodayIncome(total);
     }
 
-    if (monthlyResult.status === "fulfilled") {
-      const result = monthlyResult.value;
-      const total = Number(result?.totalUsd);
-      if (result?.month === month && Number.isFinite(total)) setServerMonthIncome(total);
-    }
   }, []);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const result = await api.get("/api/yield-sources/earnings");
+        if (active && result) setRecordedHistory(current => ({
+          ...current,
+          loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory),
+          manualIncome: result.manualIncomeHistory || current.manualIncome,
+          luloBackfills: result.luloBackfills && typeof result.luloBackfills === "object"
+            ? result.luloBackfills : current.luloBackfills,
+        }));
+      } catch { /* Use saved history when backend is unavailable. */ }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 90000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  const recordedTrackers = useMemo(() => ({
+    salad: recordedHistory.salad, rollercoin: recordedHistory.rollercoin,
+    unetwork: recordedHistory.unetwork, kryptex: recordedHistory.kryptex,
+  }), [recordedHistory.salad, recordedHistory.rollercoin, recordedHistory.unetwork, recordedHistory.kryptex]);
+  const recordedLocalMonths = useMemo(() => buildProjectIncome(
+    recordedHistory.luloProjects, recordedHistory.loopscale, recordedHistory.salad, recordedHistory.backfills,
+    recordedHistory.rollercoin, recordedHistory.unetwork, recordedHistory.kryptex,
+  ), [recordedHistory]);
+  const recordedLiveMonths = useBackendMonthlyIncome(recordedTrackers, recordedLocalMonths);
+  const recordedMonthKey = getCurrentMonthKey();
+  const recordedDayKey = getTodayKey();
+  const recordedProjectMonths = useMemo(() => reconcileLuloIncome(
+    getEffectiveProjectIncome(recordedLiveMonths, recordedHistory.snapshots),
+    recordedHistory.backfills, recordedHistory.luloBackfills, recordedMonthKey,
+    recordedHistory.luloProjects, recordedDayKey,
+  ), [recordedLiveMonths, recordedHistory.snapshots, recordedHistory.backfills,
+      recordedHistory.luloBackfills, recordedHistory.luloProjects, recordedMonthKey, recordedDayKey]);
+  const recordedLegacy = useMemo(() => legacyProjectIncome(recordedHistory.legacyProjects), [recordedHistory.legacyProjects]);
+  const recordedMonths = useMemo(() => mergeManualIncome(
+    buildIncomeHistory(recordedProjectMonths, recordedHistory.payouts, recordedMonthKey, recordedLegacy),
+    recordedHistory.manualIncome?.monthly || {}, recordedMonthKey,
+  ), [recordedProjectMonths, recordedHistory.payouts, recordedMonthKey, recordedLegacy, recordedHistory.manualIncome]);
 
   const refreshPower = useCallback(async () => {
     try {
@@ -453,6 +514,7 @@ export default function SideHustleDashboard() {
 
   useEffect(() => subscribe(() => {
     setIncome(readIncomeData());
+    setRecordedHistory(current => ({ ...readRecordedHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
     setHardware(readHardware());
     refreshIncomeMetrics();
   }), [refreshIncomeMetrics]);
@@ -471,10 +533,9 @@ export default function SideHustleDashboard() {
 
   const currentMonthKey = getCurrentMonthKey();
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) || { monthKey: currentMonthKey, total: 0, platforms: [] };
-  const monthlyIncome = Number.isFinite(Number(serverMonthIncome))
-    ? Math.max(0, Number(serverMonthIncome))
-    : Math.max(0, Number(currentMonth.total) || 0);
-  const recentMonths = income.months.slice(-12);
+  const recordedCurrentMonth = recordedMonths.find(row => row.monthKey === currentMonthKey);
+  const monthlyIncome = Math.max(0, Number(recordedCurrentMonth?.total) || 0);
+  const recentMonths = recordedMonths.slice(-12);
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
   const todayKey = pacificDayKey(clock);
   const localTodayIncome = Number(dailyRows.find(row => row.date === todayKey)?.income) || 0;
@@ -488,7 +549,7 @@ export default function SideHustleDashboard() {
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
     : null;
   const previousMonth = recentMonths.length > 1 ? recentMonths[recentMonths.length - 2] : null;
-  const monthChange = previousMonth?.total > 0 ? ((currentMonth.total - previousMonth.total) / previousMonth.total * 100) : 0;
+  const monthChange = previousMonth?.total > 0 ? ((monthlyIncome - previousMonth.total) / previousMonth.total * 100) : 0;
 
   const rankedProjects = [...income.projects].sort((a, b) => {
     const ar = a.spent > 0 ? a.earned / a.spent : 0;
