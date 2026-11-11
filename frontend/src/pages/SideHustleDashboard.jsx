@@ -86,6 +86,51 @@ function readHardware() {
   }
 }
 
+function buildDailyIncomeHistory({ luloProjects, loopscaleHistory, saladTracker, rollerTracker, unetworkTracker, kryptexTracker }) {
+  const totals = new Map();
+  const add = (date, amount) => {
+    const day = String(date || "").slice(0, 10);
+    const value = Number(amount) || 0;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || value <= 0) return;
+    totals.set(day, (totals.get(day) || 0) + value);
+  };
+
+  Object.entries(saladTracker?.daily || {}).forEach(([day, amount]) => add(day, amount));
+
+  Object.entries(unetworkTracker?.daily || {}).forEach(([day, entry]) =>
+    add(day, typeof entry === "number" ? entry : entry?.usd)
+  );
+
+  const rollerDays = new Set([
+    ...Object.keys(rollerTracker?.daily || {}),
+    ...Object.keys(rollerTracker?.walletDaily || {}),
+  ]);
+  rollerDays.forEach(day => {
+    const wallet = rollerTracker?.walletDaily?.[day];
+    const mined = rollerTracker?.daily?.[day];
+    add(day, wallet ? wallet?.usd : mined?.usd);
+  });
+
+  Object.entries(kryptexTracker?.kryptexMiningDaily || {}).forEach(([day, amount]) => {
+    if (kryptexTracker?.kryptexConfirmedDays?.[day]) add(day, amount);
+  });
+
+  Object.values(loopscaleHistory?.positions || {}).forEach(position => {
+    Object.entries(position?.observedDaily || {}).forEach(([day, amount]) => add(day, amount));
+  });
+
+  (luloProjects || []).forEach(project => {
+    (project?.transactions || []).forEach(transaction => {
+      if (transaction?.source !== "lulo_yield") return;
+      add(transaction?.source_date || transaction?.date || transaction?.created_at, transaction?.amount);
+    });
+  });
+
+  return [...totals.entries()]
+    .map(([date, income]) => ({ date, income: Number(income.toFixed(6)) }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
 function readIncomeData() {
   const quick = readObject(PROJECT_QUICK_CACHE_KEY);
   const lulo = (quick.projects || []).filter(project => project?.yield_tracking === "lulo_lending");
@@ -93,9 +138,10 @@ function readIncomeData() {
   const rollerTracker = loadRollerCoinTracker();
   const unetworkTracker = loadUnetworkTracker();
   const kryptexTracker = loadKryptexTracker();
+  const loopscaleHistory = loadLoopscaleHistory();
   const months = buildProjectIncome(
     lulo,
-    loadLoopscaleHistory(),
+    loopscaleHistory,
     saladTracker,
     loadMonthlyBackfills(),
     rollerTracker,
@@ -175,6 +221,14 @@ function readIncomeData() {
   const payback = loadProjectPayback();
   return {
     months,
+    dailyHistory: buildDailyIncomeHistory({
+      luloProjects: lulo,
+      loopscaleHistory,
+      saladTracker,
+      rollerTracker,
+      unetworkTracker,
+      kryptexTracker,
+    }),
     projects: projects.map(project => ({
       ...project,
       earned: Math.max(0, Number(project.earned) || 0),
@@ -343,6 +397,7 @@ export default function SideHustleDashboard() {
   const [power, setPower] = useState(null);
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
   const [clock, setClock] = useState(Date.now());
+  const [trendRange, setTrendRange] = useState("3M");
 
   const refreshPower = useCallback(async () => {
     try {
@@ -371,12 +426,25 @@ export default function SideHustleDashboard() {
   const currentMonthKey = getCurrentMonthKey();
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) || { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recentMonths = income.months.slice(-8);
-  const chartData = recentMonths.map(row => ({
-    monthKey: row.monthKey,
-    label: new Intl.DateTimeFormat("en-US", { month: "short", timeZone: "UTC" }).format(new Date(`${row.monthKey}-15T12:00:00Z`)),
-    income: Number(row.total) || 0,
-  }));
   const dailyIncome = income.projects.reduce((sum, project) => sum + project.daily, 0);
+  const rangeDays = trendRange === "1W" ? 7 : trendRange === "1M" ? 30 : trendRange === "3M" ? 90 : trendRange === "6M" ? 180 : 365;
+  const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
+  const latestDailyDate = dailyRows.at(-1)?.date || null;
+  const rangeCutoff = latestDailyDate
+    ? new Date(new Date(`${latestDailyDate}T12:00:00Z`).getTime() - (rangeDays - 1) * 86400000)
+    : null;
+  const trendRows = dailyRows.filter(row => !rangeCutoff || new Date(`${row.date}T12:00:00Z`) >= rangeCutoff);
+  const chartData = trendRows.map(row => ({
+    ...row,
+    label: new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", timeZone: "UTC" }).format(new Date(`${row.date}T12:00:00Z`)),
+  }));
+  const historyRows = [...dailyRows].reverse().slice(0, 5).map((row, index, reversed) => {
+    const chronological = [...dailyRows];
+    const sourceIndex = chronological.findIndex(item => item.date === row.date);
+    const previous = sourceIndex > 0 ? chronological[sourceIndex - 1] : null;
+    const change = previous?.income > 0 ? (row.income - previous.income) / previous.income * 100 : null;
+    return { ...row, change };
+  });
   const previousMonth = recentMonths.length > 1 ? recentMonths[recentMonths.length - 2] : null;
   const monthChange = previousMonth?.total > 0 ? ((currentMonth.total - previousMonth.total) / previousMonth.total * 100) : 0;
 
@@ -386,6 +454,13 @@ export default function SideHustleDashboard() {
     return br - ar || b.daily - a.daily;
   });
   const configuredProjects = rankedProjects.filter(project => project.spent > 0);
+  const incompleteProjects = configuredProjects
+    .filter(project => Math.max(0, Number(project.earned) || 0) < Math.max(0, Number(project.spent) || 0))
+    .sort((a, b) => {
+      const ar = a.spent > 0 ? a.earned / a.spent : 0;
+      const br = b.spent > 0 ? b.earned / b.spent : 0;
+      return br - ar;
+    });
   const projectSpent = configuredProjects.reduce((sum, row) => sum + row.spent, 0);
   const projectEarned = configuredProjects.reduce((sum, row) => sum + row.earned, 0);
   const projectProgress = projectSpent > 0 ? projectEarned / projectSpent * 100 : 0;
@@ -460,59 +535,122 @@ export default function SideHustleDashboard() {
       <HardwareSummaryCard progress={hardwareProgress} earned={hardwareRecovered} cost={hardwareCost}/>
     </div>
 
-    <div className="grid gap-3 xl:grid-cols-[1.6fr_.7fr_1fr]">
-      <section className={panel + " min-w-0 p-4"}>
-        <SectionTitle icon={TrendingUp} title="Income Trend" to="/income-history"/>
-        <p className="mt-1 text-[10px] text-[#778491]">Recorded passive income over time</p>
-        <div className="mt-3 h-[220px]">
+    <div className="grid gap-3 xl:grid-cols-[1.6fr_.78fr_1.12fr]">
+      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-[#a8b6c4]"/>
+            <div>
+              <h2 className="text-[15px] font-semibold leading-none">Income Trend</h2>
+              <p className="mt-1 text-[10px] text-[#7f8b97]">Total passive income over time</p>
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center rounded-xl border border-[#252f38] bg-[#0b0f13] p-1">
+            {["1W", "1M", "3M", "6M", "1Y"].map(range => (
+              <button
+                key={range}
+                type="button"
+                onClick={() => setTrendRange(range)}
+                className={`rounded-lg px-2.5 py-1 text-[9px] font-medium transition-colors ${trendRange === range ? "border border-cyan-400/40 bg-cyan-400/20 text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.18)]" : "text-[#91a0ad] hover:text-white"}`}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 h-[190px]">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -14, bottom: 0 }}>
               <defs>
                 <linearGradient id="sideHustleIncome" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2dd4bf" stopOpacity={0.34}/>
-                  <stop offset="100%" stopColor="#2dd4bf" stopOpacity={0}/>
+                  <stop offset="0%" stopColor="#21d6a4" stopOpacity={0.38}/>
+                  <stop offset="100%" stopColor="#21d6a4" stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid stroke="#1d2730" vertical={false}/>
-              <XAxis dataKey="label" stroke="#66727e" tick={{ fontSize: 10 }} axisLine={false} tickLine={false}/>
-              <YAxis stroke="#66727e" tick={{ fontSize: 10 }} axisLine={false} tickLine={false} tickFormatter={value => `$${Math.round(value)}`}/>
-              <Tooltip contentStyle={{ background: "#0b1015", border: "1px solid #2b3946", borderRadius: 10, fontSize: 11 }} formatter={value => [money(value), "Income"]}/>
-              <Area type="monotone" dataKey="income" stroke="#2dd4bf" strokeWidth={2.2} fill="url(#sideHustleIncome)"/>
+              <CartesianGrid stroke="#26323b" strokeDasharray="2 3" opacity={0.52}/>
+              <XAxis dataKey="label" stroke="#74818d" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} minTickGap={28}/>
+              <YAxis stroke="#74818d" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={value => `$${Number(value).toFixed(0)}`}/>
+              <Tooltip
+                contentStyle={{ background: "#0a0f13", border: "1px solid #2b3946", borderRadius: 10, fontSize: 10 }}
+                labelFormatter={(_, items) => items?.[0]?.payload?.date
+                  ? new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${items[0].payload.date}T12:00:00Z`))
+                  : ""}
+                formatter={value => [money(value), "Income"]}
+              />
+              <Area type="monotone" dataKey="income" stroke="#22e0a3" strokeWidth={2.2} fill="url(#sideHustleIncome)" activeDot={{ r: 4 }} isAnimationActive={false}/>
             </AreaChart>
           </ResponsiveContainer>
         </div>
       </section>
 
-      <section className={panel + " min-w-0 p-4"}>
-        <SectionTitle icon={CalendarDays} title="Income History" to="/income-history"/>
-        <div className="mt-3 divide-y divide-[#202932]">
-          {[...recentMonths].reverse().slice(0, 5).map(row => <div key={row.monthKey} className="flex items-center justify-between gap-3 py-3">
-            <span className="text-[11px] text-[#9aa7b4]">{new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" }).format(new Date(`${row.monthKey}-15T12:00:00Z`))}</span>
-            <strong className="text-[12px] tabular-nums">{money(row.total)}</strong>
-          </div>)}
-          {!recentMonths.length && <p className="py-8 text-center text-xs text-[#778491]">No income history yet.</p>}
+      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="h-4 w-4 text-[#a8b6c4]"/>
+            <h2 className="text-[15px] font-semibold">Income History</h2>
+          </div>
+          <Link to="/income-history" className="flex items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">
+            View All <ChevronRight className="h-3 w-3"/>
+          </Link>
+        </div>
+        <div className="mt-3 grid grid-cols-[1.25fr_.8fr_.8fr] gap-x-3 border-b border-[#26313a] pb-2 text-[9px] text-[#8a96a3]">
+          <span>Date</span><span className="text-right">Income</span><span className="text-right">Change</span>
+        </div>
+        <div className="divide-y divide-[#202932]">
+          {historyRows.map(row => (
+            <div key={row.date} className="grid grid-cols-[1.25fr_.8fr_.8fr] items-center gap-x-3 py-2.5 text-[10px]">
+              <span className="text-[#e5ebf1]">{new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(`${row.date}T12:00:00Z`))}</span>
+              <strong className="text-right tabular-nums text-[#eef2f6]">{money(row.income)}</strong>
+              <strong className={`text-right tabular-nums ${row.change == null ? "text-[#778491]" : row.change >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+                {row.change == null ? "—" : `${row.change >= 0 ? "+" : ""}${row.change.toFixed(1)}%`}
+              </strong>
+            </div>
+          ))}
+          {!historyRows.length && <p className="py-8 text-center text-xs text-[#778491]">No daily income history yet.</p>}
         </div>
       </section>
 
-      <section className={panel + " min-w-0 p-4"}>
-        <SectionTitle icon={Target} title="Project Break-Even" to="/project-break-even"/>
-        <p className="mt-1 text-[10px] text-[#778491]">Time to recover entered project costs</p>
-        <div className="mt-3 space-y-4">
-          {rankedProjects.slice(0, 4).map(row => {
-            const ratio = row.spent > 0 ? row.earned / row.spent * 100 : 0;
-            return <div key={row.id}>
-              <div className="flex items-center justify-between gap-2 text-[11px]">
-                <span className="truncate font-medium">{row.name}</span>
-                <strong className={row.spent ? "text-emerald-400" : "text-[#778491]"}>{row.spent ? percent(ratio) : "No cost"}</strong>
+      <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-2.5">
+            <Target className="mt-0.5 h-4 w-4 text-[#a8b6c4]"/>
+            <div>
+              <h2 className="text-[15px] font-semibold leading-none">Project Break-Even</h2>
+              <p className="mt-1 text-[10px] text-[#7f8b97]">Time to break even on active projects</p>
+            </div>
+          </div>
+          <Link to="/project-break-even" className="flex shrink-0 items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">
+            View All <ChevronRight className="h-3 w-3"/>
+          </Link>
+        </div>
+
+        <div className="mt-3 divide-y divide-[#202932]">
+          {incompleteProjects.slice(0, 3).map(row => {
+            const spent = Math.max(0, Number(row.spent) || 0);
+            const earned = Math.max(0, Number(row.earned) || 0);
+            const ratio = spent > 0 ? Math.min(100, earned / spent * 100) : 0;
+            const remaining = Math.max(0, spent - earned);
+            const days = Number(row.daily) > 0 ? Math.ceil(remaining / Number(row.daily)) : null;
+            const meta = projectTableMeta(row.name);
+            return <div key={row.id} className="grid grid-cols-[minmax(0,.85fr)_minmax(120px,1.4fr)_52px_65px] items-center gap-3 py-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${meta.iconClass}`}>{meta.icon}</span>
+                <span className="truncate text-[11px] font-medium text-[#eef2f6]">{row.name}</span>
               </div>
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#26313b]"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, ratio)}%` }}/></div>
-              <p className="mt-1 text-[9px] text-[#778491]">{row.spent ? `${money(row.earned)} / ${money(row.spent)}` : `${money(row.earned)} earned`}</p>
+              <div className="min-w-0">
+                <div className="h-2 overflow-hidden rounded-full bg-[#2a333c]">
+                  <div className="h-full rounded-full bg-emerald-400" style={{ width: `${ratio}%` }}/>
+                </div>
+                <p className="mt-1 text-[9px] tabular-nums text-[#7f8b97]">{money(earned)} / {money(spent)}</p>
+              </div>
+              <strong className="text-right text-[11px] font-semibold tabular-nums text-emerald-400">{ratio.toFixed(0)}%</strong>
+              <span className="text-right text-[9px] tabular-nums text-[#c0c8d0]">{days != null ? `~${days} days` : "—"}</span>
             </div>;
           })}
+          {!incompleteProjects.length && <p className="py-8 text-center text-xs text-[#778491]">All configured projects have broken even.</p>}
         </div>
       </section>
     </div>
-
     <div className="grid gap-3 xl:grid-cols-[1fr_1.15fr]">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
