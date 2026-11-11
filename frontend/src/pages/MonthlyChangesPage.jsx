@@ -179,104 +179,6 @@ export default function MonthlyChangesPage() {
     return mergeManualIncome(recorded, incomeSources.manualIncome?.monthly || {}, getCurrentMonthKey());
   }, [backendMonths, incomeSources]);
 
-  // One-time historical income-only estimates. Preserve every existing user-entered value.
-  // October ending balance is approximated from the current live project balance
-  // minus November-to-date income; September and October openings then subtract
-  // their own recorded earnings. This cannot reconstruct deposits or price moves.
-  useEffect(() => {
-    if (!backendReady || getCurrentMonthKey() !== "2026-11") return;
-    const balances = portfolioBalances();
-    const incomeFor = (monthKey, name) => {
-      const row = monthEarnings.find(item => item.monthKey === monthKey);
-      const match = Object.entries(row?.sources || {}).find(([source]) => source.toLowerCase() === name.toLowerCase());
-      return match ? Number(match[1]) : null;
-    };
-    const existing = readRecords();
-    const updated = { ...existing };
-    let changed = false;
-    for (const name of portfolioItems) {
-      if (name.toLowerCase() === "kryptex") continue;
-      // A BTC wallet's value changes with market prices, not mining income:
-      // only real historical BTC snapshots should be used for this row.
-      if (name.toLowerCase() === "btc") continue;
-      const balance = balances.get(name.toLowerCase());
-      const nov = incomeFor("2026-11", name);
-      const oct = incomeFor("2026-10", name);
-      const sep = incomeFor("2026-09", name);
-      if (!(balance > 0) || nov === null || oct === null || sep === null) continue;
-      const octoberEnd = round(balance - nov);
-      const octoberStart = round(octoberEnd - oct);
-      const septemberStart = round(octoberStart - sep);
-      for (const [key, start, end] of [
-        ["2026-09", septemberStart, octoberStart],
-        ["2026-10", octoberStart, octoberEnd],
-      ]) {
-        const saved = updated[key] || {};
-        const rows = Array.isArray(saved.items) ? saved.items : [];
-        if (rows.some(row => row.name.toLowerCase() === name.toLowerCase())) continue;
-        updated[key] = {
-          ...saved, items: [...rows, { name, start, end, estimated: true }],
-        };
-        changed = true;
-      }
-    }
-    if (changed) {
-      remoteStorage.setItem(KEY, JSON.stringify(updated));
-      setRecords(updated);
-    }
-  }, [backendReady, monthEarnings, portfolioItems]);
-  // Historical Kryptex USD values fluctuate with BTC prices, independent of income.
-  useEffect(() => {
-    if (!backendReady || getCurrentMonthKey() !== "2026-11" || !(bitcoinPrice > 0)) return;
-    const tracker = loadKryptexTracker();
-    const current = Number(tracker.currentBalance);
-    const synced = Date.parse(tracker.lastSyncedAt || "");
-    if (!tracker.reachable || !Number.isFinite(synced) ||
-        Date.now() - synced > 7 * 86400000 || !Number.isFinite(current) || current < 0) return;
-    const monthIncome = month => {
-      const row = monthEarnings.find(entry => entry.monthKey === month);
-      const value = Object.entries(row?.sources || {}).find(([name]) => name.toLowerCase() === "kryptex")?.[1];
-      return value !== undefined && Number.isFinite(Number(value)) ? Number(value) : null;
-    };
-    const sep = monthIncome("2026-09"), oct = monthIncome("2026-10"), nov = monthIncome("2026-11");
-    if (sep === null || oct === null || nov === null) return;
-    const actual = day => {
-      const value = tracker.dailyBalanceDays?.[day]?.lastBalanceUsd;
-      return value != null && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : null;
-    };
-    // Approximate historic BTC quantity from current BTC-denominated value,
-    // reversing earned BTC using the best available month-end USD prices.
-    const octBtc = Math.max(0, (current - nov) / bitcoinPrice);
-    const sepBtc = Math.max(0, octBtc - oct / BTC_CLOSE_USD["2026-10-31"]);
-    const augBtc = Math.max(0, sepBtc - sep / BTC_CLOSE_USD["2026-09-30"]);
-    const augustEnd = actual("2026-08-31") ?? round(augBtc * BTC_CLOSE_USD["2026-08-31"]);
-    const septemberEnd = actual("2026-09-30") ?? round(sepBtc * BTC_CLOSE_USD["2026-09-30"]);
-    const octoberEnd = actual("2026-10-31") ?? round(octBtc * BTC_CLOSE_USD["2026-10-31"]);
-    const existing = readRecords();
-    const next = { ...existing };
-    let changed = false;
-    for (const [month, start, end] of [
-      ["2026-09", augustEnd, septemberEnd],
-      ["2026-10", septemberEnd, octoberEnd],
-    ]) {
-      const record = next[month] || {};
-      const rows = Array.isArray(record.items) ? record.items : [];
-      const old = rows.find(row => String(row.name).toLowerCase() === "kryptex");
-      // Leave deliberate user edits untouched; replace older earnings-only estimates.
-      if (old && !old.estimated) continue;
-      if (old?.priceBased && Number(old.start) === start && Number(old.end) === end) continue;
-      next[month] = { ...record, items: [
-        ...rows.filter(row => String(row.name).toLowerCase() !== "kryptex"),
-        { name: "Kryptex", start, end, estimated: true, priceBased: true },
-      ] };
-      changed = true;
-    }
-    if (changed) {
-      remoteStorage.setItem(KEY, JSON.stringify(next));
-      setRecords(next);
-    }
-  }, [backendReady, bitcoinPrice, monthEarnings]);
-
   useEffect(() => {
     const refresh = () => {
       setLiveBitcoin(readHomeBitcoin());
@@ -293,29 +195,26 @@ export default function MonthlyChangesPage() {
     };
   }, []);
 
+  // Seal past months once, using the values already saved. Future live syncs and
+  // changes in project lists cannot rewrite those months. Existing entries stay intact.
   useEffect(() => {
-    if (!(bitcoinAmount > 0)) return;
-    const savedRecords = readRecords();
-    const next = { ...savedRecords };
+    if (!backendReady) return;
+    const saved = readRecords();
+    const currentKey = getCurrentMonthKey();
     let changed = false;
-    // Backfill only when no BTC row exists. Never overwrite manual historic values.
-    for (const [key, startDay, endDay] of [
-      ["2026-09", "2026-08-31", "2026-09-30"],
-      ["2026-10", "2026-09-30", "2026-10-31"],
-    ]) {
-      const old = next[key] || {};
-      const rows = Array.isArray(old.items) ? old.items : [];
-      if (rows.some(row => String(row?.name).toLowerCase() === "btc")) continue;
+    const next = { ...saved };
+    for (const [key, entry] of Object.entries(saved)) {
+      if (key >= currentKey || !Array.isArray(entry?.items) || !entry.items.length) continue;
+      if (entry.locked && entry.revenueSnapshot !== undefined) continue;
+      const monthIncome = monthEarnings.find(row => row.monthKey === key);
       next[key] = {
-        ...old,
-        items: [...rows, {
-          name: "BTC",
-          start: round(bitcoinAmount * BTC_CLOSE_USD[startDay]),
-          end: round(bitcoinAmount * BTC_CLOSE_USD[endDay]),
-          estimated: true,
-          priceBased: true,
-          btcQuantityAssumed: bitcoinAmount,
-        }],
+        ...entry,
+        locked: true,
+        // Capture historical income once, not on every subsequent sync.
+        revenueSnapshot: entry.revenueSnapshot !== undefined
+          ? entry.revenueSnapshot : monthIncome?.total ?? null,
+        // Lock the row set already saved for the completed month.
+        items: entry.items.map(row => ({ ...row })),
       };
       changed = true;
     }
@@ -323,19 +222,19 @@ export default function MonthlyChangesPage() {
       remoteStorage.setItem(KEY, JSON.stringify(next));
       setRecords(next);
     }
-  }, [bitcoinAmount]);
+  }, [backendReady, monthEarnings]);
 
   const record = records[month] || {};
   const previous = records[prevMonth(month)] || {};
   const items = useMemo(() => {
     const own = Array.isArray(record.items) ? record.items : [];
     const prior = Array.isArray(previous.items) ? previous.items : [];
-    const names = [...new Set([...portfolioItems, ...prior.map(r => r.name), ...own.map(r => r.name)])];
+    const names = record.locked ? [...new Set(own.map(r => r.name))] : [...new Set([...portfolioItems, ...prior.map(r => r.name), ...own.map(r => r.name)])];
     return names.filter(Boolean).map(name => {
       const current = own.find(row => row.name === name);
       const earlier = prior.find(row => row.name === name);
       const inferredStart = parseAmount(earlier?.end);
-      const start = parseAmount(current?.start) ?? inferredStart;
+      const start = parseAmount(current?.start) ?? (record.locked ? null : inferredStart);
       // Current month shows the live BTC USD holding from Home; historical months stay saved.
       const nowMonth = month === getCurrentMonthKey();
       const kryptexLive = incomeSources.kryptex?.reachable && incomeSources.kryptex?.lastSyncedAt
@@ -346,7 +245,7 @@ export default function MonthlyChangesPage() {
           ? kryptexLive : parseAmount(current?.end);
       return { name, start, end, estimated: Boolean(current?.estimated), change: start === null || end === null ? null : round(end - start) };
     });
-  }, [portfolioItems, record.items, previous.items, month, liveBitcoin, incomeSources.kryptex]);
+  }, [portfolioItems, record.items, record.locked, previous.items, month, liveBitcoin, incomeSources.kryptex]);
   const lastNet = Array.isArray(previous.items)
     ? round(previous.items.reduce((sum, row) => sum + (parseAmount(row.end) || 0), 0))
     : null;
@@ -358,10 +257,10 @@ export default function MonthlyChangesPage() {
   const ytdStart = yearStart ? round(yearStart.items.reduce((n, row) => n + (parseAmount(row.start) || 0), 0)) : null;
   // Revenue is sourced from Income History's reconciled recorded monthly earnings.
   // Do not add this to balance-sheet net worth: project balances already include earnings.
-  const revenue = parseAmount(monthEarnings.find(row => row.monthKey === month)?.total);
+  const revenue = record.locked ? parseAmount(record.revenueSnapshot) : parseAmount(monthEarnings.find(row => row.monthKey === month)?.total);
   const expenses = parseAmount(record.expenses) ?? 0;
   const profit = revenue === null ? null : round(revenue - expenses);
-  const previousRevenue = parseAmount(monthEarnings.find(row => row.monthKey === prevMonth(month))?.total);
+  const previousRevenue = previous.locked ? parseAmount(previous.revenueSnapshot) : parseAmount(monthEarnings.find(row => row.monthKey === prevMonth(month))?.total);
   const previousExpenses = parseAmount(previous.expenses) ?? 0;
   const previousProfit = previousRevenue === null ? null : round(previousRevenue - previousExpenses);
   const compare = (value, prior) => value !== null && prior !== null && prior !== 0
