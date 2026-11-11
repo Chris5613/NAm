@@ -644,15 +644,6 @@ export default function SideHustleDashboard() {
                 ? GPU_META.rtx5070
                 : null;
 
-            const liveDevice = deviceRows.find(device => {
-              const label = String(device?.label || device?.id || "").toLowerCase();
-              return lowerName.includes("2080")
-                ? label.includes("2080")
-                : lowerName.includes("5070")
-                  ? label.includes("5070")
-                  : false;
-            });
-
             const sourceProject = income.projects.find(project =>
               String(project?.name || "").trim().toLowerCase() === String(row.source || "").trim().toLowerCase()
             );
@@ -665,7 +656,6 @@ export default function SideHustleDashboard() {
             const estMonthlyIncome = Math.max(0, grossMonthlyIncome - monthlyPowerCost);
             const remaining = Math.max(0, cost - recovered);
             const paybackMonths = remaining <= 0 ? 0 : estMonthlyIncome > 0 ? remaining / estMonthlyIncome : null;
-            const watts = Math.max(0, Number(liveDevice?.watts) || 0);
 
             return <div
               key={row.id}
@@ -690,13 +680,13 @@ export default function SideHustleDashboard() {
               </div>
 
               <div className="min-w-0">
-                <strong className="block truncate text-[12px] font-semibold tabular-nums text-amber-400">{money(estMonthlyIncome)} /mo</strong>
-                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Est. income</p>
+                <strong className="block truncate text-[12px] font-semibold tabular-nums text-amber-400">{money(cost)}</strong>
+                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Amount Spent</p>
               </div>
 
               <div className="min-w-0">
-                <strong className="block text-[12px] font-semibold tabular-nums text-[#eef2f6]">{watts > 0 ? `${watts.toFixed(0)} W` : "—"}</strong>
-                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Power</p>
+                <strong className="block text-[12px] font-semibold tabular-nums text-[#eef2f6]">{money(recovered)}</strong>
+                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Earned So Far</p>
               </div>
 
               <div className="min-w-0">
