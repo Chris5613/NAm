@@ -2510,27 +2510,7 @@ if (
         )}
 
       </section>
-        <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017] px-4 py-3">
-          <h2 className="text-[13px] font-semibold">Projections</h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-            {[
-              {label:"Daily",amount:(summary.annualYield+(estimatedStockDividendsAnnual || 0))/365,symbol:"D"},
-              {label:"Weekly",amount:(summary.annualYield+(estimatedStockDividendsAnnual || 0))/52.1775,symbol:"W"},
-              {label:"Monthly",amount:summary.monthlyYield+(estimatedStockDividendsAnnual || 0)/12,symbol:"M"},
-              {label:"Yearly",amount:summary.annualYield+(estimatedStockDividendsAnnual || 0),symbol:"Y"},
-            ].map(item => (
-              <div key={item.label} className="min-w-0 rounded-xl border border-[#2b3848] bg-[#0e141c] px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#23364b] text-[11px] font-bold text-[#a5c3d7]">{item.symbol}</span>
-                  <div className="min-w-0">
-                    <div className="text-[10px] text-muted-foreground">{item.label}</div>
-                    <div className="truncate text-[clamp(13px,1.2vw,19px)] font-semibold tabular-nums" title={formatCurrency(item.amount)}>{formatCurrency(item.amount)}</div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
+
         <section className="min-w-0 rounded-2xl border border-[#263342] bg-[#0b1017] px-3 py-3">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-[13px] font-semibold">Connection Status</h2>
