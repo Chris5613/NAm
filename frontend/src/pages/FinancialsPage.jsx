@@ -10,6 +10,10 @@ import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
+import {
+  buildFinancialBalanceRows, buildStatementRows, buildFinancialProfit,
+  classifyCashFlows, journalAccountActivity, moneyRound, valueOrNull,
+} from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import {
@@ -26,6 +30,7 @@ const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
 const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
 const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
+const BANK_OPENINGS_KEY = "financials_bank_openings_v1";
 const DEFAULT_POWER_SETTINGS = { basicRate: 0.1691, offPeakRate: 0.0893, midPeakRate: 0.1670, peakRate: 0.4313 };
 function readHardwareRegister() {
   const rows = readJson(HARDWARE_KEY, []);
@@ -235,7 +240,7 @@ function makeRows(month, records, live, hardwareDevices = []) {
   }
   return rows;
 }
-const emptyDraft = () => ({ date: new Date().toISOString().slice(0, 10), description: "", debitAccount: "cash", creditAccount: "revenue", amount: "" });
+const emptyDraft = () => ({ date: getTodayKey(), description: "", debitAccount: "cash", creditAccount: "revenue", amount: "" });
 const line = (account, debit, credit) => ({ account, debit: rounded(debit), credit: rounded(credit) });
 
 // A conservative local interpreter: only recognize supported, explicit
@@ -336,6 +341,8 @@ export default function FinancialsPage() {
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
+  const [bankOpenings, setBankOpenings] = useState(() => readJson(BANK_OPENINGS_KEY, {}));
+  const [bankOpeningDraft, setBankOpeningDraft] = useState("");
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
@@ -352,11 +359,15 @@ export default function FinancialsPage() {
     setPowerEstimates(readJson(POWER_ESTIMATE_KEY, {}));
     setConfirmedMovements(readJson(CONFIRMED_MOVEMENTS_KEY, {}));
     setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
+    setBankOpenings(readJson(BANK_OPENINGS_KEY, {}));
     setCryptoIncome(current => ({
       ...readCryptoIncomeSources(), manualIncome: current.manualIncome,
       luloBackfills: current.luloBackfills,
     }));
   }), []);
+  useEffect(() => {
+    setBankOpeningDraft(valueOrNull(bankOpenings[month]) === null ? "" : String(bankOpenings[month]));
+  }, [month, bankOpenings]);
   useEffect(() => {
     const refresh = () => setLive(liveBalances());
     const timer = window.setInterval(refresh, 30000);
@@ -431,21 +442,11 @@ export default function FinancialsPage() {
     return () => { active = false; window.clearInterval(timer); };
   }, []);
   const closeSnapshot = closedMonths[month] || null;
-  const rows = useMemo(() => closeSnapshot?.rows ||
-    makeRows(month, records, live, hardwareDevices),
-    [month, records, live, hardwareDevices, closeSnapshot]);
-  const sections = categories.map(category => ({ ...category, rows: rows.filter(row => row.category === category.id) }));
-  const total = (field, type) => {
-    const relevant = rows.filter(row => type === "assets" ? row.category !== "liabilities" : row.category === "liabilities");
-    return relevant.some(row => row[field] === null) ? null : rounded(relevant.reduce((sum, row) => sum + row[field], 0));
-  };
-  const assetsStart = total("start", "assets");
-  const assetsEnd = total("end", "assets");
-  const debtStart = total("start", "debts");
-  const debtEnd = total("end", "debts");
-  const netStart = assetsStart === null || debtStart === null ? null : rounded(assetsStart - debtStart);
-  const netEnd = assetsEnd === null || debtEnd === null ? null : rounded(assetsEnd - debtEnd);
-  const netChange = netStart === null || netEnd === null ? null : rounded(netEnd - netStart);
+  // Captured/observed balances must be kept separate from income journal
+  // movements or mining revenue would be added to assets twice.
+  const baseRows = useMemo(() => buildFinancialBalanceRows(
+    month, records, live, hardwareDevices, getCurrentMonthKey(),
+  ), [month, records, live, hardwareDevices]);
   const recorded = records[month] || {};
   // Share the exact recorded Income History calculation with Crypto Dashboard.
   const syncedRevenue = closeSnapshot?.incomeMonth ||
