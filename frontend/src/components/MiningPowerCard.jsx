@@ -10,6 +10,8 @@ import {
   Zap,
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
+import { getCurrentMonthKey } from "@/lib/yieldFarmingAccounting";
+import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { toast } from "sonner";
 
 const SETTINGS_KEY = "mining_power_dashboard_v1";
@@ -111,7 +113,7 @@ function usageCost(usage, settings, monthKey) {
 function DeviceCard({ device, monthlyUsage, settings, monthKey }) {
   const watts = Number(device?.watts) || 0;
   const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
-  const monthlyCost = usageCost(monthlyUsage, settings, monthKey);
+  const monthlyCost = outOfPocketMiningPowerCost(usageCost(monthlyUsage, settings, monthKey), monthKey || getCurrentMonthKey());
   const meta = DEVICE_META[device?.id] || null;
   return (
     <section className="rounded-2xl border border-border/55 bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
@@ -211,7 +213,8 @@ export default function MiningPowerCard() {
   const staleMs = latest?.observedAt ? Date.now() - new Date(latest.observedAt).getTime() : Infinity;
   const live = staleMs < 90000;
   const rateInfo = currentRate(settings);
-  const hourlyCost = totalWatts / 1000 * rateInfo.rate;
+  const freePower = hasFreeMiningPower(getCurrentMonthKey());
+  const hourlyCost = outOfPocketMiningPowerCost(totalWatts / 1000 * rateInfo.rate, getCurrentMonthKey());
   const dailyCost = hourlyCost * 24;
   const dailyRevenue = Math.max(0, Number(settings.dailyRevenueUsd) || 0);
   const dailyNet = dailyRevenue - dailyCost;
@@ -224,10 +227,9 @@ export default function MiningPowerCard() {
   const monthKwh = Number(currentMonth?.totalKwh) || 0;
   const monthTrackedSeconds = Number(currentMonth?.trackedSeconds) || 0;
   const monthTrackedDays = trackedDays(monthTrackedSeconds);
-  const monthCost =
-    offPeakKwh * Number(settings.offPeakRate || 0) +
-    midPeakKwh * Number(settings.midPeakRate || 0) +
-    peakKwh * Number(settings.peakRate || 0);
+  const monthCost = outOfPocketMiningPowerCost(
+    usageCost(currentMonth, settings, currentMonth?.month), currentMonth?.month || getCurrentMonthKey()
+  );
   const monthEstimatedRevenue = dailyRevenue * monthTrackedDays;
   const monthEstimatedNet = monthEstimatedRevenue - monthCost;
   const monthDays = daysInPacificMonth();
@@ -302,14 +304,14 @@ export default function MiningPowerCard() {
           <div className="p-5">
             <p className="text-xs text-muted-foreground">Cost so far</p>
             <p className="mt-1 text-2xl font-semibold text-amber-400 tabular-nums">{money(monthCost)}</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">Actual TOD buckets</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">{freePower ? "Power provided at no cost" : "Tracked energy cost"}</p>
           </div>
           <div className="p-5">
             <p className="text-xs text-muted-foreground">Projected month-end cost</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums">
               {projectionReady ? money(projectedMonthCost) : "Collecting…"}
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">Based on tracked usage rate</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">{freePower ? "Power provided at no cost" : "Based on tracked usage rate"}</p>
           </div>
           <div className="p-5">
             <p className="text-xs text-muted-foreground">Est. net since tracking</p>
@@ -333,8 +335,8 @@ export default function MiningPowerCard() {
           </div>
           <div className="flex items-center gap-2">
             <PlugZap className="h-4 w-4 text-cyan-300" />
-            <span className="text-muted-foreground">Current Rate</span>
-            <span className="font-semibold tabular-nums">{(rateInfo.rate * 100).toFixed(2)}¢/kWh</span>
+            <span className="text-muted-foreground">Effective Rate</span>
+            <span className="font-semibold tabular-nums">{(freePower ? 0 : rateInfo.rate * 100).toFixed(2)}¢/kWh</span>
             <span className="text-xs text-muted-foreground">{rateInfo.label}</span>
           </div>
           <div className="flex items-center gap-2">
