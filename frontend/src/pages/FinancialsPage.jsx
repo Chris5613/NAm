@@ -193,6 +193,7 @@ export default function FinancialsPage() {
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
+  const [quickModalOpen, setQuickModalOpen] = useState(false);
   const [quickText, setQuickText] = useState("");
   const [quickEntry, setQuickEntry] = useState(null);
   const [quickError, setQuickError] = useState("");
@@ -311,6 +312,7 @@ export default function FinancialsPage() {
     setQuickText("");
     setQuickError("");
     setQuickStatus("Entry posted to your General Ledger and Trial Balance.");
+    setQuickModalOpen(false);
   };
   const deleteEntry = id => {
     const updated = journal.filter(entry => entry.id !== id);
@@ -431,11 +433,44 @@ export default function FinancialsPage() {
     </>}
     {tab === "ledger" && <>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">General Ledger</h2></div>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => { setQuickModalOpen(true); setQuickStatus(""); setQuickError(""); }}
+          className="inline-flex items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-sm font-semibold text-sky-300 hover:bg-sky-400/20">
+          <Sparkles size={16}/> Describe Transaction
+        </button>
         <button onClick={() => { setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
-          className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300"><Plus size={16}/> Add entry</button></div>
-      <section className={card + " space-y-4 p-4 sm:p-5"} data-testid="transaction-chat">
-        <div className="flex items-center gap-2"><Sparkles size={17} className="text-cyan-400"/>
-          <h3 className="text-sm font-semibold">Describe a transaction</h3></div>
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300"><Plus size={16}/> Add entry</button>
+      </div></div>
+      {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
+      <section className={card + " overflow-hidden p-4"}><div className="overflow-x-auto"><table className="w-full min-w-[550px] text-sm">
+        <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
+        <tbody>{entries.map(entry => entry.lines.map((item, index) => <tr key={entry.id+":"+index} className="border-b border-[#20303d]">
+          <td className="py-2 align-top">{index===0 ? <><p>{entry.description}</p><p className="text-xs text-[#8195a8]">{entry.date}{entry.automatic ? " · Auto" : ""}</p></> : null}</td>
+          <td className="py-2 text-[#c3d2df]">{accounts.find(account=>account.id===item.account)?.name || item.account}</td>
+          <td className="py-2 text-right tabular-nums">{item.debit ? money(item.debit) : "—"}</td>
+          <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
+          <td className="py-2 text-right">{index===0 && !entry.automatic && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
+        </tr>))}
+          <tr className="font-bold"><td colSpan={2} className="py-3">Total</td><td className="text-right">{money(debitTotal)}</td><td className="text-right">{money(creditTotal)}</td><td/></tr>
+        </tbody></table></div>{!entries.length && <p className="py-5 text-sm text-[#8397a9]">No journal entries yet.</p>}</section>
+    </>}
+    {tab === "trial" && <>
+      <div className="grid gap-3 sm:grid-cols-3">{metric("Debits", trialDebit)}{metric("Credits", trialCredit)}{metric("Difference", rounded(trialDebit-trialCredit), "Journal entries only", "text-emerald-400")}</div>
+      <section className={card + " p-4 sm:p-6"}><h2 className="text-lg font-semibold">Trial Balance — {monthTitle(month)}</h2>
+        
+        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[360px] text-sm"><thead><tr className="border-b border-[#314454] text-xs text-[#9db0c1]"><th className="pb-2 text-left">Account</th><th className="pb-2 text-right">Debit</th><th className="pb-2 text-right">Credit</th></tr></thead>
+          <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{row.name}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
+            <tr className="font-bold"><td className="py-3">Total</td><td className="text-right">{money(trialDebit)}</td><td className="text-right">{money(trialCredit)}</td></tr>
+          </tbody></table></div></section>
+    </>}
+    {quickModalOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/75 p-3 sm:p-5" onMouseDown={event => { if (event.target === event.currentTarget) setQuickModalOpen(false); }}>
+      <section className={card + " w-full max-w-2xl space-y-4 overflow-y-auto p-4 shadow-2xl sm:p-6"} data-testid="transaction-chat" role="dialog" aria-modal="true" aria-label="Describe a transaction">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2"><Sparkles size={17} className="text-cyan-400"/>
+            <h3 className="text-base font-semibold">Describe a transaction</h3></div>
+          <button type="button" aria-label="Close transaction popup" onClick={() => setQuickModalOpen(false)}
+            className="rounded-lg border border-[#34495c] p-2 text-[#a7bacb] hover:bg-white/[0.06] hover:text-white"><X size={17}/></button>
+        </div>
         <p className="text-xs text-[#91a6b7]">Write what happened. I'll draft a journal entry for you to review before posting.</p>
         <form onSubmit={prepareQuickEntry} className="flex flex-col gap-2 sm:flex-row">
           <input aria-label="Describe a financial transaction" value={quickText}
@@ -447,7 +482,6 @@ export default function FinancialsPage() {
           </button>
         </form>
         {quickError && <p role="alert" className="text-sm text-rose-400">{quickError}</p>}
-        {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
         {quickEntry && <div className="space-y-3 rounded-xl border border-[#355368] bg-[#111f2b] p-3 sm:p-4">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <strong className="text-sm text-white">Review journal entry</strong>
@@ -481,27 +515,7 @@ export default function FinancialsPage() {
         </div>}
         <p className="text-[11px] text-[#718b9e]">Recognizes common expenses, equipment purchases, owner contributions, and income. Unclear transactions require manual entry. No AI service or bank transfer is involved.</p>
       </section>
-      <section className={card + " overflow-hidden p-4"}><div className="overflow-x-auto"><table className="w-full min-w-[550px] text-sm">
-        <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
-        <tbody>{entries.map(entry => entry.lines.map((item, index) => <tr key={entry.id+":"+index} className="border-b border-[#20303d]">
-          <td className="py-2 align-top">{index===0 ? <><p>{entry.description}</p><p className="text-xs text-[#8195a8]">{entry.date}{entry.automatic ? " · Auto" : ""}</p></> : null}</td>
-          <td className="py-2 text-[#c3d2df]">{accounts.find(account=>account.id===item.account)?.name || item.account}</td>
-          <td className="py-2 text-right tabular-nums">{item.debit ? money(item.debit) : "—"}</td>
-          <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
-          <td className="py-2 text-right">{index===0 && !entry.automatic && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
-        </tr>))}
-          <tr className="font-bold"><td colSpan={2} className="py-3">Total</td><td className="text-right">{money(debitTotal)}</td><td className="text-right">{money(creditTotal)}</td><td/></tr>
-        </tbody></table></div>{!entries.length && <p className="py-5 text-sm text-[#8397a9]">No journal entries yet.</p>}</section>
-    </>}
-    {tab === "trial" && <>
-      <div className="grid gap-3 sm:grid-cols-3">{metric("Debits", trialDebit)}{metric("Credits", trialCredit)}{metric("Difference", rounded(trialDebit-trialCredit), "Journal entries only", "text-emerald-400")}</div>
-      <section className={card + " p-4 sm:p-6"}><h2 className="text-lg font-semibold">Trial Balance — {monthTitle(month)}</h2>
-        
-        <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[360px] text-sm"><thead><tr className="border-b border-[#314454] text-xs text-[#9db0c1]"><th className="pb-2 text-left">Account</th><th className="pb-2 text-right">Debit</th><th className="pb-2 text-right">Credit</th></tr></thead>
-          <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{row.name}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
-            <tr className="font-bold"><td className="py-3">Total</td><td className="text-right">{money(trialDebit)}</td><td className="text-right">{money(trialCredit)}</td></tr>
-          </tbody></table></div></section>
-    </>}
+    </div>}
     {modal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event=>{if(event.target===event.currentTarget)setModal(false);}}>
       <form onSubmit={saveEntry} className={card + " w-full max-w-md space-y-4 p-5 shadow-2xl"} role="dialog" aria-modal="true" aria-label="Add journal entry">
         <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">New Journal Entry</h2><button type="button" onClick={()=>setModal(false)} aria-label="Close"><X size={19}/></button></div>
