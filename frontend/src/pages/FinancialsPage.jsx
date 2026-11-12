@@ -262,11 +262,6 @@ export default function FinancialsPage() {
         <Icon size={15}/>{name}
       </button>)}
     </nav>
-    <div className="rounded-lg border border-[#334657] bg-[#121d27] px-3 py-2.5 text-xs leading-relaxed text-[#a9bdcc]">
-      <strong className="text-[#e5edf3]">Accounting preview:</strong> Project balances and saved monthly figures come from existing trackers.
-      Journal entries are recorded separately; historical balances, cash transfers, and revenues are not automatically invented.
-      Reports are not fully reconciled financial statements until opening balances and transactions are posted.
-    </div>
     {tab === "overview" && <>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {metric("Assets", assetsEnd, "Current or saved balances", "text-sky-300")}
@@ -292,7 +287,6 @@ export default function FinancialsPage() {
       </div>
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
         <h2 className="mb-1 text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
-        <p className="mb-4 text-xs text-[#92a8b9]">Shares the saved business accounts with Monthly Changes; RTX 2080 and RTX 5070 use five-year straight-line depreciation from November 2026.</p>
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
           {tableHeader}<tbody>
             {sections.map(section => <Fragment key={section.id}>
