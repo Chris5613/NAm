@@ -67,20 +67,27 @@ export function journalDisplayDescription(entry,rows,labels={}) {
   const original=String(entry?.description || "");
   if (!original || !Object.keys(labels).length) return original;
   // Render aliases in existing descriptions, without editing the underlying
-  // journal or the provider names used for syncing and deduplication.
-  const aliases=[];
+  // journal or provider names. Skip a name shared by distinct physical devices
+  // because the description alone can't identify which one it refers to.
+  const aliases=[],owners=new Map();
   for(const row of rows || []) {
-    const name=balanceDisplayName(row,labels);
-    if(!name || name===row.name) continue;
     const variant=String(row.name || "");
     const terms=["rtx2080superpc","rtx2080pc"].includes(norm(variant))
       ? ["RTX 2080 Super PC","RTX 2080 PC"] : [variant];
+    for(const term of terms) {
+      const key=term.toLowerCase();
+      if(!owners.has(key)) owners.set(key,new Set());
+      owners.get(key).add(balanceAliasKey(row));
+    }
+    const name=balanceDisplayName(row,labels);
+    if(!name || name===row.name) continue;
     for(const term of terms) aliases.push({term,label:name});
   }
-  aliases.sort((a,b)=>b.term.length-a.term.length);
+  const distinctAliases=aliases.filter(item=>owners.get(item.term.toLowerCase())?.size===1);
+  distinctAliases.sort((a,b)=>b.term.length-a.term.length);
   const originalLower=original.toLowerCase();
   const replacements=[];
-  for(const item of aliases) {
+  for(const item of distinctAliases) {
     let index=0;
     const lower=item.term.toLowerCase();
     while((index=originalLower.indexOf(lower,index))>=0) {
