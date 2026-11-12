@@ -182,9 +182,6 @@ export default function MonthlyChangesPage() {
   const [expenseEditorOpen, setExpenseEditorOpen] = useState(false);
   const [expenseDraft, setExpenseDraft] = useState("");
   const [expenseError, setExpenseError] = useState("");
-  const [rollerCorrectionOpen, setRollerCorrectionOpen] = useState(false);
-  const [rollerOctoberEnd, setRollerOctoberEnd] = useState("");
-  const [rollerCorrectionError, setRollerCorrectionError] = useState("");
   useEffect(() => subscribe(() => {
     setRecords(readRecords());
     setPortfolioItems(readPortfolioItems());
@@ -459,30 +456,6 @@ export default function MonthlyChangesPage() {
     setExpenseEditorOpen(false);
     setExpenseError("");
   };
-  const saveRollerCorrection = event => {
-    event.preventDefault();
-    const value = Number(rollerOctoberEnd);
-    if (!rollerOctoberEnd.trim() || !Number.isFinite(value) || value < 0) {
-      setRollerCorrectionError("Enter the actual nonnegative RollerCoin balance after the October withdrawal.");
-      return;
-    }
-    const endingBalance = round(value);
-    const saved = readRecords();
-    const updated = { ...saved };
-    for (const [monthKey, field] of [["2026-10", "end"], ["2026-11", "start"]]) {
-      const recordForMonth = saved[monthKey] || {};
-      const rows = Array.isArray(recordForMonth.items) ? recordForMonth.items : [];
-      const old = rows.find(row => String(row.name || "").toLowerCase() === "rollercoin");
-      const corrected = { ...(old || { name: "RollerCoin" }), [field]: endingBalance, octoberWithdrawalCorrected: true };
-      updated[monthKey] = {
-        ...recordForMonth,
-        items: [...rows.filter(row => String(row.name || "").toLowerCase() !== "rollercoin"), corrected],
-      };
-    }
-    remoteStorage.setItem(KEY, JSON.stringify(updated));
-    setRecords(updated);
-    setRollerCorrectionOpen(false);
-  };
   const showEdit = item => {
     setError("");
     setDraft(item ? {
@@ -626,17 +599,6 @@ export default function MonthlyChangesPage() {
           </tbody>
         </table>
       </div>
-      {(month === "2026-10" || month === "2026-11") && (
-        <div className="mt-3 flex justify-end">
-          <button type="button" onClick={() => {
-            setRollerOctoberEnd("");
-            setRollerCorrectionError("");
-            setRollerCorrectionOpen(true);
-          }} className="rounded-lg border border-[#3b5366] px-3 py-2 text-xs text-[#b1c8dc] hover:bg-[#172738]">
-            Correct October RollerCoin withdrawal
-          </button>
-        </div>
-      )}
     </section>
 
     {expenseEditorOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
@@ -658,32 +620,6 @@ export default function MonthlyChangesPage() {
           <button type="button" onClick={() => setExpenseEditorOpen(false)}
             className="rounded-lg border border-[#3c5267] px-4 py-2">Cancel</button>
           <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#061810]">Save expenses</button>
-        </div>
-      </form>
-    </div>}
-
-    {rollerCorrectionOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
-      onMouseDown={event => { if (event.target === event.currentTarget) setRollerCorrectionOpen(false); }}>
-      <form role="dialog" aria-modal="true" aria-label="Correct October RollerCoin withdrawal"
-        onSubmit={saveRollerCorrection} className={`${box} w-full max-w-md space-y-4 p-6 shadow-2xl`}>
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">October RollerCoin withdrawal</h2>
-          <button type="button" aria-label="Close" onClick={() => setRollerCorrectionOpen(false)}><X size={19}/></button>
-        </div>
-        <p className="text-sm text-[#a3b7c8]">
-          Enter your RollerCoin wallet's actual USD balance on October 31, after the withdrawal.
-          This replaces October's ending balance and November's starting balance, so October's withdrawal is not counted as a November loss.
-        </p>
-        <label className="block text-sm">October 31 balance after withdrawal ($)
-          <input autoFocus required type="number" min="0" step="0.01" value={rollerOctoberEnd}
-            onChange={event => setRollerOctoberEnd(event.target.value)}
-            placeholder="Enter post-withdrawal balance" className={input}/>
-        </label>
-        {rollerCorrectionError && <p role="alert" className="text-sm text-rose-400">{rollerCorrectionError}</p>}
-        <div className="flex gap-2">
-          <button type="button" onClick={() => setRollerCorrectionOpen(false)}
-            className="rounded-lg border border-[#3c5267] px-4 py-2">Cancel</button>
-          <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#061810]">Save correction</button>
         </div>
       </form>
     </div>}
