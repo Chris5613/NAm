@@ -1419,16 +1419,15 @@ export default function Dashboard() {
                       "
                     >
                       {
-                        CATEGORY_CONFIG[
-                          selectedCategory
-                        ].label
+                        selectedCategory === "crypto" ? "Total Assets" :
+                        CATEGORY_CONFIG[selectedCategory].label
                       }
                     </h2>
 
                     <p className="mt-1 text-sm text-muted-foreground">
                       {selectedCategory ===
                       "crypto"
-                        ? "Projects and Bitcoin"
+                        ? "Balance Sheet total, including BTC and equipment"
                         : selectedCategory ===
                             "other"
                           ? `${assetCounts.other} ${
