@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Coins, CreditCard, TrendingUp, Plus, Pencil, Trash2, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
@@ -18,6 +18,22 @@ import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { localStorage as appStorage } from "@/lib/localStorage";
 
 const KEY = "monthly_business_changes_v1";
+const VIEW_KEY = "monthly_changes_table_view_v1";
+const BALANCE_CATEGORIES = [
+  { id: "digital", label: "Digital Assets & Platform Balances" },
+  { id: "defi", label: "DeFi & Investments" },
+  { id: "cash", label: "Cash & Receivables" },
+  { id: "equipment", label: "Equipment & Fixed Assets" },
+  { id: "liabilities", label: "Liabilities" },
+];
+function balanceCategory(name) {
+  const key = String(name || "").toLowerCase().trim();
+  if (/loan|debt|credit card|payable|liabilit/.test(key)) return "liabilities";
+  if (/lulo|loopscale|defi|lending|invest|stock|bond/.test(key)) return "defi";
+  if (/rtx|gpu|\bpc\b|computer|hardware|equipment|psu|motherboard/.test(key)) return "equipment";
+  if (/cash|checking|savings|receivable|pending payout|bank/.test(key)) return "cash";
+  return "digital";
+}
 // USD daily closing prices for BTC-USD on Yahoo Finance (UTC daily candles).
 // These price anchors do not establish how much BTC was held on each date.
 const BTC_CLOSE_USD = Object.freeze({
@@ -168,6 +184,10 @@ const input = "mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] px-3 
 
 export default function MonthlyChangesPage() {
   const [records, setRecords] = useState(readRecords);
+  const [tableView, setTableView] = useState(() => remoteStorage.getItem(VIEW_KEY) === "balance" ? "balance" : "original");
+  const [balanceEditing, setBalanceEditing] = useState(null);
+  const [balanceDraft, setBalanceDraft] = useState({ name: "", category: "equipment", start: "", end: "" });
+  const [balanceError, setBalanceError] = useState("");
   const [portfolioItems, setPortfolioItems] = useState(readPortfolioItems);
   const [liveBitcoin, setLiveBitcoin] = useState(readHomeBitcoin);
   const [bitcoinAmount, setBitcoinAmount] = useState(readHomeBitcoinAmount);
@@ -497,6 +517,89 @@ export default function MonthlyChangesPage() {
   const changeReady = netReady && visibleItems.every(row => row.start !== null);
   const moM = netStart !== 0 ? netChange / Math.abs(netStart) * 100 : null;
   const hasValues = visibleItems.some(row => row.start !== null || row.end !== null);
+  // The balance-sheet view is additive: it reads existing project rows but
+  // keeps separately entered business accounts out of the original table.
+  const savedBalanceItems = Array.isArray(record.balanceSheetItems) ? record.balanceSheetItems : [];
+  const priorBalanceItems = Array.isArray(previous.balanceSheetItems) ? previous.balanceSheetItems : [];
+  const extraBalanceItems = (record.locked ? savedBalanceItems : [
+    ...priorBalanceItems.filter(prior => !savedBalanceItems.some(current => current.id === prior.id) && !(record.balanceExcluded || []).includes(prior.id)),
+    ...savedBalanceItems,
+  ]).map(row => {
+    const earlier = priorBalanceItems.find(item => item.id === row.id);
+    const start = parseAmount(row.start) ?? (record.locked ? null : parseAmount(earlier?.end));
+    const end = parseAmount(row.end) ?? (record.locked ? null : start);
+    return { ...row, start, end, change: start === null || end === null ? null : round(end - start) };
+  });
+  const balanceRows = [
+    ...visibleItems.map(row => ({ ...row, id: `project:${row.name}`, category: record.balanceCategories?.[row.name] || balanceCategory(row.name), original: true })),
+    ...extraBalanceItems.map(row => ({ ...row, category: row.category || balanceCategory(row.name), original: false })),
+  ];
+  const categoryRows = BALANCE_CATEGORIES.map(category => {
+    const rows = balanceRows.filter(row => row.category === category.id);
+    const subtotal = field => rows.every(row => row[field] !== null)
+      ? round(rows.reduce((sum, row) => sum + row[field], 0)) : null;
+    return { ...category, rows, start: subtotal("start"), end: subtotal("end") };
+  });
+  const balanceTotals = field => {
+    if (balanceRows.some(row => row[field] === null)) return null;
+    return round(categoryRows.reduce((sum, category) =>
+      sum + (category.id === "liabilities" ? -1 : 1) * category.rows.reduce((n, row) => n + row[field], 0), 0));
+  };
+  const balanceStart = balanceTotals("start");
+  const balanceEnd = balanceTotals("end");
+  const balanceChange = balanceStart === null || balanceEnd === null ? null : round(balanceEnd - balanceStart);
+  const balanceAssets = categoryRows.filter(cat => cat.id !== "liabilities");
+  const balanceLiabilities = categoryRows.find(cat => cat.id === "liabilities");
+  const balanceAssetEnd = balanceAssets.every(cat => cat.end !== null)
+    ? round(balanceAssets.reduce((sum, cat) => sum + cat.end, 0)) : null;
+  const balanceDebtEnd = balanceLiabilities.end;
+  const showingBalance = tableView === "balance";
+  const shownNetEnd = showingBalance ? balanceEnd : (netReady ? netEnd : null);
+  const shownNetStart = showingBalance ? balanceStart : (changeReady ? netStart : null);
+  const shownNetChange = showingBalance ? balanceChange : (changeReady ? netChange : null);
+  const shownMoM = shownNetStart !== null && shownNetStart !== 0 && shownNetChange !== null
+    ? shownNetChange / Math.abs(shownNetStart) * 100 : null;
+  const switchView = next => {
+    setTableView(next);
+    remoteStorage.setItem(VIEW_KEY, next);
+  };
+  const editBalanceItem = row => {
+    setBalanceError("");
+    setBalanceDraft(row
+      ? { name: row.name, category: row.category, start: row.start === null ? "" : String(row.start), end: row.end === null ? "" : String(row.end) }
+      : { name: "", category: "equipment", start: "", end: "" });
+    setBalanceEditing(row ? row.id : "new");
+  };
+  const saveBalanceItem = event => {
+    event.preventDefault();
+    const name = balanceDraft.name.trim();
+    const start = parseAmount(balanceDraft.start);
+    const end = parseAmount(balanceDraft.end);
+    const existing = [...savedBalanceItems];
+    if (!name || !BALANCE_CATEGORIES.some(category => category.id === balanceDraft.category) ||
+      (balanceDraft.start !== "" && start === null) || (balanceDraft.end !== "" && end === null) ||
+      (balanceDraft.category === "liabilities" && (start < 0 || end < 0))) {
+      setBalanceError("Enter a name, a category, and valid balances (debts must be positive).");
+      return;
+    }
+    if (balanceEditing === "new" && balanceRows.some(row => row.name.toLowerCase() === name.toLowerCase())) {
+      setBalanceError("This item already exists in this month's balance sheet.");
+      return;
+    }
+    const id = balanceEditing === "new" ? `extra:${Date.now()}:${Math.random().toString(36).slice(2, 8)}` : balanceEditing;
+    const next = existing.filter(row => row.id !== id);
+    next.push({ id, name, category: balanceDraft.category, start: balanceDraft.start, end: balanceDraft.end });
+    save({ ...record, balanceSheetItems: next });
+    setBalanceEditing(null);
+  };
+  const removeBalanceItem = () => {
+    if (!balanceEditing || balanceEditing === "new") return;
+    const next = savedBalanceItems.filter(row => row.id !== balanceEditing);
+    // Explicit removal prevents a prior-month account from being re-imported.
+    const excluded = [...new Set([...(record.balanceExcluded || []), balanceEditing])];
+    save({ ...record, balanceSheetItems: next, balanceExcluded: excluded });
+    setBalanceEditing(null);
+  };
   const stat = (title, value, prior, Icon, tone) => {
     const diff = compare(value, prior);
     return <section className={`${box} relative min-w-0 overflow-hidden border-t-2 p-4 ${tone.border}`}>
@@ -541,18 +644,18 @@ export default function MonthlyChangesPage() {
       <div className="grid gap-5 md:grid-cols-[1fr_1fr] md:items-center">
         <div>
           <h2 className="text-lg font-semibold">Net Worth</h2>
-          <strong className="mt-2 block text-4xl font-bold tracking-tight tabular-nums text-emerald-400 sm:text-5xl">{netReady ? formatMoney(netEnd) : "—"}</strong>
-          {changeReady && moM !== null && (
+          <strong className="mt-2 block text-4xl font-bold tracking-tight tabular-nums text-emerald-400 sm:text-5xl">{shownNetEnd !== null ? formatMoney(shownNetEnd) : "—"}</strong>
+          {shownNetChange !== null && shownMoM !== null && (
             <div className="mt-3 inline-flex rounded-full bg-emerald-500/15 px-4 py-2 text-sm font-semibold text-emerald-300">
-              {`${signedMoney(netChange)} (${moM > 0 ? "+" : ""}${moM.toFixed(1)}% MoM)`}
+              {`${signedMoney(shownNetChange)} (${shownMoM > 0 ? "+" : ""}${shownMoM.toFixed(1)}% MoM)`}
             </div>
           )}
         </div>
         <dl className="space-y-0 border-[#263342] md:border-l md:pl-7">
           {[
-            ["Previous Month", lastNet !== null ? formatMoney(lastNet) : changeReady ? formatMoney(netStart) : "—"],
-            ["Monthly Change", changeReady ? signedMoney(netChange) : "—"],
-            ["YTD Change", netReady && ytdStart !== null ? signedMoney(round(netEnd - ytdStart)) : "—"],
+            ["Previous Month", showingBalance ? (shownNetStart !== null ? formatMoney(shownNetStart) : "—") : lastNet !== null ? formatMoney(lastNet) : changeReady ? formatMoney(netStart) : "—"],
+            ["Monthly Change", shownNetChange !== null ? signedMoney(shownNetChange) : "—"],
+            ["YTD Change", !showingBalance && netReady && ytdStart !== null ? signedMoney(round(netEnd - ytdStart)) : "—"],
           ].map(([name, value]) => <div key={name} className="flex justify-between gap-4 border-b border-[#263342] py-2.5 last:border-0">
             <dt className="text-sm text-[#a4b4c4]">{name}</dt>
             <dd className="font-semibold tabular-nums">{value}</dd>
@@ -573,7 +676,20 @@ export default function MonthlyChangesPage() {
       {stat("Profit (MTD)", profit, previousProfit, TrendingUp, {border:"border-t-teal-400",text:"text-teal-400"})}
     </div>
 
-    <section className={`${box} overflow-hidden px-4 pb-4 pt-4 sm:px-6`}>
+    <div className="flex items-center justify-between gap-3">
+      <div className="inline-flex rounded-xl border border-[#344657] bg-[#101821] p-1" role="group" aria-label="Monthly changes table view">
+        <button type="button" onClick={() => switchView("original")} aria-pressed={!showingBalance}
+          className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${!showingBalance ? "bg-[#27445b] text-white" : "text-[#9fb1c1] hover:text-white"}`}>
+          Original Table
+        </button>
+        <button type="button" onClick={() => switchView("balance")} aria-pressed={showingBalance}
+          className={`rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${showingBalance ? "bg-[#27445b] text-white" : "text-[#9fb1c1] hover:text-white"}`}>
+          Balance Sheet
+        </button>
+      </div>
+    </div>
+
+    {!showingBalance ? <section className={`${box} overflow-hidden px-4 pb-4 pt-4 sm:px-6`}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <h2 className="flex items-center gap-2 text-lg font-bold uppercase tracking-wide"><CalendarDays className="text-cyan-400"/> {monthLabel(month)} Update</h2>
         <button type="button" onClick={() => showEdit(null)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300"><Plus size={14}/> Add item</button>
@@ -599,7 +715,107 @@ export default function MonthlyChangesPage() {
           </tbody>
         </table>
       </div>
-    </section>
+    </section> : (
+      <>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <section className={`${box} p-4`}>
+            <p className="text-xs text-[#9aafc2]">Total Assets</p>
+            <strong className="mt-1 block text-xl font-bold tabular-nums">{balanceAssetEnd === null ? "—" : formatMoney(balanceAssetEnd)}</strong>
+          </section>
+          <section className={`${box} p-4`}>
+            <p className="text-xs text-[#9aafc2]">Total Liabilities</p>
+            <strong className="mt-1 block text-xl font-bold tabular-nums">{balanceDebtEnd === null ? "—" : formatMoney(balanceDebtEnd)}</strong>
+          </section>
+        </div>
+        <section className={`${box} overflow-hidden px-4 pb-4 pt-4 sm:px-6`}>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-bold uppercase tracking-wide">{monthLabel(month)} Balance Sheet</h2>
+              <p className="mt-1 text-xs text-[#8fa4b7]">Existing projects stay synced. Add cash, equipment, and debts separately.</p>
+            </div>
+            <button type="button" onClick={() => editBalanceItem(null)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
+              <Plus size={14}/> Add account
+            </button>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[570px] border-collapse text-sm">
+              <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-widest text-[#9bafc1]">
+                <th className="pb-2">Asset / Liability</th><th className="pb-2 text-right">Start</th>
+                <th className="pb-2 text-right">Change</th><th className="pb-2 text-right">End</th><th className="w-9"/>
+              </tr></thead>
+              <tbody>
+                {categoryRows.map(category => <Fragment key={category.id}>
+                  <tr className="bg-[#132331]"><th colSpan={5} scope="rowgroup" className="px-2 py-2 text-left text-xs font-bold uppercase tracking-wider text-cyan-400">{category.label}</th></tr>
+                  {category.rows.length ? category.rows.map(row => <tr key={row.id} className="border-b border-[#1e2b38]">
+                    <td className="py-2 pl-2 text-[#e7edf3]">{row.name}</td>
+                    <td className="py-2 text-right tabular-nums">{row.start === null ? "—" : formatMoney(row.start)}</td>
+                    <td className={`py-2 text-right tabular-nums ${row.change > 0 ? "text-emerald-400" : row.change < 0 ? "text-rose-400" : "text-[#94a5b5]"}`}>{row.change === null ? "—" : signedMoney(row.change)}</td>
+                    <td className="py-2 text-right font-semibold tabular-nums">{row.end === null ? "—" : formatMoney(row.end)}</td>
+                    <td className="text-right">{row.original
+                      ? <button type="button" aria-label={`Edit ${row.name} in original table`} title="Edit in original table" onClick={() => { switchView("original"); showEdit(row); }} className="rounded p-1.5 text-[#8fa4b6] hover:text-white"><Pencil size={14}/></button>
+                      : <button type="button" aria-label={`Edit ${row.name}`} onClick={() => editBalanceItem(row)} className="rounded p-1.5 text-[#8fa4b6] hover:text-white"><Pencil size={14}/></button>}
+                    </td>
+                  </tr>) : <tr><td colSpan={5} className="px-2 py-2 text-xs text-[#718698]">No accounts yet</td></tr>}
+                  <tr className="border-b border-[#314454] bg-[#0f1923] font-semibold">
+                    <td className="py-2 pl-2">{category.label} Total</td>
+                    <td className="py-2 text-right tabular-nums">{category.start === null ? "—" : formatMoney(category.start)}</td>
+                    <td className="py-2 text-right tabular-nums">{category.start === null || category.end === null ? "—" : signedMoney(round(category.end - category.start))}</td>
+                    <td className="py-2 text-right tabular-nums">{category.end === null ? "—" : formatMoney(category.end)}</td><td/>
+                  </tr>
+                </Fragment>)}
+                <tr className="border-t-2 border-cyan-500 text-base font-bold">
+                  <td className="py-3 uppercase tracking-wide text-cyan-400">Net Worth</td>
+                  <td className="py-3 text-right tabular-nums">{balanceStart === null ? "—" : formatMoney(balanceStart)}</td>
+                  <td className={`py-3 text-right tabular-nums ${balanceChange === null || balanceChange >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{balanceChange === null ? "—" : signedMoney(balanceChange)}</td>
+                  <td className="py-3 text-right tabular-nums text-emerald-400">{balanceEnd === null ? "—" : formatMoney(balanceEnd)}</td><td/>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-3 text-xs text-[#8fa4b7]">Liabilities are subtracted from Net Worth. Enter debts as positive balances. Revenue and expenses above are not counted again as assets.</p>
+        </section>
+      </>
+    )}
+
+    {balanceEditing && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
+      onMouseDown={event => { if (event.target === event.currentTarget) setBalanceEditing(null); }}>
+      <form role="dialog" aria-modal="true" aria-label={balanceEditing === "new" ? "Add balance sheet account" : "Edit balance sheet account"}
+        onSubmit={saveBalanceItem} className={`${box} w-full max-w-md space-y-4 p-6 shadow-2xl`}>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">{balanceEditing === "new" ? "Add Balance Sheet Account" : "Edit Balance Sheet Account"}</h2>
+          <button type="button" aria-label="Close" onClick={() => setBalanceEditing(null)}><X size={19}/></button>
+        </div>
+        <label className="block text-sm">Account name
+          <input required value={balanceDraft.name} onChange={event => setBalanceDraft(old => ({ ...old, name: event.target.value }))}
+            className={input} placeholder="e.g. RTX 2080 Super PC"/>
+        </label>
+        <label className="block text-sm">Category
+          <select value={balanceDraft.category} onChange={event => setBalanceDraft(old => ({ ...old, category: event.target.value }))}
+            className={input}>
+            {BALANCE_CATEGORIES.map(category => <option key={category.id} value={category.id}>{category.label}</option>)}
+          </select>
+        </label>
+        <div className="grid grid-cols-2 gap-3">
+          <label className="block text-sm">Start balance ($)
+            <input type="number" step="0.01" value={balanceDraft.start}
+              onChange={event => setBalanceDraft(old => ({ ...old, start: event.target.value }))} className={input}/>
+          </label>
+          <label className="block text-sm">End balance ($)
+            <input type="number" step="0.01" value={balanceDraft.end}
+              onChange={event => setBalanceDraft(old => ({ ...old, end: event.target.value }))} className={input}/>
+          </label>
+        </div>
+        <p className="text-xs text-[#93a5b5]">New accounts are separate from the original table. Enter debt amounts as positive numbers; they are subtracted automatically.</p>
+        {balanceError && <p role="alert" className="text-sm text-rose-400">{balanceError}</p>}
+        <div className="flex gap-2">
+          {balanceEditing !== "new" && <button type="button" onClick={removeBalanceItem}
+            title="Remove account" className="rounded-lg border border-rose-500/30 px-3 py-2 text-rose-400"><Trash2 size={17}/></button>}
+          <button type="button" onClick={() => setBalanceEditing(null)} className="rounded-lg border border-[#3c5267] px-3 py-2">Cancel</button>
+          <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-3 py-2 font-semibold text-[#061810]">Save account</button>
+        </div>
+      </form>
+    </div>}
 
     {expenseEditorOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
       onMouseDown={event => { if (event.target === event.currentTarget) setExpenseEditorOpen(false); }}>
