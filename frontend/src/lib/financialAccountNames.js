@@ -61,11 +61,23 @@ export function equipmentEntryDisplayName(entry,rows,labels={}) {
   const unique=new Map(matches.map(row=>[balanceAliasKey(row),row]));
   if (unique.size!==1) return null;
   const row=[...unique.values()][0];
-  return balanceDisplayName(row,labels);
+  return labels[balanceAliasKey(row)] ? balanceDisplayName(row,labels) : null;
 }
 export function journalDisplayDescription(entry,rows,labels={}) {
   const original=String(entry?.description || "");
   if (!original || !Object.keys(labels).length) return original;
+  if(entry?.origin === "crypto-income") {
+    const matched=(rows||[]).find(row=>{
+      const accountId=balanceAccountId(row);
+      if(!accountId || !labels["account:"+accountId]) return false;
+      const label=String(row.name||"");
+      return label && original.toLowerCase().includes(label.toLowerCase());
+    });
+    if(matched) return original.replace(new RegExp(
+      String(matched.name).replace(/[.*+?^${}()|[\]\\]/g,"\\  if (!original || !Object.keys(labels).length) return original;
+  const assets=(rows || []).filter(row=>row.category==="equipment" &&"),"i"),
+      balanceDisplayName(matched,labels));
+  }
   const assets=(rows || []).filter(row=>row.category==="equipment" &&
     balanceDisplayName(row,labels)!==row.name);
   for (const row of assets) {
