@@ -106,6 +106,7 @@ function ProjectPortfolioEntry({
 
 export default function CryptoBreakdown({
   defaultOpen = false,
+  assetsSnapshot = null,
 }) {
   const [portfolio, setPortfolio] =
     useState(() =>
@@ -118,6 +119,7 @@ export default function CryptoBreakdown({
   const [refreshing, setRefreshing] =
     useState(false);
   const [financialAssets, setFinancialAssets] = useState(getFinancialTotalAssets);
+  const shownAssets = assetsSnapshot || financialAssets;
 
   useEffect(() => {
     const refresh = () => setFinancialAssets(getFinancialTotalAssets());
@@ -328,11 +330,11 @@ export default function CryptoBreakdown({
 
               <div className="min-w-[130px] text-right">
                 <p className="font-mono text-lg font-bold text-foreground">
-                  {financialAssets.value === null ? "—" : formatCurrency(financialAssets.value)}
+                  {shownAssets.value === null ? "—" : formatCurrency(shownAssets.value)}
                 </p>
 
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {financialAssets.incomplete ? "Some balances are unverified" : "From Financials · Balance Sheet"}
+                  {shownAssets.incomplete ? "Some balances are unverified" : "From Financials · Balance Sheet"}
                 </p>
               </div>
             </div>
