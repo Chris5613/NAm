@@ -224,7 +224,7 @@ export default function FinancialsPage() {
   const netChange = netStart === null || netEnd === null ? null : rounded(netEnd - netStart);
   const recorded = records[month] || {};
   const revenue = amount(recorded.revenueSnapshot);
-  const expenses = amount(recorded.expenses) ?? 0;
+  const savedExpenses = amount(recorded.expenses);
   const elapsed = month >= "2026-11" ? Math.max(0, (Number(month.slice(0, 4)) - 2026) * 12 + Number(month.slice(5)) - 11) : -1;
   const fixedDep = elapsed >= 0 && elapsed < 60 ? rounded(equipmentValue(month, 1000) - equipmentValue(shift(month, 1), 1000)) : 0;
   const ledgerEntries = journal.filter(entry => String(entry.date).slice(0, 7) === month);
@@ -232,6 +232,10 @@ export default function FinancialsPage() {
     .reduce((sum, entry) => sum + entry.amount, 0);
   const journalRevenue = ledgerEntries.filter(entry => entry.creditAccount === "revenue")
     .reduce((sum, entry) => sum + entry.amount, 0);
+  // Use posted expenses when no authoritative monthly expense total was saved.
+  // If a total exists, keep it authoritative rather than adding possibly
+  // overlapping journal entries a second time.
+  const expenses = savedExpenses === null ? rounded(journalExpense) : savedExpenses;
   const pnlRevenue = revenue === null ? (journalRevenue || null) : revenue;
   // Monthly expense card may already include electricity and other manually entered costs.
   // Display ledger amounts separately instead of counting them twice.
@@ -412,7 +416,7 @@ export default function FinancialsPage() {
         ].map(([label, value], index) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${index===3 ? "font-bold text-emerald-400" : ""}`}>
           <span>{label}</span><span className="tabular-nums">{money(value)}</span>
         </div>)}
-        <p className="mt-3 text-xs text-[#92a8b9]">Saved expense totals may include items in the journal. Ledger entries are shown separately rather than automatically added to prevent double counting. Revenue may be unavailable until a monthly snapshot exists.</p>
+        <p className="mt-3 text-xs text-[#92a8b9]">When a monthly expense total is saved, it takes priority over journal expense entries to prevent double counting. Otherwise, posted electricity and operating expenses are used. Revenue may be unavailable until a monthly snapshot exists.</p>
       </section>
     </>}
     {tab === "cash" && <>
