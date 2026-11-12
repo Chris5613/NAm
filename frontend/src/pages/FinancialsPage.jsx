@@ -2,17 +2,14 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, LayoutDashboard, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
-import { api, settingsApi, spendingApi } from "@/lib/apiClient";
+import { api, settingsApi } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
-import {
-  ACCOUNT_OPTIONS, collectMovementCandidates, collectBankMovementCandidates,
-  movementFromReview, movementJournal, reconcileBalances, resolveFinancialAccount,
-} from "@/lib/financialMovements";
+import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import {
@@ -28,7 +25,6 @@ const HARDWARE_KEY = "hardware_payback_devices_v1";
 const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
 const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
 const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
-const IGNORED_MOVEMENTS_KEY = "financials_ignored_movements_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const DEFAULT_POWER_SETTINGS = { basicRate: 0.1691, offPeakRate: 0.0893, midPeakRate: 0.1670, peakRate: 0.4313 };
 function readHardwareRegister() {
@@ -339,14 +335,6 @@ export default function FinancialsPage() {
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
-  const [ignoredMovements, setIgnoredMovements] = useState(() => readJson(IGNORED_MOVEMENTS_KEY, {}));
-  const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
-  const [bankMovements, setBankMovements] = useState([]);
-  const [movementReview, setMovementReview] = useState(null);
-  const [movementReviewError, setMovementReviewError] = useState("");
-  const [reconciliationStatus, setReconciliationStatus] = useState("");
-  const [monthClosePrompt, setMonthClosePrompt] = useState(null);
-  const [monthCloseAcknowledged, setMonthCloseAcknowledged] = useState(false);
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
@@ -362,7 +350,6 @@ export default function FinancialsPage() {
     setHardwareDevices(readHardwareRegister());
     setPowerEstimates(readJson(POWER_ESTIMATE_KEY, {}));
     setConfirmedMovements(readJson(CONFIRMED_MOVEMENTS_KEY, {}));
-    setIgnoredMovements(readJson(IGNORED_MOVEMENTS_KEY, {}));
     setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
     setCryptoIncome(current => ({
       ...readCryptoIncomeSources(), manualIncome: current.manualIncome,
@@ -394,18 +381,6 @@ export default function FinancialsPage() {
     refresh();
     const interval = window.setInterval(refresh, 90000);
     return () => { active = false; window.clearInterval(interval); };
-  }, []);
-  useEffect(() => {
-    let active = true;
-    const refreshBankTransactions = async () => {
-      try {
-        const transactions = await spendingApi.transactions();
-        if (active && Array.isArray(transactions)) setBankMovements(collectBankMovementCandidates(transactions));
-      } catch { /* Bank data can be offline. No transactions are invented. */ }
-    };
-    refreshBankTransactions();
-    const timer = window.setInterval(refreshBankTransactions, 90000);
-    return () => { active = false; window.clearInterval(timer); };
   }, []);
   const cryptoTrackers = useMemo(() => ({
     salad: cryptoIncome.salad, rollercoin: cryptoIncome.rollercoin,
@@ -482,46 +457,19 @@ export default function FinancialsPage() {
       .reduce((sum, row) => sum + Math.max(0, row.start - row.end), 0));
   const ledgerEntries = closeSnapshot?.manualEntries ||
     journal.filter(entry => String(entry.date).slice(0, 7) === month);
-  const projectMovementCandidates = useMemo(() =>
-    collectMovementCandidates(cryptoIncome.legacyProjects),
-    [cryptoIncome.legacyProjects]);
-  const movementCandidates = [...projectMovementCandidates, ...bankMovements];
-  const unresolvedMovements = movementCandidates.filter(candidate =>
-    candidate.date.startsWith(month) && !candidate.matchable &&
-    !confirmedMovements[candidate.id] && !ignoredMovements[candidate.id]);
-  const confirmedById = new Map();
-  movementCandidates.filter(row => row.matchable).forEach(row => confirmedById.set(row.id, row));
-  Object.values(confirmedMovements).forEach(row => confirmedById.set(row.id, row));
-  const matchedMovements = [...confirmedById.values()].filter(row => row.date.startsWith(month) && !ignoredMovements[row.id]);
+  // Transfer handling is manual going forward. Preserve any transfers or
+  // fees the user previously confirmed, but do not scan balances or bank data
+  // and create unsolicited candidates.
+  const matchedMovements = Object.values(confirmedMovements)
+    .filter(row => String(row?.date || "").startsWith(month));
   const alreadyPostedIds = new Set(ledgerEntries.filter(entry => entry.movementSourceId)
     .map(entry => entry.movementSourceId));
-  // Deduplicate each transfer leg separately from its fee: a manual transfer
-  // must not suppress an otherwise unrecorded fee from the same source ID.
   const syncedMovementEntries = movementJournal(matchedMovements, month, alreadyPostedIds)
     .filter(entry => !ledgerEntries.some(manual =>
       manual.date === entry.date &&
       Math.abs(Number(manual.amount) - Number(entry.lines[0]?.debit)) <= 0.005 &&
       manual.debitAccount === entry.lines[0]?.account &&
       manual.creditAccount === entry.lines[1]?.account));
-  const assetAccounts = new Set(accounts.filter(account => account.type === "asset" && account.id !== "equipment")
-    .map(account => account.id));
-  const manualTransferRecords = ledgerEntries.filter(entry =>
-    assetAccounts.has(entry.debitAccount) && assetAccounts.has(entry.creditAccount) &&
-    entry.debitAccount !== entry.creditAccount && Number(entry.amount) > 0 &&
-    /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date))).map(entry => ({
-      id: "manual:" + entry.id, date: entry.date, amount: entry.amount,
-      from: entry.creditAccount, to: entry.debitAccount,
-      type: "transfer", provider: entry.description, feeUsd: 0,
-    }));
-  // A manual transfer already present in the ledger supersedes an auto record
-  // with the same date, amount and two asset accounts.
-  const distinctAutoMovements = matchedMovements.filter(movement =>
-    !manualTransferRecords.some(manual => manual.date === movement.date &&
-      Math.abs(Number(manual.amount) - Number(movement.amount)) <= 0.005 &&
-      manual.from === movement.from && manual.to === movement.to));
-  const reconciliationMovements = [...distinctAutoMovements, ...manualTransferRecords];
-  const reconciliation = closeSnapshot?.reconciliation ||
-    reconcileBalances(rows, syncedRevenue, reconciliationMovements, month);
   // Hardware Payback knows the cost and month, but NOT the funding account.
   // Show an optional review instead of assuming a cash purchase.
   const unpostedEquipment = hardwareDevices.filter(device => {
@@ -673,80 +621,12 @@ export default function FinancialsPage() {
   const deleteEntry = id => {
     const original = journal.find(entry => entry.id === id);
     if (original && closedMonths[String(original.date).slice(0, 7)]) {
-      setReconciliationStatus("Reopen the closed month before deleting its journal entries.");
-      setTab("reconcile");
+      setTab("ledger");
       return;
     }
     const updated = journal.filter(entry => entry.id !== id);
     remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(updated));
     setJournal(updated);
-  };
-  const postReviewedMovement = () => {
-    if (!movementReview) return;
-    if (closedMonths[String(movementReview.date).slice(0, 7)]) {
-      setMovementReviewError("Reopen the month before adding transfer or fee records.");
-      return;
-    }
-    const confirmed = movementFromReview(movementReview);
-    if (!confirmed) {
-      setMovementReviewError("Enter a valid date, positive USD amount, and different source and destination accounts.");
-      return;
-    }
-    // The source id remains unchanged on re-review, so no second entry is created.
-    const updated = {...confirmedMovements, [confirmed.id]: confirmed};
-    remoteStorage.setItem(CONFIRMED_MOVEMENTS_KEY, JSON.stringify(updated));
-    setConfirmedMovements(updated);
-    setMovementReview(null);
-    setMovementReviewError("");
-    setReconciliationStatus("Confirmed movement added to the ledger and trial balance.");
-  };
-  const ignoreMovement = candidate => {
-    if (closedMonths[month]) return;
-    const updated = {...ignoredMovements, [candidate.id]: true};
-    remoteStorage.setItem(IGNORED_MOVEMENTS_KEY, JSON.stringify(updated));
-    setIgnoredMovements(updated);
-    setReconciliationStatus("Candidate dismissed; no financial entry was created.");
-  };
-  const reopenCandidate = candidate => {
-    const updated = {...ignoredMovements};
-    delete updated[candidate.id];
-    remoteStorage.setItem(IGNORED_MOVEMENTS_KEY, JSON.stringify(updated));
-    setIgnoredMovements(updated);
-    setReconciliationStatus("Candidate restored to the review queue.");
-  };
-  const closeSelectedMonth = () => {
-    if (Math.abs(trialDebit - trialCredit) > 0.005) {
-      setReconciliationStatus("The trial balance is out of balance; the month cannot be closed.");
-      return;
-    }
-    if (month >= getCurrentMonthKey()) {
-      setReconciliationStatus("The current month stays open so earnings can continue syncing.");
-      return;
-    }
-    if (closedMonths[month] || !monthCloseAcknowledged) return;
-    // Immutable report snapshot; all statement calculations and posted entries
-    // come from this copy until an explicit Reopen action. No tracker mutation.
-    const snapshot = {
-      month, closedAt: new Date().toISOString(),
-      rows: JSON.parse(JSON.stringify(rows)),
-      incomeMonth: syncedRevenue ? JSON.parse(JSON.stringify(syncedRevenue)) : null,
-      revenue, expenses, pnlProfit, fixedDep, autoPower,
-      entries: JSON.parse(JSON.stringify(entries)),
-      manualEntries: JSON.parse(JSON.stringify(ledgerEntries)),
-      reconciliation: JSON.parse(JSON.stringify(reconciliation)),
-      exceptions: {
-        pendingMovements: unresolvedMovements.length,
-        balanceDifferences: reconciliation.filter(item => Math.abs(item.unexplained) >= 0.05).length,
-        unpostedEquipment: unpostedEquipment.length,
-        revenueDifference: syncedIncomeJournal.unexplainedManualRevenue,
-      },
-    };
-    const updated = {...closedMonths, [month]: snapshot};
-    remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(updated));
-    setClosedMonths(updated);
-    setMonthClosePrompt(null);
-    setMonthCloseAcknowledged(false);
-    setReconciliationStatus(monthTitle(month) + " frozen. Reopen the month to make corrections.");
   };
   const reopenSelectedMonth = () => {
     if (!closedMonths[month]) return;
@@ -754,7 +634,6 @@ export default function FinancialsPage() {
     delete updated[month];
     remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(updated));
     setClosedMonths(updated);
-    setReconciliationStatus(monthTitle(month) + " reopened; live tracker values are active again.");
   };
   const tabs = [
     { id: "ledger", name: "General Ledger", Icon: BookOpen },
@@ -762,12 +641,11 @@ export default function FinancialsPage() {
     { id: "income", name: "Income Statement", Icon: TrendingUp },
     { id: "balance", name: "Balance Sheet", Icon: Wallet },
     { id: "cash", name: "Cash Flow", Icon: Coins },
-    { id: "reconcile", name: "Reconcile", Icon: ClipboardList },
     { id: "overview", name: "Overview", Icon: LayoutDashboard },
   ];
-  const metric = (title, value, note, color = "text-white", isCount = false) => <section className={card + " min-w-0 p-4"}>
+  const metric = (title, value, note, color = "text-white") => <section className={card + " min-w-0 p-4"}>
     <p className="text-xs text-[#9db0c1]">{title}</p>
-    <strong className={"mt-2 block text-2xl font-bold tabular-nums " + color}>{isCount ? value : money(value)}</strong>
+    <strong className={"mt-2 block text-2xl font-bold tabular-nums " + color}>{money(value)}</strong>
     {note && <p className="mt-2 text-xs text-[#7f94a8]">{note}</p>}
   </section>;
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
