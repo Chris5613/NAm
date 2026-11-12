@@ -520,6 +520,59 @@ export default function FinancialsPage() {
     .reduce((sum,entry)=>sum+entry.delta,0));
   const cashOut = moneyRound(-cashEvents.filter(entry=>entry.delta<0)
     .reduce((sum,entry)=>sum+entry.delta,0));
+  const openPhoneEditor = () => {
+    setPhoneError("");
+    setPhoneDraft({inventoryId:"",name:"",purchaseDate:"2026-05-01",
+      businessDate:"2026-05-01",businessValue:"",fundingAccount:"equity"});
+    setPhoneModal(true);
+  };
+  const setPhoneInventoryChoice = id => {
+    const original=phoneInventory.find(item=>String(item.id)===String(id));
+    setPhoneDraft(current=>({
+      ...current,inventoryId:id,
+      name:original ? String(original.model||original.name||"").trim() : current.name,
+    }));
+  };
+  const addPhoneToFinancials = event => {
+    event.preventDefault();
+    const id=typeof crypto!=="undefined" && typeof crypto.randomUUID==="function"
+      ? crypto.randomUUID() : "phone-"+Date.now();
+    try {
+      const phone=makePhoneAsset(phoneDraft,id);
+      const monthKey=phone.startMonth;
+      if (records[monthKey]?.locked || closedMonths[monthKey]) {
+        setPhoneError("The business-use month is locked or closed. Reopen it before adding equipment.");
+        return;
+      }
+      if(phone.inventoryId && businessPhones.some(item=>item.inventoryId===phone.inventoryId)) {
+        setPhoneError("This inventory phone is already recorded as business equipment.");
+        return;
+      }
+      const updated=[...businessPhones,phone];
+      const updatedJournal=[...journal,phoneJournal(phone)];
+      remoteStorage.setItem(UNETWORK_PHONES_KEY,JSON.stringify(updated));
+      remoteStorage.setItem(JOURNAL_KEY,JSON.stringify(updatedJournal));
+      setBusinessPhones(updated);
+      setJournal(updatedJournal);
+      setPhoneModal(false);
+      setMonth(getCurrentMonthKey());
+    } catch (err) {
+      setPhoneError(err.message||"Unable to add phone.");
+    }
+  };
+  const removeBusinessPhone = phone => {
+    if(records[phone.startMonth]?.locked || closedMonths[phone.startMonth]) {
+      setPhoneError("Reopen the business-use month before deleting this phone.");
+      return;
+    }
+    const updated=businessPhones.filter(item=>item.id!==phone.id);
+    const updatedJournal=journal.filter(entry=>entry.id!==phone.journalId);
+    remoteStorage.setItem(UNETWORK_PHONES_KEY,JSON.stringify(updated));
+    remoteStorage.setItem(JOURNAL_KEY,JSON.stringify(updatedJournal));
+    setBusinessPhones(updated);
+    setJournal(updatedJournal);
+    setPhoneError("");
+  };
   const saveBankOpening = event => {
     event.preventDefault();
     if (closeSnapshot) return;
@@ -751,10 +804,16 @@ export default function FinancialsPage() {
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
-          <button type="button" onClick={()=>setShowOtherLabels(value=>!value)}
-            className="rounded-lg border border-[#34485b] px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-400/10">
-            {showOtherLabels ? "Hide other account names" : "Edit other account names"}
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button type="button" onClick={openPhoneEditor}
+              className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
+              <Plus size={13}/> Add Unetwork phone
+            </button>
+            <button type="button" onClick={()=>setShowOtherLabels(value=>!value)}
+              className="rounded-lg border border-[#34485b] px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-400/10">
+              {showOtherLabels ? "Hide other account names" : "Edit other account names"}
+            </button>
+          </div>
         </div>
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
           {tableHeader}<tbody>
@@ -781,6 +840,24 @@ export default function FinancialsPage() {
           </tbody>
         </table></div>
       </section>
+      {businessPhones.length > 0 && <section className={card + " space-y-3 p-4 sm:p-5"}>
+        <div>
+          <h3 className="text-sm font-semibold">Unetwork earning phones</h3>
+          <p className="mt-1 text-xs text-[#879fb1]">Business equipment, not resale inventory. Recorded from the business-use start date; earnings stay in Unetwork revenue.</p>
+        </div>
+        <div className="space-y-2">
+          {businessPhones.map(phone => <div key={phone.id}
+            className="flex items-center justify-between gap-3 border-b border-[#263746] py-2 text-sm">
+            <div>
+              <p>{phone.name} <span className="text-xs text-[#839aaf]">· {phone.businessDate}</span></p>
+              <p className="text-xs text-[#839aaf]">Business value {money(phone.businessValue)} · {phone.fundingAccount === "equity" ? "Owner's Equity" : phone.fundingAccount === "cash" ? "Business Cash" : "Accounts Payable"} · 36-month depreciation</p>
+            </div>
+            <button type="button" aria-label={"Remove "+phone.name} onClick={()=>removeBusinessPhone(phone)}
+              className="rounded p-2 text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>
+          </div>)}
+        </div>
+        {phoneError && <p role="alert" className="text-sm text-rose-300">{phoneError}</p>}
+      </section>}
       {showOtherLabels && <section className={card + " space-y-3 p-4 sm:p-5"}>
         <h3 className="text-sm font-semibold">Other Financials account names</h3>
         <p className="text-xs text-[#879fb1]">Change shared ledger account labels here. Saved names appear in journal entries, account selectors, and the Trial Balance. Accounting IDs and totals don't change.</p>
@@ -892,6 +969,58 @@ export default function FinancialsPage() {
             <tr className="font-bold"><td className="py-3">Total</td><td className="text-right">{money(trialDebit)}</td><td className="text-right">{money(trialCredit)}</td></tr>
           </tbody></table></div></section>
     </>}
+    {phoneModal && <div className="fixed inset-0 z-[95] flex items-center justify-center overflow-y-auto bg-black/80 p-4"
+      onMouseDown={event=>{if(event.target===event.currentTarget)setPhoneModal(false);}}>
+      <form onSubmit={addPhoneToFinancials} role="dialog" aria-modal="true"
+        aria-label="Add Unetwork business phone"
+        className={card+" w-full max-w-lg space-y-4 p-5 shadow-2xl"}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold">Add Unetwork earning phone</h3>
+          <button type="button" aria-label="Close" onClick={()=>setPhoneModal(false)}><X size={18}/></button>
+        </div>
+        <p className="text-xs text-[#93acbc]">Track a phone used to earn Unetwork income as business equipment. The date you bought it can differ from when you began using it for the business.</p>
+        {phoneInventory.length > 0 && <label className="block space-y-1 text-xs text-[#a8bdce]">
+          Choose from phone inventory (optional)
+          <select className={field} value={phoneDraft.inventoryId} onChange={event=>setPhoneInventoryChoice(event.target.value)}>
+            <option value="">Enter a new phone</option>
+            {phoneInventory.map(item=><option key={item.id} value={item.id}>{item.model||item.name||"Phone"} {item.id}</option>)}
+          </select>
+        </label>}
+        <label className="block space-y-1 text-xs text-[#a8bdce]">Phone model or label
+          <input className={field} required maxLength={90} value={phoneDraft.name}
+            onChange={event=>setPhoneDraft({...phoneDraft,name:event.target.value})} placeholder="iPhone 13 — Unetwork #1"/>
+        </label>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block space-y-1 text-xs text-[#a8bdce]">Original purchase date
+            <input type="date" className={field} required value={phoneDraft.purchaseDate}
+              onChange={event=>setPhoneDraft({...phoneDraft,purchaseDate:event.target.value})}/>
+          </label>
+          <label className="block space-y-1 text-xs text-[#a8bdce]">Started business use
+            <input type="date" className={field} required value={phoneDraft.businessDate}
+              onChange={event=>setPhoneDraft({...phoneDraft,businessDate:event.target.value})}/>
+          </label>
+          <label className="block space-y-1 text-xs text-[#a8bdce]">Business equipment value (USD)
+            <input type="number" step="0.01" min="0.01" className={field} required value={phoneDraft.businessValue}
+              onChange={event=>setPhoneDraft({...phoneDraft,businessValue:event.target.value})}
+              placeholder="Value when contributed"/>
+          </label>
+          <label className="block space-y-1 text-xs text-[#a8bdce]">How business acquired it
+            <select className={field} value={phoneDraft.fundingAccount}
+              onChange={event=>setPhoneDraft({...phoneDraft,fundingAccount:event.target.value})}>
+              <option value="equity">My personal contribution</option>
+              <option value="cash">Paid using business cash</option>
+              <option value="payable">Business owes for phone</option>
+            </select>
+          </label>
+        </div>
+        <p className="text-xs text-[#8ba4b5]">This creates one equipment asset and one matching acquisition journal entry on the business-use date. No November purchase is invented for an earlier acquisition. A 36-month straight-line book-depreciation estimate is used; tax treatment may differ.</p>
+        {phoneError && <p role="alert" className="text-sm text-rose-300">{phoneError}</p>}
+        <div className="flex justify-end gap-2">
+          <button type="button" className="rounded-lg border border-[#405468] px-3 py-2 text-sm" onClick={()=>setPhoneModal(false)}>Cancel</button>
+          <button type="submit" className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#071710]">Add to Balance Sheet</button>
+        </div>
+      </form>
+    </div>}
     {renaming && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4"
       onMouseDown={event=>{if(event.target===event.currentTarget)setRenaming(null);}}>
       <form onSubmit={saveAccountName} className={card + " w-full max-w-md space-y-4 p-5 shadow-2xl"}
