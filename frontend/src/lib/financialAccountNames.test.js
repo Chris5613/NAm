@@ -58,3 +58,24 @@ test("debit balances and journal data aren't modified when displaying names", ()
   expect(row.name).toBe("BTC");
   expect(row.end).toBe(30);
 });
+
+
+test("renamed wallet and provider labels appear in manual transfer descriptions", () => {
+  const rows=[
+    {id:"project:kryptex",name:"Kryptex",category:"digital"},
+    {id:"project:btc",name:"BTC",category:"digital"},
+  ];
+  const names={"account:platform:kryptex":"Mining Pool","account:crypto":"Main Wallet"};
+  expect(journalDisplayDescription({description:"Transferred $5 from Kryptex to BTC"},rows,names))
+    .toBe("Transferred $5 from Mining Pool to Main Wallet");
+});
+
+test("ambiguous identical physical GPUs do not rewrite a journal description arbitrarily", () => {
+  const rows=[
+    {id:"device:first",name:"RTX 2080 Super PC",category:"equipment"},
+    {id:"device:second",name:"RTX 2080 Super PC",category:"equipment"},
+  ];
+  const names={"row:device:first":"Server One","row:device:second":"Server Two"};
+  expect(journalDisplayDescription({description:"Bought RTX 2080 Super PC"},rows,names))
+    .toBe("Bought RTX 2080 Super PC");
+});
