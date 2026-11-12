@@ -562,7 +562,7 @@ export default function FinancialsPage() {
   };
   const reviewEquipmentPurchase = device => {
     setDraft({
-      date: device.startMonth + "-01",
+      date: "",
       description: "Purchase: " + device.name,
       debitAccount: "equipment",
       creditAccount: "cash",
@@ -796,7 +796,7 @@ export default function FinancialsPage() {
             {accounts.map(account=><option key={account.id} value={account.id}>{account.name}</option>)}
           </select></label>)}
         <label className="block space-y-1 text-sm">Amount ($)<input required min="0.01" step="0.01" type="number" value={draft.amount} onChange={event=>setDraft(old=>({...old,amount:event.target.value}))} className={field}/></label>
-        <p className="text-xs text-[#91a7b9]">The amount is debited to one account and credited to another. Don't re-enter transactions already recorded elsewhere without reconciling.</p>
+        <p className="text-xs text-[#91a7b9]">Confirm the actual transaction date and payment account. Hardware Payback doesn't record how the purchase was funded. Don't post purchases twice.</p>
         {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
         <div className="flex gap-2"><button type="button" onClick={()=>setModal(false)} className="rounded-lg border border-[#384d5d] px-4 py-2">Cancel</button>
           <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#071710]">Post entry</button></div>
