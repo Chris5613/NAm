@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
-import { remoteStorage, subscribe } from "@/lib/serverStore";
+import { remoteStorage, subscribe, isHydrated } from "@/lib/serverStore";
+import { pruneLegacyLedger, preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
 import { financialLiveBalances as liveBalances } from "@/lib/financialAssetsSnapshot";
 import {
   readUnetworkPhones, readPhoneInventory, makePhoneAsset, phoneJournal, phoneAssetRows,
@@ -42,6 +43,7 @@ const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const BANK_OPENINGS_KEY = "financials_bank_openings_v1";
 const FINANCIAL_LABELS_KEY = "financials_account_labels_v1";
+const LEGACY_LEDGER_CLEANUP_KEY = "financials_pre_september_2026_cleanup_v1";
 const DEFAULT_POWER_SETTINGS = { basicRate: 0.1691, offPeakRate: 0.0893, midPeakRate: 0.1670, peakRate: 0.4313 };
 function readHardwareRegister() {
   const rows = readJson(HARDWARE_KEY, []);
@@ -273,6 +275,23 @@ export default function FinancialsPage() {
     }));
   }), []);
   useEffect(() => {
+    const cleanup = () => {
+      if (!isHydrated() || remoteStorage.getItem(LEGACY_LEDGER_CLEANUP_KEY)) return;
+      const currentJournal = readJson(JOURNAL_KEY, []);
+      const currentMovements = readJson(CONFIRMED_MOVEMENTS_KEY, {});
+      const currentClosed = readJson(MONTH_CLOSE_KEY, {});
+      const phones = readUnetworkPhones();
+      const cleaned = pruneLegacyLedger(currentJournal, currentMovements, currentClosed, phones);
+      if (cleaned.changedJournal) remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(cleaned.journal));
+      if (cleaned.changedMovements) remoteStorage.setItem(CONFIRMED_MOVEMENTS_KEY, JSON.stringify(cleaned.movements));
+      if (cleaned.changedClosed) remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(cleaned.closedMonths));
+      // Run only once per account. Future months and underlying income records stay untouched.
+      remoteStorage.setItem(LEGACY_LEDGER_CLEANUP_KEY, JSON.stringify({ cutoff: LEGACY_LEDGER_CUTOFF }));
+    };
+    cleanup();
+    return subscribe(cleanup);
+  }, []);
+  useEffect(() => {
     const correctOwnerFundedPc = () => {
       const current = readJson(JOURNAL_KEY, []);
       const result = reclassifyPersonalPcContribution(current);
@@ -375,11 +394,13 @@ export default function FinancialsPage() {
   const recorded = records[month] || {};
   const syncedRevenue = closeSnapshot?.incomeMonth || incomeMonths.find(entry => entry.monthKey === month);
   const savedExpenses = valueOrNull(recorded.expenses);
-  const ledgerEntries = closeSnapshot?.manualEntries ||
-    journal.filter(entry => String(entry.date).slice(0, 7) === month);
+  const ledgerEntries = preSeptemberLedgerEntries(
+    closeSnapshot?.manualEntries || journal.filter(entry => String(entry.date).slice(0, 7) === month),
+    month, businessPhones
+  );
   // Previously confirmed transfers remain intact, but new transfers are
   // recorded only when the user explicitly enters them in General Ledger.
-  const matchedMovements = Object.values(confirmedMovements)
+  const matchedMovements = month < LEGACY_LEDGER_CUTOFF ? [] : Object.values(confirmedMovements)
     .filter(row => String(row?.date || "").startsWith(month));
   const alreadyPostedIds = new Set(ledgerEntries.filter(entry => entry.movementSourceId)
     .map(entry => entry.movementSourceId));
@@ -409,23 +430,24 @@ export default function FinancialsPage() {
     .reduce((sum,entry)=>sum+Number(entry.amount||0),0));
   const autoDepreciation = Math.max(0,moneyRound(scheduledDepreciation-manualDepreciation));
   const generatedEntries = [
-    ...syncedIncomeJournal.entries,
+    ...(month < LEGACY_LEDGER_CUTOFF ? [] : syncedIncomeJournal.entries),
     ...syncedMovementEntries,
-    ...(autoDepreciation > 0 ? [{
+    ...(month >= LEGACY_LEDGER_CUTOFF && autoDepreciation > 0 ? [{
       id: "auto-depreciation:" + month, date: month + "-28",
       description: "Monthly equipment depreciation",
       lines: [line("depreciation", autoDepreciation, 0), line("accDep", 0, autoDepreciation)],
       automatic: true,
     }] : []),
-    ...(autoPower > 0 ? [{
+    ...(month >= LEGACY_LEDGER_CUTOFF && autoPower > 0 ? [{
       id: "auto-power-estimate:" + month, date: month + "-28",
       description: "Estimated mining electricity — not a confirmed payment",
       lines: [line("electric",autoPower,0),line("payable",0,autoPower)],
       automatic:true,estimated:true,
     }] : []),
   ];
-  const entries = closeSnapshot?.entries ||
-    [...manualEntries, ...generatedEntries].sort((a,b)=>a.date.localeCompare(b.date));
+  const entries = month < LEGACY_LEDGER_CUTOFF
+    ? preSeptemberLedgerEntries(closeSnapshot?.entries || manualEntries, month, businessPhones)
+    : (closeSnapshot?.entries || [...manualEntries, ...generatedEntries].sort((a,b)=>a.date.localeCompare(b.date)));
   const report = buildFinancialProfit(entries,savedExpenses);
   const incomeKnown = Boolean(syncedRevenue) ||
     ledgerEntries.some(entry=>["revenue","dividendRevenue"].includes(entry.creditAccount));
@@ -476,6 +498,12 @@ export default function FinancialsPage() {
     const firstMonth=[phoneStart,journalStart,"2026-09"].filter(Boolean).sort()[0];
     for(let key=firstMonth, n=0; key<=month && n<240; key=shift(key,1),n++) {
       if(key===month) {all.push(...entries);continue;}
+      if(key < LEGACY_LEDGER_CUTOFF) {
+        all.push(...preSeptemberLedgerEntries(journal.filter(item=>String(item.date||"").startsWith(key))
+          .map(item=>({...item,lines:[line(item.debitAccount,item.amount,0),line(item.creditAccount,0,item.amount)]})),
+          key,businessPhones));
+        continue;
+      }
       if(closedMonths[key]?.entries) {all.push(...closedMonths[key].entries);continue;}
       const periodManual=journal.filter(item=>String(item.date||"").startsWith(key));
       const manualLines=periodManual.map(item=>({
