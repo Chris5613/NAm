@@ -666,6 +666,10 @@ export default function FinancialsPage() {
     { id: "cash", name: "Cash Flow", Icon: Coins },
   ];
   const accountName = account => chartDisplayName(account,accountLabels);
+  const accountNameById = id => {
+    const account=accounts.find(row=>row.id===id);
+    return account ? accountName(account) : id;
+  };
   const ledgerAccountName = (entry,item) => {
     if(item.account==="equipment") {
       const specific=equipmentEntryDisplayName(entry,rows,accountLabels);
@@ -747,7 +751,13 @@ export default function FinancialsPage() {
         <p className="text-[11px] text-[#8299aa]">This is a manually tracked bank ledger, not a bank connection. Only business-related transactions recorded here are reflected. Do not enter a personal account's entire balance unless you intend to track that account.</p>
       </section>}
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
-        <h2 className="mb-1 text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
+          <button type="button" onClick={()=>setShowOtherLabels(value=>!value)}
+            className="rounded-lg border border-[#34485b] px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-400/10">
+            {showOtherLabels ? "Hide other account names" : "Edit other account names"}
+          </button>
+        </div>
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
           {tableHeader}<tbody>
             {sections.map(section => <Fragment key={section.id}>
@@ -773,6 +783,23 @@ export default function FinancialsPage() {
           </tbody>
         </table></div>
       </section>
+      {showOtherLabels && <section className={card + " space-y-3 p-4 sm:p-5"}>
+        <h3 className="text-sm font-semibold">Other Financials account names</h3>
+        <p className="text-xs text-[#879fb1]">Change shared ledger account labels here. Saved names appear in journal entries, account selectors, and the Trial Balance. Accounting IDs and totals don't change.</p>
+        <div className="grid gap-2 sm:grid-cols-2">
+          {accounts.map(account=><div key={account.id} className="flex min-w-0 items-center justify-between gap-2 rounded-lg border border-[#263746] px-3 py-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm">{accountName(account)}</p>
+              {accountLabels["account:"+account.id] && <p className="truncate text-[11px] text-[#7b91a2]">{account.name}</p>}
+            </div>
+            <button type="button" aria-label={"Rename "+accountName(account)}
+              onClick={()=>editChartName(account)}
+              className="shrink-0 rounded p-1.5 text-[#90aabe] hover:bg-sky-400/10 hover:text-sky-300">
+              <Pencil size={14}/>
+            </button>
+          </div>)}
+        </div>
+      </section>}
     </>}
     {tab === "income" && <>
       <div className="grid gap-3 sm:grid-cols-3">
@@ -783,11 +810,11 @@ export default function FinancialsPage() {
       <section className={card + " p-5"}>
         <h2 className="mb-4 text-lg font-semibold">Income Statement — {monthTitle(month)}</h2>
         {[
-          ["Revenue — Crypto Income", pnlRevenue],
-          ["Other operating expenses", Math.max(0,moneyRound(operatingExpense-autoPower))],
-          ...(autoPower ? [["Mining electricity (estimate)", autoPower]] : []),
-          ...(feeExpense ? [["Transaction / network fees", feeExpense]] : []),
-          ["Equipment depreciation", fixedDep],
+          [accountNameById("revenue") + " / " + accountNameById("dividendRevenue"), pnlRevenue],
+          [accountNameById("expense"), Math.max(0,moneyRound(operatingExpense-autoPower))],
+          ...(autoPower ? [[accountNameById("electric") + " (estimated)", autoPower]] : []),
+          ...(feeExpense ? [[accountNameById("fees"), feeExpense]] : []),
+          [accountNameById("depreciation"), fixedDep],
           ["Net income", pnlProfit],
         ].map(([label, value]) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${label === "Net income" ? "font-bold text-emerald-400" : ""}`}>
           <span>{label}</span><span className="tabular-nums">{money(value)}</span>
@@ -860,13 +887,42 @@ export default function FinancialsPage() {
     {tab === "trial" && <>
       <div className="grid gap-3 sm:grid-cols-3">{metric("Debits", trialDebit)}{metric("Credits", trialCredit)}{metric("Difference", rounded(trialDebit-trialCredit), "Journal entries only", "text-emerald-400")}</div>
       <section className={card + " p-4 sm:p-6"}><h2 className="text-lg font-semibold">Trial Balance — {monthTitle(month)}</h2>
-        <p className="mt-1 text-xs text-amber-300">Cumulative posted journal activity since September 2026. This is a running ledger trial balance; opening balances for externally tracked assets must be verified before it becomes a fully adjusted trial balance.</p>
+
         
         <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[360px] text-sm"><thead><tr className="border-b border-[#314454] text-xs text-[#9db0c1]"><th className="pb-2 text-left">Account</th><th className="pb-2 text-right">Debit</th><th className="pb-2 text-right">Credit</th></tr></thead>
           <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{accountName(row)}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
             <tr className="font-bold"><td className="py-3">Total</td><td className="text-right">{money(trialDebit)}</td><td className="text-right">{money(trialCredit)}</td></tr>
           </tbody></table></div></section>
     </>}
+    {renaming && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4"
+      onMouseDown={event=>{if(event.target===event.currentTarget)setRenaming(null);}}>
+      <form onSubmit={saveAccountName} className={card + " w-full max-w-md space-y-4 p-5 shadow-2xl"}
+        role="dialog" aria-modal="true" aria-label="Rename financial account">
+        <div className="flex items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold">Rename account</h3>
+          <button type="button" onClick={()=>setRenaming(null)} aria-label="Close"><X size={18}/></button>
+        </div>
+        <p className="text-xs text-[#93a9ba]">Original name: {renaming.original}</p>
+        <label className="block space-y-1.5 text-sm">Display name
+          <input className={field} autoFocus maxLength={80} value={renameDraft}
+            onChange={event=>{setRenameDraft(event.target.value);setRenameError("");}}
+            placeholder="My account name"/>
+        </label>
+        {renameError && <p role="alert" className="text-sm text-rose-400">{renameError}</p>}
+        <p className="text-xs text-[#8da4b5]">The new name will appear throughout Financials. It won't modify your mining accounts, transactions, balances, or equipment records.</p>
+        <div className="flex flex-wrap justify-end gap-2">
+          <button type="button" onClick={()=>setRenaming(null)} className="rounded-lg border border-[#3b5062] px-3 py-2 text-sm">Cancel</button>
+          <button type="button" onClick={()=>{
+            const next={...accountLabels};
+            delete next[renaming.key];
+            remoteStorage.setItem(FINANCIAL_LABELS_KEY,JSON.stringify(next));
+            setAccountLabels(next);
+            setRenaming(null);
+          }} className="rounded-lg border border-[#3b5062] px-3 py-2 text-sm text-[#b8c9d7]">Reset name</button>
+          <button type="submit" className="rounded-lg bg-sky-400 px-4 py-2 text-sm font-semibold text-[#071824]">Save name</button>
+        </div>
+      </form>
+    </div>}
     {quickModalOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/75 p-3 sm:p-5" onMouseDown={event => { if (event.target === event.currentTarget) setQuickModalOpen(false); }}>
       <section className={card + " w-full max-w-2xl space-y-4 overflow-y-auto p-4 shadow-2xl sm:p-6"} data-testid="transaction-chat" role="dialog" aria-modal="true" aria-label="Describe a transaction">
         <div className="flex items-center justify-between gap-3">
@@ -905,7 +961,7 @@ export default function FinancialsPage() {
                 {key === "debitAccount" ? "Debit" : "Credit"}
                 <select className={field} value={quickEntry[key]}
                   onChange={event => setQuickEntry(old => ({ ...old, [key]: event.target.value }))}>
-                  {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+                  {accounts.map(account => <option key={account.id} value={account.id}>{accountName(account)}</option>)}
                 </select>
               </label>)}
           </div>
@@ -928,7 +984,7 @@ export default function FinancialsPage() {
         {["debitAccount","creditAccount"].map(key=><label key={key} className="block space-y-1 text-sm">{key==="debitAccount"?"Debit account":"Credit account"}
           <select value={draft[key]} onChange={event=>setDraft(old=>({...old,[key]:event.target.value}))} className={field}>
             <option value="">Select account</option>
-            {accounts.map(account=><option key={account.id} value={account.id}>{account.name}</option>)}
+            {accounts.map(account=><option key={account.id} value={account.id}>{accountName(account)}</option>)}
           </select></label>)}
         <label className="block space-y-1 text-sm">Amount ($)<input required min="0.01" step="0.01" type="number" value={draft.amount} onChange={event=>setDraft(old=>({...old,amount:event.target.value}))} className={field}/></label>
         <p className="text-xs text-[#91a7b9]">Confirm the purchase date and funding source (Cash/Bank, Owner's Equity, Crypto, or Accounts Payable). No new bank payment is assumed.</p>
