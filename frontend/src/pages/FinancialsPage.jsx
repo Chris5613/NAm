@@ -2,8 +2,19 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, LayoutDashboard, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
+import { api } from "@/lib/apiClient";
+import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
+import { mergeManualIncome } from "@/lib/manualIncomeHistory";
+import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
+import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { localStorage as appStorage } from "@/lib/localStorage";
-import { formatCurrency, getCurrentMonthKey, loadKryptexTracker, loadRollerCoinTracker, getRollerCoinTrackerStats, loadSaladTracker, loadUnetworkTracker, readObject, PROJECT_QUICK_CACHE_KEY } from "@/lib/yieldFarmingAccounting";
+import {
+ formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome, buildProjectIncome,
+ loadMonthlyBackfills, loadMonthlySnapshots, loadLoopscaleHistory,
+ loadKryptexTracker, loadRollerCoinTracker, getRollerCoinTrackerStats,
+ loadSaladTracker, loadUnetworkTracker, readObject, PROJECT_QUICK_CACHE_KEY,
+} from "@/lib/yieldFarmingAccounting";
 
 const RECORDS_KEY = "monthly_business_changes_v1";
 const JOURNAL_KEY = "financials_journal_v1";
@@ -57,6 +68,19 @@ function equipmentValue(month, cost = 500) {
   const [year, number] = month.split("-").map(Number);
   const elapsed = Math.max(0, (year - 2026) * 12 + number - 11);
   return rounded(Math.max(0, cost * (1 - Math.min(60, elapsed) / 60)));
+}
+function readCryptoIncomeSources() {
+ const quick = readObject(PROJECT_QUICK_CACHE_KEY);
+ const projects = readJson("networth_projects", []);
+ return {
+  legacyProjects: Array.isArray(projects) ? projects : [],
+  luloProjects: (quick.projects || []).filter(item => item?.yield_tracking === "lulo_lending"),
+  loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(),
+  rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(),
+  kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(),
+  snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
+  manualIncome: {}, luloBackfills: {},
+ };
 }
 function liveBalances() {
   const values = {};
@@ -225,6 +249,7 @@ export default function FinancialsPage() {
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
   const [live, setLive] = useState(liveBalances);
+  const [cryptoIncome, setCryptoIncome] = useState(readCryptoIncomeSources);
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
@@ -237,6 +262,10 @@ export default function FinancialsPage() {
     setRecords(readJson(RECORDS_KEY, {}));
     setJournal(readJson(JOURNAL_KEY, []));
     setLive(liveBalances());
+    setCryptoIncome(current => ({
+      ...readCryptoIncomeSources(), manualIncome: current.manualIncome,
+      luloBackfills: current.luloBackfills,
+    }));
   }), []);
   useEffect(() => {
     const refresh = () => setLive(liveBalances());
@@ -245,6 +274,47 @@ export default function FinancialsPage() {
     window.addEventListener("project-crypto-updated", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); window.removeEventListener("project-crypto-updated", refresh); };
   }, []);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const result = await api.get("/api/yield-sources/earnings");
+        if (!active || !result) return;
+        setCryptoIncome(current => ({
+          ...current,
+          loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory),
+          manualIncome: result.manualIncomeHistory || current.manualIncome,
+          luloBackfills: result.luloBackfills && typeof result.luloBackfills === "object"
+            ? result.luloBackfills : current.luloBackfills,
+        }));
+      } catch { /* Keep local income records if the backend is offline. */ }
+    };
+    refresh();
+    const interval = window.setInterval(refresh, 90000);
+    return () => { active = false; window.clearInterval(interval); };
+  }, []);
+  const cryptoTrackers = useMemo(() => ({
+    salad: cryptoIncome.salad, rollercoin: cryptoIncome.rollercoin,
+    unetwork: cryptoIncome.unetwork, kryptex: cryptoIncome.kryptex,
+  }), [cryptoIncome.salad, cryptoIncome.rollercoin, cryptoIncome.unetwork, cryptoIncome.kryptex]);
+  const cryptoLocalMonths = useMemo(() => buildProjectIncome(
+    cryptoIncome.luloProjects, cryptoIncome.loopscale, cryptoIncome.salad,
+    cryptoIncome.backfills, cryptoIncome.rollercoin, cryptoIncome.unetwork,
+    cryptoIncome.kryptex,
+  ), [cryptoIncome]);
+  const cryptoBackendMonths = useBackendMonthlyIncome(cryptoTrackers, cryptoLocalMonths);
+  const incomeMonths = useMemo(() => {
+    const current = getCurrentMonthKey();
+    const reconciled = reconcileLuloIncome(
+      getEffectiveProjectIncome(cryptoBackendMonths, cryptoIncome.snapshots),
+      cryptoIncome.backfills, cryptoIncome.luloBackfills, current,
+      cryptoIncome.luloProjects, getTodayKey(),
+    );
+    const recorded = buildIncomeHistory(
+      reconciled, cryptoIncome.payouts, current, legacyProjectIncome(cryptoIncome.legacyProjects),
+    );
+    return mergeManualIncome(recorded, cryptoIncome.manualIncome?.monthly || {}, current);
+  }, [cryptoBackendMonths, cryptoIncome]);
   const rows = useMemo(() => makeRows(month, records, live), [month, records, live]);
   const sections = categories.map(category => ({ ...category, rows: rows.filter(row => row.category === category.id) }));
   const total = (field, type) => {
@@ -259,20 +329,22 @@ export default function FinancialsPage() {
   const netEnd = assetsEnd === null || debtEnd === null ? null : rounded(assetsEnd - debtEnd);
   const netChange = netStart === null || netEnd === null ? null : rounded(netEnd - netStart);
   const recorded = records[month] || {};
-  const revenue = amount(recorded.revenueSnapshot);
+  // Share the exact recorded Income History calculation with Crypto Dashboard.
+  const syncedRevenue = incomeMonths.find(entry => entry.monthKey === month);
+  const revenue = syncedRevenue ? amount(syncedRevenue.total) : null;
   const savedExpenses = amount(recorded.expenses);
   const elapsed = month >= "2026-11" ? Math.max(0, (Number(month.slice(0, 4)) - 2026) * 12 + Number(month.slice(5)) - 11) : -1;
   const fixedDep = elapsed >= 0 && elapsed < 60 ? rounded(equipmentValue(month, 1000) - equipmentValue(shift(month, 1), 1000)) : 0;
   const ledgerEntries = journal.filter(entry => String(entry.date).slice(0, 7) === month);
   const journalExpense = ledgerEntries.filter(entry => entry.debitAccount === "expense" || entry.debitAccount === "electric")
     .reduce((sum, entry) => sum + entry.amount, 0);
-  const journalRevenue = ledgerEntries.filter(entry => entry.creditAccount === "revenue")
-    .reduce((sum, entry) => sum + entry.amount, 0);
   // Use posted expenses when no authoritative monthly expense total was saved.
   // If a total exists, keep it authoritative rather than adding possibly
   // overlapping journal entries a second time.
   const expenses = savedExpenses === null ? rounded(journalExpense) : savedExpenses;
-  const pnlRevenue = revenue === null ? (journalRevenue || null) : revenue;
+  // Journaled earnings may already exist in the Crypto Income data.
+  // Do not add them a second time or substitute them for a missing source.
+  const pnlRevenue = revenue;
   // Monthly expense card may already include electricity and other manually entered costs.
   // Display ledger amounts separately instead of counting them twice.
   const pnlProfit = pnlRevenue === null ? null : rounded(pnlRevenue - expenses - fixedDep);
