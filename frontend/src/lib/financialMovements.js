@@ -69,6 +69,33 @@ export function collectMovementCandidates(projects) {
   return [...candidates.values()].sort((a,b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
 }
 
+// Bank transactions are a review source, not automatically business spending.
+// Signed amounts/categories alone cannot establish that money moved between
+// two user's mining accounts, or that a personal bank fee is a business fee.
+export function collectBankMovementCandidates(transactions) {
+  const seen = new Map();
+  for (const row of transactions || []) {
+    const id = String(row?.id || "").trim();
+    const date = String(row?.date || "").slice(0, 10);
+    const amount = Math.abs(Number(row?.amount));
+    const label = String(row?.merchant || row?.description || "").trim();
+    const category = String(row?.category || "").toLowerCase();
+    if (!id || !VALID_DATE.test(date) || !Number.isFinite(amount) || amount <= 0 ||
+      row?.pending || row?.hidden) continue;
+    const fee = /\b(fee|commission)\b/i.test(label) || /\bfees?\b/i.test(category);
+    const transfer = /\b(transfers?|payments?)\b/i.test(category);
+    if (!fee && !transfer) continue;
+    seen.set("bank:" + id, {
+      id: "bank:" + id, date, amount: round(amount),
+      type: fee ? "fee" : "transfer", provider: label || "Bank record",
+      from: null, to: null, feeUsd: 0, matchable: false,
+      issue: "Confirm this is a mining-business transaction and select its account(s)",
+      bankSource: true,
+    });
+  }
+  return [...seen.values()].sort((a, b) => b.date.localeCompare(a.date));
+}
+
 export function movementJournal(movements, month, excludeIds = new Set()) {
   const entries = [];
   for (const m of movements || []) {
