@@ -14,6 +14,7 @@ import {
   deriveCashOpening, derivePayableOpening, moneyRound,
 } from "@/lib/financialAccounting";
 import { movementJournal } from "@/lib/financialMovements";
+import { readUnetworkPhones, phoneAssetRows } from "@/lib/unetworkPhonesAccounting";
 
 export const FINANCIAL_ASSET_KEYS = {
   records:"monthly_business_changes_v1",
@@ -71,7 +72,10 @@ export function getFinancialTotalAssets(month=getCurrentMonthKey(), live=financi
   if(closed?.rows) return sumFinancialAssets(closed.rows);
 
   const base=includeJournalEquipment(
-    buildFinancialBalanceRows(month,records,live,hardware,getCurrentMonthKey()),
+    [
+      ...buildFinancialBalanceRows(month,records,live,hardware,getCurrentMonthKey()),
+      ...(records[month]?.locked ? [] : phoneAssetRows(readUnetworkPhones(),month)),
+    ],
     journal,month,Boolean(records[month]?.locked),
   );
   const manual=journal.filter(entry=>String(entry.date||"").startsWith(month));
