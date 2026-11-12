@@ -198,7 +198,7 @@ function parseTransaction(text, month) {
 }
 
 export default function FinancialsPage() {
-  const [tab, setTab] = useState("ledger");
+  const [tab, setTab] = useState("balance");
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
