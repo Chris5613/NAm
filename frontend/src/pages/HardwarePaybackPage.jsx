@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, X, Cpu, CalendarDays, Zap } from "lucide-react";
 import { api } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
+import { outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMonth } from "@/lib/incomeHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
@@ -83,14 +84,14 @@ const estimatedDailyForDevice = (device, devices, months, currentMonth, kryptexT
   if (!sourceCost) return 0;
   const allocation = (Number(device.cost) || 0) / sourceCost;
   if (source === "Kryptex") {
-    return Math.max(0, Math.max(0, Number(kryptexTracker?.profitabilityUsdDay) || 0) * allocation - (Number(device.power) || 0) / 30);
+    return Math.max(0, Math.max(0, Number(kryptexTracker?.profitabilityUsdDay) || 0) * allocation - outOfPocketMiningPowerCost(Number(device.power) || 0, currentMonth) / 30);
   }
   const row = months.find(item => item.monthKey === currentMonth);
   const dayOfMonth = Number(new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles", day: "numeric",
   }).format(new Date()));
   const monthIncome = monthSourceAmount(row, source, kryptexTracker);
-  return Math.max(0, (monthIncome / Math.max(1, dayOfMonth)) * allocation - (Number(device.power) || 0) / 30);
+  return Math.max(0, (monthIncome / Math.max(1, dayOfMonth)) * allocation - outOfPocketMiningPowerCost(Number(device.power) || 0, currentMonth) / 30);
 };
 const recoveryDateLabel = date => new Intl.DateTimeFormat("en-US", {
   timeZone: "America/Los_Angeles", month: "short", day: "numeric", year: "numeric",
@@ -107,7 +108,7 @@ function buildTimeline(devices, months, currentMonth, kryptexTracker) {
     const row = months.find(item => item.monthKey === month);
     const activeSources = new Set(devices.filter(device => device.source && month >= device.startMonth).map(device => device.source));
     const income = Array.from(activeSources).reduce((sum, source) => sum + monthSourceAmount(row, source, kryptexTracker), 0);
-    cumulative = Math.max(0, cumulative + income - devices.reduce((sum, d) => month >= d.startMonth ? sum + (Number(d.power) || 0) * fraction : sum, 0));
+    cumulative = Math.max(0, cumulative + income - devices.reduce((sum, d) => month >= d.startMonth ? sum + outOfPocketMiningPowerCost(Number(d.power) || 0, month) * fraction : sum, 0));
     points.push({ month, label: label(month), actual: Math.round(cumulative * 100) / 100, forecast: null });
   }
   const earned = cumulative;
@@ -152,14 +153,14 @@ function deviceEarnings(devices, months, month, now, legacyStats, kryptexTracker
     if (isKryptex && checkpoint.ledger !== KRYPTEX_PAYBACK_LEDGER) return [device.id, 0];
     const income = months.reduce((sum, row) =>
       row.monthKey >= checkpoint.month && row.monthKey <= month ? sum + monthSourceAmount(row, device.source, kryptexTracker) : sum, 0);
-    const power = Math.max(0, monthPosition(now) - monthPosition(checkpoint.time)) * device.power;
+    const power = Math.max(0, monthPosition(now) - monthPosition(checkpoint.time)) * outOfPocketMiningPowerCost(device.power, month);
     const sourceCost = costsBySource[device.source] || 0;
     if (isKryptex && device.earningsStartDay) {
       // This device explicitly includes the confirmed chart history from Nov 1.
       // Recompute from stored dated earnings, so an edit cannot double count it.
       const accrued = backfilledKryptexIncome(device, kryptexTracker, pacificDayKey(now));
       return [device.id, Math.max(0, accrued * device.cost / sourceCost -
-        Math.max(0, monthPosition(now) - monthPosition(device.powerStartTime || checkpoint.time)) * device.power)];
+        Math.max(0, monthPosition(now) - monthPosition(device.powerStartTime || checkpoint.time)) * outOfPocketMiningPowerCost(device.power, month))];
     }
     // If hardware was added today, credit the full positive Kryptex amount
     // for today only. From tomorrow onward, the checkpoint rule applies.
@@ -313,7 +314,7 @@ export default function HardwarePaybackPage() {
             <div className="flex flex-col items-start gap-2 border-t border-[#304252] pt-3 text-sm text-[#b1c2d0]">
               <span className={`inline-flex items-center gap-2 ${d.source ? "" : "text-amber-300"}`}>{d.source || "Income source not selected"}</span>
               <span className="inline-flex items-center gap-2"><CalendarDays size={15}/>{label(d.startMonth)}</span>
-              <span className="inline-flex items-center gap-2"><Zap size={15} className="text-amber-300"/>{money(d.power)}/mo power</span>
+              <span className="inline-flex items-center gap-2"><Zap size={15} className="text-amber-300"/>{money(outOfPocketMiningPowerCost(d.power, currentMonth))}/mo power</span>
             </div>
           </article>
         ); })}</div></section>}
