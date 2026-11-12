@@ -100,7 +100,7 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
     equipment.push({
       id:"device:"+String(device.id || key),name:String(device.name),category:"equipment",
       start:schedule.start,end:schedule.end,depreciation:schedule.depreciation,
-      historicalCost:schedule.cost,source:"hardware-payback",
+      historicalCost:schedule.cost,acquisitionMonth:device.startMonth,source:"hardware-payback",
     });
   }
   // Include unmatched historical equipment and custom recorded fixed assets.
@@ -110,7 +110,7 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
     const canonical = key==="rtx2080superpc" || key==="rtx5070gpu";
     if(canonical && !current.locked && month>="2026-11") {
       const schedule=equipmentSchedule({cost:500,startMonth:"2026-11"},month);
-      if(schedule) {equipment.push({...row,...schedule,historicalCost:500});return;}
+      if(schedule) {equipment.push({...row,...schedule,historicalCost:500,acquisitionMonth:"2026-11"});return;}
     }
     equipment.push(row);
   });
@@ -127,7 +127,7 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
       id:row.id,name:row.name,category:row.category || balanceCategory(row.name),
       start:schedule?.start ?? (valueOrNull(row.start) ?? (current.locked?null:valueOrNull(older?.end))),
       end:schedule?.end ?? (valueOrNull(row.end) ?? (current.locked?null:valueOrNull(row.start))),
-      ...(schedule ? {depreciation:schedule.depreciation,historicalCost:schedule.cost} : {}),
+      ...(schedule ? {depreciation:schedule.depreciation,historicalCost:schedule.cost,acquisitionMonth:row.placedInServiceMonth} : {}),
       source:"saved-balance-sheet",
     });
   });
@@ -143,7 +143,7 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
         equipment.some(row=>assetKey(row.name)===assetKey(fallback.name))) continue;
       const schedule = equipmentSchedule(fallback,month);
       if(schedule) equipment.push({id:fallback.id,name:fallback.name,category:"equipment",
-        ...schedule,historicalCost:fallback.cost,source:"confirmed-fallback"});
+        ...schedule,historicalCost:fallback.cost,acquisitionMonth:fallback.startMonth,source:"confirmed-fallback"});
     }
   }
   // A saved custom liability is not a fixed asset.
@@ -172,10 +172,30 @@ export function includeJournalEquipment(baseRows, journal, month, locked = false
     if(schedule) rows.push({
       id:"journal-equipment:"+String(entry.id || cleaned+entry.date),
       name:"Equipment — "+(description.length>55?description.slice(0,55)+"…":description),
-      category:"equipment",...schedule,historicalCost:amount,source:"journal-purchase",
+      category:"equipment",...schedule,historicalCost:amount,acquisitionMonth:entry.date.slice(0,7),source:"journal-purchase",
     });
   }
   return rows;
+}
+
+export function unmatchedEquipmentPurchases(rows, journal, month) {
+  const acquired=(rows||[]).filter(row=>
+    row.category==="equipment" && row.acquisitionMonth===month &&
+    row.source!=="journal-purchase" && Number(row.historicalCost)>0);
+  const spentIds=new Set();
+  return acquired.filter(asset=>{
+    const cost=Number(asset.historicalCost);
+    const name=assetKey(asset.name);
+    const match=(journal||[]).find(entry=>{
+      if(spentIds.has(entry.id) || entry.debitAccount!=="equipment" ||
+        String(entry.date||"").slice(0,7)!==month ||
+        Math.abs(Number(entry.amount)-cost)>.005) return false;
+      const description=assetKey(entry.description);
+      return description.includes(name);
+    });
+    if(match){spentIds.add(match.id);return false;}
+    return true;
+  });
 }
 
 export function journalAccountActivity(entries, account) {
