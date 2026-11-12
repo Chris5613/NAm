@@ -416,13 +416,13 @@ export default function FinancialsPage() {
         ].map(([label, value], index) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${index===3 ? "font-bold text-emerald-400" : ""}`}>
           <span>{label}</span><span className="tabular-nums">{money(value)}</span>
         </div>)}
-        <p className="mt-3 text-xs text-[#92a8b9]">When a monthly expense total is saved, it takes priority over journal expense entries to prevent double counting. Otherwise, posted electricity and operating expenses are used. Revenue may be unavailable until a monthly snapshot exists.</p>
+        
       </section>
     </>}
     {tab === "cash" && <>
       <div className="grid gap-3 sm:grid-cols-3">{metric("Recorded Cash Inflows", cashIn)}{metric("Recorded Cash Outflows", cashOut)}{metric("Recorded Net Cash Flow", rounded(cashIn-cashOut), null, "text-emerald-400")}</div>
       <section className={card + " p-5"}><h2 className="text-lg font-semibold">Cash Flow Statement — {monthTitle(month)}</h2>
-        <p className="mt-2 text-xs text-[#92a8b9]">Shows journal entries involving Cash / Bank only. Unrecorded transfers, purchases, and platform withdrawals are intentionally excluded.</p>
+        
         <div className="mt-4 space-y-2">{cashEvents.length ? cashEvents.map(entry => <div key={entry.id} className="flex items-center justify-between gap-3 border-b border-[#273746] py-2 text-sm">
           <div><p>{entry.description}</p><p className="text-xs text-[#8197a9]">{entry.date}</p></div>
           <span className={entry.debitAccount==="cash"?"text-emerald-400":"text-rose-400"}>{signed((entry.debitAccount==="cash"?1:-1)*entry.amount)}</span>
@@ -430,7 +430,7 @@ export default function FinancialsPage() {
       </section>
     </>}
     {tab === "ledger" && <>
-      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">General Ledger</h2><p className="text-xs text-[#8ba0b2]">Two-sided entries and automatic equipment depreciation</p></div>
+      <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">General Ledger</h2></div>
         <button onClick={() => { setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300"><Plus size={16}/> Add entry</button></div>
       <section className={card + " space-y-4 p-4 sm:p-5"} data-testid="transaction-chat">
@@ -496,7 +496,7 @@ export default function FinancialsPage() {
     {tab === "trial" && <>
       <div className="grid gap-3 sm:grid-cols-3">{metric("Debits", trialDebit)}{metric("Credits", trialCredit)}{metric("Difference", rounded(trialDebit-trialCredit), "Journal entries only", "text-emerald-400")}</div>
       <section className={card + " p-4 sm:p-6"}><h2 className="text-lg font-semibold">Trial Balance — {monthTitle(month)}</h2>
-        <p className="mt-1 text-xs text-[#92a8b9]">Unadjusted trial balance from posted manual entries and auto-depreciation. Opening asset balances have not been journalized.</p>
+        
         <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[360px] text-sm"><thead><tr className="border-b border-[#314454] text-xs text-[#9db0c1]"><th className="pb-2 text-left">Account</th><th className="pb-2 text-right">Debit</th><th className="pb-2 text-right">Credit</th></tr></thead>
           <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{row.name}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
             <tr className="font-bold"><td className="py-3">Total</td><td className="text-right">{money(trialDebit)}</td><td className="text-right">{money(trialCredit)}</td></tr>
