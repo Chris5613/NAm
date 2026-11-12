@@ -266,9 +266,8 @@ function parseTransaction(text, month) {
     return { error: "Enter a valid amount greater than $0." };
 
   const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0)).getUTCDate();
-  const today = new Date();
   let date = month === getCurrentMonthKey()
-    ? today.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" })
+    ? getTodayKey()
     : month + "-" + String(lastDay).padStart(2, "0");
 
   const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
@@ -312,6 +311,10 @@ function parseTransaction(text, month) {
     debitAccount = "equipment";
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
     explanation = "Record a capital equipment purchase, not an operating expense.";
+  } else if (/transaction fee|network fee|processing fee|bank fee/.test(phrase) && paid) {
+    debitAccount = "fees";
+    creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
+    explanation = "Record a transaction or network fee.";
   } else if (/rent|internet|subscription|repair|fee|operating expense|supplies/.test(phrase) && paid) {
     debitAccount = "expense";
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
@@ -558,10 +561,23 @@ export default function FinancialsPage() {
     .reduce((sum,entry)=>sum+entry.delta,0));
   const cashOut = moneyRound(-cashEvents.filter(entry=>entry.delta<0)
     .reduce((sum,entry)=>sum+entry.delta,0));
+  const saveBankOpening = event => {
+    event.preventDefault();
+    if (closeSnapshot) return;
+    const value = valueOrNull(bankOpeningDraft);
+    if (value === null || value < 0) {
+      setError("Enter a valid non-negative starting bank balance.");
+      return;
+    }
+    const updated = {...bankOpenings,[month]:moneyRound(value)};
+    remoteStorage.setItem(BANK_OPENINGS_KEY,JSON.stringify(updated));
+    setBankOpenings(updated);
+    setError("");
+  };
   const saveEntry = event => {
     event.preventDefault();
     if (closedMonths[String(draft.date).slice(0, 7)]) {
-      setError("This reporting month is closed. Reopen it under Reconcile before editing.");
+      setError("This reporting month is closed. Reopen it from General Ledger before editing.");
       return;
     }
     const value = Number(draft.amount);
@@ -692,6 +708,33 @@ export default function FinancialsPage() {
         {metric("Total Liabilities", debtEnd)}
         {metric("Owner's Equity / Net Worth", netEnd, null, "text-emerald-400")}
       </div>
+      {bankRow && <section className={card + " space-y-3 p-4"}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold">Cash / Bank</p>
+            <p className="mt-1 text-xs text-[#91a7b9]">
+              Recorded bank movement this month: <strong className="text-white">{signed(bankRow.journalChange ?? journalAccountActivity(entries,"cash"))}</strong>.
+              {bankRow.unverifiedOpening ? " Opening balance not provided; ending cash and total net worth remain incomplete." :
+                bankRow.unreconciledCash ? " The saved ending balance differs from recorded bank transactions; verify it." :
+                " Bank transactions are included in the displayed balance."}
+            </p>
+          </div>
+          <div className="text-right text-xs text-[#9db2c6]">Ending bank balance
+            <p className="mt-1 text-base font-semibold text-white">{money(bankRow.end)}</p>
+          </div>
+        </div>
+        {!closeSnapshot && <form onSubmit={saveBankOpening} className="flex flex-wrap items-end gap-2">
+          <label className="min-w-[180px] flex-1 space-y-1 text-xs text-[#a3b8c9]">
+            Opening bank balance for {monthTitle(month)}
+            <input className={field} type="number" min="0" step="0.01" value={bankOpeningDraft}
+              placeholder="Enter opening balance"
+              onChange={event=>setBankOpeningDraft(event.target.value)}/>
+          </label>
+          <button type="submit" className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-300">Save opening balance</button>
+        </form>}
+        {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
+        <p className="text-[11px] text-[#8299aa]">This is a manually tracked bank ledger, not a bank connection. Only business-related transactions recorded here are reflected. Do not enter a personal account's entire balance unless you intend to track that account.</p>
+      </section>}
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
         <h2 className="mb-1 text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
@@ -699,9 +742,9 @@ export default function FinancialsPage() {
             {sections.map(section => <Fragment key={section.id}>
               <tr className="bg-[#142333]"><th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}</th></tr>
               {section.rows.map(row => <tr key={row.id} className="border-b border-[#202f3c]">
-                <td className="py-2.5 pl-2">{row.name}</td>
+                <td className="py-2.5 pl-2">{row.name}{row.unverifiedOpening ? <span className="ml-2 text-xs text-amber-300">(opening unknown)</span> : null}</td>
                 <td className="py-2.5 text-right tabular-nums">{money(row.start)}</td>
-                <td className={`py-2.5 text-right tabular-nums ${row.start !== null && row.end !== null && row.end < row.start ? "text-rose-400" : "text-emerald-400"}`}>{row.start === null || row.end === null ? "—" : signed(rounded(row.end-row.start))}</td>
+                <td className={`py-2.5 text-right tabular-nums ${row.start !== null && row.end !== null && row.end < row.start ? "text-rose-400" : "text-emerald-400"}`}>{row.start === null || row.end === null ? (row.journalChange != null ? signed(row.journalChange) : "—") : signed(rounded(row.end-row.start))}</td>
                 <td className="py-2.5 text-right font-semibold tabular-nums">{money(row.end)}</td>
               </tr>)}
               {!section.rows.length && <tr><td colSpan={4} className="px-2 py-2 text-xs text-[#72889a]">No accounts</td></tr>}
@@ -722,7 +765,7 @@ export default function FinancialsPage() {
         <h2 className="mb-4 text-lg font-semibold">Income Statement — {monthTitle(month)}</h2>
         {[
           ["Revenue — Crypto Income", pnlRevenue],
-          ["Other operating expenses", rounded(Math.max(0, expenses - autoPower - feeExpense))],
+          ["Other operating expenses", operatingExpense],
           ...(autoPower ? [["Mining electricity (estimate)", autoPower]] : []),
           ...(feeExpense ? [["Transaction / network fees", feeExpense]] : []),
           ["Equipment depreciation", fixedDep],
@@ -735,7 +778,15 @@ export default function FinancialsPage() {
     </>}
     {tab === "cash" && <>
       <div className="grid gap-3 sm:grid-cols-3">{metric("Recorded Cash Inflows", cashIn)}{metric("Recorded Cash Outflows", cashOut)}{metric("Recorded Net Cash Flow", rounded(cashIn-cashOut), null, "text-emerald-400")}</div>
-      <section className={card + " p-5"}><h2 className="text-lg font-semibold">Cash Flow Statement — {monthTitle(month)}</h2>
+      <section className={card + " p-5"}>
+        <h2 className="text-lg font-semibold">Cash Flow Statement — {monthTitle(month)}</h2>
+        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+          {Object.entries(cashFlow.totals).map(([category,value])=>
+            <div key={category} className="rounded-lg border border-[#293e4d] p-3">
+              <p className="text-xs capitalize text-[#92adbf]">{category}</p>
+              <p className="mt-1 text-sm font-semibold tabular-nums">{signed(value)}</p>
+            </div>)}
+        </div>
         
         <div className="mt-4 space-y-2">{cashEvents.length ? cashEvents.map(entry => <div key={entry.id} className="flex items-center justify-between gap-3 border-b border-[#273746] py-2 text-sm">
           <div><p>{entry.description}</p><p className="text-xs text-[#8197a9]">{entry.date}</p></div>
@@ -790,6 +841,7 @@ export default function FinancialsPage() {
     {tab === "trial" && <>
       <div className="grid gap-3 sm:grid-cols-3">{metric("Debits", trialDebit)}{metric("Credits", trialCredit)}{metric("Difference", rounded(trialDebit-trialCredit), "Journal entries only", "text-emerald-400")}</div>
       <section className={card + " p-4 sm:p-6"}><h2 className="text-lg font-semibold">Trial Balance — {monthTitle(month)}</h2>
+        <p className="mt-1 text-xs text-amber-300">Posted journal activity for this month. A full adjusted trial balance requires verified opening account balances.</p>
         
         <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[360px] text-sm"><thead><tr className="border-b border-[#314454] text-xs text-[#9db0c1]"><th className="pb-2 text-left">Account</th><th className="pb-2 text-right">Debit</th><th className="pb-2 text-right">Credit</th></tr></thead>
           <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{row.name}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
