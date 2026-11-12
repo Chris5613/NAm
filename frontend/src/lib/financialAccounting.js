@@ -150,6 +150,34 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
   return [...ordinary,...equipment];
 }
 
+// Equipment purchases entered directly in the General Ledger also need an
+// asset even when Hardware Payback has not yet been configured. Match known
+// equipment by its name AND price so a second purchase isn't silently lost.
+export function includeJournalEquipment(baseRows, journal, month, locked = false) {
+  const rows = (baseRows || []).map(row=>({...row}));
+  if(locked) return rows;
+  for(const entry of journal || []) {
+    if(entry.debitAccount!=="equipment" || !String(entry.date||"").match(/^\d{4}-\d{2}-\d{2}$/) ||
+      String(entry.date).slice(0,7)>month || !(Number(entry.amount)>0)) continue;
+    const description = String(entry.description||"");
+    const cleaned = assetKey(description);
+    const amount = moneyRound(entry.amount);
+    const matched = rows.some(row => row.category==="equipment" &&
+      assetKey(row.name).length>=5 && cleaned.includes(assetKey(row.name)) &&
+      Math.abs(Number(row.historicalCost ?? amount)-amount)<=.005);
+    if(matched || rows.some(row=>row.id==="journal-equipment:"+entry.id)) continue;
+    const schedule = equipmentSchedule({
+      cost:amount,startMonth:entry.date.slice(0,7),
+    },month);
+    if(schedule) rows.push({
+      id:"journal-equipment:"+String(entry.id || cleaned+entry.date),
+      name:"Equipment — "+(description.length>55?description.slice(0,55)+"…":description),
+      category:"equipment",...schedule,historicalCost:amount,source:"journal-purchase",
+    });
+  }
+  return rows;
+}
+
 export function journalAccountActivity(entries, account) {
   return moneyRound((entries||[]).reduce((sum,entry)=>sum+
     (entry.lines || []).reduce((value,line)=>line.account===account
