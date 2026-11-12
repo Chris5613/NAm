@@ -14,7 +14,7 @@ import {
   buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
   buildStatementRows, buildFinancialProfit,
   classifyCashFlows, journalAccountActivity, deriveCashOpening, derivePayableOpening,
-  moneyRound, valueOrNull,
+  moneyRound, valueOrNull, reclassifyPersonalPcContribution,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { localStorage as appStorage } from "@/lib/localStorage";
@@ -192,6 +192,7 @@ function parseTransaction(text, month) {
   const unpaid = /\b(?:unpaid|owe|owed|on credit|not yet paid|bill due)\b/.test(phrase);
   const fromCash = /\b(?:cash|bank|checking|debit card)\b|from (?:my )?account/.test(phrase);
   const fromCrypto = /bitcoin|\bbtc\b|crypto wallet/.test(phrase);
+  const personallyFunded = /\b(?:personal(?:ly)?|my own|own money|owner(?:'s)?)\b/.test(phrase);
   const transfer = /\b(?:transferred|transfer|withdrew|withdrawn|withdrawal|moved|sent)\b/.test(phrase);
   if (transfer) {
     // Internal transfers move assets and are never additional revenue.
@@ -210,8 +211,10 @@ function parseTransaction(text, month) {
     explanation = unpaid ? "Record an electricity bill owed." : "Record a paid electricity expense.";
   } else if (/gpu|graphics card|computer|\bpc\b|mining equipment|hardware/.test(phrase) && paid) {
     debitAccount = "equipment";
-    creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
-    explanation = "Record a capital equipment purchase, not an operating expense.";
+    creditAccount = unpaid ? "payable" : personallyFunded ? "equity" : fromCrypto ? "crypto" : "cash";
+    explanation = personallyFunded
+      ? "Personally funded equipment is an owner contribution, not a business bank withdrawal."
+      : "Record a capital equipment purchase, not an operating expense.";
   } else if (/transaction fee|network fee|processing fee|bank fee/.test(phrase) && paid) {
     debitAccount = "fees";
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
@@ -269,6 +272,19 @@ export default function FinancialsPage() {
       luloBackfills: current.luloBackfills,
     }));
   }), []);
+  useEffect(() => {
+    const correctOwnerFundedPc = () => {
+      const current = readJson(JOURNAL_KEY, []);
+      const result = reclassifyPersonalPcContribution(current);
+      if (!result.changed) return;
+      // Same ID, amount and date: only change the original credit account.
+      remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(result.entries));
+      setJournal(result.entries);
+    };
+    correctOwnerFundedPc();
+    // Also apply after the server store hydrates, if it was initially empty.
+    return subscribe(correctOwnerFundedPc);
+  }, []);
   useEffect(() => {
     const direct = valueOrNull(bankOpenings[month]);
     setBankOpeningDraft(direct === null ? "" : String(direct));
