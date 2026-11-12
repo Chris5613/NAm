@@ -850,14 +850,12 @@ export default function FinancialsPage() {
               <tr className="bg-[#142333]"><th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}</th></tr>
               {section.rows.map(row => <tr key={row.id} className="border-b border-[#202f3c]">
                 <td className="py-2.5 pl-2">
-                  <div className="flex items-center gap-2">
-                    <span>{balanceDisplayName(row,accountLabels)}</span>
-                    <button type="button" aria-label={"Rename "+balanceDisplayName(row,accountLabels)}
-                      title="Rename account throughout Financials"
-                      onClick={()=>editRowName(row)} className="rounded p-1 text-[#738b9d] hover:bg-sky-400/10 hover:text-sky-300">
-                      <Pencil size={13}/>
-                    </button>
-                  </div>{row.unverifiedOpening ? <span className="ml-2 text-xs text-amber-300">(opening unknown)</span> : null}</td>
+                  <button type="button" aria-label={"Rename "+balanceDisplayName(row,accountLabels)}
+                    title="Click to rename account throughout Financials"
+                    onClick={()=>editRowName(row)}
+                    className="max-w-full text-left text-inherit hover:text-sky-300 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
+                    {balanceDisplayName(row,accountLabels)}
+                  </button>{row.unverifiedOpening ? <span className="ml-2 text-xs text-amber-300">(opening unknown)</span> : null}</td>
                 <td className="py-2.5 text-right tabular-nums">{money(row.start)}</td>
                 <td className={`py-2.5 text-right tabular-nums ${row.start !== null && row.end !== null && row.end < row.start ? "text-rose-400" : "text-emerald-400"}`}>{row.start === null || row.end === null ? (row.journalChange != null ? signed(row.journalChange) : "—") : signed(rounded(row.end-row.start))}</td>
                 <td className="py-2.5 text-right font-semibold tabular-nums">{money(row.end)}</td>
