@@ -503,8 +503,25 @@ export default function FinancialsPage() {
       Math.abs(Number(manual.amount) - Number(entry.lines[0]?.debit)) <= 0.005 &&
       manual.debitAccount === entry.lines[0]?.account &&
       manual.creditAccount === entry.lines[1]?.account));
+  const assetAccounts = new Set(accounts.filter(account => account.type === "asset" && account.id !== "equipment")
+    .map(account => account.id));
+  const manualTransferRecords = ledgerEntries.filter(entry =>
+    assetAccounts.has(entry.debitAccount) && assetAccounts.has(entry.creditAccount) &&
+    entry.debitAccount !== entry.creditAccount && Number(entry.amount) > 0 &&
+    /^\\d{4}-\\d{2}-\\d{2}$/.test(String(entry.date))).map(entry => ({
+      id: "manual:" + entry.id, date: entry.date, amount: entry.amount,
+      from: entry.creditAccount, to: entry.debitAccount,
+      type: "transfer", provider: entry.description, feeUsd: 0,
+    }));
+  // A manual transfer already present in the ledger supersedes an auto record
+  // with the same date, amount and two asset accounts.
+  const distinctAutoMovements = matchedMovements.filter(movement =>
+    !manualTransferRecords.some(manual => manual.date === movement.date &&
+      Math.abs(Number(manual.amount) - Number(movement.amount)) <= 0.005 &&
+      manual.from === movement.from && manual.to === movement.to));
+  const reconciliationMovements = [...distinctAutoMovements, ...manualTransferRecords];
   const reconciliation = closeSnapshot?.reconciliation ||
-    reconcileBalances(rows, syncedRevenue, matchedMovements, month);
+    reconcileBalances(rows, syncedRevenue, reconciliationMovements, month);
   // Hardware Payback knows the cost and month, but NOT the funding account.
   // Show an optional review instead of assuming a cash purchase.
   const unpostedEquipment = hardwareDevices.filter(device => {
