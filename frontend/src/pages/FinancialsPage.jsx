@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, LayoutDashboard, Plus, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
@@ -35,7 +35,7 @@ function categoryFor(name) {
   if (/debt|loan|payable|credit card|liabilit/i.test(name)) return "liabilities";
   if (cashLike(name)) return "cash";
   if (/loopscale|defi|lending|invest|stock/i.test(name)) return "defi";
-  if (/rtx|gpu|computer|equipment|hardware|\\bpc\\b/i.test(name)) return "equipment";
+  if (/rtx|gpu|computer|equipment|hardware|pc/i.test(name)) return "equipment";
   return "digital";
 }
 function readJson(key, fallback) {
@@ -295,7 +295,7 @@ export default function FinancialsPage() {
         <p className="mb-4 text-xs text-[#92a8b9]">Shares the saved business accounts with Monthly Changes; RTX 2080 and RTX 5070 use five-year straight-line depreciation from November 2026.</p>
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
           {tableHeader}<tbody>
-            {sections.map(section => <tbody key={section.id}>
+            {sections.map(section => <Fragment key={section.id}>
               <tr className="bg-[#142333]"><th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}</th></tr>
               {section.rows.map(row => <tr key={row.id} className="border-b border-[#202f3c]">
                 <td className="py-2.5 pl-2">{row.name}</td>
@@ -304,7 +304,7 @@ export default function FinancialsPage() {
                 <td className="py-2.5 text-right font-semibold tabular-nums">{money(row.end)}</td>
               </tr>)}
               {!section.rows.length && <tr><td colSpan={4} className="px-2 py-2 text-xs text-[#72889a]">No accounts</td></tr>}
-            </tbody>)}
+            </Fragment>)}
             <tr className="border-t-2 border-sky-500 font-bold"><td className="py-3">NET WORTH</td><td className="text-right">{money(netStart)}</td>
               <td className="text-right">{signed(netChange)}</td><td className="text-right text-emerald-400">{money(netEnd)}</td></tr>
           </tbody>
