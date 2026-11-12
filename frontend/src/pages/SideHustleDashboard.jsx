@@ -8,6 +8,7 @@ import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
+import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import MonthlyChangesPage from "@/pages/MonthlyChangesPage";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
@@ -581,9 +582,10 @@ export default function SideHustleDashboard() {
   const rateInfo = currentRate(powerSettings, new Date(clock));
   const powerMonth = power?.currentMonth || null;
   const monthKwh = Number(powerMonth?.totalKwh) || 0;
-  const monthPowerCost = usageCost(powerMonth, powerSettings, powerMonth?.month);
+  const freePower = hasFreeMiningPower(currentMonthKey);
+  const monthPowerCost = outOfPocketMiningPowerCost(usageCost(powerMonth, powerSettings, powerMonth?.month), powerMonth?.month || currentMonthKey);
   const miningDailyRevenue = Math.max(0, Number(powerSettings.dailyRevenueUsd) || 0);
-  const miningDailyCost = totalWatts / 1000 * Number(rateInfo.rate || 0) * 24;
+  const miningDailyCost = outOfPocketMiningPowerCost(totalWatts / 1000 * Number(rateInfo.rate || 0) * 24, currentMonthKey);
   const miningDailyNet = miningDailyRevenue - miningDailyCost;
   const deviceRows = Array.isArray(latest?.devices) ? latest.devices : [];
   const deviceUsage = powerMonth?.devices || {};
@@ -894,10 +896,13 @@ export default function SideHustleDashboard() {
             <Zap className="h-5 w-5 text-emerald-400"/>
             <h2 className="text-[16px] font-semibold">Mining Power</h2>
           </Link>
+          <div className="flex items-center gap-2">
+          {freePower && <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-[9px] font-medium text-sky-300">Free power</span>}
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-medium ${live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[#303842] bg-[#13181e] text-[#8e9aa6]"}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-[#6f7a84]"}`}/>
             {live ? "Live" : "Stale"}
           </span>
+          </div>
         </div>
 
         <div className="mt-7 grid grid-cols-2 gap-y-5 sm:grid-cols-5 sm:gap-y-0">
@@ -917,8 +922,8 @@ export default function SideHustleDashboard() {
           </div>
 
           <div className="min-w-0 px-0 sm:border-r sm:border-[#26313a] sm:px-4">
-            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Zap className="h-4 w-4 text-cyan-300"/><span>Current Rate</span></div>
-            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{"$" + Number(rateInfo.rate || 0).toFixed(4) + "/kWh"}</strong>
+            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Zap className="h-4 w-4 text-cyan-300"/><span>Effective Rate</span></div>
+            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{"$" + Number(freePower ? 0 : rateInfo.rate || 0).toFixed(4) + "/kWh"}</strong>
           </div>
 
           <div className="col-span-2 min-w-0 sm:col-span-1 sm:pl-4">
