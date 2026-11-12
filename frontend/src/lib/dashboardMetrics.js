@@ -517,8 +517,12 @@ export function calculateNetWorth(
 // The Balance Sheet already contains crypto holdings: use it instead of
 // adding a second copy of the same portfolio to net worth.
 export function getCryptoBusinessValue(financialAssets, cryptoTotal = 0) {
-  const value = financialAssets?.value;
-  return financialAssets?.incomplete !== true && typeof value === "number" &&
-    Number.isFinite(value) && Number(financialAssets?.count) > 0
+  const value = financialAssets?.netValue;
+  // Unknown asset or liability balances must not be silently treated as zero.
+  // Until a complete business net worth is known, retain the old crypto subtotal.
+  return financialAssets?.incomplete !== true &&
+    financialAssets?.liabilitiesIncomplete !== true &&
+    typeof value === "number" && Number.isFinite(value) &&
+    Number(financialAssets?.count) > 0
     ? value : (Number(cryptoTotal) || 0);
 }
