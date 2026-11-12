@@ -15,8 +15,8 @@ test("historical May acquisition is included in November equipment, not expensed
   expect(rows).toHaveLength(1);
   expect(rows[0].name).toBe("iPhone 13 — Unetwork #1");
   expect(rows[0].category).toBe("equipment");
-  expect(rows[0].end).toBe(290);
-  expect(rows[0].depreciation).toBe(10);
+  expect(rows[0].end).toBe(527.33);
+  expect(rows[0].depreciation).toBe(3);
   const entry=phoneJournal(phone);
   expect(entry.date).toBe("2026-05-20");
   expect(entry.debitAccount).toBe("equipment");
@@ -33,7 +33,7 @@ test("original purchase date is independent from business-use start",()=>{
   expect(phone.startMonth).toBe("2026-11");
   expect(phoneJournal(phone).date).toBe("2026-11-01");
   expect(phoneAssetRows([phone],"2026-10")).toHaveLength(0);
-  expect(phoneAssetRows([phone],"2026-11")[0].end).toBe(350);
+  expect(phoneAssetRows([phone],"2026-11")[0].end).toBe(357);
 });
 
 test("different iPhones with identical model remain separate assets",()=>{
@@ -65,7 +65,15 @@ test("invalid value and impossible dates are rejected",()=>{
   expect(validatePhoneAsset({...input,fundingAccount:"unknown"})).toBeTruthy();
 });
 
-test("equipment book value reaches zero after 36 months",()=>{
+test("equipment book value reaches zero after 120 months with zero salvage value",()=>{
   const phone=makePhoneAsset(input,"one");
-  expect(phoneAssetRows([phone],"2029-05")[0].end).toBe(0);
+  expect(phone.usefulLifeMonths).toBe(120);
+  expect(phoneAssetRows([phone],"2029-05")[0].end).toBe(249);
+  expect(phoneAssetRows([phone],"2036-04")[0].end).toBe(0);
+  expect(phoneAssetRows([phone],"2036-05")[0].depreciation).toBe(0);
+});
+
+test("previously saved 36-month phone records use the new 120-month schedule",()=>{
+  const phone={...makePhoneAsset(input,"legacy"),usefulLifeMonths:36};
+  expect(phoneAssetRows([phone],"2026-11")[0].end).toBe(339);
 });
