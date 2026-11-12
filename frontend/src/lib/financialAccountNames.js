@@ -66,34 +66,41 @@ export function equipmentEntryDisplayName(entry,rows,labels={}) {
 export function journalDisplayDescription(entry,rows,labels={}) {
   const original=String(entry?.description || "");
   if (!original || !Object.keys(labels).length) return original;
-  if(entry?.origin === "crypto-income") {
-    const matched=(rows||[]).find(row=>{
-      const accountId=balanceAccountId(row);
-      if(!accountId || !labels["account:"+accountId]) return false;
-      const label=String(row.name||"");
-      return label && original.toLowerCase().includes(label.toLowerCase());
-    });
-    if(matched) {
-      const term=String(matched.name);
-      const index=original.toLowerCase().indexOf(term.toLowerCase());
-      if(index>=0) return original.slice(0,index) + balanceDisplayName(matched,labels) +
-        original.slice(index+term.length);
-    }
+  // Render aliases in existing descriptions, without editing the underlying
+  // journal or the provider names used for syncing and deduplication.
+  const aliases=[];
+  for(const row of rows || []) {
+    const name=balanceDisplayName(row,labels);
+    if(!name || name===row.name) continue;
+    const variant=String(row.name || "");
+    const terms=["rtx2080superpc","rtx2080pc"].includes(norm(variant))
+      ? ["RTX 2080 Super PC","RTX 2080 PC"] : [variant];
+    for(const term of terms) aliases.push({term,label:name});
   }
-  const assets=(rows || []).filter(row=>row.category==="equipment" &&
-    balanceDisplayName(row,labels)!==row.name);
-  for (const row of assets) {
-    const name=String(row.name || "");
-    if (!name) continue;
-    const alternatives=["rtx2080superpc","rtx2080pc"].includes(norm(name))
-      ? ["RTX 2080 Super PC","RTX 2080 PC"] : [name];
-    for(const variant of alternatives) {
-      const pos=original.toLowerCase().indexOf(variant.toLowerCase());
-      if(pos>=0) {
-        return original.slice(0,pos)+balanceDisplayName(row,labels)+
-          original.slice(pos+variant.length);
+  aliases.sort((a,b)=>b.term.length-a.term.length);
+  const originalLower=original.toLowerCase();
+  const replacements=[];
+  for(const item of aliases) {
+    let index=0;
+    const lower=item.term.toLowerCase();
+    while((index=originalLower.indexOf(lower,index))>=0) {
+      const end=index+item.term.length;
+      const before=index ? originalLower[index-1] : "";
+      const after=end<originalLower.length ? originalLower[end] : "";
+      const boundary=(!before || !/[a-z0-9]/.test(before)) &&
+        (!after || !/[a-z0-9]/.test(after));
+      if(boundary && !replacements.some(span=>index<span.end && end>span.start)) {
+        replacements.push({start:index,end,label:item.label});
       }
+      index=end;
     }
   }
-  return original;
+  if(!replacements.length)return original;
+  replacements.sort((a,b)=>a.start-b.start);
+  let result="",next=0;
+  for(const span of replacements) {
+    result+=original.slice(next,span.start)+span.label;
+    next=span.end;
+  }
+  return result+original.slice(next);
 }
