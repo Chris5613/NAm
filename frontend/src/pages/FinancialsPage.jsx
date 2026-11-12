@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, LayoutDashboard, Plus, Trash2, TrendingUp, Wallet, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, LayoutDashboard, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { localStorage as appStorage } from "@/lib/localStorage";
@@ -131,6 +131,59 @@ function makeRows(month, records, live) {
 const emptyDraft = () => ({ date: new Date().toISOString().slice(0, 10), description: "", debitAccount: "cash", creditAccount: "revenue", amount: "" });
 const line = (account, debit, credit) => ({ account, debit: rounded(debit), credit: rounded(credit) });
 
+// A conservative local interpreter: only recognize supported, explicit
+// transaction patterns. Unclear text never posts directly to the ledger.
+function parseTransaction(text, month) {
+  const input = String(text || "").trim();
+  if (!input) return { error: "Describe a transaction first." };
+  const amounts = [...input.matchAll(/(?:\\$\\s*|\\bUSD\\s*)([\\d,]+(?:\\.\\d{1,2})?)/gi)];
+  if (amounts.length !== 1) {
+    return { error: "Include exactly one amount with $ or USD, for example: paid $500 for electricity this month." };
+  }
+  const value = Number(amounts[0][1].replace(/,/g, ""));
+  if (!Number.isFinite(value) || value <= 0 || rounded(value) <= 0)
+    return { error: "Enter a valid amount greater than $0." };
+  const phrase = input.toLowerCase();
+  const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0)).getUTCDate();
+  const today = new Date();
+  const date = month === getCurrentMonthKey()
+    ? today.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" })
+    : month + "-" + String(lastDay).padStart(2, "0");
+  let debitAccount = "", creditAccount = "";
+  let explanation = "";
+  const expense = /electric|power (?:bill|cost|expense)|utility|utilities|energy bill|electricity bill/.test(phrase);
+  const paid = /paid|spent|purchased|bought|payment|purchase/.test(phrase);
+  const unpaid = /unpaid|owe|owed|on credit|not yet paid|bill due/.test(phrase);
+  const fromCash = /cash|bank|checking|debit card|from (?:my )?account/.test(phrase);
+  const fromCrypto = /bitcoin|\\bbtc\\b|crypto wallet/.test(phrase);
+  if (expense && (paid || unpaid)) {
+    debitAccount = "electric";
+    creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
+    explanation = unpaid ? "Record an electricity bill owed." : "Record a paid electricity expense.";
+  } else if (/gpu|graphics card|computer|\\bpc\\b|mining equipment|hardware/.test(phrase) && paid) {
+    debitAccount = "equipment";
+    creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
+    explanation = "Record a capital equipment purchase, not an operating expense.";
+  } else if (/rent|internet|subscription|repair|fee|operating expense|supplies/.test(phrase) && paid) {
+    debitAccount = "expense";
+    creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
+    explanation = "Record an operating expense.";
+  } else if (/received|earned|income|revenue|payout/.test(phrase) && /mining|kryptex|rollercoin|salad|unetwork|yield|lulo|loopscale|payment|payout/.test(phrase)) {
+    debitAccount = fromCash ? "cash" : fromCrypto ? "crypto" : "platform";
+    creditAccount = "revenue";
+    explanation = "Record earned revenue; ensure the provider has not already been recorded.";
+  } else if (/contribut|deposited|put.*into (?:the )?business/.test(phrase) && /owner|personal|business/.test(phrase)) {
+    debitAccount = "cash"; creditAccount = "equity";
+    explanation = "Record an owner contribution, not business income.";
+  }
+  if (!debitAccount || !creditAccount) {
+    return { error: "I couldn't classify this safely. Use Add entry for transfers, withdrawals, debt payments, or anything unusual." };
+  }
+  return {
+    date, description: input, amount: rounded(value), debitAccount, creditAccount, explanation,
+  };
+}
+
 export default function FinancialsPage() {
   const [tab, setTab] = useState("overview");
   const [month, setMonth] = useState(getCurrentMonthKey);
@@ -140,6 +193,10 @@ export default function FinancialsPage() {
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
+  const [quickText, setQuickText] = useState("");
+  const [quickEntry, setQuickEntry] = useState(null);
+  const [quickError, setQuickError] = useState("");
+  const [quickStatus, setQuickStatus] = useState("");
   useEffect(() => subscribe(() => {
     setRecords(readJson(RECORDS_KEY, {}));
     setJournal(readJson(JOURNAL_KEY, []));
@@ -216,6 +273,40 @@ export default function FinancialsPage() {
     setMonth(draft.date.slice(0, 7));
     setDraft(emptyDraft());
     setModal(false);
+  };
+  const prepareQuickEntry = event => {
+    event.preventDefault();
+    setQuickStatus("");
+    const result = parseTransaction(quickText, month);
+    if (result.error) {
+      setQuickEntry(null);
+      setQuickError(result.error);
+    } else {
+      setQuickError("");
+      setQuickEntry(result);
+    }
+  };
+  const confirmQuickEntry = () => {
+    if (!quickEntry) return;
+    if (!quickEntry.description.trim() || !/^\\d{4}-\\d{2}-\\d{2}$/.test(quickEntry.date) ||
+      !Number.isFinite(quickEntry.amount) || quickEntry.amount <= 0 ||
+      quickEntry.debitAccount === quickEntry.creditAccount) {
+      setQuickError("Check the date, amount, and accounts before posting.");
+      return;
+    }
+    const updated = [...journal, {
+      id: "journal:" + Date.now() + ":" + Math.random().toString(36).slice(2, 7),
+      date: quickEntry.date, description: quickEntry.description,
+      amount: quickEntry.amount, debitAccount: quickEntry.debitAccount, creditAccount: quickEntry.creditAccount,
+      source: "quick-entry",
+    }];
+    remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(updated));
+    setJournal(updated);
+    setMonth(quickEntry.date.slice(0, 7));
+    setQuickEntry(null);
+    setQuickText("");
+    setQuickError("");
+    setQuickStatus("Entry posted to your General Ledger and Trial Balance.");
   };
   const deleteEntry = id => {
     const updated = journal.filter(entry => entry.id !== id);
@@ -338,6 +429,54 @@ export default function FinancialsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">General Ledger</h2><p className="text-xs text-[#8ba0b2]">Two-sided entries and automatic equipment depreciation</p></div>
         <button onClick={() => { setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300"><Plus size={16}/> Add entry</button></div>
+      <section className={card + " space-y-4 p-4 sm:p-5"} data-testid="transaction-chat">
+        <div className="flex items-center gap-2"><Sparkles size={17} className="text-cyan-400"/>
+          <h3 className="text-sm font-semibold">Describe a transaction</h3></div>
+        <p className="text-xs text-[#91a6b7]">Write what happened. I'll draft a journal entry for you to review before posting.</p>
+        <form onSubmit={prepareQuickEntry} className="flex flex-col gap-2 sm:flex-row">
+          <input aria-label="Describe a financial transaction" value={quickText}
+            onChange={event => { setQuickText(event.target.value); setQuickEntry(null); setQuickError(""); setQuickStatus(""); }}
+            placeholder="Paid $500 in power costs this month"
+            className={field + " min-w-0 flex-1"} />
+          <button type="submit" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-sky-400 px-4 py-2 text-sm font-semibold text-[#071824] hover:bg-sky-300">
+            <Send size={15}/> Create draft
+          </button>
+        </form>
+        {quickError && <p role="alert" className="text-sm text-rose-400">{quickError}</p>}
+        {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
+        {quickEntry && <div className="space-y-3 rounded-xl border border-[#355368] bg-[#111f2b] p-3 sm:p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <strong className="text-sm text-white">Review journal entry</strong>
+            <span className="text-xs text-[#a1bacb]">{quickEntry.explanation}</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="space-y-1 text-xs text-[#a8bdce]">Date
+              <input type="date" className={field} value={quickEntry.date}
+                onChange={event => setQuickEntry(old => ({ ...old, date: event.target.value }))}/>
+            </label>
+            <label className="space-y-1 text-xs text-[#a8bdce]">Amount ($)
+              <input type="number" min="0.01" step="0.01" className={field} value={quickEntry.amount}
+                onChange={event => setQuickEntry(old => ({ ...old, amount: Number(event.target.value) }))}/>
+            </label>
+            {["debitAccount", "creditAccount"].map(key =>
+              <label key={key} className="space-y-1 text-xs text-[#a8bdce]">
+                {key === "debitAccount" ? "Debit" : "Credit"}
+                <select className={field} value={quickEntry[key]}
+                  onChange={event => setQuickEntry(old => ({ ...old, [key]: event.target.value }))}>
+                  {accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+                </select>
+              </label>)}
+          </div>
+          <div className="flex items-center justify-between gap-2 border-t border-[#34485a] pt-3">
+            <span className="text-xs text-[#9bb2c3]">Debits and credits both equal {money(quickEntry.amount)}.</span>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => setQuickEntry(null)} className="rounded-lg border border-[#3b5164] px-3 py-2 text-xs">Cancel</button>
+              <button type="button" onClick={confirmQuickEntry} className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-[#061810]">Confirm & post</button>
+            </div>
+          </div>
+        </div>}
+        <p className="text-[11px] text-[#718b9e]">Recognizes common expenses, equipment purchases, owner contributions, and income. Unclear transactions require manual entry. No AI service or bank transfer is involved.</p>
+      </section>
       <section className={card + " overflow-hidden p-4"}><div className="overflow-x-auto"><table className="w-full min-w-[550px] text-sm">
         <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
         <tbody>{entries.map(entry => entry.lines.map((item, index) => <tr key={entry.id+":"+index} className="border-b border-[#20303d]">
