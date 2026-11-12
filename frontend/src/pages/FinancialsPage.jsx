@@ -11,7 +11,7 @@ import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
 import {
-  buildFinancialBalanceRows, buildStatementRows, buildFinancialProfit,
+  buildFinancialBalanceRows, includeJournalEquipment, buildStatementRows, buildFinancialProfit,
   classifyCashFlows, journalAccountActivity, deriveCashOpening, moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
@@ -342,9 +342,10 @@ export default function FinancialsPage() {
   const closeSnapshot = closedMonths[month] || null;
   // Captured/observed balances must be kept separate from income journal
   // movements or mining revenue would be added to assets twice.
-  const baseRows = useMemo(() => buildFinancialBalanceRows(
-    month, records, live, hardwareDevices, getCurrentMonthKey(),
-  ), [month, records, live, hardwareDevices]);
+  const baseRows = useMemo(() => includeJournalEquipment(
+    buildFinancialBalanceRows(month,records,live,hardwareDevices,getCurrentMonthKey()),
+    journal,month,Boolean(records[month]?.locked),
+  ),[month,records,live,hardwareDevices,journal]);
   const recorded = records[month] || {};
   const syncedRevenue = closeSnapshot?.incomeMonth || incomeMonths.find(entry => entry.monthKey === month);
   const savedExpenses = valueOrNull(recorded.expenses);
@@ -456,7 +457,9 @@ export default function FinancialsPage() {
       }));
       const recordedIncome=incomeMonths.find(item=>item.monthKey===key);
       const income=buildAutoIncomeJournal(key,recordedIncome,periodManual,getCurrentMonthKey(),getTodayKey());
-      const historicalHardware=buildFinancialBalanceRows(key,records,{},hardwareDevices,getCurrentMonthKey());
+      const historicalHardware=includeJournalEquipment(
+        buildFinancialBalanceRows(key,records,{},hardwareDevices,getCurrentMonthKey()),
+        journal,key,Boolean(records[key]?.locked));
       const scheduled=moneyRound(historicalHardware.filter(item=>item.category==="equipment")
         .reduce((sum,item)=>sum+Number(item.depreciation||0),0));
       const previouslyPostedDep=moneyRound(periodManual.filter(item=>item.debitAccount==="depreciation")
