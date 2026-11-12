@@ -185,7 +185,7 @@ function parseTransaction(text, month) {
 }
 
 export default function FinancialsPage() {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("ledger");
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
@@ -318,12 +318,12 @@ export default function FinancialsPage() {
     setJournal(updated);
   };
   const tabs = [
-    { id: "overview", name: "Overview", Icon: LayoutDashboard },
-    { id: "balance", name: "Balance Sheet", Icon: Wallet },
-    { id: "income", name: "Income Statement", Icon: TrendingUp },
-    { id: "cash", name: "Cash Flow", Icon: Coins },
     { id: "ledger", name: "General Ledger", Icon: BookOpen },
     { id: "trial", name: "Trial Balance", Icon: ClipboardList },
+    { id: "income", name: "Income Statement", Icon: TrendingUp },
+    { id: "balance", name: "Balance Sheet", Icon: Wallet },
+    { id: "cash", name: "Cash Flow", Icon: Coins },
+    { id: "overview", name: "Overview", Icon: LayoutDashboard },
   ];
   const metric = (title, value, note, color = "text-white") => <section className={card + " min-w-0 p-4"}>
     <p className="text-xs text-[#9db0c1]">{title}</p>
