@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, LayoutDashboard, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
-import { api } from "@/lib/apiClient";
+import { api, settingsApi } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
@@ -18,6 +18,43 @@ import {
 
 const RECORDS_KEY = "monthly_business_changes_v1";
 const JOURNAL_KEY = "financials_journal_v1";
+const HARDWARE_KEY = "hardware_payback_devices_v1";
+const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
+const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
+const DEFAULT_POWER_SETTINGS = { basicRate: 0.1691, offPeakRate: 0.0893, midPeakRate: 0.1670, peakRate: 0.4313 };
+function readHardwareRegister() {
+  const rows = readJson(HARDWARE_KEY, []);
+  return Array.isArray(rows) ? rows.filter(row => Number(row?.cost) > 0 && /^\d{4}-\d{2}$/.test(String(row.startMonth))) : [];
+}
+function monthsBetween(from, to) {
+  const [y1, m1] = from.split("-").map(Number);
+  const [y2, m2] = to.split("-").map(Number);
+  return (y2 - y1) * 12 + m2 - m1;
+}
+function hardwareSchedule(row, month) {
+  const cost = Number(row.cost) || 0;
+  const startMonth = row.startMonth || "2026-11";
+  if (month < startMonth) return null;
+  const elapsed = Math.max(0, monthsBetween(startMonth, month));
+  return {
+    start: rounded(Math.max(0, cost * (1 - Math.min(60, elapsed) / 60))),
+    end: rounded(Math.max(0, cost * (1 - Math.min(60, elapsed + 1) / 60))),
+  };
+}
+function estimatePowerCost(usage, settings) {
+  if (!usage || !/^\d{4}-\d{2}$/.test(String(usage.month))) return null;
+  const kwh = Number(usage.totalKwh ?? usage.kwh);
+  if (!Number.isFinite(kwh) || kwh < 0) return null;
+  const basic = Number(settings?.basicRate ?? DEFAULT_POWER_SETTINGS.basicRate);
+  if (usage.month < "2026-12") return rounded(kwh * basic);
+  const rates = { basic, offPeak: Number(settings?.offPeakRate ?? DEFAULT_POWER_SETTINGS.offPeakRate),
+    midPeak: Number(settings?.midPeakRate ?? DEFAULT_POWER_SETTINGS.midPeakRate),
+    peak: Number(settings?.peakRate ?? DEFAULT_POWER_SETTINGS.peakRate) };
+  const tiers = usage.tiers || {};
+  const totalTierKwh = Object.keys(rates).reduce((sum, key) => sum + (Number(tiers[key]) || 0), 0);
+  if (totalTierKwh <= 0) return null;
+  return rounded(Object.keys(rates).reduce((sum, key) => sum + (Number(tiers[key]) || 0) * rates[key], 0));
+}
 const card = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const field = "w-full rounded-lg border border-[#3c5267] bg-[#101923] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400";
 const categories = [
@@ -108,7 +145,7 @@ function liveBalances() {
   if (Number.isFinite(btc)) values.btc = btc;
   return values;
 }
-function makeRows(month, records, live) {
+function makeRows(month, records, live, hardwareDevices = []) {
   const current = records[month] || {};
   const previous = records[shift(month, -1)] || {};
   const saved = Array.isArray(current.items) ? current.items : [];
@@ -145,6 +182,8 @@ function makeRows(month, records, live) {
     ...priorExtra.filter(row => !extra.some(other => other.id === row.id) && !(current.balanceExcluded || []).includes(row.id)),
     ...extra,
   ];
+  // Hardware Payback is the shared equipment register. Keep the two known
+  // $500 purchases as a fallback if Hardware Payback hasn't been populated.
   if (!current.locked && month >= "2026-11") {
     for (const [id, name] of [["hardware:rtx2080super-pc", "RTX 2080 Super PC"], ["hardware:rtx5070", "RTX 5070 GPU"]]) {
       if (!allExtra.some(row => row.id === id || new RegExp(id.includes("2080") ? "2080" : "5070", "i").test(row.name || "")) &&
@@ -153,13 +192,31 @@ function makeRows(month, records, live) {
       }
     }
   }
+  const trackedHardwareKeys = new Set();
+  for (const device of hardwareDevices) {
+    const name = String(device.name || "").trim();
+    const key = /2080/i.test(name) ? "2080" : /5070/i.test(name) ? "5070" : name.toLowerCase();
+    if (!name || trackedHardwareKeys.has(key)) continue;
+    trackedHardwareKeys.add(key);
+    const schedule = hardwareSchedule(device, month);
+    if (!schedule) continue;
+    const existing = allExtra.find(row => {
+      const other = String(row.name || "").toLowerCase();
+      return key === "2080" ? /2080/.test(other) : key === "5070" ? /5070/.test(other) : other === key;
+    });
+    if (existing) {
+      existing.syncedHardware = { ...device, ...schedule };
+    } else {
+      allExtra.push({ id: "payback:" + String(device.id || key), name, category: "equipment", syncedHardware: { ...device, ...schedule } });
+    }
+  }
   for (const row of allExtra) {
     const isFixed = /^(hardware:rtx2080super-pc|hardware:rtx5070)$/.test(row.id) &&
       !row.disabledAutomaticDepreciation && month >= "2026-11";
     const older = priorExtra.find(item => item.id === row.id);
-    const start = isFixed ? equipmentValue(month, 500) :
+    const start = row.syncedHardware ? row.syncedHardware.start : isFixed ? equipmentValue(month, 500) :
       amount(row.start) ?? (current.locked ? null : amount(older?.end));
-    const end = isFixed ? equipmentValue(shift(month, 1), 500) :
+    const end = row.syncedHardware ? row.syncedHardware.end : isFixed ? equipmentValue(shift(month, 1), 500) :
       amount(row.end) ?? (current.locked ? null : start);
     rows.push({ id: row.id, name: row.name, category: row.category || categoryFor(row.name), start, end });
   }
@@ -250,6 +307,8 @@ export default function FinancialsPage() {
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
   const [live, setLive] = useState(liveBalances);
   const [cryptoIncome, setCryptoIncome] = useState(readCryptoIncomeSources);
+  const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
+  const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
@@ -262,6 +321,8 @@ export default function FinancialsPage() {
     setRecords(readJson(RECORDS_KEY, {}));
     setJournal(readJson(JOURNAL_KEY, []));
     setLive(liveBalances());
+    setHardwareDevices(readHardwareRegister());
+    setPowerEstimates(readJson(POWER_ESTIMATE_KEY, {}));
     setCryptoIncome(current => ({
       ...readCryptoIncomeSources(), manualIncome: current.manualIncome,
       luloBackfills: current.luloBackfills,
@@ -315,7 +376,32 @@ export default function FinancialsPage() {
     );
     return mergeManualIncome(recorded, cryptoIncome.manualIncome?.monthly || {}, current);
   }, [cryptoBackendMonths, cryptoIncome]);
-  const rows = useMemo(() => makeRows(month, records, live), [month, records, live]);
+  useEffect(() => {
+    let active = true;
+    const refreshPower = async () => {
+      try {
+        const [status, settings] = await Promise.all([
+          api.get("/api/power/status"),
+          settingsApi.get(POWER_SETTINGS_KEY).catch(() => DEFAULT_POWER_SETTINGS),
+        ]);
+        if (!active) return;
+        const usage = status?.currentMonth;
+        const value = estimatePowerCost(usage, settings || DEFAULT_POWER_SETTINGS);
+        if (usage?.month && value !== null && usage.month <= getCurrentMonthKey()) {
+          const updated = { ...readJson(POWER_ESTIMATE_KEY, {}), [usage.month]: {
+            cost: value, kwh: Number(usage.totalKwh ?? usage.kwh) || 0,
+            updatedAt: new Date().toISOString(), estimated: true,
+          } };
+          remoteStorage.setItem(POWER_ESTIMATE_KEY, JSON.stringify(updated));
+          setPowerEstimates(updated);
+        }
+      } catch { /* Keep last available electricity estimate. */ }
+    };
+    refreshPower();
+    const timer = window.setInterval(refreshPower, 90000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+  const rows = useMemo(() => makeRows(month, records, live, hardwareDevices), [month, records, live, hardwareDevices]);
   const sections = categories.map(category => ({ ...category, rows: rows.filter(row => row.category === category.id) }));
   const total = (field, type) => {
     const relevant = rows.filter(row => type === "assets" ? row.category !== "liabilities" : row.category === "liabilities");
@@ -334,25 +420,37 @@ export default function FinancialsPage() {
   const revenue = syncedRevenue ? amount(syncedRevenue.total) : null;
   const savedExpenses = amount(recorded.expenses);
   const elapsed = month >= "2026-11" ? Math.max(0, (Number(month.slice(0, 4)) - 2026) * 12 + Number(month.slice(5)) - 11) : -1;
-  const fixedDep = elapsed >= 0 && elapsed < 60 ? rounded(equipmentValue(month, 1000) - equipmentValue(shift(month, 1), 1000)) : 0;
+  const fixedDep = rounded(rows.filter(row => row.category === "equipment" && row.start !== null && row.end !== null)
+    .reduce((sum, row) => sum + Math.max(0, row.start - row.end), 0));
   const ledgerEntries = journal.filter(entry => String(entry.date).slice(0, 7) === month);
   const journalExpense = ledgerEntries.filter(entry => entry.debitAccount === "expense" || entry.debitAccount === "electric")
     .reduce((sum, entry) => sum + entry.amount, 0);
-  // Use posted expenses when no authoritative monthly expense total was saved.
-  // If a total exists, keep it authoritative rather than adding possibly
-  // overlapping journal entries a second time.
-  const expenses = savedExpenses === null ? rounded(journalExpense) : savedExpenses;
+  // Estimated power is never a cash payment. Prefer actual posted electricity
+  // expenses, and never add the same expense twice through two sources.
+  const actualPowerEntries = ledgerEntries.filter(entry => entry.debitAccount === "electric");
+  const estimatedPower = Number(powerEstimates[month]?.cost);
+  const autoPower = actualPowerEntries.length || savedExpenses !== null ||
+    !Number.isFinite(estimatedPower) ? 0 : Math.max(0, rounded(estimatedPower));
+  const expenses = savedExpenses === null ? rounded(journalExpense + autoPower) : savedExpenses;
   // Journaled earnings may already exist in the Crypto Income data.
   // Do not add them a second time or substitute them for a missing source.
   const pnlRevenue = revenue;
   // Monthly expense card may already include electricity and other manually entered costs.
   // Display ledger amounts separately instead of counting them twice.
   const pnlProfit = pnlRevenue === null ? null : rounded(pnlRevenue - expenses - fixedDep);
-  const generatedEntries = fixedDep ? [{
-    id: "auto-depreciation:" + month, date: month + "-28",
-    description: "Monthly depreciation — RTX 2080 Super PC + RTX 5070 GPU",
-    lines: [line("depreciation", fixedDep, 0), line("accDep", 0, fixedDep)], automatic: true,
-  }] : [];
+  const generatedEntries = [
+    ...(fixedDep ? [{
+      id: "auto-depreciation:" + month, date: month + "-28",
+      description: "Monthly equipment depreciation — Hardware Payback",
+      lines: [line("depreciation", fixedDep, 0), line("accDep", 0, fixedDep)], automatic: true,
+    }] : []),
+    ...(autoPower ? [{
+      id: "auto-power-estimate:" + month, date: month + "-28",
+      description: "Estimated mining electricity — not a confirmed payment",
+      lines: [line("electric", autoPower, 0), line("payable", 0, autoPower)],
+      automatic: true, estimated: true,
+    }] : []),
+  ];
   const manualEntries = ledgerEntries.map(entry => ({
     ...entry, lines: [line(entry.debitAccount, entry.amount, 0), line(entry.creditAccount, 0, entry.amount)],
   }));
