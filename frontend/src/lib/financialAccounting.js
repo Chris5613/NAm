@@ -110,8 +110,8 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
     // Exact name is used only for identifying an old seeded record, NEVER to
     // merge two physical Hardware Payback devices that happen to have the
     // same GPU model number.
-    const oldIndex = legacyHardware.findIndex((row,i)=>!usedLegacy.has(i) && equipmentAliasKey(row.name)===equipmentAliasKey(name));
-    const extraIndex = allExtra.findIndex((row,i)=>!usedExtra.has(i) && equipmentAliasKey(row.name)===equipmentAliasKey(name));
+    const oldIndex = legacyHardware.findIndex((row,i)=>!usedLegacy.has(i) && equipmentAliasKey(row.name)===equipmentAliasKey(device.name));
+    const extraIndex = allExtra.findIndex((row,i)=>!usedExtra.has(i) && equipmentAliasKey(row.name)===equipmentAliasKey(device.name));
     if(oldIndex>=0) usedLegacy.add(oldIndex);
     if(extraIndex>=0) usedExtra.add(extraIndex);
     equipment.push({
