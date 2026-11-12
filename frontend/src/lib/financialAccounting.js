@@ -71,8 +71,17 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
     else ordinary.push(value);
   }
   const equipment = [], usedLegacy = new Set(), usedExtra = new Set();
-  const allExtra = current.locked ? extra : [
-    ...extra, ...priorExtra.filter(row=>!extra.some(item=>item.id===row.id)),
+  // Carry forward saved fixed assets even when Monthly Changes has sealed a
+  // historical month. Only persisted historical rows can flow forward into
+  // a locked month; a newer Hardware Payback edit cannot rewrite it.
+  const historicalExtraById = new Map();
+  for(const [key,record] of Object.entries(records||{}).sort(([a],[b])=>a.localeCompare(b))) {
+    if(key>=month || !Array.isArray(record?.balanceSheetItems)) continue;
+    for(const row of record.balanceSheetItems) if(row?.id) historicalExtraById.set(row.id,row);
+    for(const id of record.balanceExcluded||[]) historicalExtraById.delete(id);
+  }
+  const allExtra = [
+    ...extra, ...[...historicalExtraById.values()].filter(row=>!extra.some(item=>item.id===row.id)),
   ];
   // Locked historical months are stored snapshots. Do not add recently edited
   // Hardware Payback items into them.
@@ -119,7 +128,9 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
     const key = assetKey(row.name);
     if(equipment.some(item=>assetKey(item.name)===key && item.source==="monthly-changes")) return;
     let schedule = null;
-    if(row.category==="equipment" && row.placedInServiceMonth && Number(row.historicalCost)>0)
+    const savedThisMonth = extra.some(item=>item.id===row.id);
+    if(row.category==="equipment" && row.placedInServiceMonth && Number(row.historicalCost)>0 &&
+      !(current.locked && savedThisMonth))
       schedule = equipmentSchedule({cost:row.historicalCost,startMonth:row.placedInServiceMonth,
         usefulLifeMonths:row.usefulLifeMonths},month);
     const older = priorExtra.find(item=>item.id===row.id);
