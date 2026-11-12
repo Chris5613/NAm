@@ -11,10 +11,11 @@ import {
 } from "@/lib/yieldFarmingAccounting";
 import {
   buildFinancialBalanceRows, includeJournalEquipment, buildStatementRows,
-  deriveCashOpening, derivePayableOpening, moneyRound,
+  deriveCashOpening, derivePayableOpening, moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { movementJournal } from "@/lib/financialMovements";
 import { readUnetworkPhones, phoneAssetRows } from "@/lib/unetworkPhonesAccounting";
+import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 
 export const FINANCIAL_ASSET_KEYS = {
   records:"monthly_business_changes_v1",
@@ -23,6 +24,7 @@ export const FINANCIAL_ASSET_KEYS = {
   confirmed:"financials_confirmed_movements_v1",
   closed:"financials_month_closes_v1",
   bank:"financials_bank_openings_v1",
+  power:"financials_power_estimates_v1",
 };
 
 function stored(key, fallback) {
@@ -88,8 +90,18 @@ export function getFinancialTotalAssets(month=getCurrentMonthKey(), live=financi
       Math.abs(Number(item.amount)-Number(entry.lines[0]?.debit))<=.005 &&
       item.debitAccount===entry.lines[0]?.account &&
       item.creditAccount===entry.lines[1]?.account));
+  const recorded = records?.[month] || {};
+  const estimatedPower = valueOrNull(stored(FINANCIAL_ASSET_KEYS.power,{})?.[month]?.cost);
+  const actualPower = manual.some(entry=>entry.debitAccount==="electric");
+  const autoPower = hasFreeMiningPower(month) || actualPower ||
+    (valueOrNull(recorded.expenses) !== null && Number(recorded.expenses)>0) ||
+    estimatedPower === null ? 0 : outOfPocketMiningPowerCost(estimatedPower,month);
+  const powerEntry = autoPower > 0 ? [{
+    id:"auto-power-estimate:"+month, date:month+"-28", automatic:true,
+    lines:[postedLine("electric",autoPower,0),postedLine("payable",0,autoPower)],
+  }] : [];
   const openings=stored(FINANCIAL_ASSET_KEYS.bank,{});
-  const rows=buildStatementRows(base,[...manualEntries,...movements],{
+  const rows=buildStatementRows(base,[...manualEntries,...movements,...powerEntry],{
     cashOpening:deriveCashOpening(month,openings,journal,confirmed),
     payableOpening:derivePayableOpening(month,journal),
   });
