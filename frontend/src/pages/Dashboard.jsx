@@ -12,8 +12,9 @@ import {
 } from "@/lib/api";
 
 import {
-  remoteStorage as localStorage,
+  remoteStorage as localStorage, subscribe,
 } from "@/lib/serverStore";
+import { getFinancialTotalAssets } from "@/lib/financialAssetsSnapshot";
 
 import {
   localStorage as storage,
@@ -200,6 +201,20 @@ export default function Dashboard() {
     setAssets,
   ] = useState([]);
   const [chartRange, setChartRange] = useState("ALL");
+  const [financialAssets, setFinancialAssets] = useState(getFinancialTotalAssets);
+  useEffect(() => {
+    const refresh = () => setFinancialAssets(getFinancialTotalAssets());
+    const unsubscribe = subscribe(refresh);
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("project-crypto-updated", refresh);
+    return () => {
+      unsubscribe();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("project-crypto-updated", refresh);
+    };
+  }, []);
   const [cashMonth, setCashMonth] = useState(() => new Date().toISOString().slice(0,7));
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankTransactions, setBankTransactions] = useState([]);
@@ -827,21 +842,12 @@ export default function Dashboard() {
       "debts",
     ];
 
-  const maxAllocation =
-    Math.max(
-      ...allocationCategories.map(
-        (
-          category
-        ) =>
-          Math.abs(
-            breakdown[
-              category
-            ] || 0
-          )
-      ),
-
-      1
-    );
+  const homeBalance = category => category === "crypto"
+    ? financialAssets.value : breakdown[category];
+  const maxAllocation = Math.max(
+    ...allocationCategories.map(category => Math.abs(Number(homeBalance(category)) || 0)),
+    1,
+  );
 
   const assetCounts = {
     stocks:
@@ -1204,16 +1210,22 @@ export default function Dashboard() {
           </div>
         </section>
 
-        <section className={card} aria-label="Asset allocation">
+        <section className={card} aria-label="Balances">
           <div className="border-b border-border/40 px-4 py-3">
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Asset allocation</h2>
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Balances</h2>
           </div>
           <div className="space-y-2 px-4 py-3">
-            {[...allocationCategories].sort((a, b) => Math.abs(Number(breakdown[b]) || 0) - Math.abs(Number(breakdown[a]) || 0)).map(category => (
+            {[...allocationCategories].sort((a, b) =>
+              Math.abs(Number(homeBalance(b)) || 0) -
+              Math.abs(Number(homeBalance(a)) || 0)).map(category => (
               <button key={category} type="button" onClick={() => openCategoryModal(category)}
                 className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-secondary/35"
-                aria-label={`View ${category} allocation details`}>
-                <AllocationBar category={category} value={breakdown[category] || 0} maxValue={maxAllocation} />
+                aria-label={`View ${category === "crypto" ? "Total Assets" : category} details`}>
+                <AllocationBar category={category}
+                  value={homeBalance(category)}
+                  label={category === "crypto" ? "Total Assets" : undefined}
+                  unverified={category === "crypto" && financialAssets.incomplete}
+                  maxValue={maxAllocation} />
               </button>
             ))}
           </div>
