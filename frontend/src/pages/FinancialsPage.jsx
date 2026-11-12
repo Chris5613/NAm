@@ -530,7 +530,7 @@ export default function FinancialsPage() {
   const autoPower = closeSnapshot ? closeSnapshot.autoPower :
     electricityCovered || actualPowerEntries.length || hasSavedExpenses ||
     !Number.isFinite(estimatedPower) ? 0 : outOfPocketMiningPowerCost(rounded(estimatedPower), month);
-  const feeExpense = rounded(syncedMovementEntries.reduce((sum, entry) =>
+  const feeExpense = rounded((closeSnapshot?.entries || syncedMovementEntries).reduce((sum, entry) =>
     sum + entry.lines.filter(row => row.account === "fees").reduce((n, row) => n + row.debit, 0), 0));
   // A saved expense total may already contain some fees. The greater of the
   // tracked/journaled total and saved total avoids simply adding it twice.
@@ -791,7 +791,8 @@ export default function FinancialsPage() {
           <div>Hardware Payback register: <strong className="text-white">{hardwareDevices.length} devices</strong></div>
           <div>Purchases awaiting journal confirmation: <strong className={unpostedEquipment.length ? "text-amber-300" : "text-emerald-400"}>{unpostedEquipment.length}</strong></div>
           <div>Out-of-pocket electricity: <strong className="text-white">{electricityCovered ? "$0.00 (Free power)" : powerEstimates[month] ? money(powerEstimates[month].cost) + " estimated" : "Awaiting usage data"}</strong></div>
-          <div>Unposted historical transactions: <strong className="text-amber-300">Need reconciliation</strong></div>
+          <div>Transfer / fee review: <strong className={unresolvedMovements.length ? "text-amber-300" : "text-emerald-400"}>{unresolvedMovements.length} candidates</strong></div>
+          <div>Month status: <strong className="text-white">{closeSnapshot ? "Closed · " + new Date(closeSnapshot.closedAt).toLocaleDateString() : "Open"}</strong></div>
         </div>
       </div>
     </>}
@@ -831,8 +832,9 @@ export default function FinancialsPage() {
         <h2 className="mb-4 text-lg font-semibold">Income Statement — {monthTitle(month)}</h2>
         {[
           ["Revenue — Crypto Income", pnlRevenue],
-          ["Other operating expenses", rounded(expenses - autoPower)],
+          ["Other operating expenses", rounded(Math.max(0, expenses - autoPower - feeExpense))],
           ...(autoPower ? [["Mining electricity (estimate)", autoPower]] : []),
+          ...(feeExpense ? [["Transaction / network fees", feeExpense]] : []),
           ["Equipment depreciation", fixedDep],
           ["Net income", pnlProfit],
         ].map(([label, value]) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${label === "Net income" ? "font-bold text-emerald-400" : ""}`}>
@@ -847,24 +849,25 @@ export default function FinancialsPage() {
         
         <div className="mt-4 space-y-2">{cashEvents.length ? cashEvents.map(entry => <div key={entry.id} className="flex items-center justify-between gap-3 border-b border-[#273746] py-2 text-sm">
           <div><p>{entry.description}</p><p className="text-xs text-[#8197a9]">{entry.date}</p></div>
-          <span className={entry.debitAccount==="cash"?"text-emerald-400":"text-rose-400"}>{signed((entry.debitAccount==="cash"?1:-1)*entry.amount)}</span>
+          <span className={entry.delta >= 0 ? "text-emerald-400" : "text-rose-400"}>{signed(entry.delta)}</span>
         </div>) : <p className="text-sm text-[#94a7b8]">No cash transactions recorded for this month. Add journal entries to build the cash flow statement.</p>}</div>
       </section>
     </>}
     {tab === "ledger" && <>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">General Ledger</h2></div>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" onClick={() => { setQuickModalOpen(true); setQuickStatus(""); setQuickError(""); }}
-          className="inline-flex items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-sm font-semibold text-sky-300 hover:bg-sky-400/20">
+        <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => { setQuickModalOpen(true); setQuickStatus(""); setQuickError(""); }}
+          className="inline-flex items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-sm font-semibold text-sky-300 hover:bg-sky-400/20 disabled:opacity-40">
           <Sparkles size={16}/> Describe Transaction
         </button>
-        {unpostedEquipment.length > 0 && <button type="button" onClick={() => reviewEquipmentPurchase(unpostedEquipment[0])}
-          className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300">
+        {unpostedEquipment.length > 0 && <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => reviewEquipmentPurchase(unpostedEquipment[0])}
+          className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300 disabled:opacity-40">
           Review purchase ({unpostedEquipment.length})
         </button>}
-        <button onClick={() => { setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
-          className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300"><Plus size={16}/> Add entry</button>
+        <button disabled={Boolean(closeSnapshot)} onClick={() => { setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
+          className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300 disabled:opacity-40"><Plus size={16}/> Add entry</button>
       </div></div>
+      {closeSnapshot && <p className="text-xs text-amber-300">This month is closed and frozen. Reopen it in Reconcile to post or edit transactions.</p>}
       {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
       {syncedIncomeJournal.unexplainedManualRevenue > 0 && <p role="status" className="text-sm text-amber-300">
         Manual revenue exceeds Crypto Income by {money(syncedIncomeJournal.unexplainedManualRevenue)} this month. Review for duplicates or missing earnings.
