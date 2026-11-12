@@ -12,7 +12,7 @@ import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
 import {
   buildFinancialBalanceRows, buildStatementRows, buildFinancialProfit,
-  classifyCashFlows, journalAccountActivity, moneyRound, valueOrNull,
+  classifyCashFlows, journalAccountActivity, deriveCashOpening, moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { localStorage as appStorage } from "@/lib/localStorage";
@@ -369,7 +369,8 @@ export default function FinancialsPage() {
     }));
   }), []);
   useEffect(() => {
-    setBankOpeningDraft(valueOrNull(bankOpenings[month]) === null ? "" : String(bankOpenings[month]));
+    const direct = valueOrNull(bankOpenings[month]);
+    setBankOpeningDraft(direct === null ? "" : String(direct));
   }, [month, bankOpenings]);
   useEffect(() => {
     const refresh = () => setLive(liveBalances());
@@ -524,7 +525,7 @@ export default function FinancialsPage() {
 
   // A bank payment really reduces Cash / Bank. If no opening bank balance
   // was provided, display its journal movement without fabricating an ending.
-  const cashOpening = valueOrNull(bankOpenings[month]);
+  const cashOpening = deriveCashOpening(month,bankOpenings,journal,Object.values(confirmedMovements));
   const rows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,{cashOpening});
   const sections = categories.map(category => ({
     ...category,rows:rows.filter(row=>row.category===category.id),
@@ -733,6 +734,8 @@ export default function FinancialsPage() {
           <button type="submit" className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-300">Save opening balance</button>
         </form>}
         {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
+        {valueOrNull(bankOpenings[month]) === null && cashOpening !== null &&
+          <p className="text-xs text-sky-300">Starting balance carried forward from an earlier month: {money(cashOpening)}. Enter an amount above only to override it.</p>}
         <p className="text-[11px] text-[#8299aa]">This is a manually tracked bank ledger, not a bank connection. Only business-related transactions recorded here are reflected. Do not enter a personal account's entire balance unless you intend to track that account.</p>
       </section>}
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
