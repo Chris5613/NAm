@@ -21,10 +21,10 @@ export function resolveFinancialAccount(value) {
   if (!key) return null;
   const known = {
     cash: "cash", bank: "cash", checking: "cash", savings: "cash",
-    btc: "crypto", bitcoin: "crypto", cryptowallet: "crypto",
+    btc: "crypto", bitcoin: "crypto", btcwallet: "crypto", cryptowallet: "crypto",
     lulo: "luloCash", lulosavings: "luloCash", loopscale: "defi",
     defi: "defi", brokerage: "brokerage", stock: "brokerage",
-    kryptex: "platform:kryptex", rollercoin: "platform:rollercoin",
+    kryptex: "platform:kryptex", kryptexwallet: "platform:kryptex", rollercoin: "platform:rollercoin", rollercoinwallet: "platform:rollercoin",
     salad: "platform:salad", unetwork: "platform:unetwork",
     unitynetwork: "platform:unetwork", platform: "platform",
   };
@@ -46,14 +46,17 @@ export function collectMovementCandidates(projects) {
       if (!["withdraw", "withdrawal", "transfer", "deposit", "fee", "transaction_fee", "network_fee"].includes(type)) continue;
       const id = recordId(row, project);
       const date = String(row.source_date || row.date || row.occurred_at || row.created_at || "").slice(0, 10);
-      const amount = Number(row.amountUsd ?? row.amount);
+      const amount = Math.abs(Number(row.amountUsd ?? row.amount));
       if (!id || !VALID_DATE.test(date) || !Number.isFinite(amount) || amount <= 0) continue;
       const unit = String(row.currency || row.unit || "USD").toUpperCase();
       if (unit !== "USD") continue; // Never silently treat a coin amount as USD.
+      const metadata = row.data && typeof row.data === "object" ? row.data : {};
       const from = resolveFinancialAccount(row.fromAccount || row.from || row.sourceAccount ||
+        metadata.fromAccount || metadata.from ||
         (type === "fee" || type.endsWith("_fee") || type.startsWith("withdraw") ? provider : null));
-      const to = resolveFinancialAccount(row.toAccount || row.to || row.destinationAccount);
-      const fee = Number(row.feeUsd ?? row.networkFeeUsd ?? 0);
+      const to = resolveFinancialAccount(row.toAccount || row.to || row.destinationAccount ||
+        metadata.toAccount || metadata.to);
+      const fee = Number(row.feeUsd ?? row.networkFeeUsd ?? metadata.feeUsd ?? 0);
       const feeUsd = Number.isFinite(fee) && fee >= 0 ? round(fee) : 0;
       const isFee = type === "fee" || type === "transaction_fee" || type === "network_fee";
       // A single confirmed provider event may carry both transfer and fee.
@@ -84,11 +87,16 @@ export function collectBankMovementCandidates(transactions) {
       row?.pending || row?.hidden) continue;
     const fee = /\b(fee|commission)\b/i.test(label) || /\bfees?\b/i.test(category);
     const transfer = /\b(transfers?|payments?)\b/i.test(category);
-    if (!fee && !transfer) continue;
+    const miningPayout = /kryptex|roller\s?coin|salad|unetwork|unity network|loopscale|lulo/i.test(label) &&
+      /\bincome\b/i.test(category);
+    if (!fee && !transfer && !miningPayout) continue;
+    const payoutFrom = miningPayout
+      ? resolveFinancialAccount(label.match(/kryptex|roller\s?coin|salad|unetwork|unity network|loopscale|lulo/i)?.[0])
+      : null;
     seen.set("bank:" + id, {
       id: "bank:" + id, date, amount: round(amount),
       type: fee ? "fee" : "transfer", provider: label || "Bank record",
-      from: null, to: null, feeUsd: 0, matchable: false,
+      from: payoutFrom, to: miningPayout ? "cash" : null, feeUsd: 0, matchable: false,
       issue: "Confirm this is a mining-business transaction and select its account(s)",
       bankSource: true,
     });
