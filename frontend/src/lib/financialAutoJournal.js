@@ -18,6 +18,7 @@ function debitAccountFor(sourceKey) {
   if (sourceKey === "lulo") return "luloCash";
   if (sourceKey === "loopscale") return "defi";
   if (sourceKey === "stocks") return "brokerage";
+  if (["kryptex", "rollercoin", "salad", "unetwork"].includes(sourceKey)) return "platform:" + sourceKey;
   return "platform";
 }
 function lastDay(month) {
