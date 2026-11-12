@@ -804,16 +804,6 @@ export default function FinancialsPage() {
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <button type="button" onClick={openPhoneEditor}
-              className="inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300">
-              <Plus size={13}/> Add Unetwork phone
-            </button>
-            <button type="button" onClick={()=>setShowOtherLabels(value=>!value)}
-              className="rounded-lg border border-[#34485b] px-3 py-1.5 text-xs font-medium text-sky-300 hover:bg-sky-400/10">
-              {showOtherLabels ? "Hide other account names" : "Edit other account names"}
-            </button>
-          </div>
         </div>
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
           {tableHeader}<tbody>
@@ -850,7 +840,7 @@ export default function FinancialsPage() {
             className="flex items-center justify-between gap-3 border-b border-[#263746] py-2 text-sm">
             <div>
               <p>{phone.name} <span className="text-xs text-[#839aaf]">· {phone.businessDate}</span></p>
-              <p className="text-xs text-[#839aaf]">Business value {money(phone.businessValue)} · {phone.fundingAccount === "equity" ? "Owner's Equity" : phone.fundingAccount === "cash" ? "Business Cash" : "Accounts Payable"} · 36-month depreciation</p>
+              <p className="text-xs text-[#839aaf]">Business value {money(phone.businessValue)} · {phone.fundingAccount === "equity" ? "Owner's Equity" : phone.fundingAccount === "cash" ? "Business Cash" : "Accounts Payable"} · 120-month depreciation</p>
             </div>
             <button type="button" aria-label={"Remove "+phone.name} onClick={()=>removeBusinessPhone(phone)}
               className="rounded p-2 text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>
@@ -1013,7 +1003,7 @@ export default function FinancialsPage() {
             </select>
           </label>
         </div>
-        <p className="text-xs text-[#8ba4b5]">This creates one equipment asset and one matching acquisition journal entry on the business-use date. No November purchase is invented for an earlier acquisition. A 36-month straight-line book-depreciation estimate is used; tax treatment may differ.</p>
+        <p className="text-xs text-[#8ba4b5]">This creates one equipment asset and one matching acquisition journal entry on the business-use date. No November purchase is invented for an earlier acquisition. A 120-month straight-line book-depreciation estimate with $0 salvage value is used; tax treatment may differ.</p>
         {phoneError && <p role="alert" className="text-sm text-rose-300">{phoneError}</p>}
         <div className="flex justify-end gap-2">
           <button type="button" className="rounded-lg border border-[#405468] px-3 py-2 text-sm" onClick={()=>setPhoneModal(false)}>Cancel</button>
