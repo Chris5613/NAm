@@ -73,10 +73,12 @@ export function journalDisplayDescription(entry,rows,labels={}) {
       const label=String(row.name||"");
       return label && original.toLowerCase().includes(label.toLowerCase());
     });
-    if(matched) return original.replace(new RegExp(
-      String(matched.name).replace(/[.*+?^${}()|[\]\\]/g,"\\  if (!original || !Object.keys(labels).length) return original;
-  const assets=(rows || []).filter(row=>row.category==="equipment" &&"),"i"),
-      balanceDisplayName(matched,labels));
+    if(matched) {
+      const term=String(matched.name);
+      const index=original.toLowerCase().indexOf(term.toLowerCase());
+      if(index>=0) return original.slice(0,index) + balanceDisplayName(matched,labels) +
+        original.slice(index+term.length);
+    }
   }
   const assets=(rows || []).filter(row=>row.category==="equipment" &&
     balanceDisplayName(row,labels)!==row.name);
