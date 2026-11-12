@@ -89,11 +89,24 @@ function makeRows(month, records, live) {
   const previous = records[shift(month, -1)] || {};
   const saved = Array.isArray(current.items) ? current.items : [];
   const prior = Array.isArray(previous.items) ? previous.items : [];
-  const names = current.locked ? saved.map(row => row.name) : [...new Set([
-    ...saved.map(row => row.name), ...prior.map(row => row.name),
+  // Names from live trackers are lowercase while saved accounts retain
+  // their display capitalization. Deduplicate by normalized account identity,
+  // preferring the saved (capitalized) name over generated live names.
+  const candidates = current.locked ? saved.map(row => row.name) : [
+    ...saved.map(row => row.name),
+    ...prior.map(row => row.name),
     ...Object.keys(live).map(name => name === "btc" ? "BTC" : name),
-  ])];
-  const rows = names.filter(Boolean).filter(name => !(current.excluded || []).includes(name)).map(name => {
+  ];
+  const namesByKey = new Map();
+  for (const candidate of candidates) {
+    const name = String(candidate || "").trim();
+    const key = name.toLowerCase();
+    if (!key || namesByKey.has(key)) continue;
+    namesByKey.set(key, name);
+  }
+  const excludedKeys = new Set((current.excluded || []).map(name => String(name).trim().toLowerCase()));
+  const names = [...namesByKey.values()];
+  const rows = names.filter(name => !excludedKeys.has(name.toLowerCase())).map(name => {
     const row = saved.find(item => String(item.name).toLowerCase() === String(name).toLowerCase()) || {};
     const old = prior.find(item => String(item.name).toLowerCase() === String(name).toLowerCase()) || {};
     const start = amount(row.start) ?? (current.locked ? null : amount(old.end));
