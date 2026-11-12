@@ -6,8 +6,9 @@ import {
 } from "@/lib/projectCryptoPortfolio";
 
 import {
-  remoteStorage,
+  remoteStorage, subscribe,
 } from "@/lib/serverStore";
+import { getFinancialTotalAssets } from "@/lib/financialAssetsSnapshot";
 
 import {
   Card,
@@ -17,7 +18,6 @@ import {
 import { Button } from "@/components/ui/button";
 
 import {
-  Bitcoin,
   ChevronDown,
   ChevronRight,
   RefreshCw,
@@ -114,39 +114,6 @@ function ProjectPortfolioEntry({
   );
 }
 
-function BitcoinEntry({ bitcoin }) {
-  return (
-    <Card className="border-amber-500/20 bg-card/70">
-      <CardContent className="flex items-center justify-between gap-4 p-4">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-400">
-            <Bitcoin className="h-5 w-5" />
-          </div>
-
-          <div className="min-w-0">
-            <p className="font-semibold text-foreground">
-              Bitcoin
-            </p>
-
-            <p className="text-xs font-mono text-muted-foreground">
-              {formatAmount(bitcoin?.amount)} BTC
-              {Number(bitcoin?.price) > 0
-                ? ` · ${formatCurrency(
-                    bitcoin.price
-                  )} per BTC`
-                : ""}
-            </p>
-          </div>
-        </div>
-
-        <p className="shrink-0 font-mono text-lg font-semibold text-foreground">
-          {formatCurrency(bitcoin?.value)}
-        </p>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function CryptoBreakdown({
   defaultOpen = false,
   dailyChange = 0,
@@ -161,6 +128,23 @@ export default function CryptoBreakdown({
 
   const [refreshing, setRefreshing] =
     useState(false);
+  const [financialAssets, setFinancialAssets] = useState(getFinancialTotalAssets);
+
+  useEffect(() => {
+    const refresh = () => setFinancialAssets(getFinancialTotalAssets());
+    const unsubscribe = subscribe(refresh);
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("project-crypto-updated", refresh);
+    window.addEventListener("project-income-portfolio-balance-updated", refresh);
+    return () => {
+      unsubscribe();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("project-crypto-updated", refresh);
+      window.removeEventListener("project-income-portfolio-balance-updated", refresh);
+    };
+  }, []);
 
   const [
     projectIncomeSummary,
@@ -210,6 +194,7 @@ export default function CryptoBreakdown({
 
         if (!cancelled) {
           setPortfolio(next);
+      setFinancialAssets(getFinancialTotalAssets());
         }
       } catch {
         // Keep the last saved values visible.
@@ -282,17 +267,6 @@ export default function CryptoBreakdown({
           ) || 0
         );
 
-  const displayedCryptoTotal =
-    displayedProjectBalance +
-    (
-      Number(
-        bitcoin?.value
-      ) || 0
-    );
-
-  const positive =
-    Number(dailyChange) >= 0;
-
   const hasProjectPortfolio =
     displayedProjectBalance > 0;
 
@@ -305,6 +279,7 @@ export default function CryptoBreakdown({
         await refreshProjectCryptoPortfolio();
 
       setPortfolio(next);
+      setFinancialAssets(getFinancialTotalAssets());
     } finally {
       setRefreshing(false);
     }
@@ -341,7 +316,7 @@ export default function CryptoBreakdown({
               </div>
 
               <p className="text-lg font-semibold text-foreground">
-                Crypto
+                Total Assets
               </p>
             </button>
 
@@ -367,25 +342,11 @@ export default function CryptoBreakdown({
 
               <div className="min-w-[130px] text-right">
                 <p className="font-mono text-lg font-bold text-foreground">
-                  {formatCurrency(
-                    displayedCryptoTotal
-                  )}
+                  {financialAssets.value === null ? "—" : formatCurrency(financialAssets.value)}
                 </p>
 
-                <p
-                  className={`mt-1 text-xs font-mono ${
-                    positive
-                      ? "text-emerald-500"
-                      : "text-rose-500"
-                  }`}
-                >
-                  {positive ? "+" : "-"}
-                  {formatCurrency(
-                    Math.abs(
-                      Number(dailyChange) || 0
-                    )
-                  )}{" "}
-                  today
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {financialAssets.incomplete ? "Some balances are unverified" : "From Financials · Balance Sheet"}
                 </p>
               </div>
             </div>
@@ -406,16 +367,11 @@ export default function CryptoBreakdown({
             />
           )}
 
-          <BitcoinEntry
-            bitcoin={bitcoin}
-          />
-
           {!hasProjectPortfolio &&
-            !bitcoin?.wallets?.length && (
+            !portfolio?.projectEntries?.length && (
               <Card className="border-border/40 bg-card/70">
                 <CardContent className="p-5 text-sm text-muted-foreground">
-                  No crypto holdings have been
-                  added yet.
+                  No project balances recorded. Check Financials for your full asset breakdown.
                 </CardContent>
               </Card>
             )}
