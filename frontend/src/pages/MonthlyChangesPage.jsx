@@ -19,6 +19,19 @@ import { localStorage as appStorage } from "@/lib/localStorage";
 
 const KEY = "monthly_business_changes_v1";
 const VIEW_KEY = "monthly_changes_table_view_v1";
+const HARDWARE_SERVICE_MONTH = "2026-11";
+const HARDWARE_LIFE_MONTHS = 60;
+const DEPRECIATING_HARDWARE = [
+  { id: "hardware:rtx2080super-pc", name: "RTX 2080 Super PC", cost: 500 },
+  { id: "hardware:rtx5070", name: "RTX 5070 GPU", cost: 500 },
+];
+function hardwareMonths(month) {
+  const [year, number] = month.split("-").map(Number);
+  return Math.max(0, (year - 2026) * 12 + number - 11);
+}
+function hardwareBookValue(cost, months) {
+  return Math.round(Math.max(0, cost * (1 - Math.min(HARDWARE_LIFE_MONTHS, months) / HARDWARE_LIFE_MONTHS)) * 100) / 100;
+}
 const BALANCE_CATEGORIES = [
   { id: "digital", label: "Digital Assets & Platform Balances" },
   { id: "defi", label: "DeFi & Investments" },
@@ -214,10 +227,12 @@ export default function MonthlyChangesPage() {
     if (entry.hardwareCostSeededV1) return;
     const items = Array.isArray(entry.balanceSheetItems) ? [...entry.balanceSheetItems] : [];
     const original = Array.isArray(entry.items) ? entry.items : [];
-    const hardware = [
-      { id: "hardware:rtx2080super-pc", name: "RTX 2080 Super PC", category: "equipment", start: 500, end: 500, historicalCost: 500 },
-      { id: "hardware:rtx5070", name: "RTX 5070 GPU", category: "equipment", start: 500, end: 500, historicalCost: 500 },
-    ];
+    const hardware = DEPRECIATING_HARDWARE.map(asset => ({
+      id: asset.id, name: asset.name, category: "equipment", start: asset.cost,
+      end: hardwareBookValue(asset.cost, 1), historicalCost: asset.cost,
+      usefulLifeMonths: HARDWARE_LIFE_MONTHS, salvageValue: 0,
+      placedInServiceMonth: HARDWARE_SERVICE_MONTH,
+    }));
     for (const row of hardware) {
       const matches = item => {
         const name = String(item?.name || "").toLowerCase();
@@ -549,15 +564,38 @@ export default function MonthlyChangesPage() {
   // keeps separately entered business accounts out of the original table.
   const savedBalanceItems = Array.isArray(record.balanceSheetItems) ? record.balanceSheetItems : [];
   const priorBalanceItems = Array.isArray(previous.balanceSheetItems) ? previous.balanceSheetItems : [];
-  const extraBalanceItems = (record.locked ? savedBalanceItems : [
-    ...priorBalanceItems.filter(prior => !savedBalanceItems.some(current => current.id === prior.id) && !(record.balanceExcluded || []).includes(prior.id)),
-    ...savedBalanceItems,
-  ]).map(row => {
-    const earlier = priorBalanceItems.find(item => item.id === row.id);
-    const start = parseAmount(row.start) ?? (record.locked ? null : parseAmount(earlier?.end));
-    const end = parseAmount(row.end) ?? (record.locked ? null : start);
-    return { ...row, start, end, change: start === null || end === null ? null : round(end - start) };
-  });
+  const extraBalanceItems = (() => {
+    const own = [...savedBalanceItems];
+    const prior = priorBalanceItems.filter(item =>
+      !own.some(row => row.id === item.id) && !(record.balanceExcluded || []).includes(item.id));
+    const existing = record.locked ? own : [...prior, ...own];
+    // New equipment is not backfilled into September or October.
+    if (!record.locked && month >= HARDWARE_SERVICE_MONTH) {
+      for (const asset of DEPRECIATING_HARDWARE) {
+        if (!(record.balanceExcluded || []).includes(asset.id) &&
+          !existing.some(row => row.id === asset.id || new RegExp(asset.id.includes("2080") ? "2080" : "5070", "i").test(row.name || ""))) {
+          existing.push({ id: asset.id, name: asset.name, category: "equipment",
+            historicalCost: asset.cost, placedInServiceMonth: HARDWARE_SERVICE_MONTH,
+            usefulLifeMonths: HARDWARE_LIFE_MONTHS, salvageValue: 0 });
+        }
+      }
+    }
+    return existing.map(row => {
+      const asset = DEPRECIATING_HARDWARE.find(entry => entry.id === row.id);
+      if (asset && month >= HARDWARE_SERVICE_MONTH && !row.disabledAutomaticDepreciation) {
+        const elapsed = hardwareMonths(month);
+        const start = hardwareBookValue(asset.cost, elapsed);
+        const end = hardwareBookValue(asset.cost, elapsed + 1);
+        return { ...row, category: "equipment", historicalCost: asset.cost,
+          placedInServiceMonth: HARDWARE_SERVICE_MONTH, usefulLifeMonths: HARDWARE_LIFE_MONTHS,
+          salvageValue: 0, start, end, change: round(end - start) };
+      }
+      const earlier = priorBalanceItems.find(item => item.id === row.id);
+      const start = parseAmount(row.start) ?? (record.locked ? null : parseAmount(earlier?.end));
+      const end = parseAmount(row.end) ?? (record.locked ? null : start);
+      return { ...row, start, end, change: start === null || end === null ? null : round(end - start) };
+    });
+  })();
   const balanceRows = [
     ...visibleItems.map(row => ({ ...row, id: `project:${row.name}`, category: row.name.toLowerCase().includes("lulo") ? "cash" : (record.balanceCategories?.[row.name] || balanceCategory(row.name)), original: true })),
     ...extraBalanceItems.map(row => ({ ...row, category: row.category || balanceCategory(row.name), original: false })),
@@ -616,7 +654,12 @@ export default function MonthlyChangesPage() {
     }
     const id = balanceEditing === "new" ? `extra:${Date.now()}:${Math.random().toString(36).slice(2, 8)}` : balanceEditing;
     const next = existing.filter(row => row.id !== id);
-    next.push({ id, name, category: balanceDraft.category, start: balanceDraft.start, end: balanceDraft.end });
+    // A manual hardware edit replaces the automatic schedule for that entry.
+    const isPreset = DEPRECIATING_HARDWARE.some(asset => asset.id === id);
+    next.push({ id: isPreset ? `manual:${id}` : id, name, category: balanceDraft.category,
+      start: balanceDraft.start, end: balanceDraft.end });
+    if (isPreset) next.push({ id, name, category: balanceDraft.category, disabledAutomaticDepreciation: true });
+
     save({ ...record, balanceSheetItems: next });
     setBalanceEditing(null);
   };
@@ -801,7 +844,7 @@ export default function MonthlyChangesPage() {
               </tbody>
             </table>
           </div>
-          <p className="mt-3 text-xs text-[#8fa4b7]">Liabilities are subtracted from Net Worth. Enter debts as positive balances. Revenue and expenses above are not counted again as assets.</p>
+          <p className="mt-3 text-xs text-[#8fa4b7]">Liabilities are subtracted from Net Worth. Enter debts as positive balances. Revenue and expenses above are not counted again as assets. PCs and GPUs use $500 original cost each, $0 salvage value, and five-year straight-line depreciation from November 2026 (about $8.33 per asset per month).</p>
         </section>
       </>
     )}
