@@ -790,9 +790,9 @@ export default function FinancialsPage() {
     </div>
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
-        {metric("Total Assets", assetsEnd, assetsEnd===null?"Some account balances are unverified":null, "text-sky-300")}
-        {metric("Total Liabilities", debtEnd)}
-        {metric("Owner's Equity / Net Worth", netEnd, netEnd===null?"Incomplete until missing balances are supplied":null, "text-emerald-400")}
+        {metric("Business Assets", assetsEnd, assetsEnd===null?"Some account balances are unverified":null, "text-sky-300")}
+        {metric("Business Liabilities", debtEnd)}
+        {metric("Business Net Worth", netEnd, netEnd===null?"Incomplete until missing balances are supplied":null, "text-emerald-400")}
       </div>
       {missingAssetCount > 0 && <p className="text-xs text-amber-300">
         Known asset subtotal: {money(knownAssetsSubtotal)}. {missingAssetCount} account(s) have unknown ending balances and are excluded from this partial subtotal.
