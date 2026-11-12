@@ -304,7 +304,7 @@ export default function CryptoBreakdown({
               </div>
 
               <p className="text-lg font-semibold text-foreground">
-                Total Assets
+                Crypto Business
               </p>
             </button>
 
