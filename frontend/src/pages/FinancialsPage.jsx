@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
-import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
+import { financialLiveBalances as liveBalances } from "@/lib/financialAssetsSnapshot";
 import { api, settingsApi } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
@@ -21,7 +21,7 @@ import {
   moneyRound, valueOrNull, reclassifyPersonalPcContribution,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
-import { localStorage as appStorage } from "@/lib/localStorage";
+
 import {
  formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome, buildProjectIncome,
  loadMonthlyBackfills, loadMonthlySnapshots, loadLoopscaleHistory,
@@ -114,32 +114,6 @@ function readCryptoIncomeSources() {
   snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
   manualIncome: {}, luloBackfills: {},
  };
-}
-function liveBalances() {
-  const values = {};
-  const portfolio = getStoredProjectCryptoPortfolio();
-  for (const item of portfolio?.projectEntries || []) {
-    if (item?.platform && Number.isFinite(Number(item.balance))) values[item.platform.toLowerCase()] = Number(item.balance);
-  }
-  const cache = readObject(PROJECT_QUICK_CACHE_KEY);
-  const lulo = (cache.projects || []).filter(item => item?.yield_tracking === "lulo_lending");
-  if (lulo.length) values.lulo = lulo.reduce((sum, item) => sum + (Number(item.lulo_total_balance_usd) || 0), 0);
-  if (Number.isFinite(Number(cache.loopscaleSnapshot?.positionValueUsd))) values.loopscale = Number(cache.loopscaleSnapshot.positionValueUsd);
-  const salad = loadSaladTracker();
-  if (salad.initialized || salad.lastSyncedAt) values.salad = Number(salad.currentBalance) || 0;
-  const unetwork = loadUnetworkTracker();
-  if (unetwork.initialized || unetwork.lastSyncedAt) values.unetwork = Number(unetwork.currentBalance) || 0;
-  const kryptex = loadKryptexTracker();
-  if (kryptex.initialized && kryptex.lastSyncedAt) values.kryptex = Number(kryptex.currentBalance) || 0;
-  const roller = loadRollerCoinTracker();
-  if (roller.lastSyncedAt) {
-    const value = Number(getRollerCoinTrackerStats(roller).currentBalanceUsd);
-    if (value > 0 || (roller.currentTrxBalance === 0 && roller.lastTrxPrice > 0)) values.rollercoin = value;
-  }
-  const home = appStorage.getCryptoCache()?.projectPortfolio?.bitcoin;
-  const btc = Number(home?.value ?? home?.balance ?? portfolio?.bitcoin?.value);
-  if (Number.isFinite(btc)) values.btc = btc;
-  return values;
 }
 const emptyDraft = () => ({ date: getTodayKey(), description: "", debitAccount: "cash", creditAccount: "revenue", amount: "" });
 const line = (account, debit, credit) => ({ account, debit: rounded(debit), credit: rounded(credit) });
