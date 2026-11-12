@@ -60,16 +60,6 @@ function formatCurrency(value) {
   }).format(Number(value) || 0);
 }
 
-function formatAmount(value, digits = 8) {
-  return (Number(value) || 0).toLocaleString(
-    "en-US",
-    {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: digits,
-    }
-  );
-}
-
 function ProjectPortfolioEntry({
   balance,
   activePositions = 0,
@@ -116,7 +106,6 @@ function ProjectPortfolioEntry({
 
 export default function CryptoBreakdown({
   defaultOpen = false,
-  dailyChange = 0,
 }) {
   const [portfolio, setPortfolio] =
     useState(() =>
@@ -229,9 +218,6 @@ export default function CryptoBreakdown({
 
   const summary =
     portfolio?.summary || {};
-
-  const bitcoin =
-    portfolio?.bitcoin || {};
 
   const projectIncomeBalance =
     Number(
