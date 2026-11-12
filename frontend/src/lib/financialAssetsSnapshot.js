@@ -69,7 +69,7 @@ export function getFinancialTotalAssets(month=getCurrentMonthKey(), live=financi
     Number(row?.cost)>0 && /^\d{4}-\d{2}$/.test(String(row.startMonth))) : [];
   const confirmed=Object.values(stored(FINANCIAL_ASSET_KEYS.confirmed,{}));
   const closed=stored(FINANCIAL_ASSET_KEYS.closed,{})[month];
-  if(closed?.rows) return sumFinancialAssets(closed.rows);
+  if(closed?.rows) return sumFinancialBusiness(closed.rows);
 
   const base=includeJournalEquipment(
     [
@@ -93,7 +93,7 @@ export function getFinancialTotalAssets(month=getCurrentMonthKey(), live=financi
     cashOpening:deriveCashOpening(month,openings,journal,confirmed),
     payableOpening:derivePayableOpening(month,journal),
   });
-  return sumFinancialAssets(rows);
+  return sumFinancialBusiness(rows);
 }
 
 export function sumFinancialAssets(rows) {
@@ -104,5 +104,23 @@ export function sumFinancialAssets(rows) {
     knownSubtotal:moneyRound(assets.filter(row=>row.end!==null)
       .reduce((sum,row)=>sum+Number(row.end||0),0)),
     incomplete, count:assets.length,
+  };
+}
+
+// Business net worth is business assets less liabilities, not gross assets.
+// The home page and Balance Sheet share the same rows and unknown-balance rule.
+export function sumFinancialBusiness(rows) {
+  const assets = sumFinancialAssets(rows);
+  const liabilities = (rows || []).filter(row => row.category === "liabilities");
+  const liabilitiesIncomplete = liabilities.some(row => row.end == null);
+  const liabilityValue = liabilitiesIncomplete ? null : moneyRound(
+    liabilities.reduce((sum, row) => sum + Number(row.end || 0), 0)
+  );
+  return {
+    ...assets,
+    liabilityValue,
+    netValue: assets.value === null || liabilityValue === null
+      ? null : moneyRound(assets.value - liabilityValue),
+    liabilitiesIncomplete,
   };
 }
