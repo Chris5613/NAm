@@ -335,6 +335,7 @@ export default function FinancialsPage() {
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
+  const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
@@ -692,7 +693,6 @@ export default function FinancialsPage() {
           <div>Hardware Payback register: <strong className="text-white">{hardwareDevices.length} devices</strong></div>
           <div>Purchases awaiting journal confirmation: <strong className={unpostedEquipment.length ? "text-amber-300" : "text-emerald-400"}>{unpostedEquipment.length}</strong></div>
           <div>Out-of-pocket electricity: <strong className="text-white">{electricityCovered ? "$0.00 (Free power)" : powerEstimates[month] ? money(powerEstimates[month].cost) + " estimated" : "Awaiting usage data"}</strong></div>
-          <div>Transfer / fee review: <strong className={unresolvedMovements.length ? "text-amber-300" : "text-emerald-400"}>{unresolvedMovements.length} candidates</strong></div>
           <div>Month status: <strong className="text-white">{closeSnapshot ? "Closed · " + new Date(closeSnapshot.closedAt).toLocaleDateString() : "Open"}</strong></div>
         </div>
       </div>
@@ -754,109 +754,6 @@ export default function FinancialsPage() {
         </div>) : <p className="text-sm text-[#94a7b8]">No cash transactions recorded for this month. Add journal entries to build the cash flow statement.</p>}</div>
       </section>
     </>}
-    {tab === "reconcile" && <>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {metric("Confirmed transfers & fees", matchedMovements.length, "Source records + reviewed items", "text-white", true)}
-        {metric("Transaction fees", feeExpense, "Confirmed fee entries only")}
-        {metric("Unreviewed movements", unresolvedMovements.length, "Not posted to ledger", "text-white", true)}
-      </div>
-      {reconciliationStatus && <p role="status" className="text-sm text-sky-300">{reconciliationStatus}</p>}
-      <section className={card + " space-y-4 p-4 sm:p-5"}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold">Transfer & fee reconciliation</h2>
-          <span className="text-xs text-[#9badc1]">{unresolvedMovements.length} require review</span>
-        </div>
-        <p className="text-xs text-[#92a8b9]">Dated provider transactions with explicit source and destination accounts post automatically. Bank transfers and unmatched withdrawals need confirmation. Balance decreases alone are never booked as transfers.</p>
-        {!unresolvedMovements.length && <p className="rounded-lg border border-[#2f4855] px-3 py-3 text-sm text-[#a0bdc7]">No unresolved transfer or fee candidates in this month.</p>}
-        <div className="space-y-2">
-          {unresolvedMovements.slice(0, 60).map(candidate => <div key={candidate.id}
-            className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#293d4e] bg-[#0e1b26] p-3">
-            <div className="min-w-0">
-              <p className="text-sm font-semibold">{candidate.provider || "External transfer"} · {money(candidate.amount)}</p>
-              <p className="text-xs text-[#92a8ba]">{candidate.date} · {candidate.type} · {candidate.issue}</p>
-            </div>
-            <div className="flex gap-2">
-              <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => {
-                setMovementReview({...candidate, from: candidate.from || "", to: candidate.to || ""});
-                setMovementReviewError("");
-                setReconciliationStatus("");
-              }} className="rounded-lg border border-sky-400/30 px-3 py-2 text-xs font-semibold text-sky-300 disabled:opacity-40">Review</button>
-              <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => ignoreMovement(candidate)}
-                className="rounded-lg border border-[#465767] px-3 py-2 text-xs text-[#bbc7d4] disabled:opacity-40">Dismiss</button>
-            </div>
-          </div>)}
-        </div>
-        {movementCandidates.some(candidate => candidate.date.startsWith(month) && ignoredMovements[candidate.id]) && <div className="space-y-2 border-t border-[#273746] pt-3">
-          <p className="text-xs text-[#8ca3b8]">Dismissed candidates</p>
-          {movementCandidates.filter(candidate => candidate.date.startsWith(month) && ignoredMovements[candidate.id]).map(candidate =>
-            <div key={candidate.id} className="flex items-center justify-between gap-2 text-xs text-[#93a9bc]">
-              <span>{candidate.provider} · {money(candidate.amount)}</span>
-              <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => reopenCandidate(candidate)}
-                className="rounded-md border border-[#394a5b] px-2 py-1 disabled:opacity-40">Restore</button>
-            </div>)}
-        </div>}
-        {matchedMovements.length > 0 && <div className="border-t border-[#273746] pt-3">
-          <p className="mb-2 text-xs font-semibold text-[#9cb6c8]">Confirmed movements ({matchedMovements.length})</p>
-          <div className="space-y-1">{matchedMovements.map(item => <div key={item.id} className="flex justify-between gap-3 text-xs text-[#aabecf]">
-            <span>{item.date} · {item.provider || "Transfer"} {item.type}</span>
-            <span className="flex items-center gap-2">{money(item.amount)}{item.feeUsd ? " + " + money(item.feeUsd) + " fee" : ""}
-              <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => ignoreMovement(item)}
-                className="rounded border border-[#394a5b] px-2 py-0.5 text-[#8babc2] disabled:opacity-40">Exclude</button>
-            </span>
-          </div>)}</div>
-        </div>}
-      </section>
-      <section className={card + " p-4 sm:p-5"}>
-        <h2 className="text-base font-semibold">Balance movement check</h2>
-        <p className="mt-2 text-xs text-[#91a6b7]">Compares the observed change in each account with recorded income and confirmed movements. Differences can reflect opening balances, stale snapshots, withdrawals, transfers, fees, or changing crypto prices; they are not auto-posted.</p>
-        <div className="mt-4 overflow-x-auto">
-          <table className="w-full min-w-[620px] text-xs">
-            <thead><tr className="border-b border-[#34495b] text-left text-[#9bb0c4]">
-              <th className="pb-2">Asset</th><th className="pb-2 text-right">Balance change</th>
-              <th className="pb-2 text-right">Earned</th><th className="pb-2 text-right">Transfers</th>
-              <th className="pb-2 text-right">Unexplained</th>
-            </tr></thead>
-            <tbody>{reconciliation.map(item => <tr key={item.account} className="border-b border-[#223141]">
-              <td className="py-2 font-medium">{item.name}{item.valuationSensitive ? <span className="ml-1 text-[#718fa4]">· Market priced</span> : null}</td>
-              <td className="py-2 text-right tabular-nums">{signed(item.delta)}</td>
-              <td className="py-2 text-right tabular-nums">{money(item.estimatedIncome)}</td>
-              <td className="py-2 text-right tabular-nums">{signed(item.transfers)}</td>
-              <td className={"py-2 text-right tabular-nums " + (Math.abs(item.unexplained) >= 0.05 ? "text-amber-300" : "text-emerald-300")}>{signed(item.unexplained)}</td>
-            </tr>)}</tbody>
-          </table>
-          {!reconciliation.length && <p className="py-3 text-sm text-[#849baa]">Not enough account balances are recorded to reconcile this month.</p>}
-        </div>
-      </section>
-      <section className={card + " space-y-3 p-4 sm:p-5"}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold">Month-end close · {monthTitle(month)}</h2>
-          {closeSnapshot ? <span className="text-xs font-semibold text-emerald-300">Closed</span> :
-            <span className="text-xs text-[#9bb0c4]">Open</span>}
-        </div>
-        {closeSnapshot ? <>
-          <p className="text-xs text-[#91acbd]">Frozen on {new Date(closeSnapshot.closedAt).toLocaleString()}. Journal entries, income, balances and report totals will not change until you reopen the month.</p>
-          <p className="text-xs text-[#b7c6d4]">At close: {closeSnapshot.exceptions?.pendingMovements || 0} pending transfers · {closeSnapshot.exceptions?.balanceDifferences || 0} unexplained balance changes · {closeSnapshot.exceptions?.unpostedEquipment || 0} hardware purchases pending</p>
-          <button type="button" onClick={reopenSelectedMonth} className="rounded-lg border border-amber-500/30 px-4 py-2 text-sm font-semibold text-amber-300">Reopen month</button>
-        </> : <>
-          <p className="text-xs text-[#91acbd]">After the month ends, review all transactions and balances, then freeze a copy of the reports. The original trackers and transactions are never deleted.</p>
-          {month >= getCurrentMonthKey() ? <p className="text-sm text-[#87b9d4]">The current month stays open while mining income grows.</p> :
-            <button type="button" onClick={() => { setMonthClosePrompt(month); setMonthCloseAcknowledged(false); }}
-              className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#071710]">Review & close month</button>}
-          {monthClosePrompt === month && month < getCurrentMonthKey() && <div className="space-y-3 rounded-lg border border-amber-500/25 bg-[#1a1c23] p-4">
-            <p className="text-sm font-semibold">Freeze the {monthTitle(month)} reporting snapshot?</p>
-            <p className="text-xs text-[#acb9c7]">Unresolved: {unresolvedMovements.length} movement candidates; {unpostedEquipment.length} hardware purchase records; {reconciliation.filter(item => Math.abs(item.unexplained) >= 0.05).length} balance differences. Closing preserves these exceptions for later review.</p>
-            <label className="flex items-start gap-2 text-xs text-[#c2d0db]">
-              <input type="checkbox" checked={monthCloseAcknowledged} onChange={event => setMonthCloseAcknowledged(event.target.checked)}/>
-              I reviewed these exceptions and want to freeze this report.
-            </label>
-            <div className="flex gap-2"><button type="button" onClick={() => setMonthClosePrompt(null)}
-              className="rounded-lg border border-[#445566] px-3 py-2 text-xs">Cancel</button>
-              <button type="button" disabled={!monthCloseAcknowledged} onClick={closeSelectedMonth}
-                className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-[#05190f] disabled:opacity-40">Close month</button></div>
-          </div>}
-        </>}
-      </section>
-    </>}
     {tab === "ledger" && <>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">General Ledger</h2></div>
       <div className="flex flex-wrap items-center gap-2">
@@ -871,7 +768,11 @@ export default function FinancialsPage() {
         <button disabled={Boolean(closeSnapshot)} onClick={() => { setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300 disabled:opacity-40"><Plus size={16}/> Add entry</button>
       </div></div>
-      {closeSnapshot && <p className="text-xs text-amber-300">This month is closed and frozen. Reopen it in Reconcile to post or edit transactions.</p>}
+      {closeSnapshot && <div className="flex flex-wrap items-center gap-3 text-xs text-amber-300">
+        <span>This month is closed and frozen.</span>
+        <button type="button" onClick={reopenSelectedMonth}
+          className="rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300">Reopen month</button>
+      </div>
       {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
       {syncedIncomeJournal.unexplainedManualRevenue > 0 && <p role="status" className="text-sm text-amber-300">
         Manual revenue exceeds Crypto Income by {money(syncedIncomeJournal.unexplainedManualRevenue)} this month. Review for duplicates or missing earnings.
@@ -897,50 +798,6 @@ export default function FinancialsPage() {
             <tr className="font-bold"><td className="py-3">Total</td><td className="text-right">{money(trialDebit)}</td><td className="text-right">{money(trialCredit)}</td></tr>
           </tbody></table></div></section>
     </>}
-    {movementReview && <div className="fixed inset-0 z-[80] flex items-center justify-center overflow-y-auto bg-black/75 p-3 sm:p-5"
-      onMouseDown={event => { if (event.target === event.currentTarget) setMovementReview(null); }}>
-      <section className={card + " w-full max-w-lg space-y-3 p-5 shadow-2xl"} role="dialog" aria-modal="true" aria-label="Review transfer or fee">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold">Review {["fee", "transaction_fee", "network_fee"].includes(movementReview.type) ? "fee" : "transfer"}</h2>
-          <button type="button" onClick={() => setMovementReview(null)} aria-label="Close review"><X size={19}/></button>
-        </div>
-        <p className="text-xs text-[#9bb0c3]">{movementReview.provider} · {movementReview.issue}</p>
-        {movementReview.bankSource && <p className="text-xs text-amber-300">Bank data may include personal finances. Approve only if this relates to your mining business.</p>}
-        {movementReviewError && <p role="alert" className="text-sm text-rose-400">{movementReviewError}</p>}
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="space-y-1 text-xs text-[#a9becf]">Date
-            <input type="date" value={movementReview.date} className={field}
-              onChange={event => setMovementReview(prev => ({...prev,date:event.target.value}))}/></label>
-          <label className="space-y-1 text-xs text-[#a9becf]">{["fee", "transaction_fee", "network_fee"].includes(movementReview.type) ? "Fee amount (USD)" : "Transferred amount (USD)"}
-            <input type="number" min="0.01" step="0.01" value={movementReview.amount} className={field}
-              onChange={event => setMovementReview(prev => ({...prev,amount:event.target.value}))}/></label>
-          <label className="space-y-1 text-xs text-[#a9becf]">From account / Paid by
-            <select className={field} value={movementReview.from || ""}
-              onChange={event => setMovementReview(prev => ({...prev,from:event.target.value}))}>
-              <option value="">Choose account</option>
-              {ACCOUNT_OPTIONS.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
-            </select></label>
-          {!["fee", "transaction_fee", "network_fee"].includes(movementReview.type) && <>
-            <label className="space-y-1 text-xs text-[#a9becf]">To account
-              <select className={field} value={movementReview.to || ""}
-                onChange={event => setMovementReview(prev => ({...prev,to:event.target.value}))}>
-                <option value="">Choose account</option>
-                {ACCOUNT_OPTIONS.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
-              </select></label>
-            <label className="space-y-1 text-xs text-[#a9becf]">Additional transfer fee (USD)
-              <input type="number" min="0" step="0.01" value={movementReview.feeUsd ?? 0} className={field}
-                onChange={event => setMovementReview(prev => ({...prev,feeUsd:event.target.value}))}/></label>
-          </>}
-        </div>
-        <p className="text-xs text-[#91a6b8]">Only confirmed account movements and fees are posted. The source transaction ID prevents repeat imports. This is not additional mining income.</p>
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => setMovementReview(null)}
-            className="rounded-lg border border-[#415367] px-3 py-2 text-xs">Cancel</button>
-          <button type="button" onClick={postReviewedMovement}
-            className="rounded-lg bg-emerald-400 px-4 py-2 text-xs font-semibold text-[#071a12]">Confirm & record</button>
-        </div>
-      </section>
-    </div>}
     {quickModalOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/75 p-3 sm:p-5" onMouseDown={event => { if (event.target === event.currentTarget) setQuickModalOpen(false); }}>
       <section className={card + " w-full max-w-2xl space-y-4 overflow-y-auto p-4 shadow-2xl sm:p-6"} data-testid="transaction-chat" role="dialog" aria-modal="true" aria-label="Describe a transaction">
         <div className="flex items-center justify-between gap-3">
