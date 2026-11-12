@@ -548,10 +548,42 @@ export default function FinancialsPage() {
     (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
   const creditTotal = moneyRound(entries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.credit||0),0),0));
-  // Monthly journal activity; without documented opening balances this cannot
-  // honestly be called a complete adjusted trial balance.
+  // Roll forward recorded journal activity from the start of tracking.
+  // This includes previous earning accruals and depreciation, but opening
+  // external account balances are still not invented.
+  const cumulativeEntries = useMemo(() => {
+    const all=[];
+    for(let key="2026-09", n=0; key<=month && n<240; key=shift(key,1),n++) {
+      if(key===month) {all.push(...entries);continue;}
+      if(closedMonths[key]?.entries) {all.push(...closedMonths[key].entries);continue;}
+      const periodManual=journal.filter(item=>String(item.date||"").startsWith(key));
+      const manualLines=periodManual.map(item=>({
+        ...item,lines:[line(item.debitAccount,item.amount,0),line(item.creditAccount,0,item.amount)],
+      }));
+      const recordedIncome=incomeMonths.find(item=>item.monthKey===key);
+      const income=buildAutoIncomeJournal(key,recordedIncome,periodManual,getCurrentMonthKey(),getTodayKey());
+      const historicalHardware=buildFinancialBalanceRows(key,records,{},hardwareDevices,getCurrentMonthKey());
+      const scheduled=moneyRound(historicalHardware.filter(item=>item.category==="equipment")
+        .reduce((sum,item)=>sum+Number(item.depreciation||0),0));
+      const previouslyPostedDep=moneyRound(periodManual.filter(item=>item.debitAccount==="depreciation")
+        .reduce((sum,item)=>sum+Number(item.amount||0),0));
+      const extraDep=Math.max(0,moneyRound(scheduled-previouslyPostedDep));
+      const already=new Set(periodManual.filter(item=>item.movementSourceId).map(item=>item.movementSourceId));
+      const knownMovements=movementJournal(Object.values(confirmedMovements)
+        .filter(item=>String(item.date||"").startsWith(key)),key,already)
+        .filter(item=>!periodManual.some(manual=>manual.date===item.date &&
+          Math.abs(Number(manual.amount)-Number(item.lines[0]?.debit))<.005 &&
+          manual.debitAccount===item.lines[0]?.account &&
+          manual.creditAccount===item.lines[1]?.account));
+      all.push(...manualLines,...income.entries,...knownMovements);
+      if(extraDep) all.push({id:"auto-depreciation:"+key,date:key+"-28",
+        description:"Monthly equipment depreciation",automatic:true,
+        lines:[line("depreciation",extraDep,0),line("accDep",0,extraDep)]});
+    }
+    return all;
+  },[month,entries,closedMonths,journal,incomeMonths,hardwareDevices,records,confirmedMovements]);
   const trial = accounts.map(account=>{
-    const activity = journalAccountActivity(entries,account.id);
+    const activity = journalAccountActivity(cumulativeEntries,account.id);
     return {...account,debit:Math.max(0,activity),credit:Math.max(0,-activity)};
   }).filter(account=>account.debit||account.credit);
   const trialDebit = moneyRound(trial.reduce((sum,row)=>sum+row.debit,0));
@@ -844,7 +876,7 @@ export default function FinancialsPage() {
     {tab === "trial" && <>
       <div className="grid gap-3 sm:grid-cols-3">{metric("Debits", trialDebit)}{metric("Credits", trialCredit)}{metric("Difference", rounded(trialDebit-trialCredit), "Journal entries only", "text-emerald-400")}</div>
       <section className={card + " p-4 sm:p-6"}><h2 className="text-lg font-semibold">Trial Balance — {monthTitle(month)}</h2>
-        <p className="mt-1 text-xs text-amber-300">Posted journal activity for this month. A full adjusted trial balance requires verified opening account balances.</p>
+        <p className="mt-1 text-xs text-amber-300">Cumulative posted journal activity since September 2026. This is a running ledger trial balance; opening balances for externally tracked assets must be verified before it becomes a fully adjusted trial balance.</p>
         
         <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[360px] text-sm"><thead><tr className="border-b border-[#314454] text-xs text-[#9db0c1]"><th className="pb-2 text-left">Account</th><th className="pb-2 text-right">Debit</th><th className="pb-2 text-right">Credit</th></tr></thead>
           <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{row.name}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
