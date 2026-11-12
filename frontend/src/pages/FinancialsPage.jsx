@@ -772,7 +772,7 @@ export default function FinancialsPage() {
         <span>This month is closed and frozen.</span>
         <button type="button" onClick={reopenSelectedMonth}
           className="rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300">Reopen month</button>
-      </div>
+      </div>}
       {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
       {syncedIncomeJournal.unexplainedManualRevenue > 0 && <p role="status" className="text-sm text-amber-300">
         Manual revenue exceeds Crypto Income by {money(syncedIncomeJournal.unexplainedManualRevenue)} this month. Review for duplicates or missing earnings.
