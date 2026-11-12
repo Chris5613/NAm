@@ -9,6 +9,7 @@ import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
+import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import {
  formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome, buildProjectIncome,
@@ -465,10 +466,11 @@ export default function FinancialsPage() {
   // Estimated power is never a cash payment. Prefer actual posted electricity
   // expenses, and never add the same expense twice through two sources.
   const actualPowerEntries = ledgerEntries.filter(entry => entry.debitAccount === "electric");
+  const electricityCovered = hasFreeMiningPower(month);
   const estimatedPower = Number(powerEstimates[month]?.cost);
   const hasSavedExpenses = savedExpenses !== null && savedExpenses > 0;
-  const autoPower = actualPowerEntries.length || hasSavedExpenses ||
-    !Number.isFinite(estimatedPower) ? 0 : Math.max(0, rounded(estimatedPower));
+  const autoPower = electricityCovered || actualPowerEntries.length || hasSavedExpenses ||
+    !Number.isFinite(estimatedPower) ? 0 : outOfPocketMiningPowerCost(rounded(estimatedPower), month);
   // A saved $0 means no separate costs have been recorded yet, so the
   // synced electricity estimate can still feed P&L.
   const expenses = hasSavedExpenses ? savedExpenses : rounded(journalExpense + autoPower);
@@ -633,7 +635,7 @@ export default function FinancialsPage() {
           <div>Monthly equipment depreciation: <strong className="text-white">{money(fixedDep)}</strong></div>
           <div>Hardware Payback register: <strong className="text-white">{hardwareDevices.length} devices</strong></div>
           <div>Purchases awaiting journal confirmation: <strong className={unpostedEquipment.length ? "text-amber-300" : "text-emerald-400"}>{unpostedEquipment.length}</strong></div>
-          <div>Estimated mining electricity: <strong className="text-white">{powerEstimates[month] ? money(powerEstimates[month].cost) : "Awaiting usage data"}</strong></div>
+          <div>Out-of-pocket electricity: <strong className="text-white">{electricityCovered ? "$0.00 (Free power)" : powerEstimates[month] ? money(powerEstimates[month].cost) + " estimated" : "Awaiting usage data"}</strong></div>
           <div>Unposted historical transactions: <strong className="text-amber-300">Need reconciliation</strong></div>
         </div>
       </div>
