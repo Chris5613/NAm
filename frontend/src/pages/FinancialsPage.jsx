@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { api, settingsApi } from "@/lib/apiClient";
@@ -35,21 +35,6 @@ const DEFAULT_POWER_SETTINGS = { basicRate: 0.1691, offPeakRate: 0.0893, midPeak
 function readHardwareRegister() {
   const rows = readJson(HARDWARE_KEY, []);
   return Array.isArray(rows) ? rows.filter(row => Number(row?.cost) > 0 && /^\d{4}-\d{2}$/.test(String(row.startMonth))) : [];
-}
-function monthsBetween(from, to) {
-  const [y1, m1] = from.split("-").map(Number);
-  const [y2, m2] = to.split("-").map(Number);
-  return (y2 - y1) * 12 + m2 - m1;
-}
-function hardwareSchedule(row, month) {
-  const cost = Number(row.cost) || 0;
-  const startMonth = row.startMonth || "2026-11";
-  if (month < startMonth) return null;
-  const elapsed = Math.max(0, monthsBetween(startMonth, month));
-  return {
-    start: rounded(Math.max(0, cost * (1 - Math.min(60, elapsed) / 60))),
-    end: rounded(Math.max(0, cost * (1 - Math.min(60, elapsed + 1) / 60))),
-  };
 }
 function estimatePowerCost(usage, settings) {
   if (!usage || !/^\d{4}-\d{2}$/.test(String(usage.month))) return null;
@@ -96,20 +81,11 @@ const accounts = [
   { id: "depreciation", name: "Depreciation Expense", type: "expense" },
   { id: "fees", name: "Transaction & Network Fees", type: "expense" },
 ];
-const cashLike = name => /lulo|cash|bank|checking|savings|receivable|pending payout/i.test(name);
-function categoryFor(name) {
-  if (/debt|loan|payable|credit card|liabilit/i.test(name)) return "liabilities";
-  if (cashLike(name)) return "cash";
-  if (/loopscale|defi|lending|invest|stock/i.test(name)) return "defi";
-  if (/rtx|gpu|computer|equipment|hardware|pc/i.test(name)) return "equipment";
-  return "digital";
-}
 function readJson(key, fallback) {
   try { const value = JSON.parse(remoteStorage.getItem(key) || "null"); return value ?? fallback; }
   catch { return fallback; }
 }
 const rounded = value => Math.round((Number(value) || 0) * 100) / 100;
-const amount = value => value === null || value === undefined || value === "" ? null : Number.isFinite(Number(value)) ? Number(value) : null;
 const money = value => value === null ? "—" : formatCurrency(value);
 const signed = value => value === null ? "—" : (value > 0 ? "+" : value < 0 ? "−" : "") + money(Math.abs(value));
 function shift(month, delta) {
@@ -118,11 +94,6 @@ function shift(month, delta) {
 }
 function monthTitle(month) {
   return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", year: "numeric" }).format(new Date(month + "-15T12:00:00Z"));
-}
-function equipmentValue(month, cost = 500) {
-  const [year, number] = month.split("-").map(Number);
-  const elapsed = Math.max(0, (year - 2026) * 12 + number - 11);
-  return rounded(Math.max(0, cost * (1 - Math.min(60, elapsed) / 60)));
 }
 function readCryptoIncomeSources() {
  const quick = readObject(PROJECT_QUICK_CACHE_KEY);
@@ -162,83 +133,6 @@ function liveBalances() {
   const btc = Number(home?.value ?? home?.balance ?? portfolio?.bitcoin?.value);
   if (Number.isFinite(btc)) values.btc = btc;
   return values;
-}
-function makeRows(month, records, live, hardwareDevices = []) {
-  const current = records[month] || {};
-  const previous = records[shift(month, -1)] || {};
-  const saved = Array.isArray(current.items) ? current.items : [];
-  const prior = Array.isArray(previous.items) ? previous.items : [];
-  // Names from live trackers are lowercase while saved accounts retain
-  // their display capitalization. Deduplicate by normalized account identity,
-  // preferring the saved (capitalized) name over generated live names.
-  const candidates = current.locked ? saved.map(row => row.name) : [
-    ...saved.map(row => row.name),
-    ...prior.map(row => row.name),
-    ...Object.keys(live).map(name => name === "btc" ? "BTC" : name),
-  ];
-  const namesByKey = new Map();
-  for (const candidate of candidates) {
-    const name = String(candidate || "").trim();
-    const key = name.toLowerCase();
-    if (!key || namesByKey.has(key)) continue;
-    namesByKey.set(key, name);
-  }
-  const excludedKeys = new Set((current.excluded || []).map(name => String(name).trim().toLowerCase()));
-  const names = [...namesByKey.values()];
-  const rows = names.filter(name => !excludedKeys.has(name.toLowerCase())).map(name => {
-    const row = saved.find(item => String(item.name).toLowerCase() === String(name).toLowerCase()) || {};
-    const old = prior.find(item => String(item.name).toLowerCase() === String(name).toLowerCase()) || {};
-    const start = amount(row.start) ?? (current.locked ? null : amount(old.end));
-    const observed = live[String(name).toLowerCase()];
-    const end = month === getCurrentMonthKey() && Number.isFinite(observed) ? observed : amount(row.end);
-    return { id: "project:" + name.toLowerCase(), name, category: categoryFor(name),
-      start, end };
-  });
-  const extra = Array.isArray(current.balanceSheetItems) ? current.balanceSheetItems : [];
-  const priorExtra = Array.isArray(previous.balanceSheetItems) ? previous.balanceSheetItems : [];
-  const allExtra = current.locked ? extra : [
-    ...priorExtra.filter(row => !extra.some(other => other.id === row.id) && !(current.balanceExcluded || []).includes(row.id)),
-    ...extra,
-  ];
-  // Hardware Payback is the shared equipment register. Keep the two known
-  // $500 purchases as a fallback if Hardware Payback hasn't been populated.
-  if (!current.locked && month >= "2026-11") {
-    for (const [id, name] of [["hardware:rtx2080super-pc", "RTX 2080 Super PC"], ["hardware:rtx5070", "RTX 5070 GPU"]]) {
-      if (!allExtra.some(row => row.id === id || new RegExp(id.includes("2080") ? "2080" : "5070", "i").test(row.name || "")) &&
-          !(current.balanceExcluded || []).includes(id)) {
-        allExtra.push({ id, name, category: "equipment", historicalCost: 500 });
-      }
-    }
-  }
-  const trackedHardwareKeys = new Set();
-  for (const device of hardwareDevices) {
-    const name = String(device.name || "").trim();
-    const key = /2080/i.test(name) ? "2080" : /5070/i.test(name) ? "5070" : name.toLowerCase();
-    if (!name || trackedHardwareKeys.has(key)) continue;
-    trackedHardwareKeys.add(key);
-    const schedule = hardwareSchedule(device, month);
-    if (!schedule) continue;
-    const existing = allExtra.find(row => {
-      const other = String(row.name || "").toLowerCase();
-      return key === "2080" ? /2080/.test(other) : key === "5070" ? /5070/.test(other) : other === key;
-    });
-    if (existing) {
-      existing.syncedHardware = { ...device, ...schedule };
-    } else {
-      allExtra.push({ id: "payback:" + String(device.id || key), name, category: "equipment", syncedHardware: { ...device, ...schedule } });
-    }
-  }
-  for (const row of allExtra) {
-    const isFixed = /^(hardware:rtx2080super-pc|hardware:rtx5070)$/.test(row.id) &&
-      !row.disabledAutomaticDepreciation && month >= "2026-11";
-    const older = priorExtra.find(item => item.id === row.id);
-    const start = row.syncedHardware ? row.syncedHardware.start : isFixed ? equipmentValue(month, 500) :
-      amount(row.start) ?? (current.locked ? null : amount(older?.end));
-    const end = row.syncedHardware ? row.syncedHardware.end : isFixed ? equipmentValue(shift(month, 1), 500) :
-      amount(row.end) ?? (current.locked ? null : start);
-    rows.push({ id: row.id, name: row.name, category: row.category || categoryFor(row.name), start, end });
-  }
-  return rows;
 }
 const emptyDraft = () => ({ date: getTodayKey(), description: "", debitAccount: "cash", creditAccount: "revenue", amount: "" });
 const line = (account, debit, credit) => ({ account, debit: rounded(debit), credit: rounded(credit) });
