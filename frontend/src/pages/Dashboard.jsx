@@ -21,6 +21,7 @@ import {
 } from "@/lib/localStorage";
 import {
   calculateNetWorth,
+  getCryptoBusinessValue,
   formatCurrency,
   getCategoryDailyChanges,
   getDailyNetWorthChange,
@@ -202,19 +203,6 @@ export default function Dashboard() {
   ] = useState([]);
   const [chartRange, setChartRange] = useState("ALL");
   const [financialAssets, setFinancialAssets] = useState(getFinancialTotalAssets);
-  useEffect(() => {
-    const refresh = () => setFinancialAssets(getFinancialTotalAssets());
-    const unsubscribe = subscribe(refresh);
-    const timer = window.setInterval(refresh, 30000);
-    window.addEventListener("focus", refresh);
-    window.addEventListener("project-crypto-updated", refresh);
-    return () => {
-      unsubscribe();
-      window.clearInterval(timer);
-      window.removeEventListener("focus", refresh);
-      window.removeEventListener("project-crypto-updated", refresh);
-    };
-  }, []);
   const [cashMonth, setCashMonth] = useState(() => new Date().toISOString().slice(0,7));
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankTransactions, setBankTransactions] = useState([]);
@@ -475,12 +463,11 @@ export default function Dashboard() {
             });
           }
 
+          // Financials already includes crypto project balances: replace, do not add.
+          const businessAssets = getFinancialTotalAssets();
           const calculatedNetWorth =
-            calculateNetWorth(
-              storedAssets,
-
-              cryptoTotal
-            );
+            calculateNetWorth(storedAssets, getCryptoBusinessValue(businessAssets, cryptoTotal));
+          setFinancialAssets(businessAssets);
 
           const categoryChanges =
             getCategoryDailyChanges(
@@ -560,6 +547,18 @@ export default function Dashboard() {
 
       []
     );
+
+  useEffect(() => {
+    const refresh = () => fetchData();
+    const unsubscribe = subscribe(refresh);
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      unsubscribe();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
+  }, [fetchData]);
 
   useEffect(() => {
     fetchData();
@@ -1220,10 +1219,10 @@ export default function Dashboard() {
               Math.abs(Number(homeBalance(a)) || 0)).map(category => (
               <button key={category} type="button" onClick={() => openCategoryModal(category)}
                 className="block w-full rounded-lg px-1 py-1.5 text-left transition-colors hover:bg-secondary/35"
-                aria-label={`View ${category === "crypto" ? "Total Assets" : category} details`}>
+                aria-label={`View ${category === "crypto" ? "Crypto Business" : category} details`}>
                 <AllocationBar category={category}
                   value={homeBalance(category)}
-                  label={category === "crypto" ? "Total Assets" : undefined}
+                  label={category === "crypto" ? "Crypto Business" : undefined}
                   unverified={category === "crypto" && financialAssets.incomplete}
                   maxValue={maxAllocation} />
               </button>
@@ -1431,7 +1430,7 @@ export default function Dashboard() {
                       "
                     >
                       {
-                        selectedCategory === "crypto" ? "Total Assets" :
+                        selectedCategory === "crypto" ? "Crypto Business" :
                         CATEGORY_CONFIG[selectedCategory].label
                       }
                     </h2>
