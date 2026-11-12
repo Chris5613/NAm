@@ -47,6 +47,8 @@ export function AllocationBar({
   category,
   value,
   maxValue,
+  label,
+  unverified = false,
 }) {
   const config =
     CATEGORY_CONFIG[
@@ -54,7 +56,7 @@ export function AllocationBar({
     ];
 
   const Icon =
-    config.icon;
+    label === "Total Assets" ? WalletCards : config.icon;
 
   const width =
     maxValue > 0
@@ -90,14 +92,12 @@ export function AllocationBar({
         >
           <span className="text-sm text-foreground">
             {
-              config.shortLabel
+              label || config.shortLabel
             }
           </span>
 
           <span className="text-sm font-medium text-foreground">
-            {formatCurrency(
-              value
-            )}
+            {unverified ? "—" : formatCurrency(value)}
           </span>
         </div>
 
@@ -113,7 +113,7 @@ export function AllocationBar({
             className={`h-full rounded-full ${config.bar}`}
             style={{
               width:
-                `${width}%`,
+                `${unverified ? 0 : width}%`,
             }}
           />
         </div>
