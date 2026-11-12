@@ -11,7 +11,8 @@ import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
 import {
-  buildFinancialBalanceRows, includeJournalEquipment, buildStatementRows, buildFinancialProfit,
+  buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
+  buildStatementRows, buildFinancialProfit,
   classifyCashFlows, journalAccountActivity, deriveCashOpening, moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
@@ -363,14 +364,7 @@ export default function FinancialsPage() {
       Math.abs(Number(manual.amount) - Number(entry.lines[0]?.debit)) <= 0.005 &&
       manual.debitAccount === entry.lines[0]?.account &&
       manual.creditAccount === entry.lines[1]?.account));
-  const unpostedEquipment = hardwareDevices.filter(device => {
-    if (device.startMonth !== month || !(Number(device.cost) > 0)) return false;
-    const name = String(device.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
-    return !ledgerEntries.some(entry =>
-      entry.debitAccount === "equipment" &&
-      Math.abs(Number(entry.amount) - Number(device.cost)) <= 0.01 &&
-      String(entry.description || "").toLowerCase().replace(/[^a-z0-9]/g, "").includes(name));
-  });
+  const unpostedEquipment = unmatchedEquipmentPurchases(baseRows,ledgerEntries,month);
   const syncedIncomeJournal = useMemo(() => buildAutoIncomeJournal(
     month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey(),
   ), [month, syncedRevenue, ledgerEntries]);
@@ -512,7 +506,10 @@ export default function FinancialsPage() {
     }
     const value = Number(draft.amount);
     if (!draft.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date) ||
-      !Number.isFinite(value) || value <= 0 || draft.debitAccount === draft.creditAccount) {
+      !Number.isFinite(value) || value <= 0 ||
+      !accounts.some(row=>row.id===draft.debitAccount) ||
+      !accounts.some(row=>row.id===draft.creditAccount) ||
+      draft.debitAccount === draft.creditAccount) {
       setError("Enter a valid date, description, positive amount, and two different accounts.");
       return;
     }
@@ -545,6 +542,8 @@ export default function FinancialsPage() {
     }
     if (!quickEntry.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(quickEntry.date) ||
       !Number.isFinite(quickEntry.amount) || quickEntry.amount <= 0 ||
+      !accounts.some(row=>row.id===quickEntry.debitAccount) ||
+      !accounts.some(row=>row.id===quickEntry.creditAccount) ||
       quickEntry.debitAccount === quickEntry.creditAccount) {
       setQuickError("Check the date, amount, and accounts before posting.");
       return;
@@ -569,8 +568,8 @@ export default function FinancialsPage() {
       date: "",
       description: "Purchase: " + device.name,
       debitAccount: "equipment",
-      creditAccount: "cash",
-      amount: String(device.cost),
+      creditAccount: "",
+      amount: String(device.historicalCost || device.cost),
     });
     setTab("ledger");
     setError("");
@@ -840,10 +839,11 @@ export default function FinancialsPage() {
         <label className="block space-y-1 text-sm">Description<input required value={draft.description} onChange={event=>setDraft(old=>({...old,description:event.target.value}))} className={field} placeholder="e.g. Mining payout"/></label>
         {["debitAccount","creditAccount"].map(key=><label key={key} className="block space-y-1 text-sm">{key==="debitAccount"?"Debit account":"Credit account"}
           <select value={draft[key]} onChange={event=>setDraft(old=>({...old,[key]:event.target.value}))} className={field}>
+            <option value="">Select account</option>
             {accounts.map(account=><option key={account.id} value={account.id}>{account.name}</option>)}
           </select></label>)}
         <label className="block space-y-1 text-sm">Amount ($)<input required min="0.01" step="0.01" type="number" value={draft.amount} onChange={event=>setDraft(old=>({...old,amount:event.target.value}))} className={field}/></label>
-        <p className="text-xs text-[#91a7b9]">Confirm the actual transaction date and payment account. Hardware Payback doesn't record how the purchase was funded. Don't post purchases twice.</p>
+        <p className="text-xs text-[#91a7b9]">Confirm the purchase date and funding source (Cash/Bank, Owner's Equity, Crypto, or Accounts Payable). No new bank payment is assumed.</p>
         {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
         <div className="flex gap-2"><button type="button" onClick={()=>setModal(false)} className="rounded-lg border border-[#384d5d] px-4 py-2">Cancel</button>
           <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#071710]">Post entry</button></div>
