@@ -233,8 +233,8 @@ export default function FinancialsPage() {
   const [phoneModal, setPhoneModal] = useState(false);
   const [phoneError, setPhoneError] = useState("");
   const [phoneDraft, setPhoneDraft] = useState({
-    inventoryId:"",name:"",purchaseDate:"2026-05-01",
-    businessDate:"2026-05-01",businessValue:"",fundingAccount:"equity",
+    inventoryId:"",name:"",purchaseDate:"",
+    businessDate:"",businessValue:"",fundingAccount:"equity",
   });
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
@@ -522,8 +522,8 @@ export default function FinancialsPage() {
     .reduce((sum,entry)=>sum+entry.delta,0));
   const openPhoneEditor = () => {
     setPhoneError("");
-    setPhoneDraft({inventoryId:"",name:"",purchaseDate:"2026-05-01",
-      businessDate:"2026-05-01",businessValue:"",fundingAccount:"equity"});
+    setPhoneDraft({inventoryId:"",name:"",purchaseDate:"",
+      businessDate:"",businessValue:"",fundingAccount:"equity"});
     setPhoneModal(true);
   };
   const setPhoneInventoryChoice = id => {
