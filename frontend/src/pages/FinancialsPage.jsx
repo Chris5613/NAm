@@ -582,6 +582,10 @@ export default function FinancialsPage() {
   const cashOut = rounded(cashEvents.filter(entry => entry.delta < 0).reduce((sum, entry) => sum - entry.delta, 0));
   const saveEntry = event => {
     event.preventDefault();
+    if (closedMonths[String(draft.date).slice(0, 7)]) {
+      setError("This reporting month is closed. Reopen it under Reconcile before editing.");
+      return;
+    }
     const value = Number(draft.amount);
     if (!draft.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date) ||
       !Number.isFinite(value) || value <= 0 || draft.debitAccount === draft.creditAccount) {
@@ -611,6 +615,10 @@ export default function FinancialsPage() {
   };
   const confirmQuickEntry = () => {
     if (!quickEntry) return;
+    if (closedMonths[String(quickEntry.date).slice(0, 7)]) {
+      setQuickError("This reporting month is closed. Reopen it before posting.");
+      return;
+    }
     if (!quickEntry.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(quickEntry.date) ||
       !Number.isFinite(quickEntry.amount) || quickEntry.amount <= 0 ||
       quickEntry.debitAccount === quickEntry.creditAccount) {
@@ -645,9 +653,85 @@ export default function FinancialsPage() {
     setModal(true);
   };
   const deleteEntry = id => {
+    const original = journal.find(entry => entry.id === id);
+    if (original && closedMonths[String(original.date).slice(0, 7)]) {
+      setReconciliationStatus("Reopen the closed month before deleting its journal entries.");
+      setTab("reconcile");
+      return;
+    }
     const updated = journal.filter(entry => entry.id !== id);
     remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(updated));
     setJournal(updated);
+  };
+  const postReviewedMovement = () => {
+    if (!movementReview) return;
+    if (closedMonths[String(movementReview.date).slice(0, 7)]) {
+      setReconciliationStatus("Reopen the month before adding transfer or fee records.");
+      return;
+    }
+    const confirmed = movementFromReview(movementReview);
+    if (!confirmed) {
+      setReconciliationStatus("Enter a valid date, positive USD amount, and verified account(s).");
+      return;
+    }
+    // The source id remains unchanged on re-review, so no second entry is created.
+    const updated = {...confirmedMovements, [confirmed.id]: confirmed};
+    remoteStorage.setItem(CONFIRMED_MOVEMENTS_KEY, JSON.stringify(updated));
+    setConfirmedMovements(updated);
+    setMovementReview(null);
+    setReconciliationStatus("Confirmed movement added to the ledger and trial balance.");
+  };
+  const ignoreMovement = candidate => {
+    if (closedMonths[month]) return;
+    const updated = {...ignoredMovements, [candidate.id]: true};
+    remoteStorage.setItem(IGNORED_MOVEMENTS_KEY, JSON.stringify(updated));
+    setIgnoredMovements(updated);
+    setReconciliationStatus("Candidate dismissed; no financial entry was created.");
+  };
+  const reopenCandidate = candidate => {
+    const updated = {...ignoredMovements};
+    delete updated[candidate.id];
+    remoteStorage.setItem(IGNORED_MOVEMENTS_KEY, JSON.stringify(updated));
+    setIgnoredMovements(updated);
+    setReconciliationStatus("Candidate restored to the review queue.");
+  };
+  const closeSelectedMonth = () => {
+    if (month >= getCurrentMonthKey()) {
+      setReconciliationStatus("The current month stays open so earnings can continue syncing.");
+      return;
+    }
+    if (closedMonths[month] || !monthCloseAcknowledged) return;
+    // Immutable report snapshot; all statement calculations and posted entries
+    // come from this copy until an explicit Reopen action. No tracker mutation.
+    const snapshot = {
+      month, closedAt: new Date().toISOString(),
+      rows: JSON.parse(JSON.stringify(rows)),
+      incomeMonth: syncedRevenue ? JSON.parse(JSON.stringify(syncedRevenue)) : null,
+      revenue, expenses, pnlProfit, fixedDep, autoPower,
+      entries: JSON.parse(JSON.stringify(entries)),
+      manualEntries: JSON.parse(JSON.stringify(ledgerEntries)),
+      reconciliation: JSON.parse(JSON.stringify(reconciliation)),
+      exceptions: {
+        pendingMovements: unresolvedMovements.length,
+        balanceDifferences: reconciliation.filter(item => Math.abs(item.unexplained) >= 0.05).length,
+        unpostedEquipment: unpostedEquipment.length,
+        revenueDifference: syncedIncomeJournal.unexplainedManualRevenue,
+      },
+    };
+    const updated = {...closedMonths, [month]: snapshot};
+    remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(updated));
+    setClosedMonths(updated);
+    setMonthClosePrompt(false);
+    setMonthCloseAcknowledged(false);
+    setReconciliationStatus(monthTitle(month) + " frozen. Reopen the month to make corrections.");
+  };
+  const reopenSelectedMonth = () => {
+    if (!closedMonths[month]) return;
+    const updated = {...closedMonths};
+    delete updated[month];
+    remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(updated));
+    setClosedMonths(updated);
+    setReconciliationStatus(monthTitle(month) + " reopened; live tracker values are active again.");
   };
   const tabs = [
     { id: "ledger", name: "General Ledger", Icon: BookOpen },
@@ -655,6 +739,7 @@ export default function FinancialsPage() {
     { id: "income", name: "Income Statement", Icon: TrendingUp },
     { id: "balance", name: "Balance Sheet", Icon: Wallet },
     { id: "cash", name: "Cash Flow", Icon: Coins },
+    { id: "reconcile", name: "Reconcile", Icon: ClipboardList },
     { id: "overview", name: "Overview", Icon: LayoutDashboard },
   ];
   const metric = (title, value, note, color = "text-white") => <section className={card + " min-w-0 p-4"}>
