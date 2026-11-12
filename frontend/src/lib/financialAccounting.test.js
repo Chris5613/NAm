@@ -209,3 +209,40 @@ test("ambiguous duplicate 2080 purchase entries are not silently changed", () =>
   expect(output.matchCount).toBe(2);
   expect(output.entries[0].creditAccount).toBe("cash");
 });
+
+
+test("RTX 2080 PC legacy label and RTX 2080 Super PC saved asset display only once",()=>{
+  const records={"2026-11":{
+    items:[{name:"RTX 2080 PC",start:500,end:491.67}],
+    balanceSheetItems:[{id:"hardware:rtx2080super-pc",name:"RTX 2080 Super PC",
+      category:"equipment",historicalCost:500,usefulLifeMonths:60,placedInServiceMonth:"2026-11"}],
+  }};
+  const rows=buildFinancialBalanceRows("2026-11",records,{},[],"2026-11");
+  expect(rows.filter(row=>/RTX 2080/i.test(row.name))).toHaveLength(1);
+  expect(rows.find(row=>/RTX 2080/i.test(row.name)).name).toBe("RTX 2080 Super PC");
+  expect(rows.find(row=>/RTX 2080/i.test(row.name)).end).toBe(491.67);
+});
+
+test("RTX 2080 PC legacy alias does not create a second tracked PC",()=>{
+  const records={"2026-11":{items:[{name:"RTX 2080 PC",start:500,end:491.67}]}};
+  const devices=[{id:"pc-one",name:"RTX 2080 Super PC",cost:500,startMonth:"2026-11"}];
+  const rows=buildFinancialBalanceRows("2026-11",records,{},devices,"2026-11");
+  expect(rows.filter(row=>/RTX 2080/i.test(row.name))).toHaveLength(1);
+  expect(rows.find(row=>/RTX 2080/i.test(row.name)).id).toBe("device:pc-one");
+});
+
+test("a legacy RTX 2080 PC alone is normalized to the confirmed hardware name",()=>{
+  const records={"2026-11":{items:[{name:"RTX 2080 PC",start:500,end:491.67}]}};
+  const rows=buildFinancialBalanceRows("2026-11",records,{},[],"2026-11");
+  expect(rows.filter(row=>/RTX 2080/i.test(row.name))).toHaveLength(1);
+  expect(rows.find(row=>/RTX 2080/i.test(row.name)).name).toBe("RTX 2080 Super PC");
+});
+
+test("two physical RTX 2080 devices with different Hardware Payback IDs remain separate",()=>{
+  const devices=[
+    {id:"pc-1",name:"RTX 2080 PC",cost:500,startMonth:"2026-11"},
+    {id:"pc-2",name:"RTX 2080 Super PC",cost:700,startMonth:"2026-11"},
+  ];
+  const rows=buildFinancialBalanceRows("2026-11",{}, {},devices,"2026-11");
+  expect(rows.filter(row=>/RTX 2080/i.test(row.name))).toHaveLength(2);
+});
