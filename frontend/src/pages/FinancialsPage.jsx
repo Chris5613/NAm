@@ -460,7 +460,10 @@ export default function FinancialsPage() {
     const timer = window.setInterval(refreshPower, 90000);
     return () => { active = false; window.clearInterval(timer); };
   }, []);
-  const rows = useMemo(() => makeRows(month, records, live, hardwareDevices), [month, records, live, hardwareDevices]);
+  const closeSnapshot = closedMonths[month] || null;
+  const rows = useMemo(() => closeSnapshot?.rows ||
+    makeRows(month, records, live, hardwareDevices),
+    [month, records, live, hardwareDevices, closeSnapshot]);
   const sections = categories.map(category => ({ ...category, rows: rows.filter(row => row.category === category.id) }));
   const total = (field, type) => {
     const relevant = rows.filter(row => type === "assets" ? row.category !== "liabilities" : row.category === "liabilities");
@@ -475,12 +478,32 @@ export default function FinancialsPage() {
   const netChange = netStart === null || netEnd === null ? null : rounded(netEnd - netStart);
   const recorded = records[month] || {};
   // Share the exact recorded Income History calculation with Crypto Dashboard.
-  const syncedRevenue = incomeMonths.find(entry => entry.monthKey === month);
-  const revenue = syncedRevenue ? amount(syncedRevenue.total) : null;
+  const syncedRevenue = closeSnapshot?.incomeMonth ||
+    incomeMonths.find(entry => entry.monthKey === month);
+  const revenue = closeSnapshot ? closeSnapshot.revenue :
+    syncedRevenue ? amount(syncedRevenue.total) : null;
   const savedExpenses = amount(recorded.expenses);
-  const fixedDep = rounded(rows.filter(row => row.category === "equipment" && row.start !== null && row.end !== null)
-    .reduce((sum, row) => sum + Math.max(0, row.start - row.end), 0));
-  const ledgerEntries = journal.filter(entry => String(entry.date).slice(0, 7) === month);
+  const fixedDep = closeSnapshot ? closeSnapshot.fixedDep :
+    rounded(rows.filter(row => row.category === "equipment" && row.start !== null && row.end !== null)
+      .reduce((sum, row) => sum + Math.max(0, row.start - row.end), 0));
+  const ledgerEntries = closeSnapshot?.manualEntries ||
+    journal.filter(entry => String(entry.date).slice(0, 7) === month);
+  const projectMovementCandidates = useMemo(() =>
+    collectMovementCandidates(cryptoIncome.legacyProjects),
+    [cryptoIncome.legacyProjects]);
+  const movementCandidates = [...projectMovementCandidates, ...bankMovements];
+  const unresolvedMovements = movementCandidates.filter(candidate =>
+    candidate.date.startsWith(month) && !candidate.matchable &&
+    !confirmedMovements[candidate.id] && !ignoredMovements[candidate.id]);
+  const confirmedById = new Map();
+  movementCandidates.filter(row => row.matchable).forEach(row => confirmedById.set(row.id, row));
+  Object.values(confirmedMovements).forEach(row => confirmedById.set(row.id, row));
+  const matchedMovements = [...confirmedById.values()].filter(row => row.date.startsWith(month));
+  const alreadyPostedIds = new Set(ledgerEntries.filter(entry => entry.movementSourceId)
+    .map(entry => entry.movementSourceId));
+  const syncedMovementEntries = movementJournal(matchedMovements, month, alreadyPostedIds);
+  const reconciliation = closeSnapshot?.reconciliation ||
+    reconcileBalances(rows, syncedRevenue, matchedMovements, month);
   // Hardware Payback knows the cost and month, but NOT the funding account.
   // Show an optional review instead of assuming a cash purchase.
   const unpostedEquipment = hardwareDevices.filter(device => {
@@ -504,19 +527,25 @@ export default function FinancialsPage() {
   const electricityCovered = hasFreeMiningPower(month);
   const estimatedPower = Number(powerEstimates[month]?.cost);
   const hasSavedExpenses = savedExpenses !== null && savedExpenses > 0;
-  const autoPower = electricityCovered || actualPowerEntries.length || hasSavedExpenses ||
+  const autoPower = closeSnapshot ? closeSnapshot.autoPower :
+    electricityCovered || actualPowerEntries.length || hasSavedExpenses ||
     !Number.isFinite(estimatedPower) ? 0 : outOfPocketMiningPowerCost(rounded(estimatedPower), month);
-  // A saved $0 means no separate costs have been recorded yet, so the
-  // synced electricity estimate can still feed P&L.
-  const expenses = hasSavedExpenses ? savedExpenses : rounded(journalExpense + autoPower);
+  const feeExpense = rounded(syncedMovementEntries.reduce((sum, entry) =>
+    sum + entry.lines.filter(row => row.account === "fees").reduce((n, row) => n + row.debit, 0), 0));
+  // A saved expense total may already contain some fees. The greater of the
+  // tracked/journaled total and saved total avoids simply adding it twice.
+  const expenses = closeSnapshot ? closeSnapshot.expenses :
+    Math.max(savedExpenses || 0, rounded(journalExpense + feeExpense + autoPower));
   // Journaled earnings may already exist in the Crypto Income data.
   // Do not add them a second time or substitute them for a missing source.
   const pnlRevenue = revenue;
   // Monthly expense card may already include electricity and other manually entered costs.
   // Display ledger amounts separately instead of counting them twice.
-  const pnlProfit = pnlRevenue === null ? null : rounded(pnlRevenue - expenses - fixedDep);
+  const pnlProfit = closeSnapshot ? closeSnapshot.pnlProfit :
+    pnlRevenue === null ? null : rounded(pnlRevenue - expenses - fixedDep);
   const generatedEntries = [
     ...syncedIncomeJournal.entries,
+    ...syncedMovementEntries,
     ...(fixedDep ? [{
       id: "auto-depreciation:" + month, date: month + "-28",
       description: "Monthly equipment depreciation — Hardware Payback",
@@ -532,7 +561,8 @@ export default function FinancialsPage() {
   const manualEntries = ledgerEntries.map(entry => ({
     ...entry, lines: [line(entry.debitAccount, entry.amount, 0), line(entry.creditAccount, 0, entry.amount)],
   }));
-  const entries = [...manualEntries, ...generatedEntries].sort((a, b) => a.date.localeCompare(b.date));
+  const entries = closeSnapshot?.entries ||
+    [...manualEntries, ...generatedEntries].sort((a, b) => a.date.localeCompare(b.date));
   const debitTotal = rounded(entries.reduce((sum, entry) => sum + entry.lines.reduce((n, part) => n + part.debit, 0), 0));
   const creditTotal = rounded(entries.reduce((sum, entry) => sum + entry.lines.reduce((n, part) => n + part.credit, 0), 0));
   const trial = accounts.map(account => {
@@ -542,9 +572,14 @@ export default function FinancialsPage() {
   }).filter(account => account.debit || account.credit);
   const trialDebit = rounded(trial.reduce((sum, account) => sum + account.debit, 0));
   const trialCredit = rounded(trial.reduce((sum, account) => sum + account.credit, 0));
-  const cashEvents = ledgerEntries.filter(entry => entry.debitAccount === "cash" || entry.creditAccount === "cash");
-  const cashIn = rounded(cashEvents.filter(entry => entry.debitAccount === "cash").reduce((sum, entry) => sum + entry.amount, 0));
-  const cashOut = rounded(cashEvents.filter(entry => entry.creditAccount === "cash").reduce((sum, entry) => sum + entry.amount, 0));
+  const cashEvents = entries.flatMap(entry => {
+    const row = entry.lines.find(part => part.account === "cash");
+    return row && (row.debit || row.credit)
+      ? [{id:entry.id, date:entry.date, description:entry.description,
+          delta: rounded(row.debit - row.credit)}] : [];
+  });
+  const cashIn = rounded(cashEvents.filter(entry => entry.delta > 0).reduce((sum, entry) => sum + entry.delta, 0));
+  const cashOut = rounded(cashEvents.filter(entry => entry.delta < 0).reduce((sum, entry) => sum - entry.delta, 0));
   const saveEntry = event => {
     event.preventDefault();
     const value = Number(draft.amount);
