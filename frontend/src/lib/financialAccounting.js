@@ -104,7 +104,16 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
     });
   }
   // Include unmatched historical equipment and custom recorded fixed assets.
-  legacyHardware.forEach((row,i)=>{if(!usedLegacy.has(i)) equipment.push(row);});
+  legacyHardware.forEach((row,i)=>{
+    if(usedLegacy.has(i)) return;
+    const key=assetKey(row.name);
+    const canonical = key==="rtx2080superpc" || key==="rtx5070gpu";
+    if(canonical && !current.locked && month>="2026-11") {
+      const schedule=equipmentSchedule({cost:500,startMonth:"2026-11"},month);
+      if(schedule) {equipment.push({...row,...schedule,historicalCost:500});return;}
+    }
+    equipment.push(row);
+  });
   allExtra.forEach((row,i)=>{
     if(usedExtra.has(i) || excludedEquipment.has(row.id)) return;
     const key = assetKey(row.name);
@@ -130,9 +139,8 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
       {id:"hardware:rtx2080super-pc",name:"RTX 2080 Super PC",cost:500,startMonth:"2026-11"},
       {id:"hardware:rtx5070",name:"RTX 5070 GPU",cost:500,startMonth:"2026-11"},
     ]) {
-      const model = fallback.id.includes("2080") ? "2080" : "5070";
       if(excludedEquipment.has(fallback.id) ||
-        equipment.some(row=>new RegExp(model).test(row.name))) continue;
+        equipment.some(row=>assetKey(row.name)===assetKey(fallback.name))) continue;
       const schedule = equipmentSchedule(fallback,month);
       if(schedule) equipment.push({id:fallback.id,name:fallback.name,category:"equipment",
         ...schedule,historicalCost:fallback.cost,source:"confirmed-fallback"});
