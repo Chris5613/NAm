@@ -24,6 +24,9 @@ const DEPRECIATING_HARDWARE = [
   { id: "hardware:rtx2080super-pc", name: "RTX 2080 Super PC", cost: 500 },
   { id: "hardware:rtx5070", name: "RTX 5070 GPU", cost: 500 },
 ];
+function hardwareBookValue(cost, months) {
+  return Math.round(Math.max(0, cost * (1 - Math.min(HARDWARE_LIFE_MONTHS, months) / HARDWARE_LIFE_MONTHS)) * 100) / 100;
+}
 // USD daily closing prices for BTC-USD on Yahoo Finance (UTC daily candles).
 // These price anchors do not establish how much BTC was held on each date.
 const BTC_CLOSE_USD = Object.freeze({
