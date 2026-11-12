@@ -508,7 +508,7 @@ export default function FinancialsPage() {
   const manualTransferRecords = ledgerEntries.filter(entry =>
     assetAccounts.has(entry.debitAccount) && assetAccounts.has(entry.creditAccount) &&
     entry.debitAccount !== entry.creditAccount && Number(entry.amount) > 0 &&
-    /^\\d{4}-\\d{2}-\\d{2}$/.test(String(entry.date))).map(entry => ({
+    /^\d{4}-\d{2}-\d{2}$/.test(String(entry.date))).map(entry => ({
       id: "manual:" + entry.id, date: entry.date, amount: entry.amount,
       from: entry.creditAccount, to: entry.debitAccount,
       type: "transfer", provider: entry.description, feeUsd: 0,
