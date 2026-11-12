@@ -828,24 +828,6 @@ export default function FinancialsPage() {
           </tbody>
         </table></div>
       </section>
-      {businessPhones.length > 0 && <section className={card + " space-y-3 p-4 sm:p-5"}>
-        <div>
-          <h3 className="text-sm font-semibold">Unetwork earning phones</h3>
-          <p className="mt-1 text-xs text-[#879fb1]">Business equipment, not resale inventory. Recorded from the business-use start date; earnings stay in Unetwork revenue.</p>
-        </div>
-        <div className="space-y-2">
-          {businessPhones.map(phone => <div key={phone.id}
-            className="flex items-center justify-between gap-3 border-b border-[#263746] py-2 text-sm">
-            <div>
-              <p>{phone.name} <span className="text-xs text-[#839aaf]">· {phone.businessDate}</span></p>
-              <p className="text-xs text-[#839aaf]">Business value {money(phone.businessValue)} · {phone.fundingAccount === "equity" ? "Owner's Equity" : phone.fundingAccount === "cash" ? "Business Cash" : "Accounts Payable"} · 120-month depreciation</p>
-            </div>
-            <button type="button" aria-label={"Remove "+phone.name} onClick={()=>removeBusinessPhone(phone)}
-              className="rounded p-2 text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>
-          </div>)}
-        </div>
-        {phoneError && <p role="alert" className="text-sm text-rose-300">{phoneError}</p>}
-      </section>}
       {showOtherLabels && <section className={card + " space-y-3 p-4 sm:p-5"}>
         <h3 className="text-sm font-semibold">Other Financials account names</h3>
         <p className="text-xs text-[#879fb1]">Change shared ledger account labels here. Saved names appear in journal entries, account selectors, and the Trial Balance. Accounting IDs and totals don't change.</p>
