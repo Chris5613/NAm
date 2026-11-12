@@ -419,7 +419,6 @@ export default function FinancialsPage() {
   const syncedRevenue = incomeMonths.find(entry => entry.monthKey === month);
   const revenue = syncedRevenue ? amount(syncedRevenue.total) : null;
   const savedExpenses = amount(recorded.expenses);
-  const elapsed = month >= "2026-11" ? Math.max(0, (Number(month.slice(0, 4)) - 2026) * 12 + Number(month.slice(5)) - 11) : -1;
   const fixedDep = rounded(rows.filter(row => row.category === "equipment" && row.start !== null && row.end !== null)
     .reduce((sum, row) => sum + Math.max(0, row.start - row.end), 0));
   const ledgerEntries = journal.filter(entry => String(entry.date).slice(0, 7) === month);
@@ -577,6 +576,8 @@ export default function FinancialsPage() {
           <div>Tracked assets: <strong className="text-white">{rows.length} accounts</strong></div>
           <div>Recorded journal entries: <strong className="text-white">{ledgerEntries.length}</strong></div>
           <div>Monthly equipment depreciation: <strong className="text-white">{money(fixedDep)}</strong></div>
+          <div>Hardware Payback register: <strong className="text-white">{hardwareDevices.length} devices</strong></div>
+          <div>Estimated mining electricity: <strong className="text-white">{powerEstimates[month] ? money(powerEstimates[month].cost) : "Awaiting usage data"}</strong></div>
           <div>Unposted historical transactions: <strong className="text-amber-300">Need reconciliation</strong></div>
         </div>
       </div>
@@ -609,18 +610,19 @@ export default function FinancialsPage() {
     </>}
     {tab === "income" && <>
       <div className="grid gap-3 sm:grid-cols-3">
-        {metric("Recorded Revenue", pnlRevenue, revenue === null ? "Only posted revenue available" : "Saved month-end snapshot", "text-sky-300")}
-        {metric("Saved Operating Expenses", expenses, "From Monthly Changes")}
+        {metric("Crypto Income Revenue", pnlRevenue, "Synced from Crypto Dashboard", "text-sky-300")}
+        {metric("Operating Expenses", expenses, autoPower ? "Includes Mining Power estimate" : "Saved or journaled expenses")}
         {metric("Net Income (Estimated)", pnlProfit, "After depreciation", "text-emerald-400")}
       </div>
       <section className={card + " p-5"}>
         <h2 className="mb-4 text-lg font-semibold">Income Statement — {monthTitle(month)}</h2>
         {[
-          ["Revenue" , pnlRevenue],
-          ["Operating expenses", expenses],
+          ["Revenue — Crypto Income", pnlRevenue],
+          ["Other operating expenses", rounded(expenses - autoPower)],
+          ...(autoPower ? [["Mining electricity (estimate)", autoPower]] : []),
           ["Equipment depreciation", fixedDep],
           ["Net income", pnlProfit],
-        ].map(([label, value], index) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${index===3 ? "font-bold text-emerald-400" : ""}`}>
+        ].map(([label, value) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${label === "Net income" ? "font-bold text-emerald-400" : ""}`}>
           <span>{label}</span><span className="tabular-nums">{money(value)}</span>
         </div>)}
         
