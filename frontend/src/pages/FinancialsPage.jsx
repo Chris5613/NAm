@@ -2,6 +2,10 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { financialLiveBalances as liveBalances } from "@/lib/financialAssetsSnapshot";
+import {
+  readUnetworkPhones, readPhoneInventory, makePhoneAsset, phoneJournal, phoneAssetRows,
+  UNETWORK_PHONES_KEY,
+} from "@/lib/unetworkPhonesAccounting";
 import { api, settingsApi } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
@@ -224,6 +228,14 @@ export default function FinancialsPage() {
   const [live, setLive] = useState(liveBalances);
   const [cryptoIncome, setCryptoIncome] = useState(readCryptoIncomeSources);
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
+  const [businessPhones, setBusinessPhones] = useState(readUnetworkPhones);
+  const [phoneInventory, setPhoneInventory] = useState(readPhoneInventory);
+  const [phoneModal, setPhoneModal] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const [phoneDraft, setPhoneDraft] = useState({
+    inventoryId:"",name:"",purchaseDate:"2026-05-01",
+    businessDate:"2026-05-01",businessValue:"",fundingAccount:"equity",
+  });
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
@@ -248,6 +260,8 @@ export default function FinancialsPage() {
     setJournal(readJson(JOURNAL_KEY, []));
     setLive(liveBalances());
     setHardwareDevices(readHardwareRegister());
+    setBusinessPhones(readUnetworkPhones());
+    setPhoneInventory(readPhoneInventory());
     setPowerEstimates(readJson(POWER_ESTIMATE_KEY, {}));
     setConfirmedMovements(readJson(CONFIRMED_MOVEMENTS_KEY, {}));
     setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
@@ -352,9 +366,12 @@ export default function FinancialsPage() {
   // Captured/observed balances must be kept separate from income journal
   // movements or mining revenue would be added to assets twice.
   const baseRows = useMemo(() => includeJournalEquipment(
-    buildFinancialBalanceRows(month,records,live,hardwareDevices,getCurrentMonthKey()),
+    [
+      ...buildFinancialBalanceRows(month,records,live,hardwareDevices,getCurrentMonthKey()),
+      ...(records[month]?.locked ? [] : phoneAssetRows(businessPhones,month)),
+    ],
     journal,month,Boolean(records[month]?.locked),
-  ),[month,records,live,hardwareDevices,journal]);
+  ),[month,records,live,hardwareDevices,journal,businessPhones]);
   const recorded = records[month] || {};
   const syncedRevenue = closeSnapshot?.incomeMonth || incomeMonths.find(entry => entry.monthKey === month);
   const savedExpenses = valueOrNull(recorded.expenses);
@@ -454,7 +471,10 @@ export default function FinancialsPage() {
   // external account balances are still not invented.
   const cumulativeEntries = useMemo(() => {
     const all=[];
-    for(let key="2026-09", n=0; key<=month && n<240; key=shift(key,1),n++) {
+    const phoneStart=businessPhones.map(item=>item.startMonth).filter(Boolean).sort()[0];
+    const journalStart=journal.map(item=>String(item.date||"").slice(0,7)).filter(item=>/^\d{4}-\d{2}$/.test(item)).sort()[0];
+    const firstMonth=[phoneStart,journalStart,"2026-09"].filter(Boolean).sort()[0];
+    for(let key=firstMonth, n=0; key<=month && n<240; key=shift(key,1),n++) {
       if(key===month) {all.push(...entries);continue;}
       if(closedMonths[key]?.entries) {all.push(...closedMonths[key].entries);continue;}
       const periodManual=journal.filter(item=>String(item.date||"").startsWith(key));
@@ -464,7 +484,10 @@ export default function FinancialsPage() {
       const recordedIncome=incomeMonths.find(item=>item.monthKey===key);
       const income=buildAutoIncomeJournal(key,recordedIncome,periodManual,getCurrentMonthKey(),getTodayKey());
       const historicalHardware=includeJournalEquipment(
-        buildFinancialBalanceRows(key,records,{},hardwareDevices,getCurrentMonthKey()),
+        [
+          ...buildFinancialBalanceRows(key,records,{},hardwareDevices,getCurrentMonthKey()),
+          ...(records[key]?.locked ? [] : phoneAssetRows(businessPhones,key)),
+        ],
         journal,key,Boolean(records[key]?.locked));
       const scheduled=moneyRound(historicalHardware.filter(item=>item.category==="equipment")
         .reduce((sum,item)=>sum+Number(item.depreciation||0),0));
@@ -484,7 +507,7 @@ export default function FinancialsPage() {
         lines:[line("depreciation",extraDep,0),line("accDep",0,extraDep)]});
     }
     return all;
-  },[month,entries,closedMonths,journal,incomeMonths,hardwareDevices,records,confirmedMovements]);
+  },[month,entries,closedMonths,journal,incomeMonths,hardwareDevices,businessPhones,records,confirmedMovements]);
   const trial = accounts.map(account=>{
     const activity = journalAccountActivity(cumulativeEntries,account.id);
     return {...account,debit:Math.max(0,activity),credit:Math.max(0,-activity)};
@@ -667,12 +690,12 @@ export default function FinancialsPage() {
       <div><p className="text-xs uppercase tracking-[0.18em] text-[#8197a9]">Accounting & reports</p>
         <h1 className="text-3xl font-semibold tracking-tight">Financials</h1></div>
       <div className="flex items-center gap-1 rounded-xl border border-[#344657] bg-[#101821] p-1">
-        <button type="button" disabled={month <= "2026-09"} onClick={() => setMonth(current => shift(current, -1))}
+        <button type="button" disabled={month <= "2026-01"} onClick={() => setMonth(current => shift(current, -1))}
           className="rounded-lg p-2 text-[#cedbe7] disabled:opacity-30" aria-label="Previous month"><ChevronLeft size={18}/></button>
         <CalendarDays size={15} className="text-sky-400"/>
         <select aria-label="Report month" value={month} onChange={event => setMonth(event.target.value)}
           className="bg-[#101821] px-1 py-2 text-sm font-semibold text-white [color-scheme:dark]">
-          {Array.from({length: (Number(getCurrentMonthKey().slice(0, 4)) - 2026) * 12 + Number(getCurrentMonthKey().slice(5)) - 8}, (_, index) =>
+          {Array.from({length: (Number(getCurrentMonthKey().slice(0, 4)) - 2026) * 12 + Number(getCurrentMonthKey().slice(5))}, (_, index) =>
             shift(getCurrentMonthKey(), -index)).map(key => <option key={key} value={key}>{monthTitle(key)}</option>)}
         </select>
         <button type="button" disabled={month >= getCurrentMonthKey()} onClick={() => setMonth(current => shift(current, 1))}
