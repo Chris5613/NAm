@@ -801,10 +801,10 @@ export default function SideHustleDashboard() {
 
             return <div
               key={row.id}
-              className="grid grid-cols-[minmax(0,1.7fr)_.9fr_.68fr_.82fr_.52fr] items-center gap-x-3 rounded-xl border border-[#202a33] bg-[linear-gradient(180deg,#10151a_0%,#0d1217_100%)] px-3 py-2"
+              className="min-w-0 rounded-xl border border-[#202a33] bg-[linear-gradient(180deg,#10151a_0%,#0d1217_100%)] p-3"
             >
               <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-11 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#26313b] bg-[#0a0e12]">
+                <div className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#26313b] bg-[#0a0e12] sm:h-12 sm:w-28">
                   {meta ? (
                     <img
                       src={meta.image}
@@ -815,31 +815,27 @@ export default function SideHustleDashboard() {
                     <Cpu className="h-5 w-5 text-[#8fa0b0]"/>
                   )}
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-[12px] font-semibold text-[#eef2f6]">{row.name}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="break-words text-[12px] font-semibold text-[#eef2f6]">{row.name}</p>
                   <p className="mt-0.5 text-[9px] uppercase tracking-[0.13em] text-[#7f8b97]">{meta?.brand || row.source || "Hardware"}</p>
                 </div>
-              </div>
-
-              <div className="min-w-0">
-                <strong className="block truncate text-[12px] font-semibold tabular-nums text-amber-400">{money(cost)}</strong>
-                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Amount Spent</p>
-              </div>
-
-              <div className="min-w-0">
-                <strong className="block text-[12px] font-semibold tabular-nums text-[#eef2f6]">{money(recovered)}</strong>
-                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Earned So Far</p>
-              </div>
-
-              <div className="min-w-0">
-                <strong className="block text-[12px] font-semibold tabular-nums text-[#eef2f6]">{paybackMonths === 0 ? "Recovered" : paybackMonths != null ? `~${paybackMonths.toFixed(1)} mo` : "—"}</strong>
-                <p className="mt-0.5 text-[9px] text-[#7f8b97]">Payback</p>
-              </div>
-
-              <div className="flex justify-end">
-                <span className="inline-flex min-w-[54px] items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-emerald-400">
+                <span className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-emerald-400">
                   {cost > 0 ? percent(progress) : "—"}
                 </span>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[#25313c] pt-3">
+                <div className="min-w-0">
+                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-amber-400 sm:text-[13px]">{money(cost)}</strong>
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Amount Spent</p>
+                </div>
+                <div className="min-w-0">
+                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{money(recovered)}</strong>
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Earned So Far</p>
+                </div>
+                <div className="min-w-0 text-right">
+                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{paybackMonths === 0 ? "Recovered" : paybackMonths != null ? `~${paybackMonths.toFixed(1)} mo` : "—"}</strong>
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Payback</p>
+                </div>
               </div>
             </div>;
           })}
