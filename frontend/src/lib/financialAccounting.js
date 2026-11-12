@@ -6,6 +6,14 @@ export const moneyRound = value => Math.round((Number(value) || 0) * 100) / 100;
 export const valueOrNull = value => value == null || value === "" || !Number.isFinite(Number(value))
   ? null : Number(value);
 export const assetKey = value => String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+// These two historical labels refer to the same confirmed $500 PC.
+// Do not merge two separately registered physical devices merely because
+// their model numbers match.
+export const equipmentAliasKey = value => {
+  const key = assetKey(value);
+  return key === "rtx2080pc" || key === "rtx2080superpc"
+    ? "rtx2080superpc" : key;
+};
 const isEquipment = name => /rtx|gpu|computer|equipment|hardware|\bpc\b/i.test(String(name || ""));
 const isBank = name => /^(cash\s*\/?\s*bank|bank|checking|business\s+cash|cash)$/i.test(String(name || "").trim());
 const cashLike = name => /lulo|cash|bank|checking|savings|receivable|pending payout/i.test(String(name || ""));
@@ -102,8 +110,8 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
     // Exact name is used only for identifying an old seeded record, NEVER to
     // merge two physical Hardware Payback devices that happen to have the
     // same GPU model number.
-    const oldIndex = legacyHardware.findIndex((row,i)=>!usedLegacy.has(i) && assetKey(row.name)===key);
-    const extraIndex = allExtra.findIndex((row,i)=>!usedExtra.has(i) && assetKey(row.name)===key);
+    const oldIndex = legacyHardware.findIndex((row,i)=>!usedLegacy.has(i) && equipmentAliasKey(row.name)===equipmentAliasKey(name));
+    const extraIndex = allExtra.findIndex((row,i)=>!usedExtra.has(i) && equipmentAliasKey(row.name)===equipmentAliasKey(name));
     if(oldIndex>=0) usedLegacy.add(oldIndex);
     if(extraIndex>=0) usedExtra.add(extraIndex);
     equipment.push({
@@ -115,18 +123,26 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
   // Include unmatched historical equipment and custom recorded fixed assets.
   legacyHardware.forEach((row,i)=>{
     if(usedLegacy.has(i)) return;
-    const key=assetKey(row.name);
+    const key=equipmentAliasKey(row.name);
+    if(equipment.some(item=>equipmentAliasKey(item.name)===key && item.source!=="hardware-payback")) return;
+    // A saved historical asset row takes precedence over its older alias
+    // in the general project list.
+    const aliasInSavedExtra = allExtra.some((asset,j)=>!usedExtra.has(j) &&
+      equipmentAliasKey(asset.name)===key && asset.category==="equipment");
+    if(aliasInSavedExtra) return;
     const canonical = key==="rtx2080superpc" || key==="rtx5070gpu";
     if(canonical && !current.locked && month>="2026-11") {
       const schedule=equipmentSchedule({cost:500,startMonth:"2026-11"},month);
-      if(schedule) {equipment.push({...row,...schedule,historicalCost:500,acquisitionMonth:"2026-11"});return;}
+      if(schedule) {equipment.push({...row,name:key==="rtx2080superpc"?"RTX 2080 Super PC":row.name,
+        ...schedule,historicalCost:500,acquisitionMonth:"2026-11"});return;}
     }
     equipment.push(row);
   });
   allExtra.forEach((row,i)=>{
     if(usedExtra.has(i) || excludedEquipment.has(row.id)) return;
     const key = assetKey(row.name);
-    if(equipment.some(item=>assetKey(item.name)===key && item.source==="monthly-changes")) return;
+    if(equipment.some(item=>equipmentAliasKey(item.name)===equipmentAliasKey(row.name) &&
+      item.source!=="hardware-payback")) return;
     let schedule = null;
     const savedThisMonth = extra.some(item=>item.id===row.id);
     if(row.category==="equipment" && row.placedInServiceMonth && Number(row.historicalCost)>0 &&
@@ -151,7 +167,7 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
       {id:"hardware:rtx5070",name:"RTX 5070 GPU",cost:500,startMonth:"2026-11"},
     ]) {
       if(excludedEquipment.has(fallback.id) ||
-        equipment.some(row=>assetKey(row.name)===assetKey(fallback.name))) continue;
+        equipment.some(row=>equipmentAliasKey(row.name)===equipmentAliasKey(fallback.name))) continue;
       const schedule = equipmentSchedule(fallback,month);
       if(schedule) equipment.push({id:fallback.id,name:fallback.name,category:"equipment",
         ...schedule,historicalCost:fallback.cost,acquisitionMonth:fallback.startMonth,source:"confirmed-fallback"});
@@ -174,7 +190,9 @@ export function includeJournalEquipment(baseRows, journal, month, locked = false
     const cleaned = assetKey(description);
     const amount = moneyRound(entry.amount);
     const matched = rows.some(row => row.category==="equipment" &&
-      assetKey(row.name).length>=5 && cleaned.includes(assetKey(row.name)) &&
+      equipmentAliasKey(row.name).length>=5 &&
+      (cleaned.includes(assetKey(row.name)) || cleaned.includes(equipmentAliasKey(row.name)) ||
+        (equipmentAliasKey(row.name)==="rtx2080superpc" && cleaned.includes("rtx2080pc"))) &&
       Math.abs(Number(row.historicalCost ?? amount)-amount)<=.005);
     if(matched || rows.some(row=>row.id==="journal-equipment:"+entry.id)) continue;
     const schedule = equipmentSchedule({
@@ -202,7 +220,9 @@ export function unmatchedEquipmentPurchases(rows, journal, month) {
         String(entry.date||"").slice(0,7)!==month ||
         Math.abs(Number(entry.amount)-cost)>.005) return false;
       const description=assetKey(entry.description);
-      return description.includes(name);
+      return description.includes(name) ||
+        (equipmentAliasKey(asset.name)==="rtx2080superpc" &&
+          (description.includes("rtx2080pc") || description.includes("rtx2080superpc")));
     });
     if(match){spentIds.add(match.id);return false;}
     return true;
