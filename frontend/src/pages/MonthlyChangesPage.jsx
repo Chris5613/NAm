@@ -29,7 +29,9 @@ const BALANCE_CATEGORIES = [
 function balanceCategory(name) {
   const key = String(name || "").toLowerCase().trim();
   if (/loan|debt|credit card|payable|liabilit/.test(key)) return "liabilities";
-  if (/lulo|loopscale|defi|lending|invest|stock|bond/.test(key)) return "defi";
+  // Treat Lulo as a cash-like yield savings balance for this dashboard.
+  if (/lulo/.test(key)) return "cash";
+  if (/loopscale|defi|lending|invest|stock|bond/.test(key)) return "defi";
   if (/rtx|gpu|\bpc\b|computer|hardware|equipment|psu|motherboard/.test(key)) return "equipment";
   if (/cash|checking|savings|receivable|pending payout|bank/.test(key)) return "cash";
   return "digital";
@@ -202,6 +204,32 @@ export default function MonthlyChangesPage() {
   const [expenseEditorOpen, setExpenseEditorOpen] = useState(false);
   const [expenseDraft, setExpenseDraft] = useState("");
   const [expenseError, setExpenseError] = useState("");
+  // Seed the two user-confirmed hardware costs into the new Balance Sheet only.
+  // Do not backfill earlier months without the purchase dates or change the
+  // original project table. Idempotent: user edits remain authoritative.
+  useEffect(() => {
+    const saved = readRecords();
+    const key = "2026-11";
+    const entry = saved[key] || {};
+    if (entry.hardwareCostSeededV1) return;
+    const items = Array.isArray(entry.balanceSheetItems) ? [...entry.balanceSheetItems] : [];
+    const original = Array.isArray(entry.items) ? entry.items : [];
+    const hardware = [
+      { id: "hardware:rtx2080super-pc", name: "RTX 2080 Super PC", category: "equipment", start: 500, end: 500, historicalCost: 500 },
+      { id: "hardware:rtx5070", name: "RTX 5070 GPU", category: "equipment", start: 500, end: 500, historicalCost: 500 },
+    ];
+    for (const row of hardware) {
+      const matches = item => {
+        const name = String(item?.name || "").toLowerCase();
+        return row.id.includes("2080") ? /2080/.test(name) : /5070/.test(name);
+      };
+      if (!items.some(matches) && !original.some(matches)) items.push(row);
+    }
+    const next = { ...saved, [key]: { ...entry, balanceSheetItems: items, hardwareCostSeededV1: true } };
+    remoteStorage.setItem(KEY, JSON.stringify(next));
+    setRecords(next);
+  }, []);
+
   useEffect(() => subscribe(() => {
     setRecords(readRecords());
     setPortfolioItems(readPortfolioItems());
@@ -531,7 +559,7 @@ export default function MonthlyChangesPage() {
     return { ...row, start, end, change: start === null || end === null ? null : round(end - start) };
   });
   const balanceRows = [
-    ...visibleItems.map(row => ({ ...row, id: `project:${row.name}`, category: record.balanceCategories?.[row.name] || balanceCategory(row.name), original: true })),
+    ...visibleItems.map(row => ({ ...row, id: `project:${row.name}`, category: row.name.toLowerCase().includes("lulo") ? "cash" : (record.balanceCategories?.[row.name] || balanceCategory(row.name)), original: true })),
     ...extraBalanceItems.map(row => ({ ...row, category: row.category || balanceCategory(row.name), original: false })),
   ];
   const categoryRows = BALANCE_CATEGORIES.map(category => {
