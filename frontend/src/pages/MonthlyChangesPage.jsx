@@ -194,6 +194,33 @@ export default function MonthlyChangesPage() {
     setBitcoinPrice(Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
     setIncomeSources(current => ({ ...readIncomeSources(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
   }), []);
+  // Confirmed October 31 RollerCoin balance after the October withdrawal.
+  // Apply only once so later edits to the historical month remain untouched.
+  useEffect(() => {
+    const saved = readRecords();
+    const october = saved["2026-10"] || {};
+    if (october.rollerCoinOct2026CorrectedV1) return;
+    const correctedBalance = 11.79;
+    const updated = { ...saved };
+    for (const [key, field] of [["2026-10", "end"], ["2026-11", "start"]]) {
+      const entry = saved[key] || {};
+      const rows = Array.isArray(entry.items) ? entry.items : [];
+      const original = rows.find(row => String(row?.name || "").trim().toLowerCase() === "rollercoin");
+      const replacement = {
+        ...(original || { name: "RollerCoin" }),
+        [field]: correctedBalance,
+        octoberWithdrawalCorrected: true,
+      };
+      updated[key] = {
+        ...entry,
+        items: [...rows.filter(row => String(row?.name || "").trim().toLowerCase() !== "rollercoin"), replacement],
+        ...(key === "2026-10" ? { rollerCoinOct2026CorrectedV1: true } : {}),
+      };
+    }
+    remoteStorage.setItem(KEY, JSON.stringify(updated));
+    setRecords(updated);
+  }, []);
+
   useEffect(() => {
     let active = true;
     const refresh = async () => {
