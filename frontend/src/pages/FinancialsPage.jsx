@@ -723,7 +723,7 @@ export default function FinancialsPage() {
       {bankRow && <section className={card + " space-y-3 p-4"}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold">Cash / Bank</p>
+            <p className="text-sm font-semibold">{accountNameById("cash")}</p>
             <p className="mt-1 text-xs text-[#91a7b9]">
               Recorded bank movement this month: <strong className="text-white">{signed(bankRow.journalChange ?? journalAccountActivity(entries,"cash"))}</strong>.
               {bankRow.unverifiedOpening ? " Opening balance not provided; ending cash and total net worth remain incomplete." :
@@ -803,7 +803,7 @@ export default function FinancialsPage() {
     </>}
     {tab === "income" && <>
       <div className="grid gap-3 sm:grid-cols-3">
-        {metric("Crypto Income Revenue", pnlRevenue, "Synced from Crypto Dashboard", "text-sky-300")}
+        {metric(accountNameById("revenue"), pnlRevenue, "Synced from Crypto Dashboard", "text-sky-300")}
         {metric("Operating Expenses", expenses, autoPower ? "Includes Mining Power estimate" : "Saved or journaled expenses")}
         {metric("Net Income (Estimated)", pnlProfit, "After depreciation", "text-emerald-400")}
       </div>
