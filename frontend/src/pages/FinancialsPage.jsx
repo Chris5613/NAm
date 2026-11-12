@@ -138,6 +138,11 @@ function liveBalances() {
 }
 const emptyDraft = () => ({ date: getTodayKey(), description: "", debitAccount: "cash", creditAccount: "revenue", amount: "" });
 const line = (account, debit, credit) => ({ account, debit: rounded(debit), credit: rounded(credit) });
+const validLedgerDate = raw => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) return false;
+  const value = new Date(String(raw) + "T12:00:00Z");
+  return Number.isFinite(value.getTime()) && value.toISOString().slice(0, 10) === raw;
+};
 
 // A conservative local interpreter: only recognize supported, explicit
 // transaction patterns. Unclear text never posts directly to the ledger.
@@ -434,6 +439,9 @@ export default function FinancialsPage() {
   const netStart = assetsStart===null || debtStart===null ? null : moneyRound(assetsStart-debtStart);
   const netEnd = assetsEnd===null || debtEnd===null ? null : moneyRound(assetsEnd-debtEnd);
   const netChange = netStart===null || netEnd===null ? null : moneyRound(netEnd-netStart);
+  const missingAssetCount = rows.filter(row=>row.category!=="liabilities" && row.end===null).length;
+  const knownAssetsSubtotal = moneyRound(rows.filter(row=>row.category!=="liabilities" && row.end!==null)
+    .reduce((sum,row)=>sum+Number(row.end||0),0));
   const bankRow = rows.find(row=>row.id==="ledger:cash" || /^(cash\s*\/?\s*bank|bank|checking|business\s+cash|cash)$/i.test(row.name));
   const debitTotal = moneyRound(entries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
@@ -507,7 +515,7 @@ export default function FinancialsPage() {
       return;
     }
     const value = Number(draft.amount);
-    if (!draft.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date) ||
+    if (!draft.description.trim() || !validLedgerDate(draft.date) ||
       !Number.isFinite(value) || value <= 0 ||
       !accounts.some(row=>row.id===draft.debitAccount) ||
       !accounts.some(row=>row.id===draft.creditAccount) ||
@@ -542,7 +550,7 @@ export default function FinancialsPage() {
       setQuickError("This reporting month is closed. Reopen it before posting.");
       return;
     }
-    if (!quickEntry.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(quickEntry.date) ||
+    if (!quickEntry.description.trim() || !validLedgerDate(quickEntry.date) ||
       !Number.isFinite(quickEntry.amount) || quickEntry.amount <= 0 ||
       !accounts.some(row=>row.id===quickEntry.debitAccount) ||
       !accounts.some(row=>row.id===quickEntry.creditAccount) ||
@@ -635,10 +643,13 @@ export default function FinancialsPage() {
     </nav>
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
-        {metric("Total Assets", assetsEnd, null, "text-sky-300")}
+        {metric("Total Assets", assetsEnd, assetsEnd===null?"Some account balances are unverified":null, "text-sky-300")}
         {metric("Total Liabilities", debtEnd)}
-        {metric("Owner's Equity / Net Worth", netEnd, null, "text-emerald-400")}
+        {metric("Owner's Equity / Net Worth", netEnd, netEnd===null?"Incomplete until missing balances are supplied":null, "text-emerald-400")}
       </div>
+      {missingAssetCount > 0 && <p className="text-xs text-amber-300">
+        Known asset subtotal: {money(knownAssetsSubtotal)}. {missingAssetCount} account(s) have unknown ending balances and are excluded from this partial subtotal.
+      </p>}
       {bankRow && <section className={card + " space-y-3 p-4"}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -646,6 +657,7 @@ export default function FinancialsPage() {
             <p className="mt-1 text-xs text-[#91a7b9]">
               Recorded bank movement this month: <strong className="text-white">{signed(bankRow.journalChange ?? journalAccountActivity(entries,"cash"))}</strong>.
               {bankRow.unverifiedOpening ? " Opening balance not provided; ending cash and total net worth remain incomplete." :
+                bankRow.end !== null && bankRow.end < 0 ? " Negative computed bank balance—verify the opening cash or overdraft." :
                 bankRow.unreconciledCash ? " The saved ending balance differs from recorded bank transactions; verify it." :
                 " Bank transactions are included in the displayed balance."}
             </p>
@@ -698,7 +710,7 @@ export default function FinancialsPage() {
         <h2 className="mb-4 text-lg font-semibold">Income Statement — {monthTitle(month)}</h2>
         {[
           ["Revenue — Crypto Income", pnlRevenue],
-          ["Other operating expenses", operatingExpense],
+          ["Other operating expenses", Math.max(0,moneyRound(operatingExpense-autoPower))],
           ...(autoPower ? [["Mining electricity (estimate)", autoPower]] : []),
           ...(feeExpense ? [["Transaction / network fees", feeExpense]] : []),
           ["Equipment depreciation", fixedDep],
