@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, LayoutDashboard, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { api, settingsApi } from "@/lib/apiClient";
@@ -637,12 +637,11 @@ export default function FinancialsPage() {
     setClosedMonths(updated);
   };
   const tabs = [
+    { id: "balance", name: "Balance Sheet", Icon: Wallet },
     { id: "ledger", name: "General Ledger", Icon: BookOpen },
     { id: "trial", name: "Trial Balance", Icon: ClipboardList },
     { id: "income", name: "Income Statement", Icon: TrendingUp },
-    { id: "balance", name: "Balance Sheet", Icon: Wallet },
     { id: "cash", name: "Cash Flow", Icon: Coins },
-    { id: "overview", name: "Overview", Icon: LayoutDashboard },
   ];
   const metric = (title, value, note, color = "text-white") => <section className={card + " min-w-0 p-4"}>
     <p className="text-xs text-[#9db0c1]">{title}</p>
@@ -676,27 +675,6 @@ export default function FinancialsPage() {
         <Icon size={15}/>{name}
       </button>)}
     </nav>
-    {tab === "overview" && <>
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {metric("Assets", assetsEnd, "Current or saved balances", "text-sky-300")}
-        {metric("Liabilities", debtEnd, "Only liabilities you have recorded")}
-        {metric("Net Worth", netEnd, "Assets minus liabilities", "text-emerald-400")}
-        {metric("Estimated Profit", pnlProfit, "Revenue − expenses − depreciation", "text-emerald-300")}
-      </div>
-      <div className={card + " p-5"}>
-        <h2 className="font-semibold">Reporting status</h2>
-        <div className="mt-3 grid gap-3 text-sm text-[#b0c1ce] sm:grid-cols-2">
-          <div>Tracked assets: <strong className="text-white">{rows.length} accounts</strong></div>
-          <div>Recorded journal entries: <strong className="text-white">{ledgerEntries.length}</strong></div>
-          <div>Synced income entries: <strong className="text-white">{syncedIncomeJournal.entries.length} sources</strong></div>
-          <div>Monthly equipment depreciation: <strong className="text-white">{money(fixedDep)}</strong></div>
-          <div>Hardware Payback register: <strong className="text-white">{hardwareDevices.length} devices</strong></div>
-          <div>Purchases awaiting journal confirmation: <strong className={unpostedEquipment.length ? "text-amber-300" : "text-emerald-400"}>{unpostedEquipment.length}</strong></div>
-          <div>Out-of-pocket electricity: <strong className="text-white">{electricityCovered ? "$0.00 (Free power)" : powerEstimates[month] ? money(powerEstimates[month].cost) + " estimated" : "Awaiting usage data"}</strong></div>
-          <div>Month status: <strong className="text-white">{closeSnapshot ? "Closed · " + new Date(closeSnapshot.closedAt).toLocaleDateString() : "Open"}</strong></div>
-        </div>
-      </div>
-    </>}
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
         {metric("Total Assets", assetsEnd, null, "text-sky-300")}
