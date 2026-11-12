@@ -492,7 +492,7 @@ export default function FinancialsPage() {
   const confirmedById = new Map();
   movementCandidates.filter(row => row.matchable).forEach(row => confirmedById.set(row.id, row));
   Object.values(confirmedMovements).forEach(row => confirmedById.set(row.id, row));
-  const matchedMovements = [...confirmedById.values()].filter(row => row.date.startsWith(month));
+  const matchedMovements = [...confirmedById.values()].filter(row => row.date.startsWith(month) && !ignoredMovements[row.id]);
   const alreadyPostedIds = new Set(ledgerEntries.filter(entry => entry.movementSourceId)
     .map(entry => entry.movementSourceId));
   // Deduplicate each transfer leg separately from its fee: a manual transfer
@@ -921,7 +921,10 @@ export default function FinancialsPage() {
           <p className="mb-2 text-xs font-semibold text-[#9cb6c8]">Confirmed movements ({matchedMovements.length})</p>
           <div className="space-y-1">{matchedMovements.map(item => <div key={item.id} className="flex justify-between gap-3 text-xs text-[#aabecf]">
             <span>{item.date} · {item.provider || "Transfer"} {item.type}</span>
-            <span>{money(item.amount)}{item.feeUsd ? " + " + money(item.feeUsd) + " fee" : ""}</span>
+            <span className="flex items-center gap-2">{money(item.amount)}{item.feeUsd ? " + " + money(item.feeUsd) + " fee" : ""}
+              <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => ignoreMovement(item)}
+                className="rounded border border-[#394a5b] px-2 py-0.5 text-[#8babc2] disabled:opacity-40">Exclude</button>
+            </span>
           </div>)}</div>
         </div>}
       </section>
