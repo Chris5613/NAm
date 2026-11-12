@@ -31,8 +31,8 @@ export function equipmentSchedule(device, month) {
   // acquisition increases assets; only monthly depreciation reduces its value.
   const start = months === 0 ? 0 : moneyRound(cost * (1 - Math.min(life, months) / life));
   const end = moneyRound(cost * (1 - Math.min(life, months + 1) / life));
-  return {start, end, depreciation:moneyRound(
-    cost * (Math.min(life, months+1) - Math.min(life, months)) / life), cost};
+  const beforeDep = moneyRound(cost * (1 - Math.min(life, months) / life));
+  return {start, end, depreciation:moneyRound(beforeDep - end), cost};
 }
 
 function uniqueCandidates(saved, prior, live, current, currentMonth) {
@@ -188,6 +188,40 @@ export function buildStatementRows(baseRows, ledgerEntries, opts={}) {
       start:0,end:payableDelta,journalChange:payableDelta,source:"ledger"});
   }
   return rows;
+}
+
+export function deriveCashOpening(month, openings, manualJournal = [], confirmedMovements = []) {
+  const direct = valueOrNull(openings?.[month]);
+  if(direct!==null) return direct;
+  const olderMonths=Object.keys(openings||{})
+    .filter(key=>/^\d{4}-\d{2}$/.test(key) && key < month && valueOrNull(openings[key])!==null)
+    .sort();
+  if(!olderMonths.length) return null;
+  const baseline = olderMonths[olderMonths.length-1];
+  let opening=valueOrNull(openings[baseline]);
+  for(const entry of manualJournal) {
+    const date=String(entry.date||"");
+    if(date.slice(0,7)<baseline || date.slice(0,7)>=month) continue;
+    if(entry.debitAccount==="cash") opening += Number(entry.amount)||0;
+    if(entry.creditAccount==="cash") opening -= Number(entry.amount)||0;
+  }
+  // Previously confirmed transfers count only if they weren't also posted
+  // manually. This avoids double-deducting an old cash withdrawal.
+  for(const movement of confirmedMovements||[]) {
+    const date=String(movement.date||"");
+    if(date.slice(0,7)<baseline || date.slice(0,7)>=month) continue;
+    const feeTypes=["fee","transaction_fee","network_fee"];
+    const isFee=feeTypes.includes(movement.type);
+    const alreadyManual = manualJournal.some(entry=>entry.date===date &&
+      Math.abs((Number(entry.amount)||0)-(Number(movement.amount)||0))<.005 &&
+      entry.creditAccount===movement.from &&
+      entry.debitAccount===(isFee?"fees":movement.to));
+    if(alreadyManual) continue;
+    if(movement.from==="cash") opening -= Number(movement.amount)||0;
+    if(!isFee && movement.to==="cash") opening += Number(movement.amount)||0;
+    if(movement.from==="cash" && !isFee) opening -= Number(movement.feeUsd)||0;
+  }
+  return moneyRound(opening);
 }
 
 export function buildFinancialProfit(entries, savedExpenses) {
