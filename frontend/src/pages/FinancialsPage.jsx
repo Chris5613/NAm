@@ -240,7 +240,7 @@ function parseTransaction(text, month) {
   // Never mistake model numbers like "RTX 2080" or a date like "Nov 5th"
   // for a transaction amount.
   const explicitAmounts = [...input.matchAll(/(?:\$\s*([\d,]+(?:\.\d{1,2})?)|\b([\d,]+(?:\.\d{1,2})?)\s*USD\b)/gi)];
-  const actionAmounts = [...input.matchAll(/\b(?:paid|spent|bought|purchased|received|earned|deposited|contributed)\s+(?:about\s+|approximately\s+)?([\d,]+(?:\.\d{1,2})?)\b/gi)];
+  const actionAmounts = [...input.matchAll(/\b(?:paid|spent|bought|purchased|received|earned|deposited|contributed|transferred|withdrew|withdrawn|moved|sent)\s+(?:about\s+|approximately\s+)?([\d,]+(?:\.\d{1,2})?)\b/gi)];
   const values = explicitAmounts.length
     ? explicitAmounts.map(match => match[1] || match[2])
     : actionAmounts.map(match => match[1]);
@@ -278,7 +278,26 @@ function parseTransaction(text, month) {
   const unpaid = /\b(?:unpaid|owe|owed|on credit|not yet paid|bill due)\b/.test(phrase);
   const fromCash = /\b(?:cash|bank|checking|debit card)\b|from (?:my )?account/.test(phrase);
   const fromCrypto = /bitcoin|\bbtc\b|crypto wallet/.test(phrase);
-  if (expense && (paid || unpaid)) {
+  const transfer = /\b(?:transferred|transfer|withdrew|withdrawn|withdrawal|moved|sent)\b/.test(phrase);
+  if (transfer) {
+    // Internal transfers move assets and are never additional revenue.
+    const from = phrase.match(/\bfrom\s+(?:my\s+)?(roller\s?coin|kryptex|salad|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
+    const to = phrase.match(/\b(?:to|into)\s+(?:my\s+)?(roller\s?coin|kryptex|salad|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
+    const assetAccount = match => {
+      const name = match?.[1] || "";
+      if (/lulo/.test(name)) return "luloCash";
+      if (/loopscale/.test(name)) return "defi";
+      if (/bitcoin|btc|crypto wallet/.test(name)) return "crypto";
+      if (/cash|checking|bank/.test(name)) return "cash";
+      return name ? "platform" : "";
+    };
+    debitAccount = assetAccount(to);
+    creditAccount = assetAccount(from);
+    if (!debitAccount || !creditAccount || debitAccount === creditAccount) {
+      return { error: "Specify different transfer accounts, e.g. 'Transferred $10 from RollerCoin to BTC'. Transfers within one pooled account require manual details." };
+    }
+    explanation = "Internal asset transfer — not revenue or an expense.";
+  } else if (expense && (paid || unpaid)) {
     debitAccount = "electric";
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
     explanation = unpaid ? "Record an electricity bill owed." : "Record a paid electricity expense.";
@@ -426,6 +445,18 @@ export default function FinancialsPage() {
   const fixedDep = rounded(rows.filter(row => row.category === "equipment" && row.start !== null && row.end !== null)
     .reduce((sum, row) => sum + Math.max(0, row.start - row.end), 0));
   const ledgerEntries = journal.filter(entry => String(entry.date).slice(0, 7) === month);
+  // Hardware Payback knows the cost and month, but NOT the funding account.
+  // Show an optional review instead of assuming a cash purchase.
+  const unpostedEquipment = hardwareDevices.filter(device => {
+    if (device.startMonth !== month || !(Number(device.cost) > 0)) return false;
+    const name = String(device.name || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const model = name.match(/2080|5070/)?.[0];
+    return !ledgerEntries.some(entry => {
+      if (entry.debitAccount !== "equipment" || Math.abs(Number(entry.amount) - Number(device.cost)) > 0.01) return false;
+      const description = String(entry.description || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+      return description.includes(name) || (model && description.includes(model));
+    });
+  });
   const syncedIncomeJournal = useMemo(() => buildAutoIncomeJournal(
     month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey(),
   ), [month, syncedRevenue, ledgerEntries]);
@@ -529,6 +560,18 @@ export default function FinancialsPage() {
     setQuickStatus("Entry posted to your General Ledger and Trial Balance.");
     setQuickModalOpen(false);
   };
+  const reviewEquipmentPurchase = device => {
+    setDraft({
+      date: device.startMonth + "-01",
+      description: "Purchase: " + device.name,
+      debitAccount: "equipment",
+      creditAccount: "cash",
+      amount: String(device.cost),
+    });
+    setTab("ledger");
+    setError("");
+    setModal(true);
+  };
   const deleteEntry = id => {
     const updated = journal.filter(entry => entry.id !== id);
     remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(updated));
@@ -589,6 +632,7 @@ export default function FinancialsPage() {
           <div>Synced income entries: <strong className="text-white">{syncedIncomeJournal.entries.length} sources</strong></div>
           <div>Monthly equipment depreciation: <strong className="text-white">{money(fixedDep)}</strong></div>
           <div>Hardware Payback register: <strong className="text-white">{hardwareDevices.length} devices</strong></div>
+          <div>Purchases awaiting journal confirmation: <strong className={unpostedEquipment.length ? "text-amber-300" : "text-emerald-400"}>{unpostedEquipment.length}</strong></div>
           <div>Estimated mining electricity: <strong className="text-white">{powerEstimates[month] ? money(powerEstimates[month].cost) : "Awaiting usage data"}</strong></div>
           <div>Unposted historical transactions: <strong className="text-amber-300">Need reconciliation</strong></div>
         </div>
@@ -657,6 +701,10 @@ export default function FinancialsPage() {
           className="inline-flex items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-sm font-semibold text-sky-300 hover:bg-sky-400/20">
           <Sparkles size={16}/> Describe Transaction
         </button>
+        {unpostedEquipment.length > 0 && <button type="button" onClick={() => reviewEquipmentPurchase(unpostedEquipment[0])}
+          className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300">
+          Review purchase ({unpostedEquipment.length})
+        </button>}
         <button onClick={() => { setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300"><Plus size={16}/> Add entry</button>
       </div></div>
