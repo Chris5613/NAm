@@ -26,6 +26,7 @@ import {
   moneyRound, valueOrNull, reclassifyPersonalPcContribution,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
+import { openingPhoneDepreciationEntry } from "@/lib/phoneOpeningDepreciation";
 
 import {
  formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome, buildProjectIncome,
@@ -430,6 +431,7 @@ export default function FinancialsPage() {
     .reduce((sum,entry)=>sum+Number(entry.amount||0),0));
   const autoDepreciation = Math.max(0,moneyRound(scheduledDepreciation-manualDepreciation));
   const generatedEntries = [
+    ...(month === LEGACY_LEDGER_CUTOFF ? [openingPhoneDepreciationEntry(businessPhones)].filter(Boolean) : []),
     ...(month < LEGACY_LEDGER_CUTOFF ? [] : syncedIncomeJournal.entries),
     ...syncedMovementEntries,
     ...(month >= LEGACY_LEDGER_CUTOFF && autoDepreciation > 0 ? [{
@@ -447,7 +449,12 @@ export default function FinancialsPage() {
   ];
   const entries = month < LEGACY_LEDGER_CUTOFF
     ? preSeptemberLedgerEntries(closeSnapshot?.entries || manualEntries, month, businessPhones)
-    : (closeSnapshot?.entries || [...manualEntries, ...generatedEntries].sort((a,b)=>a.date.localeCompare(b.date)));
+    : (() => {
+        const base = closeSnapshot?.entries || [...manualEntries, ...generatedEntries];
+        const adjustment = month === LEGACY_LEDGER_CUTOFF ? openingPhoneDepreciationEntry(businessPhones) : null;
+        return [...base, ...(adjustment && !base.some(entry => entry.id === adjustment.id) ? [adjustment] : [])]
+          .sort((a,b)=>a.date.localeCompare(b.date));
+      })();
   const report = buildFinancialProfit(entries,savedExpenses);
   const incomeKnown = Boolean(syncedRevenue) ||
     ledgerEntries.some(entry=>["revenue","dividendRevenue"].includes(entry.creditAccount));
@@ -533,6 +540,12 @@ export default function FinancialsPage() {
       if(extraDep) all.push({id:"auto-depreciation:"+key,date:key+"-28",
         description:"Monthly equipment depreciation",automatic:true,
         lines:[line("depreciation",extraDep,0),line("accDep",0,extraDep)]});
+    }
+    // Earlier frozen September snapshots may predate this adjustment.
+    // Include it once in the cumulative Trial Balance, without modifying history.
+    if (month >= LEGACY_LEDGER_CUTOFF) {
+      const opening = openingPhoneDepreciationEntry(businessPhones);
+      if (opening && !all.some(entry => entry.id === opening.id)) all.push(opening);
     }
     return all;
   },[month,entries,closedMonths,journal,incomeMonths,hardwareDevices,businessPhones,records,confirmedMovements]);
@@ -933,6 +946,11 @@ export default function FinancialsPage() {
           className="rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300">Reopen month</button>
       </div>}
       {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
+      {syncedIncomeJournal.pendingReviewTotal > 0 && month >= LEGACY_LEDGER_CUTOFF && <div role="status" className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-sm text-amber-300">
+        <strong>{money(syncedIncomeJournal.pendingReviewTotal)} of tracked income needs reconciliation.</strong>
+        <span className="block text-xs">Unallocated or unknown providers have not been posted as Other Platform Receivables or revenue. Verify their provider and account before recording them.</span>
+        {syncedIncomeJournal.pendingReview.map((row,index)=><p key={index} className="mt-1 text-xs">{row.source}: {money(row.amount)}</p>)}
+      </div>}
       {syncedIncomeJournal.unexplainedManualRevenue > 0 && <p role="status" className="text-sm text-amber-300">
         Manual revenue exceeds Crypto Income by {money(syncedIncomeJournal.unexplainedManualRevenue)} this month. Review for duplicates or missing earnings.
       </p>}
