@@ -1472,13 +1472,13 @@ export default function Dashboard() {
                       ? "−"
                       : ""}
 
-                    {formatCurrency(
-                      Math.abs(
-                        breakdown[
-                          selectedCategory
-                        ] || 0
-                      )
-                    )}
+                    {selectedCategory === "crypto" && financialAssets.incomplete
+                      ? "—"
+                      : formatCurrency(Math.abs(
+                          selectedCategory === "crypto"
+                            ? financialAssets.value
+                            : breakdown[selectedCategory] || 0
+                        ))}
                   </p>
 
                   <button
@@ -1523,13 +1523,13 @@ export default function Dashboard() {
                     ? "−"
                     : ""}
 
-                  {formatCurrency(
-                    Math.abs(
-                      breakdown[
-                        selectedCategory
-                      ] || 0
-                    )
-                  )}
+                  {selectedCategory === "crypto" && financialAssets.incomplete
+                      ? "—"
+                      : formatCurrency(Math.abs(
+                          selectedCategory === "crypto"
+                            ? financialAssets.value
+                            : breakdown[selectedCategory] || 0
+                        ))}
                 </p>
               </div>
 
@@ -1547,6 +1547,7 @@ export default function Dashboard() {
                 "crypto" ? (
                   <CryptoBreakdown
                     key="modal-crypto"
+                    assetsSnapshot={financialAssets}
                     defaultOpen
                     dailyChange={
                       dailyCategoryChanges
