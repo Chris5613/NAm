@@ -765,7 +765,7 @@ export default function FinancialsPage() {
             <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
             <td className="py-2 text-right">{index===0 && !entry.automatic && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
           </tr>)}
-          {entryIndex < entries.length - 1 && <tr aria-hidden="true"><td colSpan={5} className="h-4 border-0 p-0" /></tr>}
+          {entryIndex < entries.length - 1 && <tr aria-hidden="true"><td colSpan={5} className="border-0 p-0"><div style={{ height: 32, minHeight: 32 }} /></td></tr>}
         </Fragment>)}
           <tr className="font-bold"><td colSpan={2} className="py-3">Total</td><td className="text-right">{money(debitTotal)}</td><td className="text-right">{money(creditTotal)}</td><td/></tr>
         </tbody></table></div>{!entries.length && <p className="py-5 text-sm text-[#8397a9]">No journal entries yet.</p>}</section>
