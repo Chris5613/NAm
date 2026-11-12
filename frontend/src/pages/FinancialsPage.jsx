@@ -343,8 +343,9 @@ export default function FinancialsPage() {
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
   const [bankMovements, setBankMovements] = useState([]);
   const [movementReview, setMovementReview] = useState(null);
+  const [movementReviewError, setMovementReviewError] = useState("");
   const [reconciliationStatus, setReconciliationStatus] = useState("");
-  const [monthClosePrompt, setMonthClosePrompt] = useState(false);
+  const [monthClosePrompt, setMonthClosePrompt] = useState(null);
   const [monthCloseAcknowledged, setMonthCloseAcknowledged] = useState(false);
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
@@ -666,12 +667,12 @@ export default function FinancialsPage() {
   const postReviewedMovement = () => {
     if (!movementReview) return;
     if (closedMonths[String(movementReview.date).slice(0, 7)]) {
-      setReconciliationStatus("Reopen the month before adding transfer or fee records.");
+      setMovementReviewError("Reopen the month before adding transfer or fee records.");
       return;
     }
     const confirmed = movementFromReview(movementReview);
     if (!confirmed) {
-      setReconciliationStatus("Enter a valid date, positive USD amount, and verified account(s).");
+      setMovementReviewError("Enter a valid date, positive USD amount, and different source and destination accounts.");
       return;
     }
     // The source id remains unchanged on re-review, so no second entry is created.
@@ -679,6 +680,7 @@ export default function FinancialsPage() {
     remoteStorage.setItem(CONFIRMED_MOVEMENTS_KEY, JSON.stringify(updated));
     setConfirmedMovements(updated);
     setMovementReview(null);
+    setMovementReviewError("");
     setReconciliationStatus("Confirmed movement added to the ledger and trial balance.");
   };
   const ignoreMovement = candidate => {
@@ -696,6 +698,10 @@ export default function FinancialsPage() {
     setReconciliationStatus("Candidate restored to the review queue.");
   };
   const closeSelectedMonth = () => {
+    if (Math.abs(trialDebit - trialCredit) > 0.005) {
+      setReconciliationStatus("The trial balance is out of balance; the month cannot be closed.");
+      return;
+    }
     if (month >= getCurrentMonthKey()) {
       setReconciliationStatus("The current month stays open so earnings can continue syncing.");
       return;
@@ -721,7 +727,7 @@ export default function FinancialsPage() {
     const updated = {...closedMonths, [month]: snapshot};
     remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(updated));
     setClosedMonths(updated);
-    setMonthClosePrompt(false);
+    setMonthClosePrompt(null);
     setMonthCloseAcknowledged(false);
     setReconciliationStatus(monthTitle(month) + " frozen. Reopen the month to make corrections.");
   };
@@ -877,6 +883,7 @@ export default function FinancialsPage() {
             <div className="flex gap-2">
               <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => {
                 setMovementReview({...candidate, from: candidate.from || "", to: candidate.to || ""});
+                setMovementReviewError("");
                 setReconciliationStatus("");
               }} className="rounded-lg border border-sky-400/30 px-3 py-2 text-xs font-semibold text-sky-300 disabled:opacity-40">Review</button>
               <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => ignoreMovement(candidate)}
@@ -935,16 +942,16 @@ export default function FinancialsPage() {
         </> : <>
           <p className="text-xs text-[#91acbd]">After the month ends, review all transactions and balances, then freeze a copy of the reports. The original trackers and transactions are never deleted.</p>
           {month >= getCurrentMonthKey() ? <p className="text-sm text-[#87b9d4]">The current month stays open while mining income grows.</p> :
-            <button type="button" onClick={() => { setMonthClosePrompt(true); setMonthCloseAcknowledged(false); }}
+            <button type="button" onClick={() => { setMonthClosePrompt(month); setMonthCloseAcknowledged(false); }}
               className="rounded-lg bg-emerald-400 px-4 py-2 text-sm font-semibold text-[#071710]">Review & close month</button>}
-          {monthClosePrompt && month < getCurrentMonthKey() && <div className="space-y-3 rounded-lg border border-amber-500/25 bg-[#1a1c23] p-4">
+          {monthClosePrompt === month && month < getCurrentMonthKey() && <div className="space-y-3 rounded-lg border border-amber-500/25 bg-[#1a1c23] p-4">
             <p className="text-sm font-semibold">Freeze the {monthTitle(month)} reporting snapshot?</p>
             <p className="text-xs text-[#acb9c7]">Unresolved: {unresolvedMovements.length} movement candidates; {unpostedEquipment.length} hardware purchase records; {reconciliation.filter(item => Math.abs(item.unexplained) >= 0.05).length} balance differences. Closing preserves these exceptions for later review.</p>
             <label className="flex items-start gap-2 text-xs text-[#c2d0db]">
               <input type="checkbox" checked={monthCloseAcknowledged} onChange={event => setMonthCloseAcknowledged(event.target.checked)}/>
               I reviewed these exceptions and want to freeze this report.
             </label>
-            <div className="flex gap-2"><button type="button" onClick={() => setMonthClosePrompt(false)}
+            <div className="flex gap-2"><button type="button" onClick={() => setMonthClosePrompt(null)}
               className="rounded-lg border border-[#445566] px-3 py-2 text-xs">Cancel</button>
               <button type="button" disabled={!monthCloseAcknowledged} onClick={closeSelectedMonth}
                 className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-[#05190f] disabled:opacity-40">Close month</button></div>
@@ -1001,6 +1008,7 @@ export default function FinancialsPage() {
         </div>
         <p className="text-xs text-[#9bb0c3]">{movementReview.provider} · {movementReview.issue}</p>
         {movementReview.bankSource && <p className="text-xs text-amber-300">Bank data may include personal finances. Approve only if this relates to your mining business.</p>}
+        {movementReviewError && <p role="alert" className="text-sm text-rose-400">{movementReviewError}</p>}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="space-y-1 text-xs text-[#a9becf]">Date
             <input type="date" value={movementReview.date} className={field}
