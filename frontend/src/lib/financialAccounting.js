@@ -261,6 +261,33 @@ export function buildStatementRows(baseRows, ledgerEntries, opts={}) {
   return rows;
 }
 
+// User-confirmed correction: the $500 RTX 2080 Super PC was purchased
+// with personal funds and contributed to the mining business. Update the
+// ORIGINAL entry instead of posting a second purchase or adjusting business cash.
+// Restrict migration to one unambiguous November 2026 PC purchase.
+export function reclassifyPersonalPcContribution(journal) {
+  if (!Array.isArray(journal)) return { entries: [], changed: false, matchCount: 0 };
+  const candidates = journal.filter(entry => {
+    const description = String(entry?.description || "");
+    return String(entry?.date || "").startsWith("2026-11") &&
+      entry?.debitAccount === "equipment" &&
+      entry?.creditAccount === "cash" &&
+      Math.abs(Number(entry?.amount) - 500) < 0.005 &&
+      /\b2080\b/i.test(description) &&
+      /\b(?:pc|computer)\b/i.test(description);
+  });
+  // Never silently rewrite multiple similar entries or another purchase.
+  if (candidates.length !== 1) return { entries: journal, changed: false, matchCount: candidates.length };
+  const target = candidates[0];
+  return {
+    entries: journal.map(entry => entry === target ? {
+      ...entry, creditAccount: "equity", fundingSource: "personal-owner-contribution",
+      originalCreditAccount: "cash",
+    } : entry),
+    changed: true, matchCount: 1,
+  };
+}
+
 export function deriveCashOpening(month, openings, manualJournal = [], confirmedMovements = []) {
   const direct = valueOrNull(openings?.[month]);
   if(direct!==null) return direct;
