@@ -300,7 +300,7 @@ export default function FinancialsPage() {
   const saveEntry = event => {
     event.preventDefault();
     const value = Number(draft.amount);
-    if (!draft.description.trim() || !/^\\d{4}-\\d{2}-\\d{2}$/.test(draft.date) ||
+    if (!draft.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date) ||
       !Number.isFinite(value) || value <= 0 || draft.debitAccount === draft.creditAccount) {
       setError("Enter a valid date, description, positive amount, and two different accounts.");
       return;
@@ -328,7 +328,7 @@ export default function FinancialsPage() {
   };
   const confirmQuickEntry = () => {
     if (!quickEntry) return;
-    if (!quickEntry.description.trim() || !/^\\d{4}-\\d{2}-\\d{2}$/.test(quickEntry.date) ||
+    if (!quickEntry.description.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(quickEntry.date) ||
       !Number.isFinite(quickEntry.amount) || quickEntry.amount <= 0 ||
       quickEntry.debitAccount === quickEntry.creditAccount) {
       setQuickError("Check the date, amount, and accounts before posting.");
