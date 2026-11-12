@@ -549,8 +549,10 @@ export default function Dashboard() {
     );
 
   useEffect(() => {
+    // Storage notifications can be emitted by net-worth history writes.
+    // Refresh the business card only here to avoid recursive full reloads.
+    const unsubscribe = subscribe(() => setFinancialAssets(getFinancialTotalAssets()));
     const refresh = () => fetchData();
-    const unsubscribe = subscribe(refresh);
     const timer = window.setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
     return () => {
