@@ -60,3 +60,17 @@ test("dividends use a brokerage debit and dividend revenue credit", () => {
 test("no synced source does not generate imaginary revenue", () => {
   expect(buildAutoIncomeJournal(month, null).entries).toEqual([]);
 });
+
+test("unallocated income is flagged instead of manufacturing platform receivables", () => {
+  const result=buildAutoIncomeJournal(month,{total:120,sources:{Kryptex:20}},[],month,"2026-11-12");
+  expect(result.generatedRevenueTotal).toBe(20);
+  expect(result.pendingReviewTotal).toBe(100);
+  expect(result.pendingReview).toEqual([{source:"Unallocated tracked income",amount:100}]);
+  expect(result.entries.some(entry=>entry.lines[0].account==="platform")).toBe(false);
+});
+
+test("unknown income provider is queued for review, not added as an asset",()=>{
+  const result=buildAutoIncomeJournal(month,{total:40,sources:{"Mystery Mining":40}},[],month,"2026-11-12");
+  expect(result.entries).toHaveLength(0);
+  expect(result.pendingReviewTotal).toBe(40);
+});
