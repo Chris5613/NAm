@@ -21,6 +21,9 @@ function debitAccountFor(sourceKey) {
   if (["kryptex", "rollercoin", "salad", "unetwork"].includes(sourceKey)) return "platform:" + sourceKey;
   return "platform";
 }
+const VERIFIED_SOURCES = new Set([
+  "lulo", "loopscale", "stocks", "kryptex", "rollercoin", "salad", "unetwork",
+]);
 function lastDay(month) {
   const [year, number] = String(month).split("-").map(Number);
   return new Date(Date.UTC(year, number, 0)).toISOString().slice(0, 10);
@@ -31,6 +34,7 @@ export function buildAutoIncomeJournal(month, incomeMonth, manualJournal = [], c
   const blank = {
     entries: [], syncedTotal, manualRevenueTotal: 0,
     generatedRevenueTotal: 0, unexplainedManualRevenue: 0,
+    pendingReview: [], pendingReviewTotal: 0,
   };
   if (!/^\d{4}-\d{2}$/.test(String(month)) || syncedTotal === null) return blank;
 
@@ -86,9 +90,17 @@ export function buildAutoIncomeJournal(month, incomeMonth, manualJournal = [], c
   let remaining = totalAllowed;
   const date = month === currentMonth && todayKey?.startsWith(month) ? todayKey : lastDay(month);
   const entries = [];
+  const pendingReview = [];
   for (const source of remainingBySource) {
     const value = Math.min(remaining, Math.max(0, cents(source.amount)));
     if (value <= 0) continue;
+    if (!VERIFIED_SOURCES.has(source.key)) {
+      // A source without an identified receivable cannot be assumed to exist.
+      // Flag it for review instead of manufacturing a platform debit/revenue.
+      pendingReview.push({ source: source.label, amount: value });
+      remaining = cents(remaining - value);
+      continue;
+    }
     const debitAccount = debitAccountFor(source.key);
     entries.push({
       id: "synced-income:" + month + ":" + encodeURIComponent(source.key),
@@ -104,6 +116,7 @@ export function buildAutoIncomeJournal(month, incomeMonth, manualJournal = [], c
   const generatedRevenueTotal = cents(entries.reduce((sum, row) => sum + row.amount, 0));
   return {
     entries, syncedTotal, manualRevenueTotal, generatedRevenueTotal,
+    pendingReview, pendingReviewTotal: cents(pendingReview.reduce((sum, row) => sum + row.amount, 0)),
     unexplainedManualRevenue: Math.max(0, cents(manualRevenueTotal - syncedTotal)),
   };
 }
