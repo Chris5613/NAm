@@ -622,7 +622,7 @@ export default function FinancialsPage() {
           ...(autoPower ? [["Mining electricity (estimate)", autoPower]] : []),
           ["Equipment depreciation", fixedDep],
           ["Net income", pnlProfit],
-        ].map(([label, value) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${label === "Net income" ? "font-bold text-emerald-400" : ""}`}>
+        ].map(([label, value]) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${label === "Net income" ? "font-bold text-emerald-400" : ""}`}>
           <span>{label}</span><span className="tabular-nums">{money(value)}</span>
         </div>)}
         
