@@ -757,13 +757,16 @@ export default function FinancialsPage() {
       </p>}
       <section className={card + " overflow-hidden p-4"}><div className="overflow-x-auto"><table className="w-full min-w-[550px] text-sm">
         <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
-        <tbody>{entries.map(entry => entry.lines.map((item, index) => <tr key={entry.id+":"+index} className="border-b border-[#20303d]">
-          <td className="py-2 align-top">{index===0 ? <><p>{entry.description}</p><p className="text-xs text-[#8195a8]">{entry.date}{entry.automatic ? " · Auto" : ""}</p></> : null}</td>
-          <td className="py-2 text-[#c3d2df]">{accounts.find(account=>account.id===item.account)?.name || item.account}</td>
-          <td className="py-2 text-right tabular-nums">{item.debit ? money(item.debit) : "—"}</td>
-          <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
-          <td className="py-2 text-right">{index===0 && !entry.automatic && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
-        </tr>))}
+        <tbody>{entries.map((entry, entryIndex) => <Fragment key={entry.id}>
+          {entry.lines.map((item, index) => <tr key={index} className="border-b border-[#20303d]">
+            <td className="py-2 align-top">{index===0 ? <><p>{entry.description}</p><p className="text-xs text-[#8195a8]">{entry.date}{entry.automatic ? " · Auto" : ""}</p></> : null}</td>
+            <td className="py-2 text-[#c3d2df]">{accounts.find(account=>account.id===item.account)?.name || item.account}</td>
+            <td className="py-2 text-right tabular-nums">{item.debit ? money(item.debit) : "—"}</td>
+            <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
+            <td className="py-2 text-right">{index===0 && !entry.automatic && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
+          </tr>)}
+          {entryIndex < entries.length - 1 && <tr aria-hidden="true"><td colSpan={5} className="h-4 border-0 p-0" /></tr>}
+        </Fragment>)}
           <tr className="font-bold"><td colSpan={2} className="py-3">Total</td><td className="text-right">{money(debitTotal)}</td><td className="text-right">{money(creditTotal)}</td><td/></tr>
         </tbody></table></div>{!entries.length && <p className="py-5 text-sm text-[#8397a9]">No journal entries yet.</p>}</section>
     </>}
