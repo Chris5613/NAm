@@ -8,6 +8,7 @@ import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
+import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import {
  formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome, buildProjectIncome,
@@ -66,6 +67,8 @@ const categories = [
 ];
 const accounts = [
   { id: "cash", name: "Cash / Bank", type: "asset" },
+  { id: "luloCash", name: "Lulo Yield Savings", type: "asset" },
+  { id: "brokerage", name: "Brokerage Holdings / Receivable", type: "asset" },
   { id: "crypto", name: "Cryptocurrency", type: "asset" },
   { id: "platform", name: "Platform Receivables", type: "asset" },
   { id: "defi", name: "DeFi / Investments", type: "asset" },
@@ -74,6 +77,7 @@ const accounts = [
   { id: "payable", name: "Accounts Payable", type: "liability" },
   { id: "equity", name: "Owner's Equity", type: "equity" },
   { id: "revenue", name: "Mining / Yield Revenue", type: "revenue" },
+  { id: "dividendRevenue", name: "Dividend Revenue", type: "revenue" },
   { id: "electric", name: "Electricity Expense", type: "expense" },
   { id: "expense", name: "Operating Expense", type: "expense" },
   { id: "depreciation", name: "Depreciation Expense", type: "expense" },
@@ -422,6 +426,9 @@ export default function FinancialsPage() {
   const fixedDep = rounded(rows.filter(row => row.category === "equipment" && row.start !== null && row.end !== null)
     .reduce((sum, row) => sum + Math.max(0, row.start - row.end), 0));
   const ledgerEntries = journal.filter(entry => String(entry.date).slice(0, 7) === month);
+  const syncedIncomeJournal = useMemo(() => buildAutoIncomeJournal(
+    month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey(),
+  ), [month, syncedRevenue, ledgerEntries]);
   const journalExpense = ledgerEntries.filter(entry => entry.debitAccount === "expense" || entry.debitAccount === "electric")
     .reduce((sum, entry) => sum + entry.amount, 0);
   // Estimated power is never a cash payment. Prefer actual posted electricity
@@ -441,6 +448,7 @@ export default function FinancialsPage() {
   // Display ledger amounts separately instead of counting them twice.
   const pnlProfit = pnlRevenue === null ? null : rounded(pnlRevenue - expenses - fixedDep);
   const generatedEntries = [
+    ...syncedIncomeJournal.entries,
     ...(fixedDep ? [{
       id: "auto-depreciation:" + month, date: month + "-28",
       description: "Monthly equipment depreciation — Hardware Payback",
@@ -578,6 +586,7 @@ export default function FinancialsPage() {
         <div className="mt-3 grid gap-3 text-sm text-[#b0c1ce] sm:grid-cols-2">
           <div>Tracked assets: <strong className="text-white">{rows.length} accounts</strong></div>
           <div>Recorded journal entries: <strong className="text-white">{ledgerEntries.length}</strong></div>
+          <div>Synced income entries: <strong className="text-white">{syncedIncomeJournal.entries.length} sources</strong></div>
           <div>Monthly equipment depreciation: <strong className="text-white">{money(fixedDep)}</strong></div>
           <div>Hardware Payback register: <strong className="text-white">{hardwareDevices.length} devices</strong></div>
           <div>Estimated mining electricity: <strong className="text-white">{powerEstimates[month] ? money(powerEstimates[month].cost) : "Awaiting usage data"}</strong></div>
@@ -652,6 +661,9 @@ export default function FinancialsPage() {
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300"><Plus size={16}/> Add entry</button>
       </div></div>
       {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
+      {syncedIncomeJournal.unexplainedManualRevenue > 0 && <p role="status" className="text-sm text-amber-300">
+        Manual revenue exceeds Crypto Income by {money(syncedIncomeJournal.unexplainedManualRevenue)} this month. Review for duplicates or missing earnings.
+      </p>}
       <section className={card + " overflow-hidden p-4"}><div className="overflow-x-auto"><table className="w-full min-w-[550px] text-sm">
         <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
         <tbody>{entries.map(entry => entry.lines.map((item, index) => <tr key={entry.id+":"+index} className="border-b border-[#20303d]">
