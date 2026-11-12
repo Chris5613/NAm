@@ -38,7 +38,6 @@ import { getPrivateAccountingProfile } from "@/lib/yieldFarmingAccounting";
 
 import { toast } from "sonner";
 
-import CryptoBreakdown from "@/components/CryptoBreakdown";
 import AssetBreakdown from "@/components/AssetBreakdown";
 import AddAssetDialog from "@/components/AddAssetDialog";
 
@@ -1534,45 +1533,20 @@ export default function Dashboard() {
                 </p>
               </div>
 
-              {/* CONTENT */}
-
-              <div
-                className="
-                  min-h-0
-                  flex-1
-                  overflow-y-auto
-                  p-6
-                "
-              >
-                {selectedCategory ===
-                "crypto" ? (
-                  <CryptoBreakdown
-                    key="modal-crypto"
-                    assetsSnapshot={financialAssets}
+              {selectedCategory !== "crypto" && (
+                <div className="min-h-0 flex-1 overflow-y-auto p-6">
+                  <AssetBreakdown
+                    key={`modal-${selectedCategory}`}
+                    category={selectedCategory}
+                    assets={assets}
+                    onUpdate={handleAssetUpdated}
+                    onDelete={handleAssetDeleted}
                     defaultOpen
-                    dailyChange={
-                      dailyCategoryChanges
-                        ?.crypto ||
-                      0
-                    }
+                    hideSummary
+                    dailyChange={dailyCategoryChanges?.[selectedCategory] || 0}
                   />
-                ) : (
-<AssetBreakdown
-  key={`modal-${selectedCategory}`}
-  category={selectedCategory}
-  assets={assets}
-  onUpdate={handleAssetUpdated}
-  onDelete={handleAssetDeleted}
-  defaultOpen
-  hideSummary
-  dailyChange={
-    dailyCategoryChanges?.[
-      selectedCategory
-    ] || 0
-  }
-/>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         )}
