@@ -739,15 +739,20 @@ export default function FinancialsPage() {
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
-    <div className="flex flex-wrap items-center justify-between gap-3">
-      <div><p className="text-xs uppercase tracking-[0.18em] text-[#8197a9]">Accounting & reports</p>
-        <h1 className="text-3xl font-semibold tracking-tight">Financials</h1></div>
-      <div className="flex items-center gap-1 rounded-xl border border-[#344657] bg-[#101821] p-1">
+    <div className="flex min-w-0 items-center gap-3">
+      <nav className="flex min-w-0 flex-1 gap-1 overflow-x-auto rounded-2xl border border-[#242b33] bg-[#0d1014] p-2 [scrollbar-width:none]"
+        aria-label="Financials sections">
+        {tabs.map(({ id, name, Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-pressed={tab === id}
+          className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs transition-colors ${tab === id ? "border border-sky-400/70 bg-[#182633] font-semibold text-white" : "border border-transparent text-[#9dafc0] hover:bg-white/[0.04] hover:text-white"}`}>
+          <Icon size={15}/>{name}
+        </button>)}
+      </nav>
+      <div className="flex shrink-0 items-center gap-1 rounded-xl border border-[#344657] bg-[#101821] p-1">
         <button type="button" disabled={month <= "2026-01"} onClick={() => setMonth(current => shift(current, -1))}
           className="rounded-lg p-2 text-[#cedbe7] disabled:opacity-30" aria-label="Previous month"><ChevronLeft size={18}/></button>
-        <CalendarDays size={15} className="text-sky-400"/>
+        <CalendarDays size={15} className="hidden text-sky-400 sm:block"/>
         <select aria-label="Report month" value={month} onChange={event => setMonth(event.target.value)}
-          className="bg-[#101821] px-1 py-2 text-sm font-semibold text-white [color-scheme:dark]">
+          className="max-w-[112px] bg-[#101821] px-1 py-2 text-xs font-semibold text-white [color-scheme:dark] sm:max-w-none sm:text-sm">
           {Array.from({length: (Number(getCurrentMonthKey().slice(0, 4)) - 2026) * 12 + Number(getCurrentMonthKey().slice(5))}, (_, index) =>
             shift(getCurrentMonthKey(), -index)).map(key => <option key={key} value={key}>{monthTitle(key)}</option>)}
         </select>
@@ -755,13 +760,6 @@ export default function FinancialsPage() {
           className="rounded-lg p-2 text-[#cedbe7] disabled:opacity-30" aria-label="Next month"><ChevronRight size={18}/></button>
       </div>
     </div>
-    <nav className="flex min-w-0 gap-1 overflow-x-auto rounded-2xl border border-[#242b33] bg-[#0d1014] p-2 [scrollbar-width:none]"
-      aria-label="Financials sections">
-      {tabs.map(({ id, name, Icon }) => <button key={id} type="button" onClick={() => setTab(id)} aria-pressed={tab === id}
-        className={`flex shrink-0 items-center gap-2 rounded-xl px-3 py-2.5 text-xs transition-colors ${tab === id ? "border border-sky-400/70 bg-[#182633] font-semibold text-white" : "border border-transparent text-[#9dafc0] hover:bg-white/[0.04] hover:text-white"}`}>
-        <Icon size={15}/>{name}
-      </button>)}
-    </nav>
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
         {metric("Total Assets", assetsEnd, assetsEnd===null?"Some account balances are unverified":null, "text-sky-300")}
