@@ -494,17 +494,14 @@ export default function FinancialsPage() {
   const matchedMovements = [...confirmedById.values()].filter(row => row.date.startsWith(month));
   const alreadyPostedIds = new Set(ledgerEntries.filter(entry => entry.movementSourceId)
     .map(entry => entry.movementSourceId));
-  // If the user already posted the exact movement by hand, do not generate
-  // the same transfer again. Date/amount/accounts must all match.
-  const genuinelyNewMovements = matchedMovements.filter(movement => {
-    const isFee = ["fee", "transaction_fee", "network_fee"].includes(movement.type);
-    return !ledgerEntries.some(entry =>
-      entry.date === movement.date &&
-      Math.abs(Number(entry.amount) - Number(movement.amount)) <= 0.005 &&
-      entry.creditAccount === movement.from &&
-      entry.debitAccount === (isFee ? "fees" : movement.to));
-  });
-  const syncedMovementEntries = movementJournal(genuinelyNewMovements, month, alreadyPostedIds);
+  // Deduplicate each transfer leg separately from its fee: a manual transfer
+  // must not suppress an otherwise unrecorded fee from the same source ID.
+  const syncedMovementEntries = movementJournal(matchedMovements, month, alreadyPostedIds)
+    .filter(entry => !ledgerEntries.some(manual =>
+      manual.date === entry.date &&
+      Math.abs(Number(manual.amount) - Number(entry.lines[0]?.debit)) <= 0.005 &&
+      manual.debitAccount === entry.lines[0]?.account &&
+      manual.creditAccount === entry.lines[1]?.account));
   const reconciliation = closeSnapshot?.reconciliation ||
     reconcileBalances(rows, syncedRevenue, matchedMovements, month);
   // Hardware Payback knows the cost and month, but NOT the funding account.
