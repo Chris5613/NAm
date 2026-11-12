@@ -4,11 +4,12 @@ import { remoteStorage } from "@/lib/serverStore";
 import { equipmentSchedule, moneyRound } from "@/lib/financialAccounting";
 export const UNETWORK_PHONES_KEY="financials_unetwork_business_phones_v1";
 export const PHONE_INVENTORY_KEY="networth_phones";
+export const PHONE_USEFUL_LIFE_MONTHS=120; // 10-year straight-line book depreciation, $0 salvage value.
 const validDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||"")) &&
   !Number.isNaN(Date.parse(String(value)+"T12:00:00Z")) &&
   new Date(String(value)+"T12:00:00Z").toISOString().slice(0,10)===value;
 export const readUnetworkPhones=()=>{
-  try { const value=JSON.parse(remoteStorage.getItem(UNETWORK_PHONES_KEY)||"[]");return Array.isArray(value)?value:[]; }
+  try { const value=JSON.parse(remoteStorage.getItem(UNETWORK_PHONES_KEY)||"[]");return Array.isArray(value)?value.map(phone=>({...phone,usefulLifeMonths:PHONE_USEFUL_LIFE_MONTHS})):[]; }
   catch { return []; }
 };
 export const readPhoneInventory=()=>{
@@ -35,7 +36,7 @@ export function makePhoneAsset(input,id) {
     name:String(input.name).trim(), purchaseDate:input.purchaseDate,
     businessDate:input.businessDate, startMonth:input.businessDate.slice(0,7),
     businessValue:moneyRound(input.businessValue),cost:moneyRound(input.businessValue),
-    usefulLifeMonths:36, fundingAccount:input.fundingAccount,
+    usefulLifeMonths:PHONE_USEFUL_LIFE_MONTHS, fundingAccount:input.fundingAccount,
     journalId:"unetwork-phone:"+id,
     source:"unetwork-business-phone",
   };
@@ -51,7 +52,7 @@ export function phoneJournal(phone) {
 }
 export function phoneAssetRows(phones,month) {
   return (phones||[]).flatMap(phone=>{
-    const value=equipmentSchedule(phone,month);
+    const value=equipmentSchedule({...phone,usefulLifeMonths:PHONE_USEFUL_LIFE_MONTHS},month);
     if(!value) return [];
     return [{
       id:"unetwork-phone:"+phone.id,name:phone.name,
