@@ -173,8 +173,37 @@ export function buildFinancialBalanceRows(month, records, live, hardwareDevices 
         ...schedule,historicalCost:fallback.cost,acquisitionMonth:fallback.startMonth,source:"confirmed-fallback"});
     }
   }
+  // An older record calls this one confirmed PC "RTX 2080 PC" while
+  // newer records call it "RTX 2080 Super PC". Treat those labels as one
+  // acquisition when the cost and service month agree. This merges only
+  // the alias pair, not two separately registered PCs with identical names.
+  const aliasNames = new Set(["rtx2080pc", "rtx2080superpc"]);
+  const deduplicated = [];
+  for (const row of equipment) {
+    const key = assetKey(row.name);
+    if (!aliasNames.has(key)) {
+      deduplicated.push(row);
+      continue;
+    }
+    const partnerIndex = deduplicated.findIndex(other =>
+      aliasNames.has(assetKey(other.name)) &&
+      assetKey(other.name) !== key &&
+      Number.isFinite(Number(other.historicalCost)) &&
+      Number.isFinite(Number(row.historicalCost)) &&
+      Math.abs(Number(other.historicalCost) - Number(row.historicalCost)) < 0.005 &&
+      String(other.acquisitionMonth || "") === String(row.acquisitionMonth || ""));
+    if (partnerIndex < 0) {
+      deduplicated.push(row);
+      continue;
+    }
+    const priorRow = deduplicated[partnerIndex];
+    const preferred = [row, priorRow].sort((a, b) =>
+      Number(b.source === "hardware-payback") - Number(a.source === "hardware-payback") ||
+      Number(assetKey(b.name) === "rtx2080superpc") - Number(assetKey(a.name) === "rtx2080superpc"))[0];
+    deduplicated[partnerIndex] = { ...preferred, name: "RTX 2080 Super PC" };
+  }
   // A saved custom liability is not a fixed asset.
-  return [...ordinary,...equipment];
+  return [...ordinary,...deduplicated];
 }
 
 // Equipment purchases entered directly in the General Ledger also need an
