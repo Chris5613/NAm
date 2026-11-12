@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { remoteStorage as localStorage } from "@/lib/serverStore";
+import { remoteStorage as localStorage, subscribe } from "@/lib/serverStore";
+import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { walletsApi, tokenPrefsApi, customTokensApi, cryptoCacheApi, projectsApi } from "@/lib/api";
 import { coinGeckoApi } from "@/lib/external-apis";
 import { toast } from "sonner";
@@ -31,6 +32,7 @@ import {
 
 export default function CryptoPage() {
   const [wallets, setWallets] = useState([]);
+  const [homeBitcoin, setHomeBitcoin] = useState(() => getStoredProjectCryptoPortfolio()?.bitcoin || null);
   const [balances, setBalances] = useState({});
   const [defiPositions, setDefiPositions] = useState(() => getSavedDefiPositions());
   const [manualDefiPositions, setManualDefiPositions] = useState(() => getSavedManualDefiPositions());
@@ -48,6 +50,19 @@ export default function CryptoPage() {
 
 
   const lastSyncedRef = useRef(null);
+  useEffect(() => {
+    const update = () => setHomeBitcoin(getStoredProjectCryptoPortfolio()?.bitcoin || null);
+    const unsubscribe = subscribe(update);
+    window.addEventListener("project-crypto-updated", update);
+    window.addEventListener("focus", update);
+    const timer = window.setInterval(update, 30000);
+    return () => {
+      unsubscribe?.();
+      window.removeEventListener("project-crypto-updated", update);
+      window.removeEventListener("focus", update);
+      window.clearInterval(timer);
+    };
+  }, []);
   const liveLuloPosition = useMemo(() => {
     if (!luloProject || !(Number(luloProject.lulo_total_balance_usd) > 0)) return null;
 
@@ -330,7 +345,14 @@ const defiTotalValue = allDefiPositions.reduce(
   0
 );
 
-  const grandTotal = visibleTotal + defiTotalValue;
+  // Home already values Bitcoin through its shared portfolio. Reuse it if
+  // this Crypto page doesn't have the same BTC wallet among its own tokens.
+  // Never add the shared holding on top of an existing Bitcoin wallet.
+  const hasBitcoinWallet = allTokensRaw.some(token => String(token.symbol || "").toUpperCase() === "BTC");
+  const sharedBitcoinValue = Number(homeBitcoin?.value ?? homeBitcoin?.balance) || 0;
+  const bitcoinFallbackValue = !hasBitcoinWallet && !hiddenSymbols.has("BTC") && sharedBitcoinValue > 0
+    ? sharedBitcoinValue : 0;
+  const grandTotal = visibleTotal + defiTotalValue + bitcoinFallbackValue;
 
   const dailyCryptoChange = getDailyCryptoChange(grandTotal);
   const cryptoDailyPositive = dailyCryptoChange.change >= 0;
@@ -354,6 +376,8 @@ const defiTotalValue = allDefiPositions.reduce(
         (chainBreakdown[ctChain] || 0) + (ct.amount * ct.price);
     }
   });
+
+  if (bitcoinFallbackValue > 0) chainBreakdown.bitcoin = (chainBreakdown.bitcoin || 0) + bitcoinFallbackValue;
 
   if (defiTotalValue > 0) {
     chainBreakdown.solana = (chainBreakdown.solana || 0) + defiTotalValue;
@@ -640,7 +664,30 @@ useEffect(() => {
         </div>
       </div>
 
-      {wallets.length === 0 && customTokens.length === 0 && allDefiPositions.length === 0? (
+      {bitcoinFallbackValue > 0 && (
+        <Card className="border-border/40 bg-card" data-testid="shared-bitcoin-holding">
+          <CardContent className="flex flex-wrap items-center justify-between gap-5 p-5">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/10 text-orange-400">
+                <Coins className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Bitcoin (BTC)</p>
+                <p className="text-xs text-muted-foreground">Same BTC holding tracked on Home</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-semibold tabular-nums">{formatCurrency(bitcoinFallbackValue)}</p>
+              <p className="text-xs text-muted-foreground tabular-nums">
+                {(Number(homeBitcoin?.amount) || 0).toLocaleString("en-US", { maximumFractionDigits: 8 })} BTC
+                {Number(homeBitcoin?.price) > 0 ? ` · ${formatCurrency(homeBitcoin.price)} / BTC` : ""}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {wallets.length === 0 && customTokens.length === 0 && allDefiPositions.length === 0 && bitcoinFallbackValue === 0 ? (
         <Card className="border-border/40 bg-card">
           <CardContent className="p-8 flex flex-col items-center justify-center text-center">
             <Wallet className="w-10 h-10 text-muted-foreground mb-4" strokeWidth={1.5} />
