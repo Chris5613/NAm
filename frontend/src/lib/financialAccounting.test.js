@@ -1,7 +1,8 @@
 import {
   buildFinancialBalanceRows, buildStatementRows, buildFinancialProfit, classifyCashFlows,
   equipmentSchedule, deriveCashOpening, derivePayableOpening,
-  includeJournalEquipment, unmatchedEquipmentPurchases, journalAccountActivity,
+  includeJournalEquipment, unmatchedEquipmentPurchases,
+  reclassifyPersonalPcContribution, journalAccountActivity,
 } from "./financialAccounting";
 
 const month="2026-11";
@@ -158,4 +159,53 @@ test("locked January can carry forward November-purchased hardware without impor
   const rows=buildFinancialBalanceRows("2027-01",records,{},devices,"2027-04");
   expect(rows.map(row=>row.id)).toEqual(["old-pc"]);
   expect(rows[0].end).toBe(475);
+});
+
+
+test("personally funded 2080 PC is reclassified in the same entry, not duplicated", () => {
+  const existing = {id:"pc-purchase",date:"2026-11-05",
+    description:"Paid $500 for RTX 2080 Super PC Nov 5th",amount:500,
+    debitAccount:"equipment",creditAccount:"cash"};
+  const result = reclassifyPersonalPcContribution([existing]);
+  expect(result.changed).toBe(true);
+  expect(result.entries).toHaveLength(1);
+  expect(result.entries[0].id).toBe("pc-purchase");
+  expect(result.entries[0].creditAccount).toBe("equity");
+  expect(result.entries[0].debitAccount).toBe("equipment");
+  expect(result.entries[0].fundingSource).toBe("personal-owner-contribution");
+  const balanced = [{...result.entries[0],lines:[
+    {account:"equipment",debit:500,credit:0},{account:"equity",debit:0,credit:500},
+  ]}];
+  expect(journalAccountActivity(balanced,"cash")).toBe(0);
+  expect(journalAccountActivity(balanced,"equity")).toBe(-500);
+  expect(classifyCashFlows(balanced).total).toBe(0);
+  expect(buildFinancialProfit(balanced,0).expenses).toBe(0);
+});
+
+test("PC owner investment correction is idempotent across store hydration", () => {
+  const original=[{id:"pc",date:"2026-11-05",description:"RTX 2080 Super PC",
+    debitAccount:"equipment",creditAccount:"cash",amount:500}];
+  const updated=reclassifyPersonalPcContribution(original);
+  const second=reclassifyPersonalPcContribution(updated.entries);
+  expect(updated.changed).toBe(true);
+  expect(second.changed).toBe(false);
+  expect(second.entries).toHaveLength(1);
+});
+
+test("correction leaves other bank equipment purchases untouched", () => {
+  const other = {id:"other",date:"2026-11-12",
+    description:"Purchased RTX 5070 GPU with business cash",amount:500,
+    debitAccount:"equipment",creditAccount:"cash"};
+  const output=reclassifyPersonalPcContribution([other]);
+  expect(output.changed).toBe(false);
+  expect(output.entries[0].creditAccount).toBe("cash");
+});
+
+test("ambiguous duplicate 2080 purchase entries are not silently changed", () => {
+  const same={date:"2026-11-05",description:"Paid 500 for RTX 2080 Super PC",
+    amount:500,debitAccount:"equipment",creditAccount:"cash"};
+  const output=reclassifyPersonalPcContribution([{...same,id:"a"},{...same,id:"b"}]);
+  expect(output.changed).toBe(false);
+  expect(output.matchCount).toBe(2);
+  expect(output.entries[0].creditAccount).toBe("cash");
 });
