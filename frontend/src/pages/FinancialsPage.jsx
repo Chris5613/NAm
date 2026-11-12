@@ -149,31 +149,55 @@ const line = (account, debit, credit) => ({ account, debit: rounded(debit), cred
 function parseTransaction(text, month) {
   const input = String(text || "").trim();
   if (!input) return { error: "Describe a transaction first." };
-  const amounts = [...input.matchAll(/(?:\\$\\s*|\\bUSD\\s*)([\\d,]+(?:\\.\\d{1,2})?)/gi)];
-  if (amounts.length !== 1) {
-    return { error: "Include exactly one amount with $ or USD, for example: paid $500 for electricity this month." };
+  const phrase = input.toLowerCase();
+
+  // Accept "$500", "500 USD", or an amount after an action ("paid 500").
+  // Never mistake model numbers like "RTX 2080" or a date like "Nov 5th"
+  // for a transaction amount.
+  const explicitAmounts = [...input.matchAll(/(?:\$\s*([\d,]+(?:\.\d{1,2})?)|\b([\d,]+(?:\.\d{1,2})?)\s*USD\b)/gi)];
+  const actionAmounts = [...input.matchAll(/\b(?:paid|spent|bought|purchased|received|earned|deposited|contributed)\s+(?:about\s+|approximately\s+)?([\d,]+(?:\.\d{1,2})?)\b/gi)];
+  const values = explicitAmounts.length
+    ? explicitAmounts.map(match => match[1] || match[2])
+    : actionAmounts.map(match => match[1]);
+  if (values.length !== 1) {
+    return { error: "Include one purchase or payment amount, such as 'Paid 500 for RTX 2080 Super PC Nov 5th'." };
   }
-  const value = Number(amounts[0][1].replace(/,/g, ""));
+  const value = Number(values[0].replace(/,/g, ""));
   if (!Number.isFinite(value) || value <= 0 || rounded(value) <= 0)
     return { error: "Enter a valid amount greater than $0." };
-  const phrase = input.toLowerCase();
+
   const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0)).getUTCDate();
   const today = new Date();
-  const date = month === getCurrentMonthKey()
+  let date = month === getCurrentMonthKey()
     ? today.toLocaleDateString("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" })
     : month + "-" + String(lastDay).padStart(2, "0");
+
+  const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
+  const namedDate = input.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i);
+  const isoDate = input.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (namedDate || isoDate) {
+    const year = namedDate ? Number(namedDate[3] || month.slice(0, 4)) : Number(isoDate[1]);
+    const monthNumber = namedDate ? monthNames.indexOf(namedDate[1].slice(0, 3).toLowerCase()) + 1 : Number(isoDate[2]);
+    const day = Number(namedDate ? namedDate[2] : isoDate[3]);
+    const candidate = new Date(Date.UTC(year, monthNumber - 1, day));
+    if (candidate.getUTCFullYear() !== year || candidate.getUTCMonth() + 1 !== monthNumber || candidate.getUTCDate() !== day) {
+      return { error: "That transaction date is invalid. Please check the day and month." };
+    }
+    date = candidate.toISOString().slice(0, 10);
+  }
+
   let debitAccount = "", creditAccount = "";
   let explanation = "";
   const expense = /electric|power (?:bill|cost|expense)|utility|utilities|energy bill|electricity bill/.test(phrase);
-  const paid = /paid|spent|purchased|bought|payment|purchase/.test(phrase);
-  const unpaid = /unpaid|owe|owed|on credit|not yet paid|bill due/.test(phrase);
-  const fromCash = /cash|bank|checking|debit card|from (?:my )?account/.test(phrase);
-  const fromCrypto = /bitcoin|\\bbtc\\b|crypto wallet/.test(phrase);
+  const paid = /\b(?:paid|spent|purchased|bought|payment|purchase)\b/.test(phrase);
+  const unpaid = /\b(?:unpaid|owe|owed|on credit|not yet paid|bill due)\b/.test(phrase);
+  const fromCash = /\b(?:cash|bank|checking|debit card)\b|from (?:my )?account/.test(phrase);
+  const fromCrypto = /bitcoin|\bbtc\b|crypto wallet/.test(phrase);
   if (expense && (paid || unpaid)) {
     debitAccount = "electric";
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
     explanation = unpaid ? "Record an electricity bill owed." : "Record a paid electricity expense.";
-  } else if (/gpu|graphics card|computer|\\bpc\\b|mining equipment|hardware/.test(phrase) && paid) {
+  } else if (/gpu|graphics card|computer|\bpc\b|mining equipment|hardware/.test(phrase) && paid) {
     debitAccount = "equipment";
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
     explanation = "Record a capital equipment purchase, not an operating expense.";
@@ -192,9 +216,7 @@ function parseTransaction(text, month) {
   if (!debitAccount || !creditAccount) {
     return { error: "I couldn't classify this safely. Use Add entry for transfers, withdrawals, debt payments, or anything unusual." };
   }
-  return {
-    date, description: input, amount: rounded(value), debitAccount, creditAccount, explanation,
-  };
+  return { date, description: input, amount: rounded(value), debitAccount, creditAccount, explanation };
 }
 
 export default function FinancialsPage() {
