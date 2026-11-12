@@ -635,7 +635,8 @@ export default function FinancialsPage() {
     if (!aliasKey) return;
     setRenameError("");
     setRenameDraft(balanceDisplayName(row,accountLabels));
-    setRenaming({ key:aliasKey, original:row.name, accountId:balanceAccountId(row) });
+    setRenaming({ key:aliasKey, original:row.name, accountId:balanceAccountId(row),
+      isEquipment:row.category==="equipment" });
   };
   const editChartName = account => {
     setRenameError("");
@@ -909,7 +910,9 @@ export default function FinancialsPage() {
             placeholder="My account name"/>
         </label>
         {renameError && <p role="alert" className="text-sm text-rose-400">{renameError}</p>}
-        <p className="text-xs text-[#8da4b5]">The new name will appear throughout Financials. It won't modify your mining accounts, transactions, balances, or equipment records.</p>
+        <p className="text-xs text-[#8da4b5]">The new name follows this account throughout Financials without changing transaction amounts, accounting IDs, or mining tracker data.
+          {renaming.isEquipment && " The Trial Balance groups all equipment into one account; you can rename that group separately using Edit other account names."}
+        </p>
         <div className="flex flex-wrap justify-end gap-2">
           <button type="button" onClick={()=>setRenaming(null)} className="rounded-lg border border-[#3b5062] px-3 py-2 text-sm">Cancel</button>
           <button type="button" onClick={()=>{
