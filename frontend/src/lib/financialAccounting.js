@@ -215,10 +215,20 @@ export function journalAccountActivity(entries, account) {
       ? value + Number(line.debit||0)-Number(line.credit||0) : value,0),0));
 }
 
+export function derivePayableOpening(month, manualJournal = []) {
+  return moneyRound((manualJournal || []).reduce((sum,entry)=>{
+    if(String(entry.date || "").slice(0,7)>=month) return sum;
+    const value = Number(entry.amount)||0;
+    return sum + (entry.creditAccount==="payable" ? value : 0) -
+      (entry.debitAccount==="payable" ? value : 0);
+  },0));
+}
+
 export function buildStatementRows(baseRows, ledgerEntries, opts={}) {
   const rows = (baseRows||[]).map(row=>({...row}));
   const cashDelta = journalAccountActivity(ledgerEntries,"cash");
   const payableDelta = -journalAccountActivity(ledgerEntries,"payable");
+  const payableOpening = valueOrNull(opts.payableOpening) ?? 0;
   const explicitCash = rows.find(row=>isBank(row.name) && row.category==="cash");
   const cashOpening = valueOrNull(opts.cashOpening);
   if(explicitCash) {
@@ -239,12 +249,14 @@ export function buildStatementRows(baseRows, ledgerEntries, opts={}) {
   }
   const payable = rows.find(row=>/^(accounts\s+payable|payable)$/i.test(row.name));
   if(payable) {
-    const start = payable.start;
-    payable.end = payable.end ?? (start === null ? null : moneyRound(start+payableDelta));
+    const start = payable.start ?? payableOpening;
+    payable.start = start;
+    payable.end = payable.end ?? moneyRound(start+payableDelta);
     payable.journalChange = payableDelta;
-  } else if(payableDelta!==0) {
+  } else if(payableDelta!==0 || payableOpening!==0) {
     rows.push({id:"ledger:payable",name:"Accounts Payable",category:"liabilities",
-      start:0,end:payableDelta,journalChange:payableDelta,source:"ledger"});
+      start:payableOpening,end:moneyRound(payableOpening+payableDelta),
+      journalChange:payableDelta,source:"ledger"});
   }
   return rows;
 }
