@@ -6,6 +6,8 @@ import {
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
+import { localStorage as appStorage } from "@/lib/localStorage";
+import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import MonthlyChangesPage from "@/pages/MonthlyChangesPage";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
@@ -595,6 +597,15 @@ export default function SideHustleDashboard() {
 
   const projectSummary = readObject("project_income_portfolio_summary_v1");
   const totalProjectBalance = Math.max(0, Number(projectSummary?.portfolioBalance) || 0);
+  // Match the Bitcoin balance used by Home and Monthly Changes.
+  // Project Income's portfolioBalance does not include Bitcoin.
+  const homeBitcoin = appStorage.getCryptoCache()?.projectPortfolio?.bitcoin;
+  const portfolioBitcoin = getStoredProjectCryptoPortfolio()?.bitcoin;
+  const bitcoinBalance = Math.max(0, Number(
+    homeBitcoin?.value ?? homeBitcoin?.balance ??
+    portfolioBitcoin?.value ?? portfolioBitcoin?.balance
+  ) || 0);
+  const totalNetWorth = totalProjectBalance + bitcoinBalance;
   // Use the same reconciled per-source monthly totals as Income History.
   // This includes Lulo earnings even when the quick dashboard cache lacks a Lulo row.
   const sourceRows = Object.entries(recordedCurrentMonth?.sources || {})
@@ -719,8 +730,8 @@ export default function SideHustleDashboard() {
       <KpiCard
         icon={Layers3}
         title="Total Net Worth"
-        value={money(totalProjectBalance)}
-        detail="All project balances"
+        value={money(totalNetWorth)}
+        detail="Project balances + Bitcoin"
         tone="violet"
       />
       <KpiCard
