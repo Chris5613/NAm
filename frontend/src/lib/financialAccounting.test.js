@@ -246,3 +246,34 @@ test("two physical RTX 2080 devices with different Hardware Payback IDs remain s
   const rows=buildFinancialBalanceRows("2026-11",{}, {},devices,"2026-11");
   expect(rows.filter(row=>/RTX 2080/i.test(row.name))).toHaveLength(2);
 });
+
+
+test("RTX 2080 PC and RTX 2080 Super PC aliases appear as one asset", () => {
+  const devices=[
+    {id:"older",name:"RTX 2080 PC",cost:500,startMonth:"2026-11"},
+    {id:"newer",name:"RTX 2080 Super PC",cost:500,startMonth:"2026-11"},
+  ];
+  const rows=buildFinancialBalanceRows("2026-11",{}, {},devices,"2026-11");
+  const pc=rows.filter(row=>/RTX 2080/i.test(row.name));
+  expect(pc).toHaveLength(1);
+  expect(pc[0].name).toBe("RTX 2080 Super PC");
+  expect(pc[0].end).toBe(491.67);
+});
+
+test("separately owned same-name 2080 machines are not merged", () => {
+  const devices=[
+    {id:"one",name:"RTX 2080 Super PC",cost:500,startMonth:"2026-11"},
+    {id:"two",name:"RTX 2080 Super PC",cost:500,startMonth:"2026-11"},
+  ];
+  const rows=buildFinancialBalanceRows("2026-11",{}, {},devices,"2026-11");
+  expect(rows.filter(row=>row.name==="RTX 2080 Super PC")).toHaveLength(2);
+});
+
+test("2080 variants with different acquisition costs are preserved separately", () => {
+  const devices=[
+    {id:"one",name:"RTX 2080 PC",cost:500,startMonth:"2026-11"},
+    {id:"two",name:"RTX 2080 Super PC",cost:900,startMonth:"2026-11"},
+  ];
+  const rows=buildFinancialBalanceRows("2026-11",{}, {},devices,"2026-11");
+  expect(rows.filter(row=>/RTX 2080/i.test(row.name))).toHaveLength(2);
+});
