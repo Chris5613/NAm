@@ -1,6 +1,7 @@
 import {
   buildFinancialBalanceRows, buildStatementRows, buildFinancialProfit, classifyCashFlows,
-  equipmentSchedule, deriveCashOpening, journalAccountActivity,
+  equipmentSchedule, deriveCashOpening, derivePayableOpening,
+  includeJournalEquipment, unmatchedEquipmentPurchases, journalAccountActivity,
 } from "./financialAccounting";
 
 const month="2026-11";
@@ -115,4 +116,46 @@ test("bank transfer to BTC is not new income",()=>{
   const entries=[{id:"transfer",lines:[{account:"crypto",debit:25,credit:0},{account:"cash",debit:0,credit:25}]}];
   expect(buildFinancialProfit(entries,0).revenue).toBe(0);
   expect(classifyCashFlows(entries).totals.transfers).toBe(-25);
+});
+
+
+test("existing $500 PC journal matches one owned asset, and 5070 still needs funding confirmation",()=>{
+  const purchase={id:"pc",date:"2026-11-05",description:"Paid $500 for RTX 2080 Super PC Nov 5th",
+    debitAccount:"equipment",creditAccount:"cash",amount:500};
+  const rows=includeJournalEquipment(buildFinancialBalanceRows(month,{}, {},[],month),[purchase],month);
+  expect(rows.filter(row=>row.name==="RTX 2080 Super PC")).toHaveLength(1);
+  expect(unmatchedEquipmentPurchases(rows,[purchase],month).map(row=>row.name)).toEqual(["RTX 5070 GPU"]);
+});
+
+test("ledger-only equipment purchases appear as assets exactly once",()=>{
+  const journal=[{id:"extra",date:"2026-11-10",description:"Bought $200 extra GPU board",
+    debitAccount:"equipment",creditAccount:"cash",amount:200}];
+  const first=includeJournalEquipment(buildFinancialBalanceRows(month,{}, {},[],month),journal,month);
+  expect(first.filter(row=>row.source==="journal-purchase")).toHaveLength(1);
+  const next=includeJournalEquipment(first,journal,month);
+  expect(next.filter(row=>row.source==="journal-purchase")).toHaveLength(1);
+});
+
+test("unpaid bill carries into following month and closes when paid",()=>{
+  const past=[{date:"2026-11-10",amount:75,debitAccount:"expense",creditAccount:"payable"}];
+  expect(derivePayableOpening("2026-12",past)).toBe(75);
+  const billSettlement={id:"settlement",date:"2026-12-05",lines:[
+    {account:"payable",debit:75,credit:0},{account:"cash",debit:0,credit:75}]};
+  const rows=buildStatementRows([], [billSettlement],{payableOpening:derivePayableOpening("2026-12",past)});
+  const payable=rows.find(row=>row.id==="ledger:payable");
+  expect(payable.start).toBe(75);
+  expect(payable.end).toBe(0);
+});
+
+test("locked January can carry forward November-purchased hardware without importing new trackers",()=>{
+  const records={
+    "2026-11":{balanceSheetItems:[{id:"old-pc",name:"RTX 2080 Super PC",category:"equipment",
+      historicalCost:500,placedInServiceMonth:"2026-11",usefulLifeMonths:60,start:0,end:491.67}]},
+    "2026-12":{locked:true,items:[]},
+    "2027-01":{locked:true,items:[]},
+  };
+  const devices=[{id:"late-5070",name:"Late GPU",startMonth:"2026-11",cost:900}];
+  const rows=buildFinancialBalanceRows("2027-01",records,{},devices,"2027-04");
+  expect(rows.map(row=>row.id)).toEqual(["old-pc"]);
+  expect(rows[0].end).toBe(475);
 });
