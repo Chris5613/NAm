@@ -428,9 +428,12 @@ export default function FinancialsPage() {
   // expenses, and never add the same expense twice through two sources.
   const actualPowerEntries = ledgerEntries.filter(entry => entry.debitAccount === "electric");
   const estimatedPower = Number(powerEstimates[month]?.cost);
-  const autoPower = actualPowerEntries.length || savedExpenses !== null ||
+  const hasSavedExpenses = savedExpenses !== null && savedExpenses > 0;
+  const autoPower = actualPowerEntries.length || hasSavedExpenses ||
     !Number.isFinite(estimatedPower) ? 0 : Math.max(0, rounded(estimatedPower));
-  const expenses = savedExpenses === null ? rounded(journalExpense + autoPower) : savedExpenses;
+  // A saved $0 means no separate costs have been recorded yet, so the
+  // synced electricity estimate can still feed P&L.
+  const expenses = hasSavedExpenses ? savedExpenses : rounded(journalExpense + autoPower);
   // Journaled earnings may already exist in the Crypto Income data.
   // Do not add them a second time or substitute them for a missing source.
   const pnlRevenue = revenue;
