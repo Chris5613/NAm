@@ -1075,7 +1075,7 @@ export default function FinancialsPage() {
         <form onSubmit={prepareQuickEntry} className="flex flex-col gap-2 sm:flex-row">
           <input aria-label="Describe a financial transaction" value={quickText}
             onChange={event => { setQuickText(event.target.value); setQuickEntry(null); setQuickError(""); setQuickStatus(""); }}
-            placeholder="Paid $500 in power costs this month"
+            placeholder="Transferred $25 from Kryptex to BTC"
             className={field + " min-w-0 flex-1"} />
           <button type="submit" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-sky-400 px-4 py-2 text-sm font-semibold text-[#071824] hover:bg-sky-300">
             <Send size={15}/> Create draft
@@ -1113,7 +1113,7 @@ export default function FinancialsPage() {
             </div>
           </div>
         </div>}
-        <p className="text-[11px] text-[#718b9e]">Recognizes common expenses, equipment purchases, owner contributions, and income. Unclear transactions require manual entry. No AI service or bank transfer is involved.</p>
+        <p className="text-[11px] text-[#718b9e]">Recognizes common expenses, equipment purchases, transfers, owner contributions, and income. It drafts accounting entries only; it never moves funds or calls an AI service.</p>
       </section>
     </div>}
     {modal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event=>{if(event.target===event.currentTarget)setModal(false);}}>
