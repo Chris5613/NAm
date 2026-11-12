@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { api, settingsApi } from "@/lib/apiClient";
@@ -10,6 +10,10 @@ import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
+import {
+  balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName,
+  cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription,
+} from "@/lib/financialAccountNames";
 import {
   buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
   buildStatementRows, buildFinancialProfit,
@@ -33,6 +37,7 @@ const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
 const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const BANK_OPENINGS_KEY = "financials_bank_openings_v1";
+const FINANCIAL_LABELS_KEY = "financials_account_labels_v1";
 const DEFAULT_POWER_SETTINGS = { basicRate: 0.1691, offPeakRate: 0.0893, midPeakRate: 0.1670, peakRate: 0.4313 };
 function readHardwareRegister() {
   const rows = readJson(HARDWARE_KEY, []);
@@ -250,6 +255,12 @@ export default function FinancialsPage() {
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
   const [bankOpenings, setBankOpenings] = useState(() => readJson(BANK_OPENINGS_KEY, {}));
   const [bankOpeningDraft, setBankOpeningDraft] = useState("");
+  const [accountLabels, setAccountLabels] = useState(() =>
+    cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
+  const [renaming, setRenaming] = useState(null);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [showOtherLabels, setShowOtherLabels] = useState(false);
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
@@ -267,6 +278,7 @@ export default function FinancialsPage() {
     setConfirmedMovements(readJson(CONFIRMED_MOVEMENTS_KEY, {}));
     setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
     setBankOpenings(readJson(BANK_OPENINGS_KEY, {}));
+    setAccountLabels(cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
     setCryptoIncome(current => ({
       ...readCryptoIncomeSources(), manualIncome: current.manualIncome,
       luloBackfills: current.luloBackfills,
@@ -618,6 +630,34 @@ export default function FinancialsPage() {
     remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(updated));
     setClosedMonths(updated);
   };
+  const editRowName = row => {
+    const aliasKey=balanceAliasKey(row);
+    if (!aliasKey) return;
+    setRenameError("");
+    setRenameDraft(balanceDisplayName(row,accountLabels));
+    setRenaming({ key:aliasKey, original:row.name, accountId:balanceAccountId(row) });
+  };
+  const editChartName = account => {
+    setRenameError("");
+    setRenameDraft(chartDisplayName(account,accountLabels));
+    setRenaming({key:"account:"+account.id,original:account.name,accountId:account.id});
+  };
+  const saveAccountName = event => {
+    event.preventDefault();
+    if (!renaming) return;
+    const name=renameDraft.trim().replace(/\s+/g," ");
+    if (!name || name.length>80) {
+      setRenameError("Enter a name between 1 and 80 characters.");
+      return;
+    }
+    const updated={...accountLabels,[renaming.key]:name};
+    if (name === renaming.original) delete updated[renaming.key];
+    const cleaned=cleanAccountLabels(updated);
+    remoteStorage.setItem(FINANCIAL_LABELS_KEY,JSON.stringify(cleaned));
+    setAccountLabels(cleaned);
+    setRenaming(null);
+    setRenameError("");
+  };
   const tabs = [
     { id: "balance", name: "Balance Sheet", Icon: Wallet },
     { id: "ledger", name: "General Ledger", Icon: BookOpen },
@@ -625,6 +665,16 @@ export default function FinancialsPage() {
     { id: "income", name: "Income Statement", Icon: TrendingUp },
     { id: "cash", name: "Cash Flow", Icon: Coins },
   ];
+  const accountName = account => chartDisplayName(account,accountLabels);
+  const ledgerAccountName = (entry,item) => {
+    if(item.account==="equipment") {
+      const specific=equipmentEntryDisplayName(entry,rows,accountLabels);
+      if(specific) return specific;
+    }
+    const account=accounts.find(row=>row.id===item.account);
+    return account ? accountName(account) : item.account;
+  };
+  const transactionTitle = entry => journalDisplayDescription(entry,rows,accountLabels);
   const metric = (title, value, note, color = "text-white") => <section className={card + " min-w-0 p-4"}>
     <p className="text-xs text-[#9db0c1]">{title}</p>
     <strong className={"mt-2 block text-2xl font-bold tabular-nums " + color}>{money(value)}</strong>
@@ -703,7 +753,15 @@ export default function FinancialsPage() {
             {sections.map(section => <Fragment key={section.id}>
               <tr className="bg-[#142333]"><th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}</th></tr>
               {section.rows.map(row => <tr key={row.id} className="border-b border-[#202f3c]">
-                <td className="py-2.5 pl-2">{row.name}{row.unverifiedOpening ? <span className="ml-2 text-xs text-amber-300">(opening unknown)</span> : null}</td>
+                <td className="py-2.5 pl-2">
+                  <div className="flex items-center gap-2">
+                    <span>{balanceDisplayName(row,accountLabels)}</span>
+                    <button type="button" aria-label={"Rename "+balanceDisplayName(row,accountLabels)}
+                      title="Rename account throughout Financials"
+                      onClick={()=>editRowName(row)} className="rounded p-1 text-[#738b9d] hover:bg-sky-400/10 hover:text-sky-300">
+                      <Pencil size={13}/>
+                    </button>
+                  </div>{row.unverifiedOpening ? <span className="ml-2 text-xs text-amber-300">(opening unknown)</span> : null}</td>
                 <td className="py-2.5 text-right tabular-nums">{money(row.start)}</td>
                 <td className={`py-2.5 text-right tabular-nums ${row.start !== null && row.end !== null && row.end < row.start ? "text-rose-400" : "text-emerald-400"}`}>{row.start === null || row.end === null ? (row.journalChange != null ? signed(row.journalChange) : "—") : signed(rounded(row.end-row.start))}</td>
                 <td className="py-2.5 text-right font-semibold tabular-nums">{money(row.end)}</td>
@@ -750,7 +808,7 @@ export default function FinancialsPage() {
         </div>
         
         <div className="mt-4 space-y-2">{cashEvents.length ? cashEvents.map(entry => <div key={entry.id} className="flex items-center justify-between gap-3 border-b border-[#273746] py-2 text-sm">
-          <div><p>{entry.description}</p><p className="text-xs text-[#8197a9]">{entry.date}</p></div>
+          <div><p>{transactionTitle(entry)}</p><p className="text-xs text-[#8197a9]">{entry.date}</p></div>
           <span className={entry.delta >= 0 ? "text-emerald-400" : "text-rose-400"}>{signed(entry.delta)}</span>
         </div>) : <p className="text-sm text-[#94a7b8]">No cash transactions recorded for this month. Add journal entries to build the cash flow statement.</p>}</div>
       </section>
@@ -782,8 +840,8 @@ export default function FinancialsPage() {
         <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
         <tbody>{entries.map((entry, entryIndex) => <Fragment key={entry.id}>
           {entry.lines.map((item, index) => <tr key={index} className="border-b border-[#20303d]">
-            <td className="py-2 align-top">{index===0 ? <><p>{entry.description}</p><p className="text-xs text-[#8195a8]">{entry.date}{entry.automatic ? " · Auto" : ""}</p></> : null}</td>
-            <td className="py-2 text-[#c3d2df]">{accounts.find(account=>account.id===item.account)?.name || item.account}</td>
+            <td className="py-2 align-top">{index===0 ? <><p>{transactionTitle(entry)}</p><p className="text-xs text-[#8195a8]">{entry.date}{entry.automatic ? " · Auto" : ""}</p></> : null}</td>
+            <td className="py-2 text-[#c3d2df]">{ledgerAccountName(entry,item)}</td>
             <td className="py-2 text-right tabular-nums">{item.debit ? money(item.debit) : "—"}</td>
             <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
             <td className="py-2 text-right">{index===0 && !entry.automatic && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
@@ -805,7 +863,7 @@ export default function FinancialsPage() {
         <p className="mt-1 text-xs text-amber-300">Cumulative posted journal activity since September 2026. This is a running ledger trial balance; opening balances for externally tracked assets must be verified before it becomes a fully adjusted trial balance.</p>
         
         <div className="mt-4 overflow-x-auto"><table className="w-full min-w-[360px] text-sm"><thead><tr className="border-b border-[#314454] text-xs text-[#9db0c1]"><th className="pb-2 text-left">Account</th><th className="pb-2 text-right">Debit</th><th className="pb-2 text-right">Credit</th></tr></thead>
-          <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{row.name}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
+          <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{accountName(row)}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
             <tr className="font-bold"><td className="py-3">Total</td><td className="text-right">{money(trialDebit)}</td><td className="text-right">{money(trialCredit)}</td></tr>
           </tbody></table></div></section>
     </>}
