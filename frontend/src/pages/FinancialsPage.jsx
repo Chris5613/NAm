@@ -2,13 +2,17 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, CreditCard, FileSpreadsheet, LayoutDashboard, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
-import { api, settingsApi } from "@/lib/apiClient";
+import { api, settingsApi, spendingApi } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
+import {
+  ACCOUNT_OPTIONS, collectMovementCandidates, collectBankMovementCandidates,
+  movementFromReview, movementJournal, reconcileBalances,
+} from "@/lib/financialMovements";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import {
@@ -23,6 +27,9 @@ const JOURNAL_KEY = "financials_journal_v1";
 const HARDWARE_KEY = "hardware_payback_devices_v1";
 const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
 const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
+const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
+const IGNORED_MOVEMENTS_KEY = "financials_ignored_movements_v1";
+const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const DEFAULT_POWER_SETTINGS = { basicRate: 0.1691, offPeakRate: 0.0893, midPeakRate: 0.1670, peakRate: 0.4313 };
 function readHardwareRegister() {
   const rows = readJson(HARDWARE_KEY, []);
@@ -71,7 +78,11 @@ const accounts = [
   { id: "luloCash", name: "Lulo Yield Savings", type: "asset" },
   { id: "brokerage", name: "Brokerage Holdings / Receivable", type: "asset" },
   { id: "crypto", name: "Cryptocurrency", type: "asset" },
-  { id: "platform", name: "Platform Receivables", type: "asset" },
+  { id: "platform", name: "Other Platform Receivables", type: "asset" },
+  { id: "platform:kryptex", name: "Kryptex Receivables", type: "asset" },
+  { id: "platform:rollercoin", name: "RollerCoin Receivables", type: "asset" },
+  { id: "platform:salad", name: "Salad Receivables", type: "asset" },
+  { id: "platform:unetwork", name: "Unetwork Receivables", type: "asset" },
   { id: "defi", name: "DeFi / Investments", type: "asset" },
   { id: "equipment", name: "Mining Equipment", type: "asset" },
   { id: "accDep", name: "Accumulated Depreciation", type: "contra" },
@@ -82,6 +93,7 @@ const accounts = [
   { id: "electric", name: "Electricity Expense", type: "expense" },
   { id: "expense", name: "Operating Expense", type: "expense" },
   { id: "depreciation", name: "Depreciation Expense", type: "expense" },
+  { id: "fees", name: "Transaction & Network Fees", type: "expense" },
 ];
 const cashLike = name => /lulo|cash|bank|checking|savings|receivable|pending payout/i.test(name);
 function categoryFor(name) {
@@ -333,6 +345,14 @@ export default function FinancialsPage() {
   const [cryptoIncome, setCryptoIncome] = useState(readCryptoIncomeSources);
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
+  const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
+  const [ignoredMovements, setIgnoredMovements] = useState(() => readJson(IGNORED_MOVEMENTS_KEY, {}));
+  const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
+  const [bankMovements, setBankMovements] = useState([]);
+  const [movementReview, setMovementReview] = useState(null);
+  const [reconciliationStatus, setReconciliationStatus] = useState("");
+  const [monthClosePrompt, setMonthClosePrompt] = useState(false);
+  const [monthCloseAcknowledged, setMonthCloseAcknowledged] = useState(false);
   const [modal, setModal] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
@@ -347,6 +367,9 @@ export default function FinancialsPage() {
     setLive(liveBalances());
     setHardwareDevices(readHardwareRegister());
     setPowerEstimates(readJson(POWER_ESTIMATE_KEY, {}));
+    setConfirmedMovements(readJson(CONFIRMED_MOVEMENTS_KEY, {}));
+    setIgnoredMovements(readJson(IGNORED_MOVEMENTS_KEY, {}));
+    setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
     setCryptoIncome(current => ({
       ...readCryptoIncomeSources(), manualIncome: current.manualIncome,
       luloBackfills: current.luloBackfills,
@@ -377,6 +400,18 @@ export default function FinancialsPage() {
     refresh();
     const interval = window.setInterval(refresh, 90000);
     return () => { active = false; window.clearInterval(interval); };
+  }, []);
+  useEffect(() => {
+    let active = true;
+    const refreshBankTransactions = async () => {
+      try {
+        const transactions = await spendingApi.transactions();
+        if (active && Array.isArray(transactions)) setBankMovements(collectBankMovementCandidates(transactions));
+      } catch { /* Bank data can be offline. No transactions are invented. */ }
+    };
+    refreshBankTransactions();
+    const timer = window.setInterval(refreshBankTransactions, 90000);
+    return () => { active = false; window.clearInterval(timer); };
   }, []);
   const cryptoTrackers = useMemo(() => ({
     salad: cryptoIncome.salad, rollercoin: cryptoIncome.rollercoin,
