@@ -13,7 +13,8 @@ import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovemen
 import {
   buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
   buildStatementRows, buildFinancialProfit,
-  classifyCashFlows, journalAccountActivity, deriveCashOpening, moneyRound, valueOrNull,
+  classifyCashFlows, journalAccountActivity, deriveCashOpening, derivePayableOpening,
+  moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { localStorage as appStorage } from "@/lib/localStorage";
@@ -415,7 +416,8 @@ export default function FinancialsPage() {
   // A bank payment really reduces Cash / Bank. If no opening bank balance
   // was provided, display its journal movement without fabricating an ending.
   const cashOpening = deriveCashOpening(month,bankOpenings,journal,Object.values(confirmedMovements));
-  const rows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,{cashOpening});
+  const rows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,
+    {cashOpening,payableOpening:derivePayableOpening(month,journal)});
   const sections = categories.map(category => ({
     ...category,rows:rows.filter(row=>row.category===category.id),
   }));
