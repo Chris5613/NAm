@@ -11,7 +11,7 @@ import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
 import {
   ACCOUNT_OPTIONS, collectMovementCandidates, collectBankMovementCandidates,
-  movementFromReview, movementJournal, reconcileBalances,
+  movementFromReview, movementJournal, reconcileBalances, resolveFinancialAccount,
 } from "@/lib/financialMovements";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { localStorage as appStorage } from "@/lib/localStorage";
@@ -296,14 +296,7 @@ function parseTransaction(text, month) {
     // Internal transfers move assets and are never additional revenue.
     const from = phrase.match(/\bfrom\s+(?:my\s+)?(roller\s?coin|kryptex|salad|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
     const to = phrase.match(/\b(?:to|into)\s+(?:my\s+)?(roller\s?coin|kryptex|salad|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
-    const assetAccount = match => {
-      const name = match?.[1] || "";
-      if (/lulo/.test(name)) return "luloCash";
-      if (/loopscale/.test(name)) return "defi";
-      if (/bitcoin|btc|crypto wallet/.test(name)) return "crypto";
-      if (/cash|checking|bank/.test(name)) return "cash";
-      return name ? "platform" : "";
-    };
+    const assetAccount = match => resolveFinancialAccount(match?.[1]) || "";
     debitAccount = assetAccount(to);
     creditAccount = assetAccount(from);
     if (!debitAccount || !creditAccount || debitAccount === creditAccount) {
@@ -501,7 +494,17 @@ export default function FinancialsPage() {
   const matchedMovements = [...confirmedById.values()].filter(row => row.date.startsWith(month));
   const alreadyPostedIds = new Set(ledgerEntries.filter(entry => entry.movementSourceId)
     .map(entry => entry.movementSourceId));
-  const syncedMovementEntries = movementJournal(matchedMovements, month, alreadyPostedIds);
+  // If the user already posted the exact movement by hand, do not generate
+  // the same transfer again. Date/amount/accounts must all match.
+  const genuinelyNewMovements = matchedMovements.filter(movement => {
+    const isFee = ["fee", "transaction_fee", "network_fee"].includes(movement.type);
+    return !ledgerEntries.some(entry =>
+      entry.date === movement.date &&
+      Math.abs(Number(entry.amount) - Number(movement.amount)) <= 0.005 &&
+      entry.creditAccount === movement.from &&
+      entry.debitAccount === (isFee ? "fees" : movement.to));
+  });
+  const syncedMovementEntries = movementJournal(genuinelyNewMovements, month, alreadyPostedIds);
   const reconciliation = closeSnapshot?.reconciliation ||
     reconcileBalances(rows, syncedRevenue, matchedMovements, month);
   // Hardware Payback knows the cost and month, but NOT the funding account.
@@ -742,9 +745,9 @@ export default function FinancialsPage() {
     { id: "reconcile", name: "Reconcile", Icon: ClipboardList },
     { id: "overview", name: "Overview", Icon: LayoutDashboard },
   ];
-  const metric = (title, value, note, color = "text-white") => <section className={card + " min-w-0 p-4"}>
+  const metric = (title, value, note, color = "text-white", isCount = false) => <section className={card + " min-w-0 p-4"}>
     <p className="text-xs text-[#9db0c1]">{title}</p>
-    <strong className={"mt-2 block text-2xl font-bold tabular-nums " + color}>{money(value)}</strong>
+    <strong className={"mt-2 block text-2xl font-bold tabular-nums " + color}>{isCount ? value : money(value)}</strong>
     {note && <p className="mt-2 text-xs text-[#7f94a8]">{note}</p>}
   </section>;
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
@@ -855,9 +858,9 @@ export default function FinancialsPage() {
     </>}
     {tab === "reconcile" && <>
       <div className="grid gap-3 sm:grid-cols-3">
-        {metric("Confirmed transfers & fees", matchedMovements.length, "Source records + reviewed items")}
+        {metric("Confirmed transfers & fees", matchedMovements.length, "Source records + reviewed items", "text-white", true)}
         {metric("Transaction fees", feeExpense, "Confirmed fee entries only")}
-        {metric("Unreviewed movements", unresolvedMovements.length, "Not posted to ledger")}
+        {metric("Unreviewed movements", unresolvedMovements.length, "Not posted to ledger", "text-white", true)}
       </div>
       {reconciliationStatus && <p role="status" className="text-sm text-sky-300">{reconciliationStatus}</p>}
       <section className={card + " space-y-4 p-4 sm:p-5"}>
