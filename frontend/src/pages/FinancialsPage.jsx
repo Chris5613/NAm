@@ -21,7 +21,7 @@ import {
 } from "@/lib/financialAccountNames";
 import {
   buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
-  buildStatementRows, buildFinancialProfit,
+  buildStatementRows, buildFinancialProfit, splitFinancialRevenue,
   classifyCashFlows, journalAccountActivity, deriveCashOpening, derivePayableOpening,
   moneyRound, valueOrNull, reclassifyPersonalPcContribution,
 } from "@/lib/financialAccounting";
@@ -469,10 +469,12 @@ export default function FinancialsPage() {
   // Present the existing combined revenue as separately posted income streams.
   // Any frozen historical total not explained by the posted lines is shown
   // explicitly rather than being assigned to mining or dividends incorrectly.
-  const dividendIncome = moneyRound(-journalAccountActivity(entries,"dividendRevenue"));
-  const miningIncome = moneyRound(report.revenue-dividendIncome);
+  const revenueSources = splitFinancialRevenue(entries);
+  const {mining:miningIncome,yield:yieldIncome,dividends:dividendIncome} = revenueSources;
+  // Keep unidentified manual revenue separate instead of attributing it
+  // to mining or yield without evidence.
   const otherRecognizedRevenue = pnlRevenue === null ? null :
-    moneyRound(pnlRevenue-report.revenue);
+    moneyRound(revenueSources.unclassified+pnlRevenue-report.revenue);
   const operatingExpenseWithoutPower = Math.max(0,moneyRound(operatingExpense-autoPower));
   const fixedDep = closeSnapshot ? closeSnapshot.fixedDep : report.depreciation;
   const totalStatementExpenses = moneyRound(operatingExpenseWithoutPower+autoPower+feeExpense+fixedDep);
@@ -884,7 +886,7 @@ export default function FinancialsPage() {
     </>}
     {tab === "income" && <>
       <div className="grid gap-3 sm:grid-cols-3">
-        {metric(accountNameById("revenue"), pnlRevenue, "Synced from Crypto Dashboard", "text-sky-300")}
+        {metric("Total Revenue", pnlRevenue, "Mining, yield and dividends", "text-sky-300")}
         {metric("Operating Expenses", expenses, autoPower ? "Includes Mining Power estimate" : "Saved or journaled expenses")}
         {metric("Net Income (Estimated)", pnlProfit, "After depreciation", "text-emerald-400")}
       </div>
@@ -897,7 +899,8 @@ export default function FinancialsPage() {
             </tr></thead>
             <tbody>
               <tr className="bg-[#142333]"><th colSpan={2} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">Revenue</th></tr>
-              <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("revenue")}</td><td className="py-2.5 text-right tabular-nums">{money(miningIncome)}</td></tr>
+              <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">Mining Revenue</td><td className="py-2.5 text-right tabular-nums">{money(miningIncome)}</td></tr>
+              <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">Yield Revenue</td><td className="py-2.5 text-right tabular-nums">{money(yieldIncome)}</td></tr>
               <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("dividendRevenue")}</td><td className="py-2.5 text-right tabular-nums">{money(dividendIncome)}</td></tr>
               {otherRecognizedRevenue !== null && Math.abs(otherRecognizedRevenue) >= .005 && <tr className="border-b border-[#202f3c]">
                 <td className="py-2.5 pl-2">Other / previously recognized revenue</td>
