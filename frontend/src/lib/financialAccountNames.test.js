@@ -1,6 +1,6 @@
 import {
   balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName,
-  cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription,
+  cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow,
 } from "./financialAccountNames";
 
 test("Kryptex renamed in balance sheet uses the same account label in ledger and trial", () => {
@@ -78,4 +78,20 @@ test("ambiguous identical physical GPUs do not rewrite a journal description arb
   const names={"row:device:first":"Server One","row:device:second":"Server Two"};
   expect(journalDisplayDescription({description:"Bought RTX 2080 Super PC"},rows,names))
     .toBe("Bought RTX 2080 Super PC");
+});
+
+test("Lulo is hidden from current Balance Sheet even when its account is renamed",()=>{
+  const current="2026-11";
+  const rows=[
+    {id:"project:lulo",name:"Lulo",category:"cash"},
+    {id:"project:luloyieldsavings",name:"Savings",category:"cash"},
+    {id:"custom-1",name:"Lulo Yield Savings",category:"cash"},
+    {id:"project:kryptex",name:"Kryptex",category:"digital"},
+  ];
+  const labels={"account:luloCash":"Withdrawn cash"};
+  for(const row of rows.slice(0,3)){
+    expect(showBalanceSheetRow(row,current,current,labels)).toBe(false);
+    expect(showBalanceSheetRow(row,current,"2026-12",labels)).toBe(true);
+  }
+  expect(showBalanceSheetRow(rows[3],current,current,labels)).toBe(true);
 });
