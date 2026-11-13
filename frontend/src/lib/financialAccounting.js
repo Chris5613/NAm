@@ -237,6 +237,36 @@ export function includeJournalEquipment(baseRows, journal, month, locked = false
       acquisitionMonth:entry.date.slice(0,7),source:"journal-purchase",
     });
   }
+  // Subaccount credits for full remaining book value retire the specific
+  // equipment asset; partial credits do not silently remove an asset.
+  for(const row of rows) {
+    if(row.category !== "equipment" || !row.id) continue;
+    const account = "equipment:" + row.id;
+    const disposals = (journal || []).filter(entry =>
+      /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(entry.date || "")) &&
+      String(entry.date).slice(0,7) <= month &&
+      !entry.automatic &&
+      journalActivity(entry,account) < -0.005
+    ).sort((a,b) => String(a.date).localeCompare(String(b.date)));
+    for(const disposal of disposals) {
+      const disposalMonth = String(disposal.date).slice(0,7);
+      if(row.acquisitionMonth && disposalMonth < row.acquisitionMonth) continue;
+      const scheduled = disposalMonth === month ? row : equipmentSchedule({
+        cost:row.historicalCost,
+        startMonth:row.acquisitionMonth,
+        usefulLifeMonths:row.usefulLifeMonths,
+      },disposalMonth);
+      if(!scheduled || scheduled.end == null) continue;
+      const credited = moneyRound(-journalActivity(disposal,account));
+      if(credited + 0.01 < Number(scheduled.end)) continue;
+      row.start = disposalMonth < month ? 0 : row.start;
+      row.end = 0;
+      row.depreciation = 0;
+      row.retired = true;
+      row.retirementMonth = disposalMonth;
+      break;
+    }
+  }
   return rows;
 }
 
