@@ -40,8 +40,15 @@ export function financialLiveBalances() {
     if(item?.platform && Number.isFinite(Number(item.balance))) values[item.platform.toLowerCase()]=Number(item.balance);
   }
   const cache=readObject(PROJECT_QUICK_CACHE_KEY);
-  const lulo=(cache.projects||[]).filter(item=>item?.yield_tracking==="lulo_lending");
-  if(lulo.length) values.lulo=lulo.reduce((sum,item)=>sum+(Number(item.lulo_total_balance_usd)||0),0);
+  // The quick cache is only a fallback. It can still reflect a pre-withdrawal
+  // balance after a newer provider sync has updated the project store.
+  const savedProjects=appStorage.getProjects();
+  const luloProjects=(savedProjects||[]).filter(item=>item?.yield_tracking==="lulo_lending");
+  const cachedLulo=(cache.projects||[]).filter(item=>item?.yield_tracking==="lulo_lending");
+  const lulo=luloProjects.length ? luloProjects : cachedLulo;
+  if(lulo.length) values.lulo=lulo.reduce((sum,item)=>sum+
+    (Number.isFinite(Number(item.lulo_total_balance_usd))
+      ? Number(item.lulo_total_balance_usd) : 0),0);
   if(Number.isFinite(Number(cache.loopscaleSnapshot?.positionValueUsd))) values.loopscale=Number(cache.loopscaleSnapshot.positionValueUsd);
   const salad=loadSaladTracker();
   if(salad.initialized||salad.lastSyncedAt) values.salad=Number(salad.currentBalance)||0;
