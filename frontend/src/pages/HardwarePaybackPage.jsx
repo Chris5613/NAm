@@ -298,11 +298,23 @@ export default function HardwarePaybackPage() {
               ? new Date(Date.now() + Math.ceil(remaining / estimatedDaily) * 86400000)
               : null;
           return (
-          <article key={d.id} style={{ borderColor: ["#326e59", "#645284", "#94753e", "#386a91"][index % 4] }} className="w-full max-w-[280px] rounded-xl border border-[#304252] bg-gradient-to-br from-[#132330] to-[#101720] p-4">
+          <article key={d.id} role="button" tabIndex={0}
+            aria-label={`Edit ${d.name} hardware and income source`}
+            title="Click anywhere to edit hardware and income source"
+            onClick={() => { setError(""); setDraft({ ...d }); }}
+            onKeyDown={event => {
+              if(event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                setError("");
+                setDraft({ ...d });
+              }
+            }}
+            style={{ borderColor: ["#326e59", "#645284", "#94753e", "#386a91"][index % 4] }}
+            className="w-full max-w-[280px] cursor-pointer rounded-xl border border-[#304252] bg-gradient-to-br from-[#132330] to-[#101720] p-4 transition-colors hover:bg-[#1a3041] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
             <div className="flex items-center gap-3">
               <span className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 p-2.5 text-emerald-300"><Cpu size={20}/></span>
               <h3 className="min-w-0 flex-1 truncate text-lg font-semibold">{d.name}</h3>
-              <button type="button" aria-label={`Edit ${d.name}`} onClick={() => { setError(""); setDraft({ ...d }); }} className="rounded-lg border border-[#344657] p-2 text-[#aabac8] hover:text-white"><Pencil size={15}/></button>
+              <span aria-hidden="true" className="rounded-lg border border-[#344657] p-2 text-[#aabac8]"><Pencil size={15}/></span>
             </div>
             <dl className="my-5 grid grid-cols-1 gap-4 text-sm">
               <div><dt>Cost</dt><dd className="font-semibold">{money(d.cost)}</dd></div>
