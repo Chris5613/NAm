@@ -334,10 +334,6 @@ function datedSourceIncome(source, firstDay, lastDay, history) {
   return null; // Do not invent daily data for providers with only monthly totals.
 }
 function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now(), incomeMonths = [], dailyTrackers = {}) {
-  const costsBySource = {};
-  for(const device of devices) for(const source of hardwareSources(device)) {
-    costsBySource[source]=(costsBySource[source] || 0)+(Number(device.cost) || 0);
-  }
   const incomeFor = (source, start, finish) => source==="Kryptex"
     ? confirmedKryptexIncomeByMonth(tracker,start,finish)
     : incomeMonths.reduce((sum,row)=>row.monthKey>=start && row.monthKey<=finish
@@ -347,7 +343,7 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
   return Object.fromEntries(devices.map(device=>{
     const sources=hardwareSources(device),checkpoint=device.checkpoint;
     if(!checkpoint || !sources.length) return [device.id,0];
-    const share=source=>(Number(device.cost)||0)/(costsBySource[source] || 1);
+    // Each card tracks the complete chosen source earnings; cost is solely its own payback target.
     const singleKryptex=sources.length===1 && sources[0]==="Kryptex";
     // RTX 2080 card is a direct view of the source's month-to-date earnings.
     // It deliberately does not split Kryptex earnings with the RTX 5080.
@@ -384,7 +380,7 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     // not earnings since the last hardware checkpoint. Prefer the reconciled
     // monthly income that also powers the General Ledger; fall back to
     // confirmed daily tracker earnings if monthly reporting is unavailable.
-    // Multiple devices using Kryptex split the same income by cost.
+    // The full provider month total is shown regardless of other hardware.
     if(singleKryptex){
       const reported=incomeMonths.find(row=>row.monthKey===currentMonth);
       const reconciled=Object.entries(reported?.sources || {})
@@ -396,26 +392,26 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
       // Use the highest verified month-to-date figure instead of displaying
       // a smaller checkpoint/day subtotal such as $6.73.
       const monthToDate=Math.max(reconciled,confirmed,trackedMonthly);
-      return [device.id,Math.max(0,monthToDate*share("Kryptex"))];
+      return [device.id,Math.max(0,monthToDate)];
     }
     const powerStart=device.powerStartTime || checkpoint.time;
     const power=Math.max(0,monthPosition(now)-monthPosition(powerStart))*(Number(device.power)||0);
     if(singleKryptex && device.earningsStartDay){
       const accrued=confirmedKryptexIncome(tracker,device.earningsStartDay,pacificDayKey(now));
-      return [device.id,Math.max(0,accrued*share("Kryptex")-power)];
+      return [device.id,Math.max(0,accrued-power)];
     }
     if(singleKryptex && checkpoint.allocationMode!=="allocated" &&
       pacificDayKey(checkpoint.time)===pacificDayKey(now)){
       const today=pacificDayKey(now);
       const todayIncome=tracker?.kryptexConfirmedDays?.[today]
         ? Math.max(0,Number(tracker?.kryptexMiningDaily?.[today])||0):0;
-      return [device.id,Math.max(0,todayIncome*share("Kryptex")-power)];
+      return [device.id,Math.max(0,todayIncome-power)];
     }
     const earned=sources.reduce((sum,source)=>
-      sum+incomeFor(source,checkpoint.month,currentMonth)*share(source),0);
+      sum+incomeFor(source,checkpoint.month,currentMonth),0);
     const baseline=checkpoint.allocationMode==="allocated"
       ? Number(checkpoint.baseline)||0
-      : (Number(checkpoint.baseline)||0)*share(sources[0]);
+      : (Number(checkpoint.baseline)||0);
     return [device.id,Math.max(0,(Number(checkpoint.carried)||0)+earned-baseline-power)];
   }));
 }
