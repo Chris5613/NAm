@@ -74,3 +74,17 @@ test("unknown income provider is queued for review, not added as an asset",()=>{
   expect(result.entries).toHaveLength(0);
   expect(result.pendingReviewTotal).toBe(40);
 });
+
+test("does not flag a one-cent aggregate rounding difference across named sources", () => {
+  const result=buildAutoIncomeJournal(month,
+    {total:10.01,sources:{Kryptex:5,RollerCoin:5}},[],month,"2026-11-12");
+  expect(result.pendingReviewTotal).toBe(0);
+  expect(result.entries).toHaveLength(2);
+  expect(result.generatedRevenueTotal).toBe(10);
+});
+
+test("still flags material unallocated income", () => {
+  const result=buildAutoIncomeJournal(month,
+    {total:10.02,sources:{Kryptex:5,RollerCoin:5}},[],month,"2026-11-12");
+  expect(result.pendingReviewTotal).toBe(0.02);
+});
