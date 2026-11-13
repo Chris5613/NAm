@@ -416,3 +416,40 @@ test("Review purchase does not suppress a different GPU or a partial acquisition
   ]};
   expect(unmatchedEquipmentPurchases(rows,[partial],"2026-11")).toHaveLength(2);
 });
+
+test("RTX 5080 trade-in upgrades cash-only registered equipment rather than doubling assets",()=>{
+  const asset={
+    id:"hardware:rtx5080",name:"RTX 5080",category:"equipment",
+    historicalCost:1250,acquisitionMonth:"2026-11",
+    ...equipmentSchedule({cost:1250,startMonth:"2026-11"},"2026-11"),
+    source:"saved-balance-sheet",
+  };
+  const trade={id:"trade",date:"2026-11-13",description:"RTX 5080",lines:[
+    {account:"equipment",debit:1950,credit:0},
+    {account:"cash",debit:0,credit:1250},
+    {account:"equipment:hardware:rtx5070",debit:0,credit:491.67},
+    {account:"gainDisposal",debit:0,credit:208.33},
+  ]};
+  const rows=includeJournalEquipment([asset],[trade],"2026-11");
+  expect(rows).toHaveLength(1);
+  expect(rows[0].historicalCost).toBe(1950);
+  expect(rows[0].end).toBe(1917.5);
+  expect(rows[0].depreciation).toBe(32.5);
+  expect(includeJournalEquipment(rows,[trade],"2026-11")).toHaveLength(1);
+  const future=includeJournalEquipment([{
+    ...asset,...equipmentSchedule({cost:1250,startMonth:"2026-11"},"2026-12")
+  }],[trade],"2026-12");
+  expect(future).toHaveLength(1);
+  expect(future[0].historicalCost).toBe(1950);
+});
+
+test("distinct registered GPUs of the same model are never merged by purchase amount",()=>{
+  const base=[
+    {id:"device:a",name:"RTX 5080",category:"equipment",acquisitionMonth:"2026-11",historicalCost:1250},
+    {id:"device:b",name:"RTX 5080",category:"equipment",acquisitionMonth:"2026-11",historicalCost:1250},
+  ];
+  const purchase={id:"third",date:"2026-11-15",description:"RTX 5080",lines:[
+    {account:"equipment",debit:1950,credit:0},{account:"cash",debit:0,credit:1950},
+  ]};
+  expect(includeJournalEquipment(base,[purchase],"2026-11")).toHaveLength(3);
+});
