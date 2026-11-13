@@ -277,6 +277,10 @@ function canonicalSourceName(source) {
   return value;
 }
 
+const hardwareSources = device => [...new Set(
+  (Array.isArray(device?.sources) ? device.sources : [device?.source])
+    .map(canonicalSourceName).filter(Boolean)
+)];
 function pacificDayKey(time) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
@@ -447,7 +451,7 @@ export default function SideHustleDashboard() {
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
   const [addModal, setAddModal] = useState(null);
-  const [hardwareDraft, setHardwareDraft] = useState({ name: "", cost: "", power: "", source: "", startMonth: getCurrentMonthKey() });
+  const [hardwareDraft, setHardwareDraft] = useState({ name: "", cost: "", power: "", source: "", sources: [], startMonth: getCurrentMonthKey() });
   const [projectDraft, setProjectDraft] = useState({ id: "", cost: "" });
   const [addError, setAddError] = useState("");
 
@@ -592,7 +596,7 @@ export default function SideHustleDashboard() {
 
   const hardwareCost = hardware.reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
   const kryptexTracker = loadKryptexTracker();
-  const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock);
+  const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock, recordedMonths);
   const hardwareRecovered = Object.values(hardwareEarnings)
     .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
   const hardwareProgress = hardwareCost > 0 ? hardwareRecovered / hardwareCost * 100 : 0;
@@ -641,36 +645,60 @@ export default function SideHustleDashboard() {
   function openAddModal(kind) {
     setAddError("");
     if (kind === "hardware") setHardwareDraft({
-      name: "", cost: "", power: "", source: "", startMonth: currentMonthKey,
+      name: "", cost: "", power: "", source: "", sources: [], startMonth: currentMonthKey,
     });
     if (kind === "project") setProjectDraft({ id: "", cost: "" });
     setAddModal(kind);
   }
+  function openHardwareEditor(device) {
+    setAddError("");
+    setHardwareDraft({ ...device, sources:hardwareSources(device) });
+    setAddModal("hardware");
+  }
   function saveHardware(event) {
     event.preventDefault();
-    const name = hardwareDraft.name.trim();
-    const source = canonicalSourceName(hardwareDraft.source);
-    const cost = Number(hardwareDraft.cost);
-    const power = Number(hardwareDraft.power || 0);
-    if (!name || !source || !/^\d{4}-\d{2}$/.test(hardwareDraft.startMonth) ||
-        hardwareDraft.startMonth > currentMonthKey || !Number.isFinite(cost) || cost <= 0 ||
-        !Number.isFinite(power) || power < 0) {
-      setAddError("Enter a name, purchase cost, valid purchase month, and income source.");
+    const name=hardwareDraft.name.trim();
+    const sources=hardwareSources(hardwareDraft);
+    const cost=Number(hardwareDraft.cost),power=Number(hardwareDraft.power || 0);
+    if(!name || !sources.length || !/^\d{4}-\d{2}$/.test(hardwareDraft.startMonth) ||
+      hardwareDraft.startMonth>currentMonthKey || !Number.isFinite(cost) || cost<=0 ||
+      !Number.isFinite(power) || power<0){
+      setAddError("Enter a name, cost, valid month, and at least one income source.");
       return;
     }
-    const now = Date.now();
-    const device = {
-      id: crypto.randomUUID(), name, source, cost, power,
-      startMonth: hardwareDraft.startMonth,
-      checkpoint: {
-        time: now, month: currentMonthKey,
-        baseline: source === "Kryptex" ? 0 : Number(recordedCurrentMonth?.sources?.[source]) || 0,
-        carried: 0,
-        ...(source === "Kryptex" ? { ledger: KRYPTEX_PAYBACK_LEDGER } : {}),
-      },
+    const prior=hardware.find(row=>row.id===hardwareDraft.id);
+    const device={
+      ...hardwareDraft,id:prior?.id || crypto.randomUUID(),
+      name,cost,power,sources,source:sources[0],
+      startMonth:hardwareDraft.startMonth,
     };
-    const next = [...readHardware(), device];
-    remoteStorage.setItem(HARDWARE_KEY, JSON.stringify(next));
+    if(prior){
+      const changed=JSON.stringify(hardwareSources(prior))!==JSON.stringify(sources);
+      if(changed){
+        // Preserve earned payback at the moment sources are switched; new
+        // sources start from their current month checkpoint.
+        const baseline=sources.reduce((sum,source)=>
+          sum+(Number(recordedCurrentMonth?.sources?.[source]) || 0),0);
+        device.checkpoint={
+          time:Date.now(),month:currentMonthKey,
+          baseline,carried:Number(hardwareEarnings[prior.id]) || 0,
+          allocationMode:"allocated",
+          ...(sources.includes("Kryptex") ? {ledger:KRYPTEX_PAYBACK_LEDGER} : {}),
+        };
+        device.earningsStartDay=null;
+        device.powerStartTime=null;
+      }
+    }else{
+      device.checkpoint={
+        time:Date.now(),month:currentMonthKey,
+        baseline:sources.length===1 && sources[0]==="Kryptex" ? 0 :
+          sources.reduce((sum,source)=>sum+(Number(recordedCurrentMonth?.sources?.[source]) || 0),0),
+        carried:0,allocationMode:"allocated",
+        ...(sources.includes("Kryptex") ? {ledger:KRYPTEX_PAYBACK_LEDGER} : {}),
+      };
+    }
+    const next=prior ? hardware.map(row=>row.id===prior.id ? device : row) : [...hardware,device];
+    remoteStorage.setItem(HARDWARE_KEY,JSON.stringify(next));
     setHardware(next);
     setAddModal(null);
   }
@@ -776,22 +804,27 @@ export default function SideHustleDashboard() {
                 ? GPU_META.rtx5070
                 : null;
 
-            const sourceProject = income.projects.find(project =>
-              String(project?.name || "").trim().toLowerCase() === String(row.source || "").trim().toLowerCase()
+            const selectedSources=hardwareSources(row);
+            const sourceProjects=income.projects.filter(project=>
+              selectedSources.some(source=>canonicalSourceName(project?.name).toLowerCase()===source.toLowerCase())
             );
 
             const cost = Math.max(0, Number(row.cost) || 0);
             const recovered = Math.max(0, Number(hardwareEarnings[row.id]) || 0);
             const progress = cost > 0 ? recovered / cost * 100 : 0;
             const monthlyPowerCost = Math.max(0, Number(row.power) || 0);
-            const grossMonthlyIncome = Math.max(0, Number(sourceProject?.daily) || 0) * 30.4375;
+            const grossMonthlyIncome = sourceProjects.reduce((sum,project)=>sum+Math.max(0,Number(project.daily)||0),0)*30.4375;
             const estMonthlyIncome = Math.max(0, grossMonthlyIncome - monthlyPowerCost);
             const remaining = Math.max(0, cost - recovered);
             const paybackMonths = remaining <= 0 ? 0 : estMonthlyIncome > 0 ? remaining / estMonthlyIncome : null;
 
             return <div
-              key={row.id}
-              className="min-w-0 rounded-xl border border-[#202a33] bg-[linear-gradient(180deg,#10151a_0%,#0d1217_100%)] p-3"
+              key={row.id} role="button" tabIndex={0}
+              aria-label={`Edit ${row.name} hardware and income sources`}
+              title="Click to edit hardware and income sources"
+              onClick={()=>openHardwareEditor(row)}
+              onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openHardwareEditor(row);}}}
+              className="min-w-0 cursor-pointer rounded-xl border border-[#202a33] bg-[linear-gradient(180deg,#10151a_0%,#0d1217_100%)] p-3 transition-colors hover:border-emerald-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
             >
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#26313b] bg-[#0a0e12] sm:h-12 sm:w-28">
@@ -807,7 +840,7 @@ export default function SideHustleDashboard() {
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="break-words text-[12px] font-semibold text-[#eef2f6]">{row.name}</p>
-                  <p className="mt-0.5 text-[9px] uppercase tracking-[0.13em] text-[#7f8b97]">{meta?.brand || row.source || "Hardware"}</p>
+                  <p className="mt-0.5 text-[9px] uppercase tracking-[0.13em] text-[#7f8b97]">{selectedSources.join(" · ") || meta?.brand || "Hardware"}</p>
                 </div>
                 <span className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-emerald-400">
                   {cost > 0 ? percent(progress) : "—"}
@@ -1023,10 +1056,10 @@ export default function SideHustleDashboard() {
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
         onMouseDown={event => { if (event.target === event.currentTarget) setAddModal(null); }}>
         <form onSubmit={addModal === "hardware" ? saveHardware : saveProjectCost}
-          role="dialog" aria-modal="true" aria-label={addModal === "hardware" ? "Add hardware" : "Add project break-even cost"}
+          role="dialog" aria-modal="true" aria-label={addModal === "hardware" ? (hardwareDraft.id ? "Edit hardware" : "Add hardware") : "Add project break-even cost"}
           className="w-full max-w-md space-y-4 rounded-2xl border border-[#263342] bg-[#0b1017] p-6 text-white shadow-2xl">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-xl font-semibold">{addModal === "hardware" ? "Add hardware" : "Add project break-even cost"}</h2>
+            <h2 className="text-xl font-semibold">{addModal === "hardware" ? (hardwareDraft.id ? "Edit hardware" : "Add hardware") : "Add project break-even cost"}</h2>
             <button type="button" aria-label="Close" onClick={() => setAddModal(null)}
               className="rounded-lg p-1 text-[#91a4b8] hover:bg-white/10 hover:text-white"><X className="h-5 w-5"/></button>
           </div>
@@ -1048,14 +1081,23 @@ export default function SideHustleDashboard() {
                     className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
                 </label>
               </div>
-              <label className="block text-sm">Income source
-                <select required value={hardwareDraft.source}
-                  onChange={event => setHardwareDraft(current => ({ ...current, source: event.target.value }))}
-                  className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3">
-                  <option value="" disabled>Select a source</option>
-                  {addSourceOptions.map(source => <option key={source} value={source}>{source}</option>)}
-                </select>
-              </label>
+              <fieldset className="space-y-2">
+                <legend className="text-sm">Income sources (select multiple)</legend>
+                <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#3c5267] bg-[#111b25] p-2">
+                  {[...new Set([...addSourceOptions,...hardwareSources(hardwareDraft)])].map(source=>
+                    <label key={source} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
+                      <input type="checkbox" checked={hardwareSources(hardwareDraft).includes(source)}
+                        onChange={event=>setHardwareDraft(current=>{
+                          const selected=hardwareSources(current);
+                          const sources=event.target.checked ? [...selected,source] : selected.filter(name=>name!==source);
+                          return {...current,sources,source:sources[0] || ""};
+                        })}
+                        className="h-4 w-4 accent-emerald-400"/>
+                      {source}
+                    </label>
+                  )}
+                </div>
+              </fieldset>
               <label className="block text-sm">Purchase month
                 <input required type="month" max={currentMonthKey} value={hardwareDraft.startMonth}
                   onChange={event => setHardwareDraft(current => ({ ...current, startMonth: event.target.value }))}
@@ -1088,7 +1130,7 @@ export default function SideHustleDashboard() {
             <button type="button" onClick={() => setAddModal(null)}
               className="rounded-lg border border-[#3c5267] px-4 py-3 text-sm">Cancel</button>
             <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-3 text-sm font-semibold text-[#061810]">
-              {addModal === "hardware" ? "Save hardware" : "Save project cost"}
+              {addModal === "hardware" ? (hardwareDraft.id ? "Save changes" : "Save hardware") : "Save project cost"}
             </button>
           </div>
         </form>
