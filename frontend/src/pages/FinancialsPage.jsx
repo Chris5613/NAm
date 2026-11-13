@@ -8,8 +8,6 @@ import {
   UNETWORK_PHONES_KEY,
 } from "@/lib/unetworkPhonesAccounting";
 import { api, settingsApi } from "@/lib/apiClient";
-import { projectsApi } from "@/lib/api";
-import { saveObject } from "@/lib/yieldFarmingAccounting";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
@@ -233,8 +231,6 @@ export default function FinancialsPage() {
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
   const [live, setLive] = useState(liveBalances);
-  const [luloRefreshing, setLuloRefreshing] = useState(false);
-  const [luloRefreshError, setLuloRefreshError] = useState("");
   const [cryptoIncome, setCryptoIncome] = useState(readCryptoIncomeSources);
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [businessPhones, setBusinessPhones] = useState(readUnetworkPhones);
@@ -312,32 +308,6 @@ export default function FinancialsPage() {
     // Also apply after the server store hydrates, if it was initially empty.
     return subscribe(correctOwnerFundedPc);
   }, []);
-  const refreshLuloBalance = async () => {
-    setLuloRefreshing(true);
-    setLuloRefreshError("");
-    try {
-      // The provider snapshot refresh is the source of truth for withdrawals.
-      // A journal entry never directly overwrites the observed Lulo balance.
-      const response=await projectsApi.accrueApyTransactions();
-      const projects=Array.isArray(response?.data) ? response.data : [];
-      const lulo=projects.filter(item=>item?.yield_tracking==="lulo_lending");
-      if(!lulo.length) throw new Error("No Lulo account is configured.");
-      // The existing sync helper preserves older values if the provider fails.
-      // Never report a cache-only result as a successful forced refresh.
-      const now=Date.now();
-      if(lulo.some(item=>!Number.isFinite(Date.parse(item.lulo_last_synced_at)) ||
-          now-Date.parse(item.lulo_last_synced_at)>2*60*1000)) {
-        throw new Error("Lulo did not return a fresh balance. The previous amount is still shown.");
-      }
-      const cache=readObject(PROJECT_QUICK_CACHE_KEY);
-      saveObject(PROJECT_QUICK_CACHE_KEY,{...cache,projects});
-      setLive(liveBalances());
-    } catch(error) {
-      setLuloRefreshError(error?.message || "Unable to refresh Lulo right now.");
-    } finally {
-      setLuloRefreshing(false);
-    }
-  };
   useEffect(() => {
     const refresh = () => setLive(liveBalances());
     const timer = window.setInterval(refresh, 30000);
@@ -830,12 +800,7 @@ export default function FinancialsPage() {
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
-          <button type="button" onClick={refreshLuloBalance} disabled={luloRefreshing}
-            className="rounded-lg border border-sky-400/30 px-3 py-1.5 text-xs font-semibold text-sky-300 hover:bg-sky-400/10 disabled:opacity-50">
-            {luloRefreshing ? "Refreshing Lulo…" : "Refresh Lulo balance"}
-          </button>
         </div>
-        {luloRefreshError && <p role="alert" className="mb-3 text-xs text-amber-300">{luloRefreshError}</p>}
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
           {tableHeader}<tbody>
             {sections.map(section => <Fragment key={section.id}>
