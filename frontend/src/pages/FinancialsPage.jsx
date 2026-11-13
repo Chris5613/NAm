@@ -91,6 +91,7 @@ const accounts = [
   { id: "equity", name: "Owner's Equity", type: "equity" },
   { id: "revenue", name: "Mining / Yield Revenue", type: "revenue" },
   { id: "dividendRevenue", name: "Dividend Revenue", type: "revenue" },
+  { id: "gainDisposal", name: "Gain on Equipment Disposal", type: "revenue" },
   { id: "electric", name: "Electricity Expense", type: "expense" },
   { id: "expense", name: "Operating Expense", type: "expense" },
   { id: "depreciation", name: "Depreciation Expense", type: "expense" },
@@ -463,7 +464,7 @@ export default function FinancialsPage() {
   const feeExpense = report.fees;
   const fixedDep = closeSnapshot ? closeSnapshot.fixedDep : report.depreciation;
   const pnlProfit = closeSnapshot ? closeSnapshot.pnlProfit :
-    pnlRevenue === null ? null : moneyRound(pnlRevenue - expenses - fixedDep);
+    pnlRevenue === null ? null : moneyRound(pnlRevenue + report.disposalGain - expenses - fixedDep);
 
   // A bank payment really reduces Cash / Bank. If no opening bank balance
   // was provided, display its journal movement without fabricating an ending.
@@ -912,6 +913,7 @@ export default function FinancialsPage() {
         <h2 className="mb-4 text-lg font-semibold">Income Statement — {monthTitle(month)}</h2>
         {[
           [accountNameById("revenue") + " / " + accountNameById("dividendRevenue"), pnlRevenue],
+          ...(report.disposalGain ? [[accountNameById("gainDisposal"),report.disposalGain]] : []),
           [accountNameById("expense"), Math.max(0,moneyRound(operatingExpense-autoPower))],
           ...(autoPower ? [[accountNameById("electric") + " (estimated)", autoPower]] : []),
           ...(feeExpense ? [[accountNameById("fees"), feeExpense]] : []),
@@ -1169,7 +1171,7 @@ export default function FinancialsPage() {
             <span>Credits: {money(draft.lines.reduce((sum,row)=>sum+(Number(row.credit)||0),0))}</span>
           </div>
         </div>
-        <p className="text-xs text-[#91a7b9]">Confirm the purchase date and funding source (Cash/Bank, Owner's Equity, Crypto, or Accounts Payable). No new bank payment is assumed.</p>
+        <p className="text-xs text-[#91a7b9]">Debits must equal credits. Multi-account entries post to the ledger and trial balance. Equipment trades also require updating the equipment register for the old and new GPUs; posting alone does not replace those assets automatically.</p>
         {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
         <div className="flex gap-2"><button type="button" onClick={()=>setModal(false)} className="rounded-lg border border-[#384d5d] px-4 py-2">Cancel</button>
           <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#071710]">Post entry</button></div>
