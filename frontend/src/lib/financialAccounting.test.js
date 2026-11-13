@@ -1,5 +1,5 @@
 import {
-  buildFinancialBalanceRows, buildStatementRows, buildFinancialProfit, classifyCashFlows,
+  buildFinancialBalanceRows, buildStatementRows, buildFinancialProfit, classifyCashFlows, splitFinancialRevenue,
   equipmentSchedule, deriveCashOpening, derivePayableOpening,
   includeJournalEquipment, unmatchedEquipmentPurchases,
   reclassifyPersonalPcContribution, journalAccountActivity,
@@ -309,4 +309,33 @@ test("owner-funded equipment acquisition has no business cash flow",()=>{
   ]};
   expect(includeJournalEquipment([], [entry], "2026-11")).toHaveLength(1);
   expect(classifyCashFlows([entry]).total).toBe(0);
+});
+
+test("income statement separates synced mining, yield and dividend revenue without changing totals",()=>{
+  const entries=[
+    {id:"synced-income:2026-11:kryptex",description:"Synced Kryptex income",
+      lines:[{account:"platform:kryptex",debit:10,credit:0},{account:"revenue",debit:0,credit:10}]},
+    {id:"synced-income:2026-11:rollercoin",description:"Synced RollerCoin income",
+      lines:[{account:"platform:rollercoin",debit:5,credit:0},{account:"revenue",debit:0,credit:5}]},
+    {id:"synced-income:2026-11:lulo",description:"Synced Lulo income",
+      lines:[{account:"luloCash",debit:8,credit:0},{account:"revenue",debit:0,credit:8}]},
+    {id:"synced-income:2026-11:loopscale",description:"Synced Loopscale income",
+      lines:[{account:"defi",debit:7,credit:0},{account:"revenue",debit:0,credit:7}]},
+    {id:"synced-income:2026-11:stocks",description:"Synced Stocks income",
+      lines:[{account:"brokerage",debit:3,credit:0},{account:"dividendRevenue",debit:0,credit:3}]},
+    {id:"journal:manual",description:"Miscellaneous income",
+      lines:[{account:"cash",debit:2,credit:0},{account:"revenue",debit:0,credit:2}]},
+  ];
+  const split=splitFinancialRevenue(entries);
+  expect(split).toEqual({mining:15,yield:15,dividends:3,unclassified:2});
+  expect(split.mining+split.yield+split.dividends+split.unclassified)
+    .toBe(buildFinancialProfit(entries,null).revenue);
+});
+
+test("cash withdrawals are excluded from yield revenue",()=>{
+  const withdrawal={id:"journal:withdrawal",description:"Withdrawal from Lulo",
+    lines:[{account:"cash",debit:1500,credit:0},{account:"luloCash",debit:0,credit:1500}]};
+  expect(splitFinancialRevenue([withdrawal])).toEqual({
+    mining:0,yield:0,dividends:0,unclassified:0,
+  });
 });
