@@ -8,6 +8,7 @@ import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
+import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
@@ -699,22 +700,13 @@ export default function SideHustleDashboard() {
     .filter(([, amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
     .map(([platform, amount]) => ({ platform, amount: Number(amount) }))
     .sort((a, b) => b.amount - a.amount);
-  const sourceProjectMap = new Map();
-  income.projects.forEach(project => {
-    const key = String(project?.name || "").trim().toLowerCase();
-    if (!key) return;
-    const existing = sourceProjectMap.get(key);
-    if (!existing || Number(project.balance) > Number(existing.balance)) sourceProjectMap.set(key, project);
-  });
-  const sourceTableRows = sourceRows.map(row => {
-    const project = sourceProjectMap.get(String(row.platform || "").trim().toLowerCase()) || {};
-    return {
-      ...row,
-      daily: Math.max(0, Number(project.daily) || 0),
-      roi: Math.max(0, Number(project.roi) || 0),
-      meta: projectTableMeta(row.platform),
-    };
-  });
+  const sourceTableRows = sourceRows.map(row => ({
+    ...row,
+    // Only observed/confirmed dated earnings appear in "Income (Today)".
+    // Missing daily records render as a dash rather than APY estimates.
+    daily: recordedDailyProviderIncome(row.platform, todayKey, recordedHistory),
+    meta: projectTableMeta(row.platform),
+  }));
 
   const addSourceOptions = [...new Set([
     ...income.projects.map(project => project.name),
@@ -1070,7 +1062,7 @@ export default function SideHustleDashboard() {
                 <div>
                   <span className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-medium ${row.meta.typeClass}`}>{row.meta.type}</span>
                 </div>
-                <strong className="text-right font-semibold tabular-nums text-[#eef2f6]">{money(row.daily)}</strong>
+                <strong className="text-right font-semibold tabular-nums text-[#eef2f6]" title={row.daily == null ? "No confirmed daily earnings record available" : "Recorded earnings for today"}>{row.daily == null ? "—" : money(row.daily)}</strong>
                 <strong className="text-right font-semibold tabular-nums text-[#eef2f6]">{money(row.amount)}</strong>
                 <div className="flex justify-end">
                   <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-medium text-emerald-400">
