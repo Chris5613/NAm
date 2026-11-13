@@ -691,18 +691,7 @@ export default function SideHustleDashboard() {
   }
 
   return <div className="min-w-0 space-y-3 pb-8 text-white" data-testid="side-hustle-dashboard">
-    <header className="flex flex-wrap items-end justify-between gap-3 px-1">
-      <div>
-        <div className="flex items-center gap-3">
-          <ChartNoAxesCombined className="h-7 w-7 text-emerald-400"/>
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium ${live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[#303842] bg-[#13181e] text-[#8e9aa6]"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-[#6f7a84]"}`}/>{live ? "Live" : "Stale"}
-          </span>
-        </div>
-        
-      </div>
-      <p className="text-[10px] text-[#73808d]">Updated {new Date(clock).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</p>
-    </header>
+
 
     <nav aria-label="Dashboard sections" className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-2xl border border-[#242b33] bg-[#0d1014] px-2 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] [scrollbar-width:none]">
       {[
