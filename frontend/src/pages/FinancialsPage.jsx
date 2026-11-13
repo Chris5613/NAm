@@ -855,11 +855,11 @@ export default function FinancialsPage() {
               {section.rows.map(row => <tr key={row.id} className="border-b border-[#202f3c]">
                 <td className="py-2.5 pl-2">
                   {inlineRenameRowId === row.id ? (
-                    <form onSubmit={saveAccountName} className="inline-flex max-w-full flex-col gap-1">
+                    <form onSubmit={saveAccountName} className="inline-flex w-[min(520px,75vw)] flex-col gap-1">
                       <input
                         autoFocus
                         aria-label={"Rename "+balanceDisplayName(row,accountLabels)}
-                        className="w-full min-w-[160px] max-w-[340px] rounded border border-sky-400/60 bg-[#101923] px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-sky-400"
+                        className="w-full rounded-md border border-sky-400/60 bg-[#101923] px-3 py-2 text-sm text-white outline-none focus:ring-1 focus:ring-sky-400"
                         maxLength={80}
                         value={renameDraft}
                         onChange={event=>{setRenameDraft(event.target.value);setRenameError("");}}
