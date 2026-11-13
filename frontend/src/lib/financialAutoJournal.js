@@ -1,3 +1,4 @@
+import { journalLines } from "./compoundJournal";
 // Dynamic, read-only accruals from Crypto Dashboard's reconciled monthly income.
 // They are recomputed from the same source, never persisted as journal records:
 // a provider refresh must replace—not append to—previous estimates.
@@ -56,10 +57,12 @@ export function buildAutoIncomeJournal(month, incomeMonth, manualJournal = [], c
 
   // Recognize only manual entries explicitly credited to income. A withdrawal
   // or wallet transfer credits an ASSET account and does not cancel accruals.
-  const manualRevenue = (manualJournal || []).filter(entry =>
-    String(entry.date || "").slice(0, 7) === month &&
-    ["revenue", "dividendRevenue"].includes(entry.creditAccount) &&
-    Number(entry.amount) > 0);
+  const manualRevenue = (manualJournal || []).flatMap(entry => {
+    if(String(entry.date || "").slice(0,7)!==month) return [];
+    const amount = cents(journalLines(entry).reduce((sum,row)=>
+      ["revenue","dividendRevenue"].includes(row.account) ? sum+row.credit-row.debit : sum,0));
+    return amount>0 ? [{...entry,amount}] : [];
+  });
   const manualRevenueTotal = cents(manualRevenue.reduce((sum, entry) => sum + Number(entry.amount), 0));
   const remainingBySource = [...sources.values()].map(source => ({ ...source }));
   let unattributedManual = 0;
