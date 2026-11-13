@@ -378,11 +378,16 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     // Multiple devices using Kryptex split the same income by cost.
     if(singleKryptex){
       const reported=incomeMonths.find(row=>row.monthKey===currentMonth);
-      const monthlyAmount=reported && Object.entries(reported.sources || {})
+      const reconciled=Object.entries(reported?.sources || {})
         .filter(([name])=>canonicalSourceName(name).toLowerCase()==="kryptex")
         .reduce((sum,[,amount])=>sum+Math.max(0,Number(amount)||0),0);
       const confirmed=confirmedKryptexIncomeByMonth(tracker,currentMonth,currentMonth);
-      return [device.id,Math.max(0,(monthlyAmount ?? confirmed)*share("Kryptex"))];
+      const trackedMonthly=Math.max(0,Number(tracker?.monthlyEarnings?.[currentMonth])||0);
+      // The monthly earnings ledger can lead the older confirmed-day cache.
+      // Use the highest verified month-to-date figure instead of displaying
+      // a smaller checkpoint/day subtotal such as $6.73.
+      const monthToDate=Math.max(reconciled,confirmed,trackedMonthly);
+      return [device.id,Math.max(0,monthToDate*share("Kryptex"))];
     }
     const powerStart=device.powerStartTime || checkpoint.time;
     const power=Math.max(0,monthPosition(now)-monthPosition(powerStart))*(Number(device.power)||0);
