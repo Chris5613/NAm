@@ -5,6 +5,9 @@ import {
   Coins,
   Cpu,
   PlugZap,
+  Pencil,
+  Check,
+  X,
   RefreshCw,
   TrendingUp,
   Zap,
@@ -110,11 +113,36 @@ function usageCost(usage, settings, monthKey) {
   );
 }
 
-function DeviceCard({ device, monthlyUsage, settings, monthKey }) {
+function DeviceCard({ device, monthlyUsage, settings, monthKey, label, onRename }) {
+  const [editing, setEditing] = useState(false);
+  const [draftLabel, setDraftLabel] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const beginRename = () => {
+    setDraftLabel(label || device?.label || "PC");
+    setRenameError("");
+    setEditing(true);
+  };
+  const saveLabel = async event => {
+    event.preventDefault();
+    const next=draftLabel.trim();
+    if(!next || next.length>80) {
+      setRenameError("Enter a name (up to 80 characters).");
+      return;
+    }
+    try {
+      await onRename(device.id,next);
+      setEditing(false);
+      setRenameError("");
+    } catch(error) {
+      setRenameError(error?.message || "Couldn't save this name.");
+    }
+  };
   const watts = Number(device?.watts) || 0;
   const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
   const monthlyCost = outOfPocketMiningPowerCost(usageCost(monthlyUsage, settings, monthKey), monthKey || getCurrentMonthKey());
-  const meta = DEVICE_META[device?.id] || null;
+  const originalMeta = DEVICE_META[device?.id] || null;
+  // Do not display an RTX 5070 product photo for a renamed RTX 5080.
+  const meta = /5080/i.test(label || "") && device?.id === "rtx5070" ? null : originalMeta;
   return (
     <section className="rounded-2xl border border-border/55 bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
       <div className="flex items-start justify-between gap-3">
@@ -123,7 +151,25 @@ function DeviceCard({ device, monthlyUsage, settings, monthKey }) {
             <Cpu className="h-4 w-4" />
           </div>
           <div>
-            <h2 className="text-base font-semibold">{device?.label || "PC"}</h2>
+            {editing ? (
+              <form onSubmit={saveLabel} className="flex flex-wrap items-center gap-1.5">
+                <input autoFocus aria-label="GPU name" maxLength={80} value={draftLabel}
+                  onChange={event=>setDraftLabel(event.target.value)}
+                  onKeyDown={event=>{if(event.key==="Escape"){setEditing(false);setRenameError("");}}}
+                  className="w-[min(210px,45vw)] rounded-md border border-sky-400/50 bg-background px-2 py-1 text-sm text-foreground outline-none focus:border-sky-400"/>
+                <button type="submit" aria-label="Save GPU name" className="rounded p-1 text-emerald-400 hover:bg-secondary"><Check size={16}/></button>
+                <button type="button" aria-label="Cancel GPU rename" onClick={()=>{setEditing(false);setRenameError("");}}
+                  className="rounded p-1 text-muted-foreground hover:bg-secondary"><X size={16}/></button>
+              </form>
+            ) : (
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-base font-semibold">{label || device?.label || "PC"}</h2>
+                <button type="button" aria-label={"Rename " + (label || device?.label || "GPU")}
+                  title="Rename GPU" onClick={beginRename}
+                  className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-sky-300"><Pencil size={14}/></button>
+              </div>
+            )}
+            {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
             {meta?.brand && (
               <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
                 {meta.brand}
@@ -183,6 +229,13 @@ export default function MiningPowerCard() {
   const [status, setStatus] = useState(null);
   const [settings, setSettings] = useState(DEFAULTS);
   const [refreshing, setRefreshing] = useState(false);
+  const renameDevice = useCallback(async (id,label) => {
+    // Keep immutable Tapo device IDs for readings and historic kWh totals.
+    const updated={...settings,deviceLabels:{...(settings.deviceLabels || {}),[id]:label}};
+    await settingsApi.set(SETTINGS_KEY,updated);
+    setSettings(updated);
+    toast.success("GPU name updated");
+  },[settings]);
 
   const refresh = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true);
@@ -353,6 +406,8 @@ export default function MiningPowerCard() {
           <DeviceCard
             key={device.id}
             device={device}
+            label={settings.deviceLabels?.[device.id] || device.label}
+            onRename={renameDevice}
             monthlyUsage={monthlyDevices[device.id]}
             settings={settings}
             monthKey={currentMonth?.month}
