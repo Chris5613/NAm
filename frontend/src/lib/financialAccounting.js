@@ -280,12 +280,19 @@ export function unmatchedEquipmentPurchases(rows, journal, month) {
     const name=assetKey(asset.name);
     const match=(journal||[]).find(entry=>{
       if(spentIds.has(entry.id) ||
-        String(entry.date||"").slice(0,7)!==month ||
-        Math.abs(journalActivity(entry,"equipment")-cost)>.005) return false;
+        String(entry.date||"").slice(0,7)!==month) return false;
+      const equipmentDebit=journalActivity(entry,"equipment");
+      if(equipmentDebit<=0) return false;
       const description=assetKey(entry.description);
-      return description.includes(name) ||
+      const sameAsset=description.includes(name) ||
         (equipmentAliasKey(asset.name)==="rtx2080superpc" &&
           (description.includes("rtx2080pc") || description.includes("rtx2080superpc")));
+      if(!sameAsset) return false;
+      // A trade-in can debit the NEW GPU's full value ($1,950)
+      // even though the hardware register tracks only its cash portion
+      // ($1,250). The posted equipment acquisition already covers the
+      // purchase; do not suggest posting that cash portion a second time.
+      return equipmentDebit+0.005>=cost;
     });
     if(match){spentIds.add(match.id);return false;}
     return true;
