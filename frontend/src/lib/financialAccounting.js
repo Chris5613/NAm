@@ -228,7 +228,8 @@ export function includeJournalEquipment(baseRows, journal, month, locked = false
       equipmentAliasKey(row.name).length>=5 &&
       (cleaned.includes(assetKey(row.name)) || cleaned.includes(equipmentAliasKey(row.name)) ||
         // Account labels often prepend "Equipment —" to a model name.
-        cleaned.includes(assetKey(row.name).replace(/^equipment/,"")) ||
+        (assetKey(row.name).replace(/^equipment/,"").length>=5 &&
+          cleaned.includes(assetKey(row.name).replace(/^equipment/,""))) ||
         (equipmentAliasKey(row.name)==="rtx2080superpc" && cleaned.includes("rtx2080pc"))) &&
       row.acquisitionMonth===entry.date.slice(0,7));
     // A trade-in may have been registered for only the cash payment
