@@ -214,24 +214,27 @@ export function includeJournalEquipment(baseRows, journal, month, locked = false
   const rows = (baseRows || []).map(row=>({...row}));
   if(locked) return rows;
   for(const entry of journal || []) {
-    if(entry.debitAccount!=="equipment" || !String(entry.date||"").match(/^\d{4}-\d{2}-\d{2}$/) ||
-      String(entry.date).slice(0,7)>month || !(Number(entry.amount)>0)) continue;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(entry.date||"")) ||
+      String(entry.date).slice(0,7)>month) continue;
+    // Compound entries have a lines array; older purchases have debitAccount/amount.
+    // Only a debit to the generic equipment account creates a NEW asset. A
+    // debit to an existing equipment subaccount must not fabricate another GPU.
+    const amount = moneyRound(journalActivity(entry,"equipment"));
+    if(!(amount>0)) continue;
     const description = String(entry.description||"");
     const cleaned = assetKey(description);
-    const amount = moneyRound(entry.amount);
     const matched = rows.some(row => row.category==="equipment" &&
       equipmentAliasKey(row.name).length>=5 &&
       (cleaned.includes(assetKey(row.name)) || cleaned.includes(equipmentAliasKey(row.name)) ||
         (equipmentAliasKey(row.name)==="rtx2080superpc" && cleaned.includes("rtx2080pc"))) &&
       Math.abs(Number(row.historicalCost ?? amount)-amount)<=.005);
     if(matched || rows.some(row=>row.id==="journal-equipment:"+entry.id)) continue;
-    const schedule = equipmentSchedule({
-      cost:amount,startMonth:entry.date.slice(0,7),
-    },month);
+    const schedule = equipmentSchedule({cost:amount,startMonth:entry.date.slice(0,7)},month);
     if(schedule) rows.push({
       id:"journal-equipment:"+String(entry.id || cleaned+entry.date),
       name:"Equipment — "+(description.length>55?description.slice(0,55)+"…":description),
-      category:"equipment",...schedule,historicalCost:amount,acquisitionMonth:entry.date.slice(0,7),source:"journal-purchase",
+      category:"equipment",...schedule,historicalCost:amount,
+      acquisitionMonth:entry.date.slice(0,7),source:"journal-purchase",
     });
   }
   return rows;
@@ -246,9 +249,9 @@ export function unmatchedEquipmentPurchases(rows, journal, month) {
     const cost=Number(asset.historicalCost);
     const name=assetKey(asset.name);
     const match=(journal||[]).find(entry=>{
-      if(spentIds.has(entry.id) || entry.debitAccount!=="equipment" ||
+      if(spentIds.has(entry.id) ||
         String(entry.date||"").slice(0,7)!==month ||
-        Math.abs(Number(entry.amount)-cost)>.005) return false;
+        Math.abs(journalActivity(entry,"equipment")-cost)>.005) return false;
       const description=assetKey(entry.description);
       return description.includes(name) ||
         (equipmentAliasKey(asset.name)==="rtx2080superpc" &&
@@ -395,7 +398,7 @@ export function classifyCashFlows(entries) {
       .reduce((n,line)=>n+Number(line.debit||0)-Number(line.credit||0),0);
     if(Math.abs(cash)<.005)continue;
     const other = (entry.lines||[]).filter(line=>line.account!=="cash").map(line=>line.account);
-    const category = other.some(a=>a==="equipment") ? "investing" :
+    const category = other.some(a=>a==="equipment" || a.startsWith("equipment:")) ? "investing" :
       other.some(a=>a==="equity") ? "financing" :
       other.some(a=>["revenue","dividendRevenue","expense","fees","electric"].includes(a))
         ? "operating" : "transfers";
