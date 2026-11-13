@@ -254,6 +254,7 @@ export default function FinancialsPage() {
   const [renameError, setRenameError] = useState("");
   const [showOtherLabels, setShowOtherLabels] = useState(false);
   const [modal, setModal] = useState(false);
+  const [editingEntryId, setEditingEntryId] = useState(null);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
   const [quickModalOpen, setQuickModalOpen] = useState(false);
@@ -632,9 +633,22 @@ export default function FinancialsPage() {
     setBankOpenings(updated);
     setError("");
   };
+  const editEntry = entry => {
+    const original=journal.find(item=>item.id===entry.id);
+    if (!original || entry.automatic || closedMonths[String(original.date).slice(0,7)]) return;
+    setEditingEntryId(original.id);
+    setDraft({date:original.date,description:original.description,lines:journalLines(original).map(row=>({
+      account:row.account,debit:row.debit ? String(row.debit) : "",credit:row.credit ? String(row.credit) : "",
+    }))});
+    setError("");
+    setModal(true);
+  };
   const saveEntry = event => {
     event.preventDefault();
-    if(closedMonths[String(draft.date).slice(0,7)]) {
+    const original = editingEntryId ? journal.find(entry=>entry.id===editingEntryId) : null;
+    if(editingEntryId && !original) {setError("This entry could not be found. Close and reopen the editor.");return;}
+    if((original && closedMonths[String(original.date).slice(0,7)]) ||
+       closedMonths[String(draft.date).slice(0,7)]) {
       setError("This reporting month is closed. Reopen it from General Ledger before editing."); return;
     }
     if(!draft.description.trim() || !validLedgerDate(draft.date)) {
@@ -642,10 +656,15 @@ export default function FinancialsPage() {
     }
     const checked=validateCompoundEntry(draft.lines,availableAccounts.map(account=>account.id));
     if(checked.error) {setError(checked.error); return;}
-    const updated=[...journal,{id:"journal:"+Date.now()+":"+Math.random().toString(36).slice(2,7),
-      date:draft.date,description:draft.description.trim(),lines:checked.lines,source:"compound-journal"}];
+    const updatedEntry=original
+      ? {...original,date:draft.date,description:draft.description.trim(),lines:checked.lines,
+          amount:undefined,debitAccount:undefined,creditAccount:undefined}
+      : {id:"journal:"+Date.now()+":"+Math.random().toString(36).slice(2,7),
+          date:draft.date,description:draft.description.trim(),lines:checked.lines,source:"compound-journal"};
+    const updated=original ? journal.map(entry=>entry.id===original.id ? updatedEntry : entry)
+      : [...journal,updatedEntry];
     remoteStorage.setItem(JOURNAL_KEY,JSON.stringify(updated));
-    setJournal(updated); setMonth(draft.date.slice(0,7));setDraft(emptyDraft());setError("");setModal(false);
+    setJournal(updated); setMonth(draft.date.slice(0,7));setDraft(emptyDraft());setEditingEntryId(null);setError("");setModal(false);
   };
   const prepareQuickEntry = event => {
     event.preventDefault();
@@ -690,6 +709,7 @@ export default function FinancialsPage() {
   };
   const reviewEquipmentPurchase = device => {
     const amount=String(device.historicalCost || device.cost);
+    setEditingEntryId(null);
     setDraft({date:"",description:"Purchase: "+device.name,lines:[
       {account:"equipment",debit:amount,credit:""},{account:"",debit:"",credit:amount},
     ]});
@@ -962,7 +982,7 @@ export default function FinancialsPage() {
           className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300 disabled:opacity-40">
           Review purchase ({unpostedEquipment.length})
         </button>}
-        <button disabled={Boolean(closeSnapshot)} onClick={() => { setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
+        <button disabled={Boolean(closeSnapshot)} onClick={() => { setEditingEntryId(null); setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300 disabled:opacity-40"><Plus size={16}/> Add entry</button>
       </div></div>
       {closeSnapshot && <div className="flex flex-wrap items-center gap-3 text-xs text-amber-300">
@@ -983,7 +1003,13 @@ export default function FinancialsPage() {
         <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
         <tbody>{entries.map((entry, entryIndex) => <Fragment key={entry.id}>
           {entry.lines.map((item, index) => <tr key={index} className="border-b border-[#20303d]">
-            <td className="py-2 align-top">{index===0 ? <><p>{transactionTitle(entry)}</p><p className="text-xs text-[#8195a8]">{entry.date}{entry.automatic ? " · Auto" : ""}</p></> : null}</td>
+            <td className="py-2 align-top">{index===0 ? <>{!entry.automatic && journal.some(item=>item.id===entry.id) && !closedMonths[String(entry.date).slice(0,7)] ? (
+              <button type="button" onClick={()=>editEntry(entry)} title="Edit journal entry"
+                className="text-left hover:text-sky-300 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400">
+                {transactionTitle(entry)}
+              </button>
+            ) : <p>{transactionTitle(entry)}</p>}
+            <p className="text-xs text-[#8195a8]">{entry.date}{entry.automatic ? " · Auto" : ""}</p></> : null}</td>
             <td className="py-2 text-[#c3d2df]">{ledgerAccountName(entry,item)}</td>
             <td className="py-2 text-right tabular-nums">{item.debit ? money(item.debit) : "—"}</td>
             <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
@@ -1147,8 +1173,8 @@ export default function FinancialsPage() {
       </section>
     </div>}
     {modal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event=>{if(event.target===event.currentTarget)setModal(false);}}>
-      <form onSubmit={saveEntry} className={card + " w-full max-w-2xl max-h-[90vh] space-y-4 overflow-y-auto p-5 shadow-2xl"} role="dialog" aria-modal="true" aria-label="Add journal entry">
-        <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">New Journal Entry</h2><button type="button" onClick={()=>setModal(false)} aria-label="Close"><X size={19}/></button></div>
+      <form onSubmit={saveEntry} className={card + " w-full max-w-2xl max-h-[90vh] space-y-4 overflow-y-auto p-5 shadow-2xl"} role="dialog" aria-modal="true" aria-label={editingEntryId ? "Edit journal entry" : "Add journal entry"}>
+        <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">{editingEntryId ? "Edit Journal Entry" : "New Journal Entry"}</h2><button type="button" onClick={()=>setModal(false)} aria-label="Close"><X size={19}/></button></div>
         <label className="block space-y-1 text-sm">Date<input required type="date" value={draft.date} onChange={event=>setDraft(old=>({...old,date:event.target.value}))} className={field}/></label>
         <label className="block space-y-1 text-sm">Description<input required value={draft.description} onChange={event=>setDraft(old=>({...old,description:event.target.value}))} className={field} placeholder="e.g. Mining payout"/></label>
         <div className="space-y-2">
@@ -1182,7 +1208,7 @@ export default function FinancialsPage() {
         <p className="text-xs text-[#91a7b9]">Debits must equal credits. Existing equipment items can be selected individually. Equipment trades still require updating the equipment register; posting a journal entry alone does not retire an old GPU or add a new one to the Balance Sheet.</p>
         {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
         <div className="flex gap-2"><button type="button" onClick={()=>setModal(false)} className="rounded-lg border border-[#384d5d] px-4 py-2">Cancel</button>
-          <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#071710]">Post entry</button></div>
+          <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#071710]">{editingEntryId ? "Save changes" : "Post entry"}</button></div>
       </form>
     </div>}
   </div>;
