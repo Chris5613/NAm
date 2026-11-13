@@ -19,6 +19,20 @@ export function balanceAccountId(row) {
   // GPU must NOT rename every equipment transaction.
   return null;
 }
+// Lulo's provider identity is stable even when the visible account label
+// is renamed. Historical Balance Sheets retain their original rows.
+export function showBalanceSheetRow(row, reportMonth, currentMonth, labels = {}) {
+  if(reportMonth !== currentMonth) return true;
+  const id=norm(row?.id);
+  const name=norm(row?.name);
+  const display=norm(balanceDisplayName(row,labels));
+  const luloById=id === "projectlulo" || id.startsWith("projectlulo") ||
+    id === "lulocash" || id === "ledgerlulocash";
+  const luloByName=name.includes("lulo") || display.includes("lulo") ||
+    balanceAccountId(row)==="luloCash";
+  return !(luloById || luloByName);
+}
+
 export function balanceAliasKey(row) {
   if (!row?.id) return null;
   const id = String(row.id);
