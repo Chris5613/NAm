@@ -391,6 +391,28 @@ export function buildFinancialProfit(entries, savedExpenses) {
     savedExpenses:saved};
 }
 
+// Split recognized revenue by source without changing the journal totals.
+// Unidentified manual revenue stays unclassified rather than being mislabeled
+// as mining or yield. Withdrawals do not count as income.
+export function splitFinancialRevenue(entries) {
+  const result={mining:0,yield:0,dividends:0,unclassified:0};
+  for(const entry of entries||[]) {
+    const revenue=moneyRound(-journalActivity(entry,"revenue"));
+    const dividends=moneyRound(-journalActivity(entry,"dividendRevenue"));
+    result.dividends=moneyRound(result.dividends+dividends);
+    if(!revenue) continue;
+    const description=String(entry.description||"").toLowerCase();
+    const source=String(entry.id||"").startsWith("synced-income:")
+      ? decodeURIComponent(String(entry.id).split(":").slice(2).join(":")).toLowerCase()
+      : description;
+    const category=/lulo|loopscale|yield|lending|interest/.test(source) ? "yield" :
+      /kryptex|roller\s*coin|salad|unetwork|unity\s*network|mining/.test(source) ? "mining" :
+      "unclassified";
+    result[category]=moneyRound(result[category]+revenue);
+  }
+  return result;
+}
+
 export function classifyCashFlows(entries) {
   const sections={operating:[],investing:[],financing:[],transfers:[]};
   for(const entry of entries||[]) {
