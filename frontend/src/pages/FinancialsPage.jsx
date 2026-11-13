@@ -466,6 +466,16 @@ export default function FinancialsPage() {
   const expenses = closeSnapshot ? closeSnapshot.expenses : report.expenses;
   const operatingExpense = closeSnapshot ? Math.max(0,moneyRound(expenses-report.fees-autoPower)) : report.operating;
   const feeExpense = report.fees;
+  // Present the existing combined revenue as separately posted income streams.
+  // Any frozen historical total not explained by the posted lines is shown
+  // explicitly rather than being assigned to mining or dividends incorrectly.
+  const dividendIncome = moneyRound(-journalAccountActivity(entries,"dividendRevenue"));
+  const miningIncome = moneyRound(report.revenue-dividendIncome);
+  const otherRecognizedRevenue = pnlRevenue === null ? null :
+    moneyRound(pnlRevenue-report.revenue);
+  const operatingExpenseWithoutPower = Math.max(0,moneyRound(operatingExpense-autoPower));
+  const totalStatementExpenses = moneyRound(operatingExpenseWithoutPower+autoPower+feeExpense+fixedDep);
+
   const fixedDep = closeSnapshot ? closeSnapshot.fixedDep : report.depreciation;
   const pnlProfit = closeSnapshot ? closeSnapshot.pnlProfit :
     pnlRevenue === null ? null : moneyRound(pnlRevenue + report.disposalGain - expenses - fixedDep);
@@ -878,20 +888,38 @@ export default function FinancialsPage() {
         {metric("Operating Expenses", expenses, autoPower ? "Includes Mining Power estimate" : "Saved or journaled expenses")}
         {metric("Net Income (Estimated)", pnlProfit, "After depreciation", "text-emerald-400")}
       </div>
-      <section className={card + " p-5"}>
+      <section className={card + " overflow-hidden p-4 sm:p-6"}>
         <h2 className="mb-4 text-lg font-semibold">Income Statement — {monthTitle(month)}</h2>
-        {[
-          [accountNameById("revenue") + " / " + accountNameById("dividendRevenue"), pnlRevenue],
-          ...(report.disposalGain ? [[accountNameById("gainDisposal"),report.disposalGain]] : []),
-          [accountNameById("expense"), Math.max(0,moneyRound(operatingExpense-autoPower))],
-          ...(autoPower ? [[accountNameById("electric") + " (estimated)", autoPower]] : []),
-          ...(feeExpense ? [[accountNameById("fees"), feeExpense]] : []),
-          [accountNameById("depreciation"), fixedDep],
-          ["Net income", pnlProfit],
-        ].map(([label, value]) => <div key={label} className={`flex justify-between gap-3 border-b border-[#273746] py-3 text-sm ${label === "Net income" ? "font-bold text-emerald-400" : ""}`}>
-          <span>{label}</span><span className="tabular-nums">{money(value)}</span>
-        </div>)}
-        
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[440px] border-collapse text-sm">
+            <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
+              <th className="pb-3">Account</th><th className="pb-3 text-right">Amount</th>
+            </tr></thead>
+            <tbody>
+              <tr className="bg-[#142333]"><th colSpan={2} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">Revenue</th></tr>
+              <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("revenue")}</td><td className="py-2.5 text-right tabular-nums">{money(miningIncome)}</td></tr>
+              <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("dividendRevenue")}</td><td className="py-2.5 text-right tabular-nums">{money(dividendIncome)}</td></tr>
+              {otherRecognizedRevenue !== null && Math.abs(otherRecognizedRevenue) >= .005 && <tr className="border-b border-[#202f3c]">
+                <td className="py-2.5 pl-2">Other / previously recognized revenue</td>
+                <td className="py-2.5 text-right tabular-nums">{money(otherRecognizedRevenue)}</td>
+              </tr>}
+              <tr className="border-b border-[#314454] font-semibold"><td className="py-3 pl-2">Total Revenue</td><td className="py-3 text-right tabular-nums">{money(pnlRevenue)}</td></tr>
+              <tr className="bg-[#142333]"><th colSpan={2} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">Operating Expenses</th></tr>
+              <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("expense")}</td><td className="py-2.5 text-right tabular-nums">{money(operatingExpenseWithoutPower)}</td></tr>
+              {autoPower > 0 && <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("electric")} (estimated)</td><td className="py-2.5 text-right tabular-nums">{money(autoPower)}</td></tr>}
+              {feeExpense > 0 && <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("fees")}</td><td className="py-2.5 text-right tabular-nums">{money(feeExpense)}</td></tr>}
+              <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("depreciation")}</td><td className="py-2.5 text-right tabular-nums">{money(fixedDep)}</td></tr>
+              <tr className="border-b border-[#314454] font-semibold"><td className="py-3 pl-2">Total Expenses</td><td className="py-3 text-right tabular-nums">{money(totalStatementExpenses)}</td></tr>
+              {report.disposalGain !== 0 && <>
+                <tr className="bg-[#142333]"><th colSpan={2} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">Other Income</th></tr>
+                <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("gainDisposal")}</td><td className="py-2.5 text-right tabular-nums">{money(report.disposalGain)}</td></tr>
+              </>}
+              <tr className="border-t border-[#3c5d66] font-bold text-emerald-400">
+                <td className="py-3 pl-2">Net Income</td><td className="py-3 text-right tabular-nums">{money(pnlProfit)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </>}
     {tab === "cash" && <>
