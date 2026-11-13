@@ -21,7 +21,6 @@ const SETTINGS_KEY = "mining_power_dashboard_v1";
 const TOD_EFFECTIVE_AT = new Date("2026-12-10T00:00:00-08:00");
 const TOD_EFFECTIVE_MONTH = "2026-12";
 const DEFAULTS = {
-  dailyRevenueUsd: 3.55,
   offPeakRate: 0.0893,
   midPeakRate: 0.1670,
   peakRate: 0.4313,
@@ -227,6 +226,7 @@ function DeviceCard({ device, monthlyUsage, settings, monthKey, label, onRename 
 
 export default function MiningPowerCard() {
   const [status, setStatus] = useState(null);
+  const [kryptexDailyRevenue, setKryptexDailyRevenue] = useState(null);
   const [settings, setSettings] = useState(DEFAULTS);
   const [refreshing, setRefreshing] = useState(false);
   const renameDevice = useCallback(async (id,label) => {
@@ -252,11 +252,15 @@ export default function MiningPowerCard() {
   const refresh = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true);
     try {
-      const [power, saved] = await Promise.all([
+      const [power, saved, kryptex] = await Promise.all([
         api.get("/api/power/status"),
         settingsApi.get(SETTINGS_KEY).catch(() => null),
+        api.get("/api/project-tracking/kryptex/aggregate").catch(() => null),
       ]);
       setStatus(power);
+      const reportedDaily = kryptex?.status?.profitability_usd_day;
+      const value = reportedDaily == null ? NaN : Number(reportedDaily);
+      setKryptexDailyRevenue(Number.isFinite(value) && value >= 0 && Number(kryptex?.machine_count) > 0 ? value : null);
       if (saved && typeof saved === "object") {
         setSettings(current => ({ ...current, ...saved }));
       }
@@ -281,8 +285,10 @@ export default function MiningPowerCard() {
   const freePower = hasFreeMiningPower(getCurrentMonthKey());
   const hourlyCost = outOfPocketMiningPowerCost(totalWatts / 1000 * rateInfo.rate, getCurrentMonthKey());
   const dailyCost = hourlyCost * 24;
-  const dailyRevenue = Math.max(0, Number(settings.dailyRevenueUsd) || 0);
-  const dailyNet = dailyRevenue - dailyCost;
+  // The same live two-PC Kryptex aggregate shown in Yield Farming.
+  // Do not substitute a hardcoded estimate when no machine is reporting.
+  const dailyRevenue = kryptexDailyRevenue;
+  const dailyNet = dailyRevenue == null ? null : dailyRevenue - dailyCost;
 
   const currentMonth = status?.currentMonth || null;
   const monthTiers = currentMonth?.tiers || {};
@@ -295,8 +301,8 @@ export default function MiningPowerCard() {
   const monthCost = outOfPocketMiningPowerCost(
     usageCost(currentMonth, settings, currentMonth?.month), currentMonth?.month || getCurrentMonthKey()
   );
-  const monthEstimatedRevenue = dailyRevenue * monthTrackedDays;
-  const monthEstimatedNet = monthEstimatedRevenue - monthCost;
+  const monthEstimatedRevenue = dailyRevenue == null ? null : dailyRevenue * monthTrackedDays;
+  const monthEstimatedNet = monthEstimatedRevenue == null ? null : monthEstimatedRevenue - monthCost;
   const monthDays = daysInPacificMonth();
   const projectionReady = monthTrackedSeconds >= 900;
   const projectedMonthCost = projectionReady && monthTrackedDays > 0
@@ -380,10 +386,10 @@ export default function MiningPowerCard() {
           </div>
           <div className="p-5">
             <p className="text-xs text-muted-foreground">Est. net since tracking</p>
-            <p className={"mt-1 text-2xl font-semibold tabular-nums " + (monthEstimatedNet >= 0 ? "text-emerald-400" : "text-rose-400")}>
-              {money(monthEstimatedNet)}
+            <p className={"mt-1 text-2xl font-semibold tabular-nums " + (monthEstimatedNet == null || monthEstimatedNet >= 0 ? "text-emerald-400" : "text-rose-400")}>
+              {monthEstimatedNet == null ? "Waiting for Kryptex…" : money(monthEstimatedNet)}
             </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">Uses {money(dailyRevenue)}/day revenue estimate</p>
+            <p className="mt-1 text-[10px] text-muted-foreground">{dailyRevenue == null ? "Waiting for live Kryptex profitability" : `Uses ${money(dailyRevenue)}/day live Kryptex revenue · combined PCs`}</p>
           </div>
         </div>
 
@@ -407,7 +413,7 @@ export default function MiningPowerCard() {
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-emerald-400" />
             <span className="text-muted-foreground">Net Profit / Day</span>
-            <span className={"font-semibold tabular-nums " + (dailyNet >= 0 ? "text-emerald-400" : "text-rose-400")}>{money(dailyNet)}</span>
+            <span className={"font-semibold tabular-nums " + (dailyNet == null || dailyNet >= 0 ? "text-emerald-400" : "text-rose-400")}>{dailyNet == null ? "—" : money(dailyNet)}</span>
           </div>
         </div>
 
