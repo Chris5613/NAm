@@ -14,6 +14,7 @@ import {
   deriveCashOpening, derivePayableOpening, moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { movementJournal } from "@/lib/financialMovements";
+import { journalLines, journalActivity } from "@/lib/compoundJournal";
 import { readUnetworkPhones, phoneAssetRows } from "@/lib/unetworkPhonesAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 
@@ -81,9 +82,7 @@ export function getFinancialTotalAssets(month=getCurrentMonthKey(), live=financi
     journal,month,Boolean(records[month]?.locked),
   );
   const manual=journal.filter(entry=>String(entry.date||"").startsWith(month));
-  const manualEntries=manual.map(entry=>({
-    ...entry,lines:[postedLine(entry.debitAccount,entry.amount,0),postedLine(entry.creditAccount,0,entry.amount)],
-  }));
+  const manualEntries=manual.map(entry=>({...entry,lines:journalLines(entry)}));
   const alreadyPosted=new Set(manual.filter(row=>row.movementSourceId).map(row=>row.movementSourceId));
   const movements=movementJournal(confirmed.filter(row=>String(row?.date||"").startsWith(month)),month,alreadyPosted)
     .filter(entry=>!manual.some(item=>item.date===entry.date &&
@@ -92,7 +91,7 @@ export function getFinancialTotalAssets(month=getCurrentMonthKey(), live=financi
       item.creditAccount===entry.lines[1]?.account));
   const recorded = records?.[month] || {};
   const estimatedPower = valueOrNull(stored(FINANCIAL_ASSET_KEYS.power,{})?.[month]?.cost);
-  const actualPower = manual.some(entry=>entry.debitAccount==="electric");
+  const actualPower = manual.some(entry=>journalActivity(entry,"electric")>0);
   const autoPower = hasFreeMiningPower(month) || actualPower ||
     (valueOrNull(recorded.expenses) !== null && Number(recorded.expenses)>0) ||
     estimatedPower === null ? 0 : outOfPocketMiningPowerCost(estimatedPower,month);
