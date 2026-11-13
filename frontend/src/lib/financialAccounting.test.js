@@ -385,3 +385,34 @@ test("equipment disposal stays retired next month without rewriting prior month"
   expect(future.end).toBe(0);
   expect(includeJournalEquipment([asset],[disposal],"2026-10")[0].retired).toBeUndefined();
 });
+
+test("Review purchase recognizes RTX 5080 trade-in even when hardware register tracks only cash paid",()=>{
+  const rows=[
+    {id:"hardware:rtx5080",name:"RTX 5080",category:"equipment",
+      acquisitionMonth:"2026-11",historicalCost:1250,source:"saved-balance-sheet"},
+  ];
+  const recordedTrade={id:"trade-5080",date:"2026-11-13",description:"RTX 5080",
+    lines:[
+      {account:"equipment",debit:1950,credit:0},
+      {account:"cash",debit:0,credit:1250},
+      {account:"equipment:hardware:rtx5070",debit:0,credit:491.67},
+      {account:"gainDisposal",debit:0,credit:208.33},
+    ],
+  };
+  expect(unmatchedEquipmentPurchases(rows,[recordedTrade],"2026-11")).toEqual([]);
+  expect(unmatchedEquipmentPurchases(rows,[],"2026-11")).toHaveLength(1);
+});
+
+test("Review purchase does not suppress a different GPU or a partial acquisition",()=>{
+  const rows=[
+    {id:"hardware:rtx5080",name:"RTX 5080",category:"equipment",
+      acquisitionMonth:"2026-11",historicalCost:1250},
+    {id:"hardware:rtx2080",name:"RTX 2080 Super PC",category:"equipment",
+      acquisitionMonth:"2026-11",historicalCost:500},
+  ];
+  const partial={id:"partial",date:"2026-11-13",description:"RTX 5080",lines:[
+    {account:"equipment",debit:500,credit:0},
+    {account:"cash",debit:0,credit:500},
+  ]};
+  expect(unmatchedEquipmentPurchases(rows,[partial],"2026-11")).toHaveLength(2);
+});
