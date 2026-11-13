@@ -711,14 +711,14 @@ export default function SideHustleDashboard() {
   function openAddModal(kind) {
     setAddError("");
     if (kind === "hardware") setHardwareDraft({
-      name: "", cost: "", power: "", source: "", sources: [], startMonth: currentMonthKey,
+      name: "", cost: "", power: "", source: "", sources: [], startMonth: currentMonthKey, earningsStartDay:pacificDayKey(Date.now()),
     });
     if (kind === "project") setProjectDraft({ id: "", cost: "" });
     setAddModal(kind);
   }
   function openHardwareEditor(device) {
     setAddError("");
-    setHardwareDraft({ ...device, sources:hardwareSources(device) });
+    setHardwareDraft({ ...device, sources:hardwareSources(device), earningsStartDay:device.earningsStartDay || "" });
     setAddModal("hardware");
   }
   function saveHardware(event) {
@@ -726,16 +726,17 @@ export default function SideHustleDashboard() {
     const name=hardwareDraft.name.trim();
     const sources=hardwareSources(hardwareDraft);
     const cost=Number(hardwareDraft.cost),power=Number(hardwareDraft.power || 0);
+    const startDay=String(hardwareDraft.earningsStartDay || "");
     if(!name || !sources.length || !/^\d{4}-\d{2}$/.test(hardwareDraft.startMonth) ||
       hardwareDraft.startMonth>currentMonthKey || !Number.isFinite(cost) || cost<=0 ||
-      !Number.isFinite(power) || power<0){
+      !Number.isFinite(power) || power<0 || (startDay && (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(startDay) || startDay>pacificDayKey(Date.now())))){
       setAddError("Enter a name, cost, valid month, and at least one income source.");
       return;
     }
     const prior=hardware.find(row=>row.id===hardwareDraft.id);
     const device={
       ...hardwareDraft,id:prior?.id || crypto.randomUUID(),
-      name,cost,power,sources,source:sources[0],
+      name,cost,power,sources,source:sources[0],earningsStartDay:startDay || null,
       startMonth:hardwareDraft.startMonth,
     };
     if(prior){
@@ -756,7 +757,7 @@ export default function SideHustleDashboard() {
           allocationMode:"allocated",
           ...(sources.includes("Kryptex") ? {ledger:KRYPTEX_PAYBACK_LEDGER} : {}),
         };
-        device.earningsStartDay=null;
+        // Keep manually selected earnings start dates when sources change.
         device.powerStartTime=null;
       }
     }else{
@@ -1177,6 +1178,12 @@ export default function SideHustleDashboard() {
                 <input required type="month" max={currentMonthKey} value={hardwareDraft.startMonth}
                   onChange={event => setHardwareDraft(current => ({ ...current, startMonth: event.target.value }))}
                   className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
+              </label>
+              <label className="block text-sm">Earnings start date
+                <input type="date" max={pacificDayKey(Date.now())} value={hardwareDraft.earningsStartDay || ""}
+                  onChange={event=>setHardwareDraft(current=>({...current,earningsStartDay:event.target.value}))}
+                  className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
+                <span className="mt-1 block text-xs text-[#91a4b8]">Counts available daily earnings beginning at midnight Pacific on this date. Leave blank to use existing checkpoint tracking.</span>
               </label>
             </>
           ) : (
