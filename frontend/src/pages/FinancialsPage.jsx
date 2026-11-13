@@ -488,7 +488,10 @@ export default function FinancialsPage() {
   const rows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,
     {cashOpening,payableOpening:derivePayableOpening(month,journal)});
   const sections = categories.map(category => ({
-    ...category,rows:rows.filter(row=>row.category===category.id),
+    // Lulo remains in accounting and totals, but is hidden from the Balance Sheet table.
+    ...category,rows:rows.filter(row=>row.category===category.id &&
+      !/\blulo\b/i.test(String(row.name || "")) &&
+      !/^project:lulo(?:$|[^a-z])/i.test(String(row.id || ""))),
   }));
   const total = (field,type) => {
     const relevant = rows.filter(row =>
