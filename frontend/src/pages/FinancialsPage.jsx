@@ -17,7 +17,7 @@ import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
 import {
   balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName,
-  cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription,
+  cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow,
 } from "@/lib/financialAccountNames";
 import {
   buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
@@ -487,16 +487,13 @@ export default function FinancialsPage() {
   const cashOpening = deriveCashOpening(month,bankOpenings,journal,Object.values(confirmedMovements));
   const rows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,
     {cashOpening,payableOpening:derivePayableOpening(month,journal)});
-  // Hide Lulo only for the active reporting month. As soon as the next
-  // calendar month starts, the previous month's historical row returns.
-  // This is display-only; Lulo remains in stored data and report totals.
-  const hideCurrentLulo = month === getCurrentMonthKey();
+  // Only presentation rows are filtered. Financial totals still use 'rows'.
+  // Closed/past reporting months retain their Lulo historical reference.
+  const reportingMonth = getCurrentMonthKey();
   const sections = categories.map(category => ({
-    ...category,rows:rows.filter(row=>row.category===category.id &&
-      (!hideCurrentLulo || (
-        !/\blulo\b/i.test(String(row.name || "")) &&
-        !/^project:lulo(?:$|[^a-z])/i.test(String(row.id || ""))
-      ))),
+    ...category,
+    rows: rows.filter(row => row.category === category.id &&
+      showBalanceSheetRow(row, month, reportingMonth, accountLabels)),
   }));
   const total = (field,type) => {
     const relevant = rows.filter(row =>
