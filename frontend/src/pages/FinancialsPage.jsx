@@ -487,11 +487,16 @@ export default function FinancialsPage() {
   const cashOpening = deriveCashOpening(month,bankOpenings,journal,Object.values(confirmedMovements));
   const rows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,
     {cashOpening,payableOpening:derivePayableOpening(month,journal)});
+  // Hide Lulo only for the active reporting month. As soon as the next
+  // calendar month starts, the previous month's historical row returns.
+  // This is display-only; Lulo remains in stored data and report totals.
+  const hideCurrentLulo = month === getCurrentMonthKey();
   const sections = categories.map(category => ({
-    // Lulo remains in accounting and totals, but is hidden from the Balance Sheet table.
     ...category,rows:rows.filter(row=>row.category===category.id &&
-      !/\blulo\b/i.test(String(row.name || "")) &&
-      !/^project:lulo(?:$|[^a-z])/i.test(String(row.id || ""))),
+      (!hideCurrentLulo || (
+        !/\blulo\b/i.test(String(row.name || "")) &&
+        !/^project:lulo(?:$|[^a-z])/i.test(String(row.id || ""))
+      ))),
   }));
   const total = (field,type) => {
     const relevant = rows.filter(row =>
