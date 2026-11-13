@@ -48,7 +48,12 @@ export function buildAutoIncomeJournal(month, incomeMonth, manualJournal = [], c
     else sources.set(key, { key, label: name, amount: value });
   }
   const reportedSources = cents([...sources.values()].reduce((sum, source) => sum + source.amount, 0));
-  if (syncedTotal > reportedSources) {
+  // Sources and the headline total can round separately. A one-cent
+  // residual across multiple named sources is not actionable missing income.
+  const roundingResidual = sources.size >= 2 &&
+    syncedTotal > reportedSources &&
+    cents(syncedTotal - reportedSources) <= 0.01;
+  if (syncedTotal > reportedSources && !roundingResidual) {
     sources.set("unallocated-income", {
       key: "unallocated-income", label: "Unallocated tracked income",
       amount: cents(syncedTotal - reportedSources),
