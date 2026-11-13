@@ -223,12 +223,29 @@ export function includeJournalEquipment(baseRows, journal, month, locked = false
     if(!(amount>0)) continue;
     const description = String(entry.description||"");
     const cleaned = assetKey(description);
-    const matched = rows.some(row => row.category==="equipment" &&
+    const candidates=rows.filter(row => row.category==="equipment" &&
+      row.source!=="journal-purchase" &&
       equipmentAliasKey(row.name).length>=5 &&
       (cleaned.includes(assetKey(row.name)) || cleaned.includes(equipmentAliasKey(row.name)) ||
         (equipmentAliasKey(row.name)==="rtx2080superpc" && cleaned.includes("rtx2080pc"))) &&
-      Math.abs(Number(row.historicalCost ?? amount)-amount)<=.005);
-    if(matched || rows.some(row=>row.id==="journal-equipment:"+entry.id)) continue;
+      row.acquisitionMonth===entry.date.slice(0,7));
+    // A trade-in may have been registered for only the cash payment
+    // ($1,250), while its purchase journal debits the full GPU value
+    // ($1,950). These are one asset, not two acquisitions.
+    // Only reconcile unambiguous one-to-one matches; don't accidentally
+    // merge two separately owned GPUs of the same model.
+    if(candidates.length===1 && amount+0.005>=Number(candidates[0].historicalCost)) {
+      const existing=candidates[0];
+      if(amount>Number(existing.historicalCost)+0.005) {
+        const schedule=equipmentSchedule({
+          cost:amount,startMonth:existing.acquisitionMonth,
+          usefulLifeMonths:existing.usefulLifeMonths,
+        },month);
+        if(schedule) Object.assign(existing,schedule,{historicalCost:amount});
+      }
+      continue;
+    }
+    if(rows.some(row=>row.id==="journal-equipment:"+entry.id)) continue;
     const schedule = equipmentSchedule({cost:amount,startMonth:entry.date.slice(0,7)},month);
     if(schedule) rows.push({
       id:"journal-equipment:"+String(entry.id || cleaned+entry.date),
