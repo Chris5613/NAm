@@ -1,3 +1,4 @@
+import { journalActivity } from "./compoundJournal";
 // Financials calculation helpers. Account balances observed from trackers
 // are NOT incremented again by the income journal; those trackers already
 // include the mining earnings. Bank and payable accounts are only projected
@@ -267,9 +268,7 @@ export function journalAccountActivity(entries, account) {
 export function derivePayableOpening(month, manualJournal = []) {
   return moneyRound((manualJournal || []).reduce((sum,entry)=>{
     if(String(entry.date || "").slice(0,7)>=month) return sum;
-    const value = Number(entry.amount)||0;
-    return sum + (entry.creditAccount==="payable" ? value : 0) -
-      (entry.debitAccount==="payable" ? value : 0);
+    return sum - journalActivity(entry,"payable");
   },0));
 }
 
@@ -349,8 +348,7 @@ export function deriveCashOpening(month, openings, manualJournal = [], confirmed
   for(const entry of manualJournal) {
     const date=String(entry.date||"");
     if(date.slice(0,7)<baseline || date.slice(0,7)>=month) continue;
-    if(entry.debitAccount==="cash") opening += Number(entry.amount)||0;
-    if(entry.creditAccount==="cash") opening -= Number(entry.amount)||0;
+    opening += journalActivity(entry,"cash");
   }
   // Previously confirmed transfers count only if they weren't also posted
   // manually. This avoids double-deducting an old cash withdrawal.
