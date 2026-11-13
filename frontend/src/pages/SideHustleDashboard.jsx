@@ -351,7 +351,7 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     if(!checkpoint || !sources.length) return [device.id,0];
     const share=source=>(Number(device.cost)||0)/(costsBySource[source] || 1);
     const singleKryptex=sources.length===1 && sources[0]==="Kryptex";
-    if(/\\brtx\\s*5080\\b/i.test(String(device.name || "")) && currentMonth >= "2026-11"){
+    if(/\brtx\s*5080\b/i.test(String(device.name || "")) && currentMonth >= "2026-11"){
       const firstDay=device.earningsStartDay && device.earningsStartDay<RTX5080_PAYBACK_START_DAY
         ? RTX5080_PAYBACK_START_DAY : (device.earningsStartDay || RTX5080_PAYBACK_START_DAY);
       const lastDay=pacificDayKey(now);
