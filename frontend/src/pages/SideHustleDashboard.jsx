@@ -319,7 +319,7 @@ function confirmedKryptexIncomeByMonth(tracker, startMonth, endMonth) {
 // Use exactly the same recorded daily values that power Top Projects.
 // Count every selected source independently from the inclusive start date.
 function datedSourceIncome(source, firstDay, lastDay, history) {
-  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(firstDay) || firstDay>lastDay) return 0;
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(firstDay) || firstDay>lastDay) return 0;
   const start=new Date(firstDay+"T12:00:00Z");
   const end=new Date(lastDay+"T12:00:00Z");
   let total=0,found=false;
