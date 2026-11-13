@@ -287,7 +287,8 @@ export default function HardwarePaybackPage() {
         // only starts contributing from the newly recorded checkpoint.
         checkpoint:{
           time,month:currentMonth,
-          baseline:unchanged || previous ? allocatedSourceIncome(device,next,currentRow,history.kryptex) : 0,
+          baseline:!previous && sources.length===1 && sources[0]==="Kryptex"
+            ? 0 : allocatedSourceIncome(device,next,currentRow,history.kryptex),
           allocationMode:"allocated",
           carried:previous ? (carried[device.id] ?? 0) : 0,
           ...(sources.includes("Kryptex") ? {ledger:KRYPTEX_PAYBACK_LEDGER} : {}),
@@ -333,7 +334,7 @@ export default function HardwarePaybackPage() {
               if(event.key === "Enter" || event.key === " ") {
                 event.preventDefault();
                 setError("");
-                setDraft({ ...d });
+                setDraft({ ...d, sources:deviceSources(d) });
               }
             }}
             style={{ borderColor: ["#326e59", "#645284", "#94753e", "#386a91"][index % 4] }}
