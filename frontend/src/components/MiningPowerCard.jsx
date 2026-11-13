@@ -230,12 +230,24 @@ export default function MiningPowerCard() {
   const [settings, setSettings] = useState(DEFAULTS);
   const [refreshing, setRefreshing] = useState(false);
   const renameDevice = useCallback(async (id,label) => {
-    // Keep immutable Tapo device IDs for readings and historic kWh totals.
-    const updated={...settings,deviceLabels:{...(settings.deviceLabels || {}),[id]:label}};
-    await settingsApi.set(SETTINGS_KEY,updated);
-    setSettings(updated);
-    toast.success("GPU name updated");
-  },[settings]);
+    // Guarded settings writes require an exact before/after pair. Fetch the
+    // latest server value first so a stale refresh cannot overwrite settings.
+    // Preserve the device ID: Tapo readings and historical kWh use that ID.
+    for(let attempt=0; attempt<2; attempt++) {
+      const before=await settingsApi.get(SETTINGS_KEY);
+      const base=before && typeof before==="object" && !Array.isArray(before) ? before : {};
+      const after={...base,deviceLabels:{...(base.deviceLabels || {}),[id]:label}};
+      try {
+        const saved=await settingsApi.patch(SETTINGS_KEY,before,after);
+        setSettings(current=>({...current,...(saved || after)}));
+        toast.success("GPU name updated");
+        return;
+      } catch(error) {
+        // Retry once if another tab wrote settings between GET and PATCH.
+        if(attempt===1 || !String(error?.message || "").includes("changed in another session")) throw error;
+      }
+    }
+  },[]);
 
   const refresh = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true);
