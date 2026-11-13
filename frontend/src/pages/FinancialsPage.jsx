@@ -395,6 +395,14 @@ export default function FinancialsPage() {
     ],
     journal,month,Boolean(records[month]?.locked),
   ),[month,records,live,hardwareDevices,journal,businessPhones]);
+  // Each existing fixed asset is selectable as its own ledger subaccount.
+  // Keep the generic equipment account for acquisitions not yet in the register.
+  const equipmentAccounts = useMemo(() => baseRows
+    .filter(row => row.category === "equipment" && row.id)
+    .map(row => ({ id:"equipment:"+row.id, name:balanceDisplayName(row,accountLabels), type:"asset" }))
+    .filter((row,index,array)=>array.findIndex(other=>other.id===row.id)===index),
+    [baseRows,accountLabels]);
+  const availableAccounts = [...accounts, ...equipmentAccounts];
   const recorded = records[month] || {};
   const syncedRevenue = closeSnapshot?.incomeMonth || incomeMonths.find(entry => entry.monthKey === month);
   const savedExpenses = valueOrNull(recorded.expenses);
@@ -546,7 +554,7 @@ export default function FinancialsPage() {
     }
     return all;
   },[month,entries,closedMonths,journal,incomeMonths,hardwareDevices,businessPhones,records,confirmedMovements]);
-  const trial = accounts.map(account=>{
+  const trial = availableAccounts.map(account=>{
     const activity = journalAccountActivity(cumulativeEntries,account.id);
     return {...account,debit:Math.max(0,activity),credit:Math.max(0,-activity)};
   }).filter(account=>account.debit||account.credit);
@@ -632,7 +640,7 @@ export default function FinancialsPage() {
     if(!draft.description.trim() || !validLedgerDate(draft.date)) {
       setError("Enter a valid date and description."); return;
     }
-    const checked=validateCompoundEntry(draft.lines,accounts.map(account=>account.id));
+    const checked=validateCompoundEntry(draft.lines,availableAccounts.map(account=>account.id));
     if(checked.error) {setError(checked.error); return;}
     const updated=[...journal,{id:"journal:"+Date.now()+":"+Math.random().toString(36).slice(2,7),
       date:draft.date,description:draft.description.trim(),lines:checked.lines,source:"compound-journal"}];
@@ -747,7 +755,7 @@ export default function FinancialsPage() {
   ];
   const accountName = account => chartDisplayName(account,accountLabels);
   const accountNameById = id => {
-    const account=accounts.find(row=>row.id===id);
+    const account=availableAccounts.find(row=>row.id===id);
     return account ? accountName(account) : id;
   };
   const ledgerAccountName = (entry,item) => {
@@ -755,7 +763,7 @@ export default function FinancialsPage() {
       const specific=equipmentEntryDisplayName(entry,rows,accountLabels);
       if(specific) return specific;
     }
-    const account=accounts.find(row=>row.id===item.account);
+    const account=availableAccounts.find(row=>row.id===item.account);
     return account ? accountName(account) : item.account;
   };
   const transactionTitle = entry => journalDisplayDescription(entry,rows,accountLabels);
@@ -1152,7 +1160,7 @@ export default function FinancialsPage() {
               onChange={event=>setDraft(old=>({...old,lines:old.lines.map((row,i)=>i===index?{...row,account:event.target.value}:row)}))}
               className={field+" min-w-0 px-1"}>
               <option value="">Select account</option>
-              {accounts.map(account=><option key={account.id} value={account.id}>{accountName(account)}</option>)}
+              {availableAccounts.map(account=><option key={account.id} value={account.id}>{accountName(account)}</option>)}
             </select>
             <input aria-label={`Debit line ${index+1}`} type="number" min="0" step="0.01" value={item.debit}
               onChange={event=>setDraft(old=>({...old,lines:old.lines.map((row,i)=>i===index?{...row,debit:event.target.value,credit:""}:row)}))}
@@ -1171,7 +1179,7 @@ export default function FinancialsPage() {
             <span>Credits: {money(draft.lines.reduce((sum,row)=>sum+(Number(row.credit)||0),0))}</span>
           </div>
         </div>
-        <p className="text-xs text-[#91a7b9]">Debits must equal credits. Multi-account entries post to the ledger and trial balance. Equipment trades also require updating the equipment register for the old and new GPUs; posting alone does not replace those assets automatically.</p>
+        <p className="text-xs text-[#91a7b9]">Debits must equal credits. Existing equipment items can be selected individually. Equipment trades still require updating the equipment register; posting a journal entry alone does not retire an old GPU or add a new one to the Balance Sheet.</p>
         {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
         <div className="flex gap-2"><button type="button" onClick={()=>setModal(false)} className="rounded-lg border border-[#384d5d] px-4 py-2">Cancel</button>
           <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#071710]">Post entry</button></div>
