@@ -883,11 +883,6 @@ export default function SideHustleDashboard() {
                 : null;
 
             const selectedSources=hardwareSources(row);
-            const kryptexMonthTotal=selectedSources.includes("Kryptex")
-              ? Object.entries(recordedCurrentMonth?.sources || {}).reduce((sum,[source,amount])=>
-                  canonicalSourceName(source).toLowerCase()==="kryptex"
-                    ? sum+Math.max(0,Number(amount)||0) : sum,0)
-              : null;
             const sourceProjects=income.projects.filter(project=>
               selectedSources.some(source=>canonicalSourceName(project?.name).toLowerCase()===source.toLowerCase())
             );
@@ -930,10 +925,7 @@ export default function SideHustleDashboard() {
                 </div>
                 <div className="min-w-0">
                   <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{money(recovered)}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Allocated earnings</p>
-                  {kryptexMonthTotal != null && <p className="mt-1 text-[10px] leading-tight text-sky-300">
-                    Kryptex month total: {money(kryptexMonthTotal)}
-                  </p>}
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Earned So Far</p>
                 </div>
                 <div className="min-w-0 text-right">
                   <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{paybackMonths === 0 ? "Recovered" : paybackMonths != null ? `~${paybackMonths.toFixed(1)} mo` : "—"}</strong>
