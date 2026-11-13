@@ -492,8 +492,12 @@ export default function FinancialsPage() {
   const reportingMonth = getCurrentMonthKey();
   const sections = categories.map(category => ({
     ...category,
+    // Alphabetize account names only inside each section; keep section
+    // order and accounting totals unchanged. Use visible renamed labels.
     rows: rows.filter(row => row.category === category.id && !row.retired &&
-      showBalanceSheetRow(row, month, reportingMonth, accountLabels)),
+      showBalanceSheetRow(row, month, reportingMonth, accountLabels))
+      .sort((a,b) => balanceDisplayName(a,accountLabels).localeCompare(
+        balanceDisplayName(b,accountLabels), undefined, {sensitivity:"base",numeric:true})),
   }));
   const total = (field,type) => {
     const relevant = rows.filter(row =>
