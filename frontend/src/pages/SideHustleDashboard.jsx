@@ -1134,7 +1134,7 @@ export default function SideHustleDashboard() {
         onMouseDown={event => { if (event.target === event.currentTarget) setAddModal(null); }}>
         <form onSubmit={addModal === "hardware" ? saveHardware : saveProjectCost}
           role="dialog" aria-modal="true" aria-label={addModal === "hardware" ? (hardwareDraft.id ? "Edit hardware" : "Add hardware") : "Add project break-even cost"}
-          className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain space-y-4 rounded-2xl border border-[#263342] bg-[#0b1017] p-6 text-white shadow-2xl">
+          className="w-full max-w-2xl max-h-[calc(100dvh-1rem)] overflow-y-auto overscroll-contain space-y-4 rounded-2xl border border-[#263342] bg-[#0b1017] p-5 sm:p-7 text-white shadow-2xl">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xl font-semibold">{addModal === "hardware" ? (hardwareDraft.id ? "Edit hardware" : "Add hardware") : "Add project break-even cost"}</h2>
             <button type="button" aria-label="Close" onClick={() => setAddModal(null)}
