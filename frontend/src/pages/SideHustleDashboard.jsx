@@ -375,30 +375,18 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
         ...dailyTrackers,kryptex:tracker,
       }));
       if(dated.every(amount=>amount!==null)){
+        // Each hardware card tracks full earnings from its selected start
+        // date. Do not apportion source earnings by device purchase price:
+        // the two GPUs share a provider, not an accounting ownership ratio.
+        // These card amounts are attribution views and must not be summed
+        // as unique business revenue.
         const credited=sources.reduce((sum,source)=>{
-          const daily=source==="Kryptex" ? tracker?.kryptexMiningDaily || {}
-            : source==="Salad" ? dailyTrackers.salad?.daily || {}
-            : source==="Unetwork" ? dailyTrackers.unetwork?.daily || {}
-            : source==="RollerCoin" ? {
-                ...dailyTrackers.rollercoin?.daily,
-                ...dailyTrackers.rollercoin?.walletDaily,
-              } : {};
-          return sum+Object.entries(daily).reduce((subtotal,[day,raw])=>{
-            if(day<chosenStart || day>lastDay) return subtotal;
-            if(source==="Kryptex" && !tracker?.kryptexConfirmedDays?.[day]) return subtotal;
-            const amount=Math.max(0,Number(raw?.usd ?? raw)||0);
-            const activeCost=devices.filter(other=>
-              hardwareSources(other).includes(source) &&
-              (!other.earningsStartDay || other.earningsStartDay<=day) &&
-              (other.startMonth || "")<=day.slice(0,7)
-            ).reduce((n,other)=>n+Math.max(0,Number(other.cost)||0),0);
-            return subtotal+(activeCost>0 ? amount*(Number(device.cost)||0)/activeCost : 0);
-          },0);
+          const dated=datedSourceIncome(source,chosenStart,lastDay,{
+            ...dailyTrackers,kryptex:tracker,
+          });
+          return sum+(dated ?? 0);
         },0);
-        const startTime=new Date(chosenStart+"T12:00:00Z");
-        const power=Math.max(0,monthPosition(now)-monthPosition(startTime))*
-          (Number(device.power)||0);
-        return [device.id,Math.max(0,credited-power)];
+        return [device.id,Math.max(0,credited)];
       }
     }
     // The Dashboard's Kryptex amount displays current-month mining income,
@@ -675,9 +663,11 @@ export default function SideHustleDashboard() {
   const deviceUsage = powerMonth?.devices || {};
 
   const hardwareCost = hardware.reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
-  const kryptexTracker = loadKryptexTracker();
+  // Use the same provider observations for Top Projects and Hardware Payback.
+  const kryptexTracker = recordedHistory.kryptex;
   const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock, recordedMonths, {
-    salad:loadSaladTracker(),unetwork:loadUnetworkTracker(),rollercoin:loadRollerCoinTracker(),
+    salad:recordedHistory.salad,unetwork:recordedHistory.unetwork,
+    rollercoin:recordedHistory.rollercoin,
   });
   const hardwareRecovered = Object.values(hardwareEarnings)
     .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
