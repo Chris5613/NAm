@@ -316,23 +316,20 @@ function confirmedKryptexIncomeByMonth(tracker, startMonth, endMonth) {
   }, 0);
 }
 
+// Use exactly the same recorded daily values that power Top Projects.
+// Count every selected source independently from the inclusive start date.
 function datedSourceIncome(source, firstDay, lastDay, history) {
-  const sumDaily=(entries, toAmount) => Object.entries(entries || {}).reduce((sum,[day,value]) =>
-    day>=firstDay && day<=lastDay ? sum+Math.max(0,Number(toAmount(value))||0):sum,0);
-  if(source==="Kryptex") return confirmedKryptexIncome(history.kryptex,firstDay,lastDay);
-  if(source==="Salad") return sumDaily(history.salad?.daily,value=>value?.usd ?? value);
-  if(source==="Unetwork") return sumDaily(history.unetwork?.daily,value=>value?.usd ?? value);
-  if(source==="RollerCoin"){
-    const daily=history.rollercoin?.daily || {};
-    const wallet=history.rollercoin?.walletDaily || {};
-    return [...new Set([...Object.keys(daily),...Object.keys(wallet)])].reduce((sum,day)=>{
-      if(day<firstDay || day>lastDay) return sum;
-      const value=wallet[day] || daily[day];
-      return sum+Math.max(0,Number(value?.usd ?? value)||0);
-    },0);
+  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(firstDay) || firstDay>lastDay) return 0;
+  const start=new Date(firstDay+"T12:00:00Z");
+  const end=new Date(lastDay+"T12:00:00Z");
+  let total=0,found=false;
+  for(let day=start.getTime();day<=end.getTime();day+=86400000){
+    const amount=recordedDailyProviderIncome(source,new Date(day).toISOString().slice(0,10),history);
+    if(amount!==null){total+=amount;found=true;}
   }
-  return null; // Do not invent daily data for providers with only monthly totals.
+  return found ? total : null;
 }
+
 function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now(), incomeMonths = [], dailyTrackers = {}) {
   const incomeFor = (source, start, finish) => source==="Kryptex"
     ? confirmedKryptexIncomeByMonth(tracker,start,finish)
@@ -366,14 +363,13 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     if(chosenStart){
       const lastDay=pacificDayKey(now);
       if(chosenStart>lastDay) return [device.id,0];
-      const dated=sources.map(source=>datedSourceIncome(source,chosenStart,lastDay,{
-        ...dailyTrackers,kryptex:tracker,
-      }));
-      if(dated.every(amount=>amount!==null)){
-        // Provider earnings are not split by hardware cost. The user-selected
-        // date includes that entire day. Overlapping card totals are not
-        // unique business income.
-        return [device.id,Math.max(0,dated.reduce((sum,amount)=>sum+amount,0))];
+      const history={...dailyTrackers,kryptex:tracker};
+      const dated=sources.map(source=>datedSourceIncome(source,chosenStart,lastDay,history));
+      // Missing daily observations for one provider must not suppress
+      // available income from another selected provider.
+      if(dated.some(amount=>amount!==null)){
+        // Full Kryptex + full Salad + any other selected source; no cost split.
+        return [device.id,Math.max(0,dated.reduce((sum,amount)=>sum+(amount ?? 0),0))];
       }
     }
     // The Dashboard's Kryptex amount displays current-month mining income,
