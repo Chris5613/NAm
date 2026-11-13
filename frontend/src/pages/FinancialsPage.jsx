@@ -492,7 +492,7 @@ export default function FinancialsPage() {
   const reportingMonth = getCurrentMonthKey();
   const sections = categories.map(category => ({
     ...category,
-    rows: rows.filter(row => row.category === category.id &&
+    rows: rows.filter(row => row.category === category.id && !row.retired &&
       showBalanceSheetRow(row, month, reportingMonth, accountLabels)),
   }));
   const total = (field,type) => {
@@ -1182,7 +1182,7 @@ export default function FinancialsPage() {
             <span>Credits: {money(draft.lines.reduce((sum,row)=>sum+(Number(row.credit)||0),0))}</span>
           </div>
         </div>
-        <p className="text-xs text-[#91a7b9]">Debits must equal credits. Existing equipment items can be selected individually. Equipment trades still require updating the equipment register; posting a journal entry alone does not retire an old GPU or add a new one to the Balance Sheet.</p>
+        <p className="text-xs text-[#91a7b9]">Debits must equal credits. Existing equipment items can be selected individually. A full book-value credit to an individual equipment account retires it from the Balance Sheet; generic equipment debits add new purchases.</p>
         {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
         <div className="flex gap-2"><button type="button" onClick={()=>setModal(false)} className="rounded-lg border border-[#384d5d] px-4 py-2">Cancel</button>
           <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-2 font-semibold text-[#071710]">{editingEntryId ? "Save changes" : "Post entry"}</button></div>
