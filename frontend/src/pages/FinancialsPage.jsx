@@ -26,6 +26,7 @@ import {
   moneyRound, valueOrNull, reclassifyPersonalPcContribution,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
+import { journalLines, validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
 import { openingPhoneDepreciationEntry } from "@/lib/phoneOpeningDepreciation";
 
 import {
@@ -122,7 +123,7 @@ function readCryptoIncomeSources() {
   manualIncome: {}, luloBackfills: {},
  };
 }
-const emptyDraft = () => ({ date: getTodayKey(), description: "", debitAccount: "cash", creditAccount: "revenue", amount: "" });
+const emptyDraft = () => ({ date: getTodayKey(), description: "", lines:[{account:"cash",debit:"",credit:""},{account:"revenue",debit:"",credit:""}] });
 const line = (account, debit, credit) => ({ account, debit: rounded(debit), credit: rounded(credit) });
 const validLedgerDate = raw => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(raw))) return false;
@@ -418,18 +419,15 @@ export default function FinancialsPage() {
   ), [month, syncedRevenue, ledgerEntries]);
   const electricityCovered = hasFreeMiningPower(month);
   const estimatedPower = valueOrNull(powerEstimates[month]?.cost);
-  const hasActualPower = ledgerEntries.some(entry => entry.debitAccount === "electric");
+  const hasActualPower = ledgerEntries.some(entry => journalActivity(entry,"electric")>0);
   // No automatic electricity expense is generated while power is supplied free.
   const autoPower = closeSnapshot ? closeSnapshot.autoPower :
     electricityCovered || hasActualPower || (savedExpenses !== null && savedExpenses > 0) ||
       estimatedPower === null ? 0 : outOfPocketMiningPowerCost(estimatedPower, month);
-  const manualEntries = ledgerEntries.map(entry => ({
-    ...entry, lines: [line(entry.debitAccount, entry.amount, 0), line(entry.creditAccount, 0, entry.amount)],
-  }));
+  const manualEntries = ledgerEntries.map(entry=>({...entry,lines:journalLines(entry)}));
   const scheduledDepreciation = moneyRound(baseRows.filter(row=>row.category==="equipment")
     .reduce((sum,row)=>sum+Number(row.depreciation||0),0));
-  const manualDepreciation = moneyRound(ledgerEntries.filter(entry=>entry.debitAccount==="depreciation")
-    .reduce((sum,entry)=>sum+Number(entry.amount||0),0));
+  const manualDepreciation = moneyRound(ledgerEntries.reduce((sum,entry)=>sum+journalActivity(entry,"depreciation"),0));
   const autoDepreciation = Math.max(0,moneyRound(scheduledDepreciation-manualDepreciation));
   const generatedEntries = [
     ...(month === LEGACY_LEDGER_CUTOFF ? [openingPhoneDepreciationEntry(businessPhones)].filter(Boolean) : []),
@@ -458,7 +456,7 @@ export default function FinancialsPage() {
       })();
   const report = buildFinancialProfit(entries,savedExpenses);
   const incomeKnown = Boolean(syncedRevenue) ||
-    ledgerEntries.some(entry=>["revenue","dividendRevenue"].includes(entry.creditAccount));
+    ledgerEntries.some(entry=>["revenue","dividendRevenue"].some(account=>journalActivity(entry,account)<0));
   const pnlRevenue = closeSnapshot ? closeSnapshot.revenue : incomeKnown ? report.revenue : null;
   const expenses = closeSnapshot ? closeSnapshot.expenses : report.expenses;
   const operatingExpense = closeSnapshot ? Math.max(0,moneyRound(expenses-report.fees-autoPower)) : report.operating;
@@ -508,15 +506,13 @@ export default function FinancialsPage() {
       if(key===month) {all.push(...entries);continue;}
       if(key < LEGACY_LEDGER_CUTOFF) {
         all.push(...preSeptemberLedgerEntries(journal.filter(item=>String(item.date||"").startsWith(key))
-          .map(item=>({...item,lines:[line(item.debitAccount,item.amount,0),line(item.creditAccount,0,item.amount)]})),
+          .map(item=>({...item,lines:journalLines(item)})),
           key,businessPhones));
         continue;
       }
       if(closedMonths[key]?.entries) {all.push(...closedMonths[key].entries);continue;}
       const periodManual=journal.filter(item=>String(item.date||"").startsWith(key));
-      const manualLines=periodManual.map(item=>({
-        ...item,lines:[line(item.debitAccount,item.amount,0),line(item.creditAccount,0,item.amount)],
-      }));
+      const manualLines=periodManual.map(item=>({...item,lines:journalLines(item)}));
       const recordedIncome=incomeMonths.find(item=>item.monthKey===key);
       const income=buildAutoIncomeJournal(key,recordedIncome,periodManual,getCurrentMonthKey(),getTodayKey());
       const historicalHardware=includeJournalEquipment(
@@ -527,8 +523,7 @@ export default function FinancialsPage() {
         journal,key,Boolean(records[key]?.locked));
       const scheduled=moneyRound(historicalHardware.filter(item=>item.category==="equipment")
         .reduce((sum,item)=>sum+Number(item.depreciation||0),0));
-      const previouslyPostedDep=moneyRound(periodManual.filter(item=>item.debitAccount==="depreciation")
-        .reduce((sum,item)=>sum+Number(item.amount||0),0));
+      const previouslyPostedDep=moneyRound(periodManual.reduce((sum,item)=>sum+journalActivity(item,"depreciation"),0));
       const extraDep=Math.max(0,moneyRound(scheduled-previouslyPostedDep));
       const already=new Set(periodManual.filter(item=>item.movementSourceId).map(item=>item.movementSourceId));
       const knownMovements=movementJournal(Object.values(confirmedMovements)
@@ -630,27 +625,18 @@ export default function FinancialsPage() {
   };
   const saveEntry = event => {
     event.preventDefault();
-    if (closedMonths[String(draft.date).slice(0, 7)]) {
-      setError("This reporting month is closed. Reopen it from General Ledger before editing.");
-      return;
+    if(closedMonths[String(draft.date).slice(0,7)]) {
+      setError("This reporting month is closed. Reopen it from General Ledger before editing."); return;
     }
-    const value = Number(draft.amount);
-    if (!draft.description.trim() || !validLedgerDate(draft.date) ||
-      !Number.isFinite(value) || value <= 0 ||
-      !accounts.some(row=>row.id===draft.debitAccount) ||
-      !accounts.some(row=>row.id===draft.creditAccount) ||
-      draft.debitAccount === draft.creditAccount) {
-      setError("Enter a valid date, description, positive amount, and two different accounts.");
-      return;
+    if(!draft.description.trim() || !validLedgerDate(draft.date)) {
+      setError("Enter a valid date and description."); return;
     }
-    const updated = [...journal, { id: "journal:" + Date.now() + ":" + Math.random().toString(36).slice(2, 7),
-      date: draft.date, description: draft.description.trim(), amount: rounded(value),
-      debitAccount: draft.debitAccount, creditAccount: draft.creditAccount }];
-    remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(updated));
-    setJournal(updated);
-    setMonth(draft.date.slice(0, 7));
-    setDraft(emptyDraft());
-    setModal(false);
+    const checked=validateCompoundEntry(draft.lines,accounts.map(account=>account.id));
+    if(checked.error) {setError(checked.error); return;}
+    const updated=[...journal,{id:"journal:"+Date.now()+":"+Math.random().toString(36).slice(2,7),
+      date:draft.date,description:draft.description.trim(),lines:checked.lines,source:"compound-journal"}];
+    remoteStorage.setItem(JOURNAL_KEY,JSON.stringify(updated));
+    setJournal(updated); setMonth(draft.date.slice(0,7));setDraft(emptyDraft());setError("");setModal(false);
   };
   const prepareQuickEntry = event => {
     event.preventDefault();
@@ -694,13 +680,10 @@ export default function FinancialsPage() {
     setQuickModalOpen(false);
   };
   const reviewEquipmentPurchase = device => {
-    setDraft({
-      date: "",
-      description: "Purchase: " + device.name,
-      debitAccount: "equipment",
-      creditAccount: "",
-      amount: String(device.historicalCost || device.cost),
-    });
+    const amount=String(device.historicalCost || device.cost);
+    setDraft({date:"",description:"Purchase: "+device.name,lines:[
+      {account:"equipment",debit:amount,credit:""},{account:"",debit:"",credit:amount},
+    ]});
     setTab("ledger");
     setError("");
     setModal(true);
@@ -1154,16 +1137,38 @@ export default function FinancialsPage() {
       </section>
     </div>}
     {modal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event=>{if(event.target===event.currentTarget)setModal(false);}}>
-      <form onSubmit={saveEntry} className={card + " w-full max-w-md space-y-4 p-5 shadow-2xl"} role="dialog" aria-modal="true" aria-label="Add journal entry">
+      <form onSubmit={saveEntry} className={card + " w-full max-w-2xl max-h-[90vh] space-y-4 overflow-y-auto p-5 shadow-2xl"} role="dialog" aria-modal="true" aria-label="Add journal entry">
         <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">New Journal Entry</h2><button type="button" onClick={()=>setModal(false)} aria-label="Close"><X size={19}/></button></div>
         <label className="block space-y-1 text-sm">Date<input required type="date" value={draft.date} onChange={event=>setDraft(old=>({...old,date:event.target.value}))} className={field}/></label>
         <label className="block space-y-1 text-sm">Description<input required value={draft.description} onChange={event=>setDraft(old=>({...old,description:event.target.value}))} className={field} placeholder="e.g. Mining payout"/></label>
-        {["debitAccount","creditAccount"].map(key=><label key={key} className="block space-y-1 text-sm">{key==="debitAccount"?"Debit account":"Credit account"}
-          <select value={draft[key]} onChange={event=>setDraft(old=>({...old,[key]:event.target.value}))} className={field}>
-            <option value="">Select account</option>
-            {accounts.map(account=><option key={account.id} value={account.id}>{accountName(account)}</option>)}
-          </select></label>)}
-        <label className="block space-y-1 text-sm">Amount ($)<input required min="0.01" step="0.01" type="number" value={draft.amount} onChange={event=>setDraft(old=>({...old,amount:event.target.value}))} className={field}/></label>
+        <div className="space-y-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_90px_90px_24px] gap-2 text-xs text-[#9db0c1]">
+            <span>Account</span><span>Debit ($)</span><span>Credit ($)</span><span/>
+          </div>
+          {draft.lines.map((item,index)=><div key={index} className="grid grid-cols-[minmax(0,1fr)_90px_90px_24px] items-center gap-2">
+            <select aria-label={`Account line ${index+1}`} value={item.account}
+              onChange={event=>setDraft(old=>({...old,lines:old.lines.map((row,i)=>i===index?{...row,account:event.target.value}:row)}))}
+              className={field+" min-w-0 px-1"}>
+              <option value="">Select account</option>
+              {accounts.map(account=><option key={account.id} value={account.id}>{accountName(account)}</option>)}
+            </select>
+            <input aria-label={`Debit line ${index+1}`} type="number" min="0" step="0.01" value={item.debit}
+              onChange={event=>setDraft(old=>({...old,lines:old.lines.map((row,i)=>i===index?{...row,debit:event.target.value,credit:""}:row)}))}
+              className={field+" min-w-0 px-1"}/>
+            <input aria-label={`Credit line ${index+1}`} type="number" min="0" step="0.01" value={item.credit}
+              onChange={event=>setDraft(old=>({...old,lines:old.lines.map((row,i)=>i===index?{...row,credit:event.target.value,debit:""}:row)}))}
+              className={field+" min-w-0 px-1"}/>
+            <button type="button" disabled={draft.lines.length<=2} aria-label={`Remove line ${index+1}`}
+              onClick={()=>setDraft(old=>({...old,lines:old.lines.filter((_,i)=>i!==index)}))}
+              className="text-[#9db0c1] disabled:opacity-30"><X size={16}/></button>
+          </div>)}
+          <button type="button" onClick={()=>setDraft(old=>({...old,lines:[...old.lines,{account:"",debit:"",credit:""}]}))}
+            className="inline-flex items-center gap-1 text-xs text-sky-300"><Plus size={14}/> Add account line</button>
+          <div className="flex justify-end gap-4 text-xs text-[#9db0c1]">
+            <span>Debits: {money(draft.lines.reduce((sum,row)=>sum+(Number(row.debit)||0),0))}</span>
+            <span>Credits: {money(draft.lines.reduce((sum,row)=>sum+(Number(row.credit)||0),0))}</span>
+          </div>
+        </div>
         <p className="text-xs text-[#91a7b9]">Confirm the purchase date and funding source (Cash/Bank, Owner's Equity, Crypto, or Accounts Payable). No new bank payment is assumed.</p>
         {error && <p role="alert" className="text-sm text-rose-400">{error}</p>}
         <div className="flex gap-2"><button type="button" onClick={()=>setModal(false)} className="rounded-lg border border-[#384d5d] px-4 py-2">Cancel</button>
