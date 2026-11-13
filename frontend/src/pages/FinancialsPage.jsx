@@ -245,7 +245,6 @@ export default function FinancialsPage() {
   const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
   const [bankOpenings, setBankOpenings] = useState(() => readJson(BANK_OPENINGS_KEY, {}));
-  const [bankOpeningDraft, setBankOpeningDraft] = useState("");
   const [accountLabels, setAccountLabels] = useState(() =>
     cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
   const [renaming, setRenaming] = useState(null);
@@ -309,10 +308,6 @@ export default function FinancialsPage() {
     // Also apply after the server store hydrates, if it was initially empty.
     return subscribe(correctOwnerFundedPc);
   }, []);
-  useEffect(() => {
-    const direct = valueOrNull(bankOpenings[month]);
-    setBankOpeningDraft(direct === null ? "" : String(direct));
-  }, [month, bankOpenings]);
   useEffect(() => {
     const refresh = () => setLive(liveBalances());
     const timer = window.setInterval(refresh, 30000);
@@ -499,7 +494,6 @@ export default function FinancialsPage() {
   const missingAssetCount = rows.filter(row=>row.category!=="liabilities" && row.end===null).length;
   const knownAssetsSubtotal = moneyRound(rows.filter(row=>row.category!=="liabilities" && row.end!==null)
     .reduce((sum,row)=>sum+Number(row.end||0),0));
-  const bankRow = rows.find(row=>row.id==="ledger:cash" || /^(cash\s*\/?\s*bank|bank|checking|business\s+cash|cash)$/i.test(row.name));
   const debitTotal = moneyRound(entries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
   const creditTotal = moneyRound(entries.reduce((sum,entry)=>sum+
@@ -619,29 +613,6 @@ export default function FinancialsPage() {
     setBusinessPhones(updated);
     setJournal(updatedJournal);
     setPhoneError("");
-  };
-  const saveBankOpening = event => {
-    event.preventDefault();
-    if (closeSnapshot) return;
-    const value = valueOrNull(bankOpeningDraft);
-    if (value === null || value < 0) {
-      setError("Enter a valid non-negative starting bank balance.");
-      return;
-    }
-    const updated = {...bankOpenings,[month]:moneyRound(value)};
-    remoteStorage.setItem(BANK_OPENINGS_KEY,JSON.stringify(updated));
-    setBankOpenings(updated);
-    setError("");
-  };
-  const editEntry = entry => {
-    const original=journal.find(item=>item.id===entry.id);
-    if (!original || entry.automatic || closedMonths[String(original.date).slice(0,7)]) return;
-    setEditingEntryId(original.id);
-    setDraft({date:original.date,description:original.description,lines:journalLines(original).map(row=>({
-      account:row.account,debit:row.debit ? String(row.debit) : "",credit:row.credit ? String(row.credit) : "",
-    }))});
-    setError("");
-    setModal(true);
   };
   const saveEntry = event => {
     event.preventDefault();
