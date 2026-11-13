@@ -339,3 +339,49 @@ test("cash withdrawals are excluded from yield revenue",()=>{
     mining:0,yield:0,dividends:0,unclassified:0,
   });
 });
+
+test("crediting the RTX 5070 individual account retires it from the balance sheet",()=>{
+  const asset={id:"hardware:rtx5070",name:"RTX 5070 GPU",category:"equipment",
+    historicalCost:500,acquisitionMonth:"2026-11",start:0,end:491.67,
+    depreciation:8.33,source:"confirmed-fallback"};
+  const dispose={id:"trade-5070",date:"2026-11-12",description:"Trade RTX 5070 for RTX 5080",lines:[
+    {account:"equipment:hardware:rtx5070",debit:0,credit:491.67},
+    {account:"equipment",debit:1950,credit:0},
+    {account:"equity",debit:0,credit:1250},
+    {account:"gainDisposal",debit:0,credit:208.33},
+  ]};
+  const rows=includeJournalEquipment([asset],[dispose],"2026-11");
+  const old=rows.find(row=>row.id===asset.id);
+  expect(old.retired).toBe(true);
+  expect(old.end).toBe(0);
+  expect(old.depreciation).toBe(0);
+  expect(rows.some(row=>row.source==="journal-purchase")).toBe(true);
+  const withoutDisposal=includeJournalEquipment([asset],[],"2026-11");
+  expect(withoutDisposal[0].retired).toBeUndefined();
+});
+
+test("partial equipment credit does not retire an asset",()=>{
+  const asset={id:"hardware:rtx5070",name:"RTX 5070 GPU",category:"equipment",
+    historicalCost:500,acquisitionMonth:"2026-11",start:0,end:491.67,depreciation:8.33};
+  const partial={id:"adjustment",date:"2026-11-12",lines:[
+    {account:"equipment:hardware:rtx5070",debit:0,credit:100},
+    {account:"cash",debit:100,credit:0},
+  ]};
+  const [row]=includeJournalEquipment([asset],[partial],"2026-11");
+  expect(row.retired).toBeUndefined();
+  expect(row.end).toBe(491.67);
+});
+
+test("equipment disposal stays retired next month without rewriting prior month",()=>{
+  const asset={id:"hardware:rtx5070",name:"RTX 5070 GPU",category:"equipment",
+    historicalCost:500,acquisitionMonth:"2026-11",start:491.67,end:483.33,depreciation:8.34};
+  const disposal={id:"trade",date:"2026-11-12",lines:[
+    {account:"equipment:hardware:rtx5070",debit:0,credit:491.67},
+    {account:"cash",debit:491.67,credit:0},
+  ]};
+  const future=includeJournalEquipment([asset],[disposal],"2026-12")[0];
+  expect(future.retired).toBe(true);
+  expect(future.start).toBe(0);
+  expect(future.end).toBe(0);
+  expect(includeJournalEquipment([asset],[disposal],"2026-10")[0].retired).toBeUndefined();
+});
