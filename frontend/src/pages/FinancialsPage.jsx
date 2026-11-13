@@ -247,6 +247,7 @@ export default function FinancialsPage() {
   const [accountLabels, setAccountLabels] = useState(() =>
     cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
   const [renaming, setRenaming] = useState(null);
+  const [inlineRenameRowId, setInlineRenameRowId] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [renameError, setRenameError] = useState("");
   const [showOtherLabels, setShowOtherLabels] = useState(false);
@@ -728,14 +729,16 @@ export default function FinancialsPage() {
     setRenameDraft(balanceDisplayName(row,accountLabels));
     setRenaming({ key:aliasKey, original:row.name, accountId:balanceAccountId(row),
       isEquipment:row.category==="equipment" });
+    setInlineRenameRowId(row.id);
   };
   const editChartName = account => {
+    setInlineRenameRowId(null);
     setRenameError("");
     setRenameDraft(chartDisplayName(account,accountLabels));
     setRenaming({key:"account:"+account.id,original:account.name,accountId:account.id});
   };
   const saveAccountName = event => {
-    event.preventDefault();
+    event?.preventDefault();
     if (!renaming) return;
     const name=renameDraft.trim().replace(/\s+/g," ");
     if (!name || name.length>80) {
@@ -748,6 +751,7 @@ export default function FinancialsPage() {
     remoteStorage.setItem(FINANCIAL_LABELS_KEY,JSON.stringify(cleaned));
     setAccountLabels(cleaned);
     setRenaming(null);
+    setInlineRenameRowId(null);
     setRenameError("");
   };
   const tabs = [
@@ -850,12 +854,42 @@ export default function FinancialsPage() {
               <tr className="bg-[#142333]"><th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}</th></tr>
               {section.rows.map(row => <tr key={row.id} className="border-b border-[#202f3c]">
                 <td className="py-2.5 pl-2">
-                  <button type="button" aria-label={"Rename "+balanceDisplayName(row,accountLabels)}
-                    title="Click to rename account throughout Financials"
-                    onClick={()=>editRowName(row)}
-                    className="max-w-full text-left text-inherit hover:text-sky-300 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
-                    {balanceDisplayName(row,accountLabels)}
-                  </button>{row.unverifiedOpening ? <span className="ml-2 text-xs text-amber-300">(opening unknown)</span> : null}</td>
+                  {inlineRenameRowId === row.id ? (
+                    <form onSubmit={saveAccountName} className="inline-flex max-w-full flex-col gap-1">
+                      <input
+                        autoFocus
+                        aria-label={"Rename "+balanceDisplayName(row,accountLabels)}
+                        className="w-full min-w-[160px] max-w-[340px] rounded border border-sky-400/60 bg-[#101923] px-2 py-1 text-sm text-white outline-none focus:ring-1 focus:ring-sky-400"
+                        maxLength={80}
+                        value={renameDraft}
+                        onChange={event=>{setRenameDraft(event.target.value);setRenameError("");}}
+                        onKeyDown={event=>{
+                          if(event.key==="Escape") {
+                            event.preventDefault();
+                            setInlineRenameRowId(null);
+                            setRenaming(null);
+                            setRenameError("");
+                          }
+                        }}
+                        onBlur={()=>{
+                          if(renameDraft.trim()) saveAccountName();
+                          else {
+                            setInlineRenameRowId(null);
+                            setRenaming(null);
+                            setRenameError("");
+                          }
+                        }}
+                      />
+                      {renameError && <span role="alert" className="text-xs text-rose-300">{renameError}</span>}
+                    </form>
+                  ) : (
+                    <button type="button" aria-label={"Rename "+balanceDisplayName(row,accountLabels)}
+                      title="Click to rename account throughout Financials"
+                      onClick={()=>editRowName(row)}
+                      className="max-w-full text-left text-inherit hover:text-sky-300 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-400">
+                      {balanceDisplayName(row,accountLabels)}
+                    </button>
+                  )}{row.unverifiedOpening ? <span className="ml-2 text-xs text-amber-300">(opening unknown)</span> : null}</td>
                 <td className="py-2.5 text-right tabular-nums">{money(row.start)}</td>
                 <td className={`py-2.5 text-right tabular-nums ${row.start !== null && row.end !== null && row.end < row.start ? "text-rose-400" : "text-emerald-400"}`}>{row.start === null || row.end === null ? (row.journalChange != null ? signed(row.journalChange) : "—") : signed(rounded(row.end-row.start))}</td>
                 <td className="py-2.5 text-right font-semibold tabular-nums">{money(row.end)}</td>
@@ -1035,7 +1069,7 @@ export default function FinancialsPage() {
         </div>
       </form>
     </div>}
-    {renaming && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4"
+    {renaming && !inlineRenameRowId && <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/75 p-4"
       onMouseDown={event=>{if(event.target===event.currentTarget)setRenaming(null);}}>
       <form onSubmit={saveAccountName} className={card + " w-full max-w-md space-y-4 p-5 shadow-2xl"}
         role="dialog" aria-modal="true" aria-label="Rename financial account">
