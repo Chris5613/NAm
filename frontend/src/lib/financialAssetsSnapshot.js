@@ -42,13 +42,10 @@ export function financialLiveBalances() {
   const cache=readObject(PROJECT_QUICK_CACHE_KEY);
   // The quick cache is only a fallback. It can still reflect a pre-withdrawal
   // balance after a newer provider sync has updated the project store.
-  const savedProjects=appStorage.getProjects();
-  const luloProjects=(savedProjects||[]).filter(item=>item?.yield_tracking==="lulo_lending");
-  const cachedLulo=(cache.projects||[]).filter(item=>item?.yield_tracking==="lulo_lending");
-  const lulo=luloProjects.length ? luloProjects : cachedLulo;
-  if(lulo.length) values.lulo=lulo.reduce((sum,item)=>sum+
-    (Number.isFinite(Number(item.lulo_total_balance_usd))
-      ? Number(item.lulo_total_balance_usd) : 0),0);
+  // Manual Financials reporting override requested after the Lulo withdrawal.
+  // Do not change the external provider account, project store, or underlying
+  // transaction history. This only sets Lulo's reported CURRENT asset to $0.
+  values.lulo=0;
   if(Number.isFinite(Number(cache.loopscaleSnapshot?.positionValueUsd))) values.loopscale=Number(cache.loopscaleSnapshot.positionValueUsd);
   const salad=loadSaladTracker();
   if(salad.initialized||salad.lastSyncedAt) values.salad=Number(salad.currentBalance)||0;
