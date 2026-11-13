@@ -8,6 +8,7 @@ import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
+import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import MonthlyChangesPage from "@/pages/MonthlyChangesPage";
@@ -518,6 +519,7 @@ export default function SideHustleDashboard() {
   const [hardwareDraft, setHardwareDraft] = useState({ name: "", cost: "", power: "", source: "", sources: [], startMonth: getCurrentMonthKey() });
   const [projectDraft, setProjectDraft] = useState({ id: "", cost: "" });
   const [addError, setAddError] = useState("");
+  const [photoLoading, setPhotoLoading] = useState(false);
 
   const refreshIncomeMetrics = useCallback(async () => {
     const today = pacificDayKey(Date.now());
@@ -904,15 +906,8 @@ export default function SideHustleDashboard() {
             >
               <div className="flex min-w-0 items-center gap-3">
                 <div className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#26313b] bg-[#0a0e12] sm:h-12 sm:w-28">
-                  {meta ? (
-                    <img
-                      src={meta.image}
-                      alt={lowerName.includes("2080") ? "RTX 2080 Super" : "RTX 5070"}
-                      className="h-full w-full object-contain px-1"
-                    />
-                  ) : (
-                    <Cpu className="h-5 w-5 text-[#8fa0b0]"/>
-                  )}
+                  <img src={hardwareImageFor(row)} alt={row.name + " hardware"}
+                    className="h-full w-full object-contain px-1"/>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="break-words text-[12px] font-semibold text-[#eef2f6]">{row.name}</p>
@@ -1146,6 +1141,31 @@ export default function SideHustleDashboard() {
                 <input autoFocus required value={hardwareDraft.name} onChange={event => setHardwareDraft(current => ({ ...current, name: event.target.value }))}
                   placeholder="RTX 5070" className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
               </label>
+              <div className="space-y-2">
+                <span className="text-sm">Hardware photo</span>
+                <div className="flex items-center gap-3">
+                  <img src={hardwareImageFor(hardwareDraft)} alt="Hardware photo preview"
+                    className="h-20 w-32 shrink-0 rounded-lg border border-[#3c5267] bg-[#111b25] object-contain p-1"/>
+                  <div className="min-w-0 flex-1 space-y-2">
+                    <input type="file" accept="image/jpeg,image/png,image/webp"
+                      aria-label="Upload hardware photo" disabled={photoLoading}
+                      onChange={async event=>{
+                        const file=event.target.files?.[0];if(!file)return;
+                        setPhotoLoading(true);setAddError("");
+                        try{
+                          const photo=await prepareHardwarePhoto(file);
+                          setHardwareDraft(current=>({...current,photo}));
+                        }catch(error){setAddError(error?.message || "Unable to load photo.");}
+                        finally{setPhotoLoading(false);event.target.value="";}
+                      }}
+                      className="block w-full text-xs text-[#aab9c6] file:mr-2 file:rounded-md file:border-0 file:bg-[#243a4e] file:px-2 file:py-1.5 file:text-white"/>
+                    {hardwareDraft.photo && <button type="button"
+                      onClick={()=>setHardwareDraft(current=>({...current,photo:""}))}
+                      className="text-xs text-rose-300 hover:underline">Remove photo</button>}
+                    <p className="text-[11px] text-[#91a4b8]">Optional JPG, PNG or WebP. RTX 5080 has a default illustration.</p>
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 <label className="block text-sm">Purchase cost ($)
                   <input required type="number" min="0.01" step="0.01" value={hardwareDraft.cost}
@@ -1212,7 +1232,7 @@ export default function SideHustleDashboard() {
           <div className="flex gap-2">
             <button type="button" onClick={() => setAddModal(null)}
               className="rounded-lg border border-[#3c5267] px-4 py-3 text-sm">Cancel</button>
-            <button type="submit" className="flex-1 rounded-lg bg-emerald-400 px-4 py-3 text-sm font-semibold text-[#061810]">
+            <button type="submit" disabled={photoLoading} className="flex-1 rounded-lg bg-emerald-400 px-4 py-3 text-sm font-semibold text-[#061810] disabled:opacity-50">
               {addModal === "hardware" ? (hardwareDraft.id ? "Save changes" : "Save hardware") : "Save project cost"}
             </button>
           </div>
