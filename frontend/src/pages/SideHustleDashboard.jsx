@@ -330,7 +330,19 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     if(!checkpoint || !sources.length) return [device.id,0];
     const share=source=>(Number(device.cost)||0)/(costsBySource[source] || 1);
     const singleKryptex=sources.length===1 && sources[0]==="Kryptex";
-    if(singleKryptex && checkpoint.ledger!==KRYPTEX_PAYBACK_LEDGER) return [device.id,0];
+    // The Dashboard's Kryptex amount displays current-month mining income,
+    // not earnings since the last hardware checkpoint. Prefer the reconciled
+    // monthly income that also powers the General Ledger; fall back to
+    // confirmed daily tracker earnings if monthly reporting is unavailable.
+    // Multiple devices using Kryptex split the same income by cost.
+    if(singleKryptex){
+      const reported=incomeMonths.find(row=>row.monthKey===currentMonth);
+      const monthlyAmount=reported && Object.entries(reported.sources || {})
+        .filter(([name])=>canonicalSourceName(name).toLowerCase()==="kryptex")
+        .reduce((sum,[,amount])=>sum+Math.max(0,Number(amount)||0),0);
+      const confirmed=confirmedKryptexIncomeByMonth(tracker,currentMonth,currentMonth);
+      return [device.id,Math.max(0,(monthlyAmount ?? confirmed)*share("Kryptex"))];
+    }
     const powerStart=device.powerStartTime || checkpoint.time;
     const power=Math.max(0,monthPosition(now)-monthPosition(powerStart))*(Number(device.power)||0);
     if(singleKryptex && device.earningsStartDay){
