@@ -695,7 +695,6 @@ export default function SideHustleDashboard() {
       <div>
         <div className="flex items-center gap-3">
           <ChartNoAxesCombined className="h-7 w-7 text-emerald-400"/>
-          <h1 className="text-[30px] font-semibold tracking-tight">Dashboard</h1>
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium ${live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[#303842] bg-[#13181e] text-[#8e9aa6]"}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-[#6f7a84]"}`}/>{live ? "Live" : "Stale"}
           </span>
