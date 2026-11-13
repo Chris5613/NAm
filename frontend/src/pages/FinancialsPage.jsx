@@ -826,36 +826,6 @@ export default function FinancialsPage() {
       {missingAssetCount > 0 && <p className="text-xs text-amber-300">
         Known asset subtotal: {money(knownAssetsSubtotal)}. {missingAssetCount} account(s) have unknown ending balances and are excluded from this partial subtotal.
       </p>}
-      {bankRow && <section className={card + " space-y-3 p-4"}>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <p className="text-sm font-semibold">{accountNameById("cash")}</p>
-            <p className="mt-1 text-xs text-[#91a7b9]">
-              Recorded bank movement this month: <strong className="text-white">{signed(bankRow.journalChange ?? journalAccountActivity(entries,"cash"))}</strong>.
-              {bankRow.unverifiedOpening ? " Opening balance not provided; ending cash and total net worth remain incomplete." :
-                bankRow.end !== null && bankRow.end < 0 ? " Negative computed bank balance—verify the opening cash or overdraft." :
-                bankRow.unreconciledCash ? " The saved ending balance differs from recorded bank transactions; verify it." :
-                " Bank transactions are included in the displayed balance."}
-            </p>
-          </div>
-          <div className="text-right text-xs text-[#9db2c6]">Ending bank balance
-            <p className="mt-1 text-base font-semibold text-white">{money(bankRow.end)}</p>
-          </div>
-        </div>
-        {!closeSnapshot && <form onSubmit={saveBankOpening} className="flex flex-wrap items-end gap-2">
-          <label className="min-w-[180px] flex-1 space-y-1 text-xs text-[#a3b8c9]">
-            Opening bank balance for {monthTitle(month)}
-            <input className={field} type="number" min="0" step="0.01" value={bankOpeningDraft}
-              placeholder="Enter opening balance"
-              onChange={event=>setBankOpeningDraft(event.target.value)}/>
-          </label>
-          <button type="submit" className="rounded-lg border border-sky-400/30 bg-sky-400/10 px-4 py-2 text-sm font-semibold text-sky-300">Save opening balance</button>
-        </form>}
-        {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
-        {valueOrNull(bankOpenings[month]) === null && cashOpening !== null &&
-          <p className="text-xs text-sky-300">Starting balance carried forward from an earlier month: {money(cashOpening)}. Enter an amount above only to override it.</p>}
-        <p className="text-[11px] text-[#8299aa]">This is a manually tracked bank ledger, not a bank connection. Only business-related transactions recorded here are reflected. Do not enter a personal account's entire balance unless you intend to track that account.</p>
-      </section>}
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
