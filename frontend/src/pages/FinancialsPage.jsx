@@ -474,9 +474,9 @@ export default function FinancialsPage() {
   const otherRecognizedRevenue = pnlRevenue === null ? null :
     moneyRound(pnlRevenue-report.revenue);
   const operatingExpenseWithoutPower = Math.max(0,moneyRound(operatingExpense-autoPower));
+  const fixedDep = closeSnapshot ? closeSnapshot.fixedDep : report.depreciation;
   const totalStatementExpenses = moneyRound(operatingExpenseWithoutPower+autoPower+feeExpense+fixedDep);
 
-  const fixedDep = closeSnapshot ? closeSnapshot.fixedDep : report.depreciation;
   const pnlProfit = closeSnapshot ? closeSnapshot.pnlProfit :
     pnlRevenue === null ? null : moneyRound(pnlRevenue + report.disposalGain - expenses - fixedDep);
 
