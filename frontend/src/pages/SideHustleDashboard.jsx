@@ -314,51 +314,42 @@ function confirmedKryptexIncomeByMonth(tracker, startMonth, endMonth) {
   }, 0);
 }
 
-function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now()) {
-  const costsBySource = devices.reduce((totals, device) => {
-    const source = canonicalSourceName(device.source);
-    if (source) totals[source] = (totals[source] || 0) + (Number(device.cost) || 0);
-    return totals;
-  }, {});
-
-  return Object.fromEntries(devices.map(device => {
-    const source = canonicalSourceName(device.source);
-    const checkpoint = device.checkpoint;
-    if (!checkpoint || !source) return [device.id, 0];
-
-    if (source === "Kryptex") {
-      if (checkpoint.ledger !== KRYPTEX_PAYBACK_LEDGER) return [device.id, 0];
-
-      const sourceCost = costsBySource[source] || 0;
-      if (!sourceCost) return [device.id, 0];
-
-      const allocation = (Number(device.cost) || 0) / sourceCost;
-      const powerStart = device.powerStartTime || checkpoint.time;
-      const power = Math.max(0, monthPosition(now) - monthPosition(powerStart)) * (Number(device.power) || 0);
-
-      if (device.earningsStartDay) {
-        const accrued = confirmedKryptexIncome(tracker, device.earningsStartDay, pacificDayKey(now));
-        return [device.id, Math.max(0, accrued * allocation - power)];
-      }
-
-      const income = confirmedKryptexIncomeByMonth(tracker, checkpoint.month, currentMonth);
-      const today = pacificDayKey(now);
-      const checkpointDay = pacificDayKey(checkpoint.time);
-      if (checkpointDay === today) {
-        const todayIncome = tracker?.kryptexConfirmedDays?.[today]
-          ? Math.max(0, Number(tracker?.kryptexMiningDaily?.[today]) || 0)
-          : 0;
-        return [device.id, Math.max(0, todayIncome * allocation - power)];
-      }
-
-      return [device.id, Math.max(0,
-        (Number(checkpoint.carried) || 0) +
-        Math.max(0, income - (Number(checkpoint.baseline) || 0)) * allocation -
-        power
-      )];
+function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now(), incomeMonths = []) {
+  const costsBySource = {};
+  for(const device of devices) for(const source of hardwareSources(device)) {
+    costsBySource[source]=(costsBySource[source] || 0)+(Number(device.cost) || 0);
+  }
+  const incomeFor = (source, start, finish) => source==="Kryptex"
+    ? confirmedKryptexIncomeByMonth(tracker,start,finish)
+    : incomeMonths.reduce((sum,row)=>row.monthKey>=start && row.monthKey<=finish
+        ? sum+Object.entries(row.sources || {}).reduce((total,[name,amount])=>
+            total+(canonicalSourceName(name)===source ? Math.max(0,Number(amount)||0):0),0)
+        : sum,0);
+  return Object.fromEntries(devices.map(device=>{
+    const sources=hardwareSources(device),checkpoint=device.checkpoint;
+    if(!checkpoint || !sources.length) return [device.id,0];
+    const share=source=>(Number(device.cost)||0)/(costsBySource[source] || 1);
+    const singleKryptex=sources.length===1 && sources[0]==="Kryptex";
+    if(singleKryptex && checkpoint.ledger!==KRYPTEX_PAYBACK_LEDGER) return [device.id,0];
+    const powerStart=device.powerStartTime || checkpoint.time;
+    const power=Math.max(0,monthPosition(now)-monthPosition(powerStart))*(Number(device.power)||0);
+    if(singleKryptex && device.earningsStartDay){
+      const accrued=confirmedKryptexIncome(tracker,device.earningsStartDay,pacificDayKey(now));
+      return [device.id,Math.max(0,accrued*share("Kryptex")-power)];
     }
-
-    return [device.id, Math.max(0, Number(checkpoint.carried) || 0)];
+    if(singleKryptex && checkpoint.allocationMode!=="allocated" &&
+      pacificDayKey(checkpoint.time)===pacificDayKey(now)){
+      const today=pacificDayKey(now);
+      const todayIncome=tracker?.kryptexConfirmedDays?.[today]
+        ? Math.max(0,Number(tracker?.kryptexMiningDaily?.[today])||0):0;
+      return [device.id,Math.max(0,todayIncome*share("Kryptex")-power)];
+    }
+    const earned=sources.reduce((sum,source)=>
+      sum+incomeFor(source,checkpoint.month,currentMonth)*share(source),0);
+    const baseline=checkpoint.allocationMode==="allocated"
+      ? Number(checkpoint.baseline)||0
+      : (Number(checkpoint.baseline)||0)*share(sources[0]);
+    return [device.id,Math.max(0,(Number(checkpoint.carried)||0)+earned-baseline-power)];
   }));
 }
 
@@ -677,8 +668,13 @@ export default function SideHustleDashboard() {
       if(changed){
         // Preserve earned payback at the moment sources are switched; new
         // sources start from their current month checkpoint.
+        const allocationCosts={};
+        for(const row of hardware.map(item=>item.id===prior.id ? device : item)) {
+          for(const source of hardwareSources(row)) allocationCosts[source]=(allocationCosts[source]||0)+(Number(row.cost)||0);
+        }
         const baseline=sources.reduce((sum,source)=>
-          sum+(Number(recordedCurrentMonth?.sources?.[source]) || 0),0);
+          sum+(Number(recordedCurrentMonth?.sources?.[source]) || 0)*
+            (cost/(allocationCosts[source]||1)),0);
         device.checkpoint={
           time:Date.now(),month:currentMonthKey,
           baseline,carried:Number(hardwareEarnings[prior.id]) || 0,
@@ -692,7 +688,11 @@ export default function SideHustleDashboard() {
       device.checkpoint={
         time:Date.now(),month:currentMonthKey,
         baseline:sources.length===1 && sources[0]==="Kryptex" ? 0 :
-          sources.reduce((sum,source)=>sum+(Number(recordedCurrentMonth?.sources?.[source]) || 0),0),
+          sources.reduce((sum,source)=>{
+            const total=[...hardware,device].filter(row=>hardwareSources(row).includes(source))
+              .reduce((n,row)=>n+(Number(row.cost)||0),0);
+            return sum+(Number(recordedCurrentMonth?.sources?.[source])||0)*cost/(total||1);
+          },0),
         carried:0,allocationMode:"allocated",
         ...(sources.includes("Kryptex") ? {ledger:KRYPTEX_PAYBACK_LEDGER} : {}),
       };
