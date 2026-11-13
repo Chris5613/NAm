@@ -314,7 +314,28 @@ function confirmedKryptexIncomeByMonth(tracker, startMonth, endMonth) {
   }, 0);
 }
 
-function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now(), incomeMonths = []) {
+// The RTX 5080 was put into service on November 13. Count actual daily
+// provider earnings from the start of that Pacific calendar day, not from
+// the moment its hardware card was created.
+const RTX5080_PAYBACK_START_DAY="2026-11-13";
+function datedSourceIncome(source, firstDay, lastDay, history) {
+  const sumDaily=(entries, toAmount) => Object.entries(entries || {}).reduce((sum,[day,value]) =>
+    day>=firstDay && day<=lastDay ? sum+Math.max(0,Number(toAmount(value))||0):sum,0);
+  if(source==="Kryptex") return confirmedKryptexIncome(history.kryptex,firstDay,lastDay);
+  if(source==="Salad") return sumDaily(history.salad?.daily,value=>value?.usd ?? value);
+  if(source==="Unetwork") return sumDaily(history.unetwork?.daily,value=>value?.usd ?? value);
+  if(source==="RollerCoin"){
+    const daily=history.rollercoin?.daily || {};
+    const wallet=history.rollercoin?.walletDaily || {};
+    return [...new Set([...Object.keys(daily),...Object.keys(wallet)])].reduce((sum,day)=>{
+      if(day<firstDay || day>lastDay) return sum;
+      const value=wallet[day] || daily[day];
+      return sum+Math.max(0,Number(value?.usd ?? value)||0);
+    },0);
+  }
+  return null; // Do not invent daily data for providers with only monthly totals.
+}
+function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now(), incomeMonths = [], dailyTrackers = {}) {
   const costsBySource = {};
   for(const device of devices) for(const source of hardwareSources(device)) {
     costsBySource[source]=(costsBySource[source] || 0)+(Number(device.cost) || 0);
@@ -330,6 +351,26 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     if(!checkpoint || !sources.length) return [device.id,0];
     const share=source=>(Number(device.cost)||0)/(costsBySource[source] || 1);
     const singleKryptex=sources.length===1 && sources[0]==="Kryptex";
+    if(/\\brtx\\s*5080\\b/i.test(String(device.name || "")) && currentMonth >= "2026-11"){
+      const firstDay=device.earningsStartDay && device.earningsStartDay<RTX5080_PAYBACK_START_DAY
+        ? RTX5080_PAYBACK_START_DAY : (device.earningsStartDay || RTX5080_PAYBACK_START_DAY);
+      const lastDay=pacificDayKey(now);
+      if(lastDay<firstDay) return [device.id,0];
+      const tracked=sources.map(source=>({
+        source,amount:datedSourceIncome(source,firstDay,lastDay,{
+          ...dailyTrackers,kryptex:tracker,
+        }),
+      }));
+      if(tracked.every(row=>row.amount!==null)){
+        const credited=tracked.reduce((sum,row)=>sum+row.amount*share(row.source),0);
+        // The device's power field represents a monthly cost. Allocate it
+        // only from its start date, never earlier in the month.
+        const startTime=new Date(firstDay+"T00:00:00-08:00");
+        const elapsedMonths=Math.max(0,monthPosition(now)-monthPosition(startTime));
+        const power=elapsedMonths*(Number(device.power)||0);
+        return [device.id,Math.max(0,credited-power)];
+      }
+    }
     // The Dashboard's Kryptex amount displays current-month mining income,
     // not earnings since the last hardware checkpoint. Prefer the reconciled
     // monthly income that also powers the General Ledger; fall back to
@@ -599,7 +640,9 @@ export default function SideHustleDashboard() {
 
   const hardwareCost = hardware.reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
   const kryptexTracker = loadKryptexTracker();
-  const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock, recordedMonths);
+  const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock, recordedMonths, {
+    salad:loadSaladTracker(),unetwork:loadUnetworkTracker(),rollercoin:loadRollerCoinTracker(),
+  });
   const hardwareRecovered = Object.values(hardwareEarnings)
     .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
   const hardwareProgress = hardwareCost > 0 ? hardwareRecovered / hardwareCost * 100 : 0;
