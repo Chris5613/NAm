@@ -277,3 +277,36 @@ test("2080 variants with different acquisition costs are preserved separately", 
   const rows=buildFinancialBalanceRows("2026-11",{}, {},devices,"2026-11");
   expect(rows.filter(row=>/RTX 2080/i.test(row.name))).toHaveLength(2);
 });
+
+test("multi-line RTX 5080 cash purchase creates one balance sheet asset and investing cash outflow",()=>{
+  const entry={id:"5080-purchase",date:"2026-11-12",description:"Purchased RTX 5080 GPU for cash",lines:[
+    {account:"equipment",debit:1950,credit:0},
+    {account:"cash",debit:0,credit:1950},
+  ]};
+  const first=includeJournalEquipment([], [entry], "2026-11");
+  expect(first).toHaveLength(1);
+  expect(first[0].historicalCost).toBe(1950);
+  expect(first[0].end).toBe(1917.5);
+  expect(includeJournalEquipment(first,[entry],"2026-11")).toHaveLength(1);
+  expect(classifyCashFlows([entry]).totals.investing).toBe(-1950);
+  expect(buildStatementRows(first,[entry],{cashOpening:2000})
+    .find(row=>row.id==="ledger:cash").end).toBe(50);
+});
+
+test("existing equipment subaccount cash transaction is classified as investing without duplicating a new asset",()=>{
+  const entry={id:"existing",date:"2026-11-12",description:"Payment for existing equipment",lines:[
+    {account:"equipment:hardware:rtx5070",debit:200,credit:0},
+    {account:"cash",debit:0,credit:200},
+  ]};
+  expect(includeJournalEquipment([], [entry], "2026-11")).toEqual([]);
+  expect(classifyCashFlows([entry]).totals.investing).toBe(-200);
+});
+
+test("owner-funded equipment acquisition has no business cash flow",()=>{
+  const entry={id:"owner",date:"2026-11-12",description:"Purchased RTX 5080 from personal funds",lines:[
+    {account:"equipment",debit:1950,credit:0},
+    {account:"equity",debit:0,credit:1950},
+  ]};
+  expect(includeJournalEquipment([], [entry], "2026-11")).toHaveLength(1);
+  expect(classifyCashFlows([entry]).total).toBe(0);
+});
