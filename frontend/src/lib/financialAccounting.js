@@ -372,6 +372,7 @@ export function deriveCashOpening(month, openings, manualJournal = [], confirmed
 export function buildFinancialProfit(entries, savedExpenses) {
   const balances = account => journalAccountActivity(entries,account);
   const revenue = moneyRound(-balances("revenue")-balances("dividendRevenue"));
+  const disposalGain = moneyRound(-balances("gainDisposal"));
   const fees = Math.max(0,balances("fees"));
   const ordinaryJournal = Math.max(0,moneyRound(balances("expense")+balances("electric")));
   const depreciation = Math.max(0,balances("depreciation"));
@@ -381,8 +382,8 @@ export function buildFinancialProfit(entries, savedExpenses) {
   // are posted on top of that unitemized snapshot.
   const operating = Math.max(saved||0,ordinaryJournal);
   const expenses = moneyRound(operating+fees);
-  return {revenue,operating,fees,depreciation,expenses,
-    profit:moneyRound(revenue-expenses-depreciation),
+  return {revenue,disposalGain,operating,fees,depreciation,expenses,
+    profit:moneyRound(revenue+disposalGain-expenses-depreciation),
     unitemizedExpenseOverlap:saved!==null && ordinaryJournal>0,
     savedExpenses:saved};
 }
