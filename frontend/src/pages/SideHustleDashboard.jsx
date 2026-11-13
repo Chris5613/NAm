@@ -314,10 +314,6 @@ function confirmedKryptexIncomeByMonth(tracker, startMonth, endMonth) {
   }, 0);
 }
 
-// The RTX 5080 was put into service on November 13. Count actual daily
-// provider earnings from the start of that Pacific calendar day, not from
-// the moment its hardware card was created.
-const RTX5080_PAYBACK_START_DAY="2026-11-13";
 function datedSourceIncome(source, firstDay, lastDay, history) {
   const sumDaily=(entries, toAmount) => Object.entries(entries || {}).reduce((sum,[day,value]) =>
     day>=firstDay && day<=lastDay ? sum+Math.max(0,Number(toAmount(value))||0):sum,0);
@@ -351,23 +347,42 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     if(!checkpoint || !sources.length) return [device.id,0];
     const share=source=>(Number(device.cost)||0)/(costsBySource[source] || 1);
     const singleKryptex=sources.length===1 && sources[0]==="Kryptex";
-    if(/\brtx\s*5080\b/i.test(String(device.name || "")) && currentMonth >= "2026-11"){
-      const firstDay=device.earningsStartDay && device.earningsStartDay<RTX5080_PAYBACK_START_DAY
-        ? RTX5080_PAYBACK_START_DAY : (device.earningsStartDay || RTX5080_PAYBACK_START_DAY);
+
+    // When the user specifies a start day, attribute each confirmed day of
+    // provider earnings to devices active that day. Earlier days are not
+    // divided with GPUs that only started mining later.
+    const chosenStart=/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(device.earningsStartDay || ""))
+      ? device.earningsStartDay : null;
+    if(chosenStart){
       const lastDay=pacificDayKey(now);
-      if(lastDay<firstDay) return [device.id,0];
-      const tracked=sources.map(source=>({
-        source,amount:datedSourceIncome(source,firstDay,lastDay,{
-          ...dailyTrackers,kryptex:tracker,
-        }),
+      if(chosenStart>lastDay) return [device.id,0];
+      const dated=sources.map(source=>datedSourceIncome(source,chosenStart,lastDay,{
+        ...dailyTrackers,kryptex:tracker,
       }));
-      if(tracked.every(row=>row.amount!==null)){
-        const credited=tracked.reduce((sum,row)=>sum+row.amount*share(row.source),0);
-        // The device's power field represents a monthly cost. Allocate it
-        // only from its start date, never earlier in the month.
-        const startTime=new Date(firstDay+"T00:00:00-08:00");
-        const elapsedMonths=Math.max(0,monthPosition(now)-monthPosition(startTime));
-        const power=elapsedMonths*(Number(device.power)||0);
+      if(dated.every(amount=>amount!==null)){
+        const credited=sources.reduce((sum,source)=>{
+          const daily=source==="Kryptex" ? tracker?.kryptexMiningDaily || {}
+            : source==="Salad" ? dailyTrackers.salad?.daily || {}
+            : source==="Unetwork" ? dailyTrackers.unetwork?.daily || {}
+            : source==="RollerCoin" ? {
+                ...dailyTrackers.rollercoin?.daily,
+                ...dailyTrackers.rollercoin?.walletDaily,
+              } : {};
+          return sum+Object.entries(daily).reduce((subtotal,[day,raw])=>{
+            if(day<chosenStart || day>lastDay) return subtotal;
+            if(source==="Kryptex" && !tracker?.kryptexConfirmedDays?.[day]) return subtotal;
+            const amount=Math.max(0,Number(raw?.usd ?? raw)||0);
+            const activeCost=devices.filter(other=>
+              hardwareSources(other).includes(source) &&
+              (!other.earningsStartDay || other.earningsStartDay<=day) &&
+              (other.startMonth || "")<=day.slice(0,7)
+            ).reduce((n,other)=>n+Math.max(0,Number(other.cost)||0),0);
+            return subtotal+(activeCost>0 ? amount*(Number(device.cost)||0)/activeCost : 0);
+          },0);
+        },0);
+        const startTime=new Date(chosenStart+"T12:00:00Z");
+        const power=Math.max(0,monthPosition(now)-monthPosition(startTime))*
+          (Number(device.power)||0);
         return [device.id,Math.max(0,credited-power)];
       }
     }
