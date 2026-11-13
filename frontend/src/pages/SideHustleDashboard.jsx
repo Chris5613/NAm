@@ -348,6 +348,19 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     if(!checkpoint || !sources.length) return [device.id,0];
     const share=source=>(Number(device.cost)||0)/(costsBySource[source] || 1);
     const singleKryptex=sources.length===1 && sources[0]==="Kryptex";
+    // RTX 2080 card is a direct view of the source's month-to-date earnings.
+    // It deliberately does not split Kryptex earnings with the RTX 5080.
+    // It changes payback display only, never the provider income ledger.
+    if(/\brtx\s*2080\b/i.test(String(device.name || "")) &&
+       singleKryptex && device.earningsStartDay === currentMonth+"-01"){
+      const monthRow=incomeMonths.find(row=>row.monthKey===currentMonth);
+      const reconciled=Object.entries(monthRow?.sources || {}).reduce((total,[name,amount])=>
+        canonicalSourceName(name).toLowerCase()==="kryptex"
+          ? total+Math.max(0,Number(amount)||0) : total,0);
+      const tracked=Math.max(0,Number(tracker?.monthlyEarnings?.[currentMonth])||0);
+      const confirmed=confirmedKryptexIncomeByMonth(tracker,currentMonth,currentMonth);
+      return [device.id,Math.max(0,reconciled,tracked,confirmed)];
+    }
 
     // When the user specifies a start day, attribute each confirmed day of
     // provider earnings to devices active that day. Earlier days are not
