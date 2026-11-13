@@ -363,9 +363,8 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
       return [device.id,Math.max(0,reconciled,tracked,confirmed)];
     }
 
-    // When the user specifies a start day, attribute each confirmed day of
-    // provider earnings to devices active that day. Earlier days are not
-    // divided with GPUs that only started mining later.
+    // Count the full daily earnings of each selected source beginning on
+    // the inclusive start date. These figures are hardware tracking views.
     const chosenStart=/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(device.earningsStartDay || ""))
       ? device.earningsStartDay : null;
     if(chosenStart){
@@ -375,18 +374,10 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
         ...dailyTrackers,kryptex:tracker,
       }));
       if(dated.every(amount=>amount!==null)){
-        // Each hardware card tracks full earnings from its selected start
-        // date. Do not apportion source earnings by device purchase price:
-        // the two GPUs share a provider, not an accounting ownership ratio.
-        // These card amounts are attribution views and must not be summed
-        // as unique business revenue.
-        const credited=sources.reduce((sum,source)=>{
-          const dated=datedSourceIncome(source,chosenStart,lastDay,{
-            ...dailyTrackers,kryptex:tracker,
-          });
-          return sum+(dated ?? 0);
-        },0);
-        return [device.id,Math.max(0,credited)];
+        // Provider earnings are not split by hardware cost. The user-selected
+        // date includes that entire day. Overlapping card totals are not
+        // unique business income.
+        return [device.id,Math.max(0,dated.reduce((sum,amount)=>sum+amount,0))];
       }
     }
     // The Dashboard's Kryptex amount displays current-month mining income,
