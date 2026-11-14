@@ -1,4 +1,4 @@
-import { buildAutoIncomeJournal } from "./financialAutoJournal";
+import { buildAutoIncomeJournal, visibleLedgerEntries } from "./financialAutoJournal";
 
 const month = "2026-11";
 function totals(result) {
@@ -87,4 +87,20 @@ test("still flags material unallocated income", () => {
   const result=buildAutoIncomeJournal(month,
     {total:10.02,sources:{Kryptex:5,RollerCoin:5}},[],month,"2026-11-12");
   expect(result.pendingReviewTotal).toBe(0.02);
+});
+
+test("current-month auto income is hidden without changing the accounting entries",()=>{
+  const entries=[
+    {id:"synced-income:2026-11:kryptex",automatic:true,amount:20},
+    {id:"synced-income:2026-11:salad",automatic:true,amount:5},
+    {id:"auto-depreciation:2026-11",automatic:true,amount:2},
+    {id:"journal:purchase",amount:1200},
+  ];
+  const visible=visibleLedgerEntries(entries,"2026-11","2026-11");
+  expect(visible.map(entry=>entry.id)).toEqual([
+    "auto-depreciation:2026-11","journal:purchase",
+  ]);
+  expect(entries).toHaveLength(4);
+  expect(visibleLedgerEntries(entries,"2026-11","2026-12")).toEqual(entries);
+  expect(visibleLedgerEntries(entries,"2026-12","2026-12")).toHaveLength(3);
 });
