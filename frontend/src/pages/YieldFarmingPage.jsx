@@ -91,7 +91,7 @@ import {
   ProjectIncomeSection
 } from "@/components/YieldFarmingComponents";
 
-export default function YieldFarmingPage() {
+export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const {
     stockPayouts,
     recordStockPayout,
@@ -1396,13 +1396,14 @@ export default function YieldFarmingPage() {
   // independent monthly snapshot calculation.
   useEffect(() => {
     const month=todayKey.slice(0,7);
+    onMonthlyEarningsChange?.({month,amount:thisMonthEarned});
     const current=readObject(PASSIVE_MONTHLY_INCOME_KEY);
     if(current?.month===month &&
        Math.abs(Number(current.amount)-thisMonthEarned)<0.000001) return;
     saveObject(PASSIVE_MONTHLY_INCOME_KEY,{
       month,amount:thisMonthEarned,updatedAt:new Date().toISOString(),
     });
-  }, [todayKey,thisMonthEarned]);
+  }, [todayKey,thisMonthEarned,onMonthlyEarningsChange]);
 
   const monthlyChartMax = Math.max(
     0.1,
