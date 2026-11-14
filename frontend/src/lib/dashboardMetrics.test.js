@@ -44,3 +44,28 @@ test("home net worth uses net business assets after liabilities, not gross asset
   expect(getCryptoBusinessValue({value:1000,liabilityValue:300,netValue:700,incomplete:false,count:3},500)).toBe(700);
   expect(getCryptoBusinessValue({value:1000,liabilityValue:null,netValue:null,incomplete:false,liabilitiesIncomplete:true,count:3},500)).toBe(500);
 });
+
+test("Lulo withdrawal bank cash is counted once across Home and business",()=>{
+  const assets=[
+    {category:"stocks",manual_value:9564.02},
+    {category:"cash",manual_value:9533.86},
+    {category:"other",manual_value:3000},
+    {category:"debts",manual_value:7275.48},
+  ];
+  const business={netValue:7736.52,bankCashValue:1238.14,
+    incomplete:false,liabilitiesIncomplete:false,count:8};
+  const net=calculateNetWorth(assets,
+    getCryptoBusinessValue(business,7700,9533.86));
+  expect(net.breakdown.cash).toBe(9533.86);
+  expect(net.breakdown.crypto).toBe(6498.38);
+  expect(net.total_net_worth).toBeCloseTo(21320.78,2);
+});
+test("no personal cash means no bank overlap is removed",()=>{
+  const business={netValue:7736.52,bankCashValue:1238.14,
+    incomplete:false,liabilitiesIncomplete:false,count:8};
+  expect(getCryptoBusinessValue(business,7000,0)).toBe(7736.52);
+  expect(getCryptoBusinessValue(business,7000,500)).toBe(7236.52);
+});
+test("incomplete business falls back to crypto without an unverified cash deduction",()=>{
+  expect(getCryptoBusinessValue({netValue:null,bankCashValue:1238.14,incomplete:true,count:8},7000,9533.86)).toBe(7000);
+});
