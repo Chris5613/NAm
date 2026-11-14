@@ -131,9 +131,18 @@ export function sumFinancialBusiness(rows) {
   const liabilityValue = liabilitiesIncomplete ? null : moneyRound(
     liabilities.reduce((sum, row) => sum + Number(row.end || 0), 0)
   );
+  // Business Cash / Bank may also be included in Home's personal bank accounts
+  // after transferring money out of Lulo. Expose only that *bank* balance for
+  // Home to reconcile; keep Lulo, receivables and equipment untouched.
+  const bankCashValue = moneyRound((rows || []).filter(row=>
+    row.category === "cash" &&
+    (/^(?:cash\s*\/?\s*bank|bank|checking|business\s+cash|cash)$/i.test(String(row.name || "").trim()) ||
+      row.id === "ledger:cash") && Number.isFinite(Number(row.end))
+  ).reduce((sum,row)=>sum+Math.max(0,Number(row.end)||0),0));
   return {
     ...assets,
     liabilityValue,
+    bankCashValue,
     netValue: assets.value === null || liabilityValue === null
       ? null : moneyRound(assets.value - liabilityValue),
     liabilitiesIncomplete,
