@@ -1926,7 +1926,7 @@ const summary =
         <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
         </div>
       </header>
-      <div className="grid items-stretch gap-2.5 lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
+      <div className="grid items-stretch gap-2.5 lg:min-h-[clamp(350px,calc(100dvh-465px),640px)] lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
         <section className="flex min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -1968,7 +1968,7 @@ const summary =
               </div>
             </div>
           </div>
-          <div className="mt-2 h-[230px] w-full lg:h-[260px]">
+          <div className="mt-2 h-[265px] w-full min-h-0 lg:h-auto lg:min-h-[280px] lg:flex-1">
             <ResponsiveContainer width="100%" height="100%">
               {earningsChartRange === "monthly" ? (
                 <AreaChart data={monthlyChartData} margin={{top:18,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? monthlyChartData[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"monthly",key:day}); }}>
