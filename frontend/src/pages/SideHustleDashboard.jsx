@@ -13,6 +13,7 @@ import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
+import { PASSIVE_MONTHLY_INCOME_KEY } from "@/lib/monthlyEarningsChart";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
@@ -511,6 +512,8 @@ export default function SideHustleDashboard() {
   const [serverTodayIncome, setServerTodayIncome] = useState(null);
   const [serverTodaySources, setServerTodaySources] = useState(null);
   const [recordedHistory, setRecordedHistory] = useState(readRecordedHistory);
+  const [publishedPassiveMonth, setPublishedPassiveMonth] = useState(()=>readObject(PASSIVE_MONTHLY_INCOME_KEY));
+  const [serverMonthlyEarned, setServerMonthlyEarned] = useState(null);
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
   const [addModal, setAddModal] = useState(null);
@@ -620,6 +623,7 @@ export default function SideHustleDashboard() {
     setIncome(readIncomeData());
     setRecordedHistory(current => ({ ...readRecordedHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
     setHardware(readHardware());
+    setPublishedPassiveMonth(readObject(PASSIVE_MONTHLY_INCOME_KEY));
     refreshIncomeMetrics();
   }), [refreshIncomeMetrics]);
   useEffect(() => {
@@ -635,10 +639,38 @@ export default function SideHustleDashboard() {
     };
   }, [refreshPower, refreshIncomeMetrics]);
 
+  // Passive Income's chart is authoritative. Until its first chart value is
+  // published, ask the shared backend for its daily earnings ledger rather
+  // than displaying the stale monthly accounting snapshot.
+  useEffect(()=>{
+    let active=true;
+    const refresh=async()=>{
+      const month=getCurrentMonthKey();
+      try {
+        const result=await api.get(`/api/project-tracking/monthly-daily-earnings/${month}`);
+        if(!active)return;
+        const days=Array.isArray(result?.days) ? result.days : null;
+        if(days){
+          setServerMonthlyEarned({month,amount:days.reduce((sum,day)=>
+            sum+Math.max(0,Number(day.totalUsd)||0),0)});
+        }
+      } catch { /* Await Passive Income's chart or use recorded month. */ }
+    };
+    refresh();
+    const timer=window.setInterval(refresh,90000);
+    return()=>{active=false;window.clearInterval(timer);};
+  },[]);
+
   const currentMonthKey = getCurrentMonthKey();
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) || { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recordedCurrentMonth = recordedMonths.find(row => row.monthKey === currentMonthKey);
-  const monthlyIncome = Math.max(0, Number(recordedCurrentMonth?.total) || 0);
+  const chartTotal=publishedPassiveMonth?.month===currentMonthKey &&
+    Number.isFinite(Number(publishedPassiveMonth.amount))
+      ? Math.max(0,Number(publishedPassiveMonth.amount)) : null;
+  const serverDailyTotal=serverMonthlyEarned?.month===currentMonthKey
+    ? Math.max(0,Number(serverMonthlyEarned.amount)||0) : null;
+  const monthlyIncome=chartTotal ?? serverDailyTotal ??
+    Math.max(0,Number(recordedCurrentMonth?.total)||0);
   const recentMonths = recordedMonths.slice(-12);
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
   const todayKey = pacificDayKey(clock);
