@@ -516,13 +516,22 @@ export function calculateNetWorth(
 
 // The Balance Sheet already contains crypto holdings: use it instead of
 // adding a second copy of the same portfolio to net worth.
-export function getCryptoBusinessValue(financialAssets, cryptoTotal = 0) {
+export function getCryptoBusinessValue(financialAssets, cryptoTotal = 0, personalCash = 0) {
   const value = financialAssets?.netValue;
   // Unknown asset or liability balances must not be silently treated as zero.
   // Until a complete business net worth is known, retain the old crypto subtotal.
-  return financialAssets?.incomplete !== true &&
-    financialAssets?.liabilitiesIncomplete !== true &&
-    typeof value === "number" && Number.isFinite(value) &&
-    Number(financialAssets?.count) > 0
-    ? value : (Number(cryptoTotal) || 0);
+  if (financialAssets?.incomplete === true ||
+      financialAssets?.liabilitiesIncomplete === true ||
+      typeof value !== "number" || !Number.isFinite(value) ||
+      !(Number(financialAssets?.count) > 0)) {
+    return Number(cryptoTotal) || 0;
+  }
+  // The business bank cash was moved from Lulo into a bank account already
+  // tracked under Home > Cash. It remains an asset on the business Balance
+  // Sheet, but must appear only once in combined personal net worth.
+  const overlap = Math.min(
+    Math.max(0, Number(financialAssets.bankCashValue) || 0),
+    Math.max(0, Number(personalCash) || 0),
+  );
+  return Math.round((value - overlap) * 100) / 100;
 }
