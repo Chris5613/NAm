@@ -1,4 +1,11 @@
 import { journalLines } from "./compoundJournal";
+// Presentation-only filter. Current-month synced accruals still update and
+// remain in every statement calculation; they reappear in historical months.
+export function visibleLedgerEntries(entries, reportingMonth, currentMonth) {
+  if(reportingMonth !== currentMonth) return entries;
+  return entries.filter(entry=>!String(entry?.id || "").startsWith("synced-income:"));
+}
+
 // Dynamic, read-only accruals from Crypto Dashboard's reconciled monthly income.
 // They are recomputed from the same source, never persisted as journal records:
 // a provider refresh must replace—not append to—previous estimates.
