@@ -462,10 +462,16 @@ export default function Dashboard() {
             });
           }
 
-          // Financials already includes crypto project balances: replace, do not add.
+          // Financials already includes crypto holdings and the business
+          // bank balance. Cash moved out of Lulo is also in Home's tracked
+          // bank accounts, so exclude that overlap from combined net worth,
+          // not from the business Balance Sheet or PPE.
           const businessAssets = getFinancialTotalAssets();
-          const calculatedNetWorth =
-            calculateNetWorth(storedAssets, getCryptoBusinessValue(businessAssets, cryptoTotal));
+          const personalCash = calculateNetWorth(storedAssets, 0).breakdown.cash;
+          const calculatedNetWorth = calculateNetWorth(
+            storedAssets,
+            getCryptoBusinessValue(businessAssets, cryptoTotal, personalCash),
+          );
           setFinancialAssets(businessAssets);
 
           const categoryChanges =
