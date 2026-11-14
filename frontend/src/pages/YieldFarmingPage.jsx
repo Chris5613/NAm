@@ -877,8 +877,6 @@ export default function YieldFarmingPage() {
   liveProjectFeedRef.current = liveProjectFeed;
   useEffect(() => {
     let active = true;
-    let lastAlertText = "";
-    let lastAlertTime = 0;
     let consecutiveFailures = 0;
     const report = async () => {
       if (!active) return;
@@ -894,21 +892,8 @@ export default function YieldFarmingPage() {
             projectCount: Number(result.portfolio.projectCount),
           });
         }
-        // Delayed or broken syncs are actionable, but avoid repeated toasts.
-        const names = Array.isArray(result?.staleProjects)
-          ? result.staleProjects.filter(Boolean) : [];
-        if (names.length && document.visibilityState === "visible") {
-          const alertText = names.join(", ");
-          const now = Date.now();
-          if (alertText !== lastAlertText || now - lastAlertTime > 60 * 60 * 1000) {
-            lastAlertText = alertText;
-            lastAlertTime = now;
-            toast.warning("Project sync delayed", {
-              description: names.join(", ") + " has not reported a recent reading.",
-              duration: 6500,
-            });
-          }
-        }
+        // Keep reporting project freshness to the backend, but do not
+        // interrupt the user with stale-reading warning popups.
       } catch {
         consecutiveFailures += 1;
         if (consecutiveFailures === 3 && document.visibilityState === "visible") {
