@@ -13,7 +13,7 @@ import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildAutoIncomeJournal } from "@/lib/financialAutoJournal";
+import { buildAutoIncomeJournal, visibleLedgerEntries } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
 import {
   balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName,
@@ -459,6 +459,14 @@ export default function FinancialsPage() {
         return [...base, ...(adjustment && !base.some(entry => entry.id === adjustment.id) ? [adjustment] : [])]
           .sort((a,b)=>a.date.localeCompare(b.date));
       })();
+  // Filter only visible General Ledger rows. All underlying accruals
+  // remain live and all accounting reports use unfiltered entries.
+  const displayedLedgerEntries=visibleLedgerEntries(entries,month,getCurrentMonthKey());
+  const hiddenSyncedIncomeCount=entries.length-displayedLedgerEntries.length;
+  const ledgerVisibleDebit=moneyRound(displayedLedgerEntries.reduce((sum,entry)=>sum+
+    (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
+  const ledgerVisibleCredit=moneyRound(displayedLedgerEntries.reduce((sum,entry)=>sum+
+    (entry.lines||[]).reduce((n,part)=>n+Number(part.credit||0),0),0));
   const report = buildFinancialProfit(entries,savedExpenses);
   const incomeKnown = Boolean(syncedRevenue) ||
     ledgerEntries.some(entry=>["revenue","dividendRevenue"].some(account=>journalActivity(entry,account)<0));
@@ -980,9 +988,12 @@ export default function FinancialsPage() {
       {syncedIncomeJournal.unexplainedManualRevenue > 0 && <p role="status" className="text-sm text-amber-300">
         Manual revenue exceeds Crypto Income by {money(syncedIncomeJournal.unexplainedManualRevenue)} this month. Review for duplicates or missing earnings.
       </p>}
-      <section className={card + " overflow-hidden p-4"}><div className="overflow-x-auto"><table className="w-full min-w-[550px] text-sm">
+      {hiddenSyncedIncomeCount > 0 && <p className="text-xs text-[#8fa7b9]">
+         {hiddenSyncedIncomeCount} automatically synced income {hiddenSyncedIncomeCount === 1 ? "entry is" : "entries are"} hidden until this month ends. Earnings continue updating and remain included in your financial reports.
+       </p>}
+       <section className={card + " overflow-hidden p-4"}><div className="overflow-x-auto"><table className="w-full min-w-[550px] text-sm">
         <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
-        <tbody>{entries.map((entry, entryIndex) => <Fragment key={entry.id}>
+        <tbody>{displayedLedgerEntries.map((entry, entryIndex) => <Fragment key={entry.id}>
           {entry.lines.map((item, index) => <tr key={index} className="border-b border-[#20303d]">
             <td className="py-2 align-top">{index===0 ? <>{!entry.automatic && journal.some(item=>item.id===entry.id) && !closedMonths[String(entry.date).slice(0,7)] ? (
               <button type="button" onClick={()=>editEntry(entry)} title="Edit journal entry"
@@ -996,7 +1007,7 @@ export default function FinancialsPage() {
             <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
             <td className="py-2 text-right">{index===0 && !entry.automatic && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
           </tr>)}
-          {entryIndex < entries.length - 1 && <tr aria-hidden="true" className="h-10 border-y border-[#2b3d4d] bg-[#101923]/60">
+          {entryIndex < displayedLedgerEntries.length - 1 && <tr aria-hidden="true" className="h-10 border-y border-[#2b3d4d] bg-[#101923]/60">
             <td className="h-10">&nbsp;</td>
             <td>&nbsp;</td>
             <td>&nbsp;</td>
@@ -1004,8 +1015,8 @@ export default function FinancialsPage() {
             <td>&nbsp;</td>
           </tr>}
         </Fragment>)}
-          <tr className="font-bold"><td colSpan={2} className="py-3">Total</td><td className="text-right">{money(debitTotal)}</td><td className="text-right">{money(creditTotal)}</td><td/></tr>
-        </tbody></table></div>{!entries.length && <p className="py-5 text-sm text-[#8397a9]">No journal entries yet.</p>}</section>
+          <tr className="font-bold"><td colSpan={2} className="py-3">{hiddenSyncedIncomeCount ? "Visible total" : "Total"}</td><td className="text-right">{money(ledgerVisibleDebit)}</td><td className="text-right">{money(ledgerVisibleCredit)}</td><td/></tr>
+        </tbody></table></div>{!displayedLedgerEntries.length && <p className="py-5 text-sm text-[#8397a9]">No journal entries visible this month.</p>}</section>
     </>}
     {tab === "trial" && <>
       <div className="grid gap-3 sm:grid-cols-3">{metric("Debits", trialDebit)}{metric("Credits", trialCredit)}{metric("Difference", rounded(trialDebit-trialCredit), "Journal entries only", "text-emerald-400")}</div>
