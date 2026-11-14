@@ -1013,7 +1013,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     };
   });
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [earningsChartRange, setEarningsChartRange] = useState("daily");
+  const [earningsChartRange, setEarningsChartRange] = useState("monthly");
   const [earningsChartYear, setEarningsChartYear] = useState(() => String(getCurrentYear()));
   const [selectedEarningsPoint, setSelectedEarningsPoint] = useState(null);
   useEffect(() => {
@@ -1930,12 +1930,12 @@ const summary =
         <section className="flex min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-[14px] font-semibold">Earnings {earningsChartRange === "daily" ? "Today" : earningsChartRange === "weekly" ? "This Week" : earningsChartRange === "monthly" ? "This Month" : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}</h2>
-              <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "daily" ? todayEarnings : earningsChartRange === "weekly" ? weekEarnings : earningsChartRange === "monthly" ? thisMonthEarned : thisYearEarned)}</div>
+              <h2 className="text-[14px] font-semibold">Earnings {earningsChartRange === "monthly" ? "This Month" : earningsChartRange === "weekly" ? "This Week" : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}</h2>
+              <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "monthly" ? thisMonthEarned : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-[#303842] bg-[#13181e] p-0.5" aria-label="Earnings chart period">
-                {["daily", "weekly", "monthly", "yearly"].map(period => (
+                {["monthly", "weekly", "yearly"].map(period => (
                   <button
                     key={period}
                     type="button"
@@ -1943,7 +1943,7 @@ const summary =
                     aria-pressed={earningsChartRange === period}
                     className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${earningsChartRange === period ? "bg-[#283039] text-white" : "text-muted-foreground hover:text-white"}`}
                   >
-                    {period === "daily" ? "Daily" : period === "weekly" ? "Weekly" : period === "monthly" ? "Monthly" : "Yearly"}
+                    {period === "monthly" ? "Monthly" : period === "weekly" ? "Weekly" : "Yearly"}
                   </button>
                 ))}
               </div>
@@ -1970,24 +1970,36 @@ const summary =
           </div>
           <div className="mt-2 h-[280px] w-full min-h-0 lg:h-auto lg:min-h-[320px] lg:flex-1">
             <ResponsiveContainer width="100%" height="100%">
-              {earningsChartRange === "daily" ? (
-                <AreaChart data={dailyChartData} margin={{top:12,right:12,left:-8,bottom:3}}>
+              {earningsChartRange === "monthly" ? (
+                <AreaChart data={monthlyChartData} margin={{top:18,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? monthlyChartData[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"monthly",key:day}); }}>
                   <defs>
-                    <linearGradient id="yieldDailyFill" x1="0" y1="0" x2="0" y2="1">
+                    <linearGradient id="yieldMonthlyFill" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
                       <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
                     </linearGradient>
                   </defs>
                   <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
-                  <XAxis dataKey="x" type="number" domain={[0,dailyChartEnd]} ticks={dailyChartTicks} axisLine={false} tickLine={false} tick={{fontSize:10,fill:"#91a1b2"}} tickFormatter={hour => hour === 0 ? "12am" : hour === 12 ? "12pm" : hour === 24 ? "12am" : hour < 12 ? hour+"am" : (hour-12)+"pm"}/>
-                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[dailyChartMin,dailyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)} />
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={hour => {
-                    const rounded = Math.max(0, Math.min(24,Number(hour)));
-                    const hours = Math.floor(rounded);
-                    const mins = Math.floor((rounded-hours)*60);
-                    return `${String(hours).padStart(2,"0")}:${String(mins).padStart(2,"0")} PT`;
-                  }} formatter={(value, name, item)=>[formatCurrency(value), item?.payload?.displayBaseline ? "Display baseline · no reading" : "Recorded today"]}/>
-                  <Area type="monotoneX" dataKey="value" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldDailyFill)" dot={false} activeDot={{r:4, strokeWidth:2}} isAnimationActive={false}/>
+                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize:9,fill:"#91a1b2"}} interval={2} />
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings"]}/>
+                  <Area type="monotone" dataKey="value" name="Daily earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)"
+                    dot={props => {
+                      const day = props?.payload?.key;
+                      if (!day || day > todayKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={4} fill="#30e69b"
+                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"monthly",key:day})}/>;
+                    }}
+                    activeDot={props => {
+                      const day = props?.payload?.key;
+                      if (!day || day > todayKey || props?.payload?.value == null) return null;
+                      return <circle cx={props.cx} cy={props.cy} r={7} fill="#30e69b"
+                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => setSelectedEarningsPoint({range:"monthly",key:day})}/>;
+                    }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
                 </AreaChart>
               ) : earningsChartRange === "weekly" ? (
                 <AreaChart data={weekDays} margin={{top:28,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? weekDays[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"weekly",key:day}); }}>
@@ -2019,37 +2031,6 @@ const summary =
                     connectNulls={false} isAnimationActive={false}>
                     <LabelList dataKey="value" position="top" offset={12} formatter={value => value == null ? "" : formatCurrency(value)} style={{fill:"#c7f9e5",fontSize:10,fontWeight:600}} />
                   </Area>
-                </AreaChart>
-              ) : earningsChartRange === "monthly" ? (
-                <AreaChart data={monthlyChartData} margin={{top:18,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? monthlyChartData[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"monthly",key:day}); }}>
-                  <defs>
-                    <linearGradient id="yieldMonthlyFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
-                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
-                  <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize:9,fill:"#91a1b2"}} interval={2} />
-                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)}/>
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings"]}/>
-                  <Area type="monotone" dataKey="value" name="Daily earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)"
-                    dot={props => {
-                      const day = props?.payload?.key;
-                      if (!day || day > todayKey || props?.payload?.value == null) return null;
-                      return <circle cx={props.cx} cy={props.cy} r={4} fill="#30e69b"
-                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
-                        onClick={() => setSelectedEarningsPoint({range:"monthly",key:day})}/>;
-                    }}
-                    activeDot={props => {
-                      const day = props?.payload?.key;
-                      if (!day || day > todayKey || props?.payload?.value == null) return null;
-                      return <circle cx={props.cx} cy={props.cy} r={7} fill="#30e69b"
-                        stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
-                        onClick={() => setSelectedEarningsPoint({range:"monthly",key:day})}/>;
-                    }}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
                 </AreaChart>
               ) : (
                 <AreaChart data={yearlyChartData} margin={{top:28,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const month = point?.activePayload?.[0]?.payload?.monthKey || (Number.isInteger(index) ? yearlyChartData[index]?.monthKey : null); if (month && month <= todayKey.slice(0,7)) setSelectedEarningsPoint({range:"yearly",key:month}); }}>
@@ -2501,7 +2482,7 @@ if (
 
 
       </div>
-      {selectedBreakdown && earningsChartRange !== "daily" && (
+      {selectedBreakdown && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
           onMouseDown={event => { if (event.target === event.currentTarget) setSelectedEarningsPoint(null); }}>
           <div role="dialog" aria-modal="true" aria-label={`Earnings by project for ${selectedBreakdown.label}`}
