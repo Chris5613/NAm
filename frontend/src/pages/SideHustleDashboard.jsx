@@ -324,7 +324,19 @@ function datedSourceIncome(source, firstDay, lastDay, history) {
   const end=new Date(lastDay+"T12:00:00Z");
   let total=0,found=false;
   for(let day=start.getTime();day<=end.getTime();day+=86400000){
-    const amount=recordedDailyProviderIncome(source,new Date(day).toISOString().slice(0,10),history);
+    const dayKey=new Date(day).toISOString().slice(0,10);
+    const local=recordedDailyProviderIncome(source,dayKey,history);
+    const server=history.serverDaily?.date===dayKey
+      ? Object.entries(history.serverDaily.sources || {}).reduce((maximum,[name,value])=>{
+          if(canonicalSourceName(name).toLowerCase()!==canonicalSourceName(source).toLowerCase())
+            return maximum;
+          const n=Number(value);
+          return Number.isFinite(n) ? Math.max(maximum ?? 0,Math.max(0,n)) : maximum;
+        },null)
+      : null;
+    // Today's Earnings uses a server-side per-source high-water counter.
+    // Prefer its up-to-date recorded amount when local tracker sync lags.
+    const amount=server===null ? local : local===null ? server : Math.max(server,local);
     if(amount!==null){total+=amount;found=true;}
   }
   return found ? total : null;
@@ -497,6 +509,7 @@ export default function SideHustleDashboard() {
   const [power, setPower] = useState(null);
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
   const [serverTodayIncome, setServerTodayIncome] = useState(null);
+  const [serverTodaySources, setServerTodaySources] = useState(null);
   const [recordedHistory, setRecordedHistory] = useState(readRecordedHistory);
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
@@ -516,6 +529,11 @@ export default function SideHustleDashboard() {
       const result = dailyResult.value;
       const total = Number(result?.totalUsd);
       if (result?.date === today && Number.isFinite(total)) setServerTodayIncome(total);
+      if (result?.date === today && result.sources && typeof result.sources === "object") {
+        setServerTodaySources({date:today,sources:result.sources});
+      } else {
+        setServerTodaySources(null);
+      }
     }
 
   }, []);
@@ -650,7 +668,7 @@ export default function SideHustleDashboard() {
   const kryptexTracker = recordedHistory.kryptex;
   const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock, recordedMonths, {
     salad:recordedHistory.salad,unetwork:recordedHistory.unetwork,
-    rollercoin:recordedHistory.rollercoin,
+    rollercoin:recordedHistory.rollercoin,serverDaily:serverTodaySources,
   });
   const hardwareRecovered = Object.values(hardwareEarnings)
     .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
