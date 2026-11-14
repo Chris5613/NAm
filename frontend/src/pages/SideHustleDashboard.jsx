@@ -513,7 +513,6 @@ export default function SideHustleDashboard() {
   const [serverTodaySources, setServerTodaySources] = useState(null);
   const [recordedHistory, setRecordedHistory] = useState(readRecordedHistory);
   const [publishedPassiveMonth, setPublishedPassiveMonth] = useState(()=>readObject(PASSIVE_MONTHLY_INCOME_KEY));
-  const [serverMonthlyEarned, setServerMonthlyEarned] = useState(null);
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
   const [addModal, setAddModal] = useState(null);
@@ -639,26 +638,16 @@ export default function SideHustleDashboard() {
     };
   }, [refreshPower, refreshIncomeMetrics]);
 
-  // Passive Income's chart is authoritative. Until its first chart value is
-  // published, ask the shared backend for its daily earnings ledger rather
-  // than displaying the stale monthly accounting snapshot.
-  useEffect(()=>{
-    let active=true;
-    const refresh=async()=>{
-      const month=getCurrentMonthKey();
-      try {
-        const result=await api.get(`/api/project-tracking/monthly-daily-earnings/${month}`);
-        if(!active)return;
-        const days=Array.isArray(result?.days) ? result.days : null;
-        if(days){
-          setServerMonthlyEarned({month,amount:days.reduce((sum,day)=>
-            sum+Math.max(0,Number(day.totalUsd)||0),0)});
-        }
-      } catch { /* Await Passive Income's chart or use recorded month. */ }
-    };
-    refresh();
-    const timer=window.setInterval(refresh,90000);
-    return()=>{active=false;window.clearInterval(timer);};
+  // A single mounted Passive Income chart publishes the current MTD number.
+  // Keeping the source mounted also avoids a stale monthly value on the
+  // Dashboard when users have not opened the Passive Income tab yet.
+  const receivePassiveMonthlyIncome=useCallback(next=>{
+    if(!next || !/^\\d{4}-\\d{2}$/.test(String(next.month)) ||
+       !Number.isFinite(Number(next.amount))) return;
+    setPublishedPassiveMonth(previous=>
+      previous?.month===next.month &&
+      Math.abs(Number(previous.amount)-Number(next.amount))<0.000001
+        ? previous : {month:next.month,amount:Number(next.amount)});
   },[]);
 
   const currentMonthKey = getCurrentMonthKey();
@@ -667,10 +656,7 @@ export default function SideHustleDashboard() {
   const chartTotal=publishedPassiveMonth?.month===currentMonthKey &&
     Number.isFinite(Number(publishedPassiveMonth.amount))
       ? Math.max(0,Number(publishedPassiveMonth.amount)) : null;
-  const serverDailyTotal=serverMonthlyEarned?.month===currentMonthKey
-    ? Math.max(0,Number(serverMonthlyEarned.amount)||0) : null;
-  const monthlyIncome=chartTotal ?? serverDailyTotal ??
-    Math.max(0,Number(recordedCurrentMonth?.total)||0);
+  const monthlyIncome=chartTotal;
   const recentMonths = recordedMonths.slice(-12);
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
   const todayKey = pacificDayKey(clock);
@@ -685,7 +671,7 @@ export default function SideHustleDashboard() {
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
     : null;
   const previousMonth = recentMonths.length > 1 ? recentMonths[recentMonths.length - 2] : null;
-  const monthChange = previousMonth?.total > 0 ? ((monthlyIncome - previousMonth.total) / previousMonth.total * 100) : 0;
+  const monthChange = monthlyIncome !== null && previousMonth?.total > 0 ? ((monthlyIncome - previousMonth.total) / previousMonth.total * 100) : 0;
 
   const rankedProjects = [...income.projects].sort((a, b) => {
     const ar = a.spent > 0 ? a.earned / a.spent : 0;
@@ -891,7 +877,7 @@ export default function SideHustleDashboard() {
       <KpiCard
         icon={CalendarDays}
         title="Monthly Income"
-        value={money(monthlyIncome)}
+        value={monthlyIncome===null ? "—" : money(monthlyIncome)}
         detail={previousMonth ? `${monthChange >= 0 ? "▲" : "▼"} ${Math.abs(monthChange).toFixed(1)}% vs. last month` : "Current month total"}
         tone="sky"
       />
@@ -1132,7 +1118,7 @@ export default function SideHustleDashboard() {
             <div className="mt-5 grid grid-cols-2 gap-x-0 gap-y-0">
               <div className="border-b border-r border-[#242d35] pb-5 pr-5">
                 <p className="text-[10px] text-[#83909d]">Passive Income (MTD)</p>
-                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(monthlyIncome)}</strong>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{monthlyIncome===null ? "—" : money(monthlyIncome)}</strong>
                 <p className="mt-1 text-[9px] text-emerald-400/80">{previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"}</p>
               </div>
               <div className="border-b border-[#242d35] pb-5 pl-5">
@@ -1147,7 +1133,7 @@ export default function SideHustleDashboard() {
               </div>
               <div className="pt-5 pl-5">
                 <p className="text-[10px] text-[#83909d]">Est. Net Profit (MTD)</p>
-                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{money(Math.max(0, monthlyIncome - monthPowerCost))}</strong>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{monthlyIncome===null ? "—" : money(Math.max(0, monthlyIncome - monthPowerCost))}</strong>
                 
               </div>
             </div>
@@ -1165,11 +1151,10 @@ export default function SideHustleDashboard() {
         </div>
       </section>
     </div>
-    </> : (
-      <div className="pt-1">
-        <YieldFarmingPage/>
-      </div>
-    )}
+    </> : null}
+    <div className={activeView==="passive" ? "pt-1" : "hidden"}>
+      <YieldFarmingPage onMonthlyEarningsChange={receivePassiveMonthlyIncome}/>
+    </div>
     {addModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
         onMouseDown={event => { if (event.target === event.currentTarget) setAddModal(null); }}>
