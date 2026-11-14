@@ -1,5 +1,8 @@
 import { stockPayoutTotal } from "./stockDividendPayouts";
 
+export const PASSIVE_MONTHLY_INCOME_KEY = "passive_income_monthly_chart_total_v1";
+
+
 function sumSources(sources) {
   return Object.values(sources || {}).reduce(
     (sum, amount) =>
