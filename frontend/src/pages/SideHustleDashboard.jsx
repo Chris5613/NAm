@@ -5,6 +5,7 @@ import {
   Plus, Target, TrendingUp, Zap, X,
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
+import { projectsApi } from "@/lib/api";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { localStorage as appStorage } from "@/lib/localStorage";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
@@ -554,6 +555,29 @@ export default function SideHustleDashboard() {
     refresh();
     const timer = window.setInterval(refresh, 90000);
     return () => { active = false; window.clearInterval(timer); };
+  }, []);
+
+  // The Dashboard must refresh provider projects independently. Previously
+  // only visiting Passive Income fetched Lulo projects and updated its quick
+  // cache, so Monthly Income could jump when returning from that page.
+  useEffect(() => {
+    let active=true;
+    const refreshProjects=async()=>{
+      try {
+        const response=await projectsApi.getAll();
+        if(!active || !Array.isArray(response?.data)) return;
+        const projects=response.data;
+        setRecordedHistory(current=>{
+          const luloProjects=projects.filter(project=>project?.yield_tracking==="lulo_lending");
+          return JSON.stringify(current.luloProjects)===JSON.stringify(luloProjects)
+            ? current : {...current,luloProjects};
+        });
+      } catch { /* Keep last saved project readings if unavailable. */ }
+    };
+    refreshProjects();
+    const timer=window.setInterval(refreshProjects,90000);
+    window.addEventListener("focus",refreshProjects);
+    return ()=>{active=false;window.clearInterval(timer);window.removeEventListener("focus",refreshProjects);};
   }, []);
 
   const recordedTrackers = useMemo(() => ({
