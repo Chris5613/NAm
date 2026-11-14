@@ -45,3 +45,28 @@ test("unknown business liability prevents a verified net worth", () => {
     {category:"liabilities",end:null},
   ])).toMatchObject({value:100,liabilityValue:null,netValue:null,liabilitiesIncomplete:true});
 });
+
+test("business bank cash is marked as overlap without deleting it from business assets",()=>{
+  const result=sumFinancialBusiness([
+    {id:"ledger:cash",name:"Cash / Bank",category:"cash",end:1238.14},
+    {id:"project:lulo",name:"Lulo",category:"cash",end:0},
+    {id:"device:5080",name:"RTX 5080",category:"equipment",end:1250},
+    {id:"platform:kryptex",name:"Kryptex receivable",category:"cash",end:20},
+  ]);
+  expect(result).toMatchObject({
+    bankCashValue:1238.14,
+    value:2508.14,
+    netValue:2508.14,
+    incomplete:false,
+  });
+});
+
+test("bank overlap ignores unknown, receivable, and Lulo asset rows",()=>{
+  const result=sumFinancialBusiness([
+    {name:"Cash / Bank",category:"cash",end:null},
+    {name:"Lulo",category:"cash",end:1500},
+    {name:"Mining Rewards Receivable",category:"cash",end:10},
+  ]);
+  expect(result.bankCashValue).toBe(0);
+  expect(result.incomplete).toBe(true);
+});
