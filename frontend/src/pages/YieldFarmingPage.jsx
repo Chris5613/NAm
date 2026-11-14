@@ -10,7 +10,7 @@ import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
 import { useDailyEarningsHighWater } from "../hooks/useDailyEarningsHighWater";
 import { buildSourceTotalsForDay } from "../lib/yieldIncomeSources";
-import { buildMonthlyDailyEarningsChart, buildYearlyEarningsChart } from "../lib/monthlyEarningsChart";
+import { buildMonthlyDailyEarningsChart, buildYearlyEarningsChart, PASSIVE_MONTHLY_INCOME_KEY } from "../lib/monthlyEarningsChart";
 import { buildDailyEarningsChart } from "../lib/dailyEarningsChart";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
@@ -1391,6 +1391,19 @@ export default function YieldFarmingPage() {
     (sum, day) => sum + (Number(day.value) || 0),
     0
   );
+  // Publish the exact value displayed by Passive Income's "This Month"
+  // chart so the Crypto Dashboard uses the same figure rather than an
+  // independent monthly snapshot calculation.
+  useEffect(() => {
+    const month=todayKey.slice(0,7);
+    const current=readObject(PASSIVE_MONTHLY_INCOME_KEY);
+    if(current?.month===month &&
+       Math.abs(Number(current.amount)-thisMonthEarned)<0.000001) return;
+    saveObject(PASSIVE_MONTHLY_INCOME_KEY,{
+      month,amount:thisMonthEarned,updatedAt:new Date().toISOString(),
+    });
+  }, [todayKey,thisMonthEarned]);
+
   const monthlyChartMax = Math.max(
     0.1,
     ...monthlyChartData.map(day => Number(day.value) || 0)
