@@ -283,7 +283,11 @@ async def receive_kryptex_machine(
         amount = number(raw)
         if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or amount is None or amount < 0:
             continue
-        mining_daily[day] = amount
+        # A lower later USD conversion can reflect a BTC price decline,
+        # not fewer sats mined. Preserve already credited earnings for
+        # this day; the live account balance is tracked separately.
+        previous = number(mining_daily.get(day)) if confirmed_days.get(day) else None
+        mining_daily[day] = max(amount, previous if previous is not None and previous >= 0 else 0.0)
         confirmed_days[day] = True
         touched_months.add(day[:7])
 
