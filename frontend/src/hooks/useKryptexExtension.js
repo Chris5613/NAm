@@ -100,7 +100,15 @@ export function updateKryptexTracker(current, payload, nowIso = new Date().toISO
     const confirmedUsd = Number(value);
     if (!Number.isFinite(confirmedUsd) || confirmedUsd < 0) continue;
 
-    kryptexMiningDaily[entryDay] = confirmedUsd;
+    // Account USD value can decline with BTC even while earned sats remain.
+    // Treat confirmed mining income as a dated high-water earning, not as
+    // a mark-to-market balance that can erase previously earned income.
+    const previous = confirmedDays[entryDay]
+      ? Number(kryptexMiningDaily[entryDay]) : NaN;
+    kryptexMiningDaily[entryDay] = Math.max(
+      confirmedUsd,
+      Number.isFinite(previous) && previous >= 0 ? previous : 0,
+    );
     confirmedDays[entryDay] = true;
   }
 
