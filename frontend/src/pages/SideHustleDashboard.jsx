@@ -642,7 +642,7 @@ export default function SideHustleDashboard() {
   // Keeping the source mounted also avoids a stale monthly value on the
   // Dashboard when users have not opened the Passive Income tab yet.
   const receivePassiveMonthlyIncome=useCallback(next=>{
-    if(!next || !/^\\d{4}-\\d{2}$/.test(String(next.month)) ||
+    if(!next || !/^\d{4}-\d{2}$/.test(String(next.month)) ||
        !Number.isFinite(Number(next.amount))) return;
     setPublishedPassiveMonth(previous=>
       previous?.month===next.month &&
