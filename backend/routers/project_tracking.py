@@ -897,13 +897,21 @@ async def source_owned_income_history(
             "date": entry.occurred_at, "type": entry.type,
             "amount": entry.amount,
         })
-    project_rows = [
-        {**(project.data if isinstance(project.data, dict) else {}),
-         "id": project.id, "name": project.name,
-         "earned": project.earned,
-         "transactions": per_project.get(project.id, [])}
-        for project in projects
-    ]
+    # Legacy projects keep their dated earnings inside Project.data. Newer
+    # installations may use the relational ProjectTransaction table. Do not
+    # replace a populated embedded journal with an empty table result: doing
+    # so hides historical Clore AI/Unity Network income in the server view.
+    project_rows = []
+    for project in projects:
+        info = project.data if isinstance(project.data, dict) else {}
+        relational = per_project.get(project.id, [])
+        embedded = info.get("transactions")
+        history = relational if relational else (
+            embedded if isinstance(embedded, list) else [])
+        project_rows.append({
+            **info, "id": project.id, "name": project.name,
+            "earned": project.earned, "transactions": history,
+        })
     # The provider snapshot can lag the extension's durable tracker by up to
     # the scheduler interval. Compute today's snapshot projection in memory,
     # using exactly the same sources as the background reconciler.
