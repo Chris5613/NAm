@@ -157,6 +157,47 @@ def lulo_withdrawal_review(journal, monthly_rows, month):
     }
 
 
+def equipment_trade_review(journal, month):
+    """Read the journal's trade-in math; never sell/remove the asset again."""
+    trades = []
+    for entry in journal if isinstance(journal, list) else []:
+        if not isinstance(entry, dict) or not str(entry.get("date") or "").startswith(month):
+            continue
+        lines = entry.get("lines")
+        if not isinstance(lines, list):
+            continue
+        debits = sum(finite_number(line.get("debit")) or 0 for line in lines
+                     if isinstance(line, dict))
+        credits = sum(finite_number(line.get("credit")) or 0 for line in lines
+                      if isinstance(line, dict))
+        cash_credit = sum(finite_number(line.get("credit")) or 0 for line in lines
+                          if isinstance(line, dict) and line.get("account") == "cash")
+        equipment_credit = sum(finite_number(line.get("credit")) or 0 for line in lines
+                               if isinstance(line, dict) and
+                               str(line.get("account") or "").startswith("equipment:"))
+        gain_credit = sum(finite_number(line.get("credit")) or 0 for line in lines
+                          if isinstance(line, dict) and line.get("account") == "gainDisposal")
+        equipment_debit = sum(finite_number(line.get("debit")) or 0 for line in lines
+                              if isinstance(line, dict) and line.get("account") == "equipment")
+        if equipment_credit <= 0 or equipment_debit <= 0:
+            continue
+        trade_value = equipment_credit + gain_credit
+        balanced = abs(debits - credits) <= .01
+        reconciles = balanced and abs((equipment_debit - cash_credit) - trade_value) <= .02
+        trades.append({
+            "date": str(entry.get("date") or ""),
+            "acquiredEquipmentUsd": round(equipment_debit, 2),
+            "cashPaidUsd": round(cash_credit, 2),
+            "disposedEquipmentBookValueUsd": round(equipment_credit, 2),
+            "disposalGainUsd": round(gain_credit, 2),
+            "tradeInValueUsd": round(trade_value, 2),
+            "journalBalanced": balanced,
+            "purchaseFundingReconciles": reconciles,
+            "equipmentRegisterDisposalIndependentlyVerified": False,
+        })
+    return trades
+
+
 def home_reconciliation_preview(
     assets, wallets, wallet_cache, provider_feed, portfolio_setting,
     legacy_crypto_cache, financial_monthly, journal, month, user_id,
@@ -184,6 +225,7 @@ def home_reconciliation_preview(
         user_id=user_id, now=now
     )
     transfer = lulo_withdrawal_review(journal, financial_monthly, month)
+    equipment_trades = equipment_trade_review(journal, month)
     flags = []
     if not source_matches:
         flags.append("project-feed-summary-mismatch-or-absent")
@@ -193,6 +235,10 @@ def home_reconciliation_preview(
         flags.append("bitcoin-wallet-observations-stale")
     if transfer["amountsRequireReview"]:
         flags.append("lulo-withdrawal-vs-opening-requires-review")
+    if any(not trade["purchaseFundingReconciles"] for trade in equipment_trades):
+        flags.append("equipment-trade-journal-imbalance")
+    if equipment_trades:
+        flags.append("traded-equipment-register-disposal-requires-review")
     flags.append("financials-business-ledger-not-yet-backend-reconciled")
     return {
         "sourceOfCalculation": "backend-read-only-reconciliation",
@@ -206,14 +252,15 @@ def home_reconciliation_preview(
             personal["subtotalUsd"] + btc["cryptoTotalUsd"], 8
         ) if personal["subtotalUsd"] is not None and
              btc["cryptoTotalUsd"] is not None else None,
-        "lastSchedulerFormulaUsd": legacy["totalUsd"],
-        "lastSchedulerFormula": legacy["formula"],
+        "currentLegacySchedulerProjectionUsd": legacy["totalUsd"],
+        "legacySchedulerFormula": legacy["formula"],
         "legacyBasisIncludesFinancials": False,
         "businessBalanceSheetUsd": None,
         "homeCertifiedNetWorthUsd": None,
         "certified": False,
         "bankCashDeduplication": "unverified",
         "luloTransfer": transfer,
+        "equipmentTrades": equipment_trades,
         "flags": flags,
         "financialRecordsMutated": False,
     }

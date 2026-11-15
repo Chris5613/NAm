@@ -92,6 +92,24 @@ class NetWorthReconciliationTests(unittest.TestCase):
         self.assertIsNone(incomplete["simplifiedPersonalPlusCryptoUsd"])
         self.assertIn("project-feed-summary-mismatch-or-absent",incomplete["flags"])
 
+    def test_gpu_trade_in_math_balances_without_changing_register(self):
+        from backend.networth_reconciliation import equipment_trade_review
+        journal = [{"date": "2026-11-13", "lines": [
+            {"account": "equipment", "debit": 1950, "credit": 0},
+            {"account": "cash", "debit": 0, "credit": 1250},
+            {"account": "equipment:hardware:rtx5070", "debit": 0, "credit": 491.67},
+            {"account": "gainDisposal", "debit": 0, "credit": 208.33},
+        ]}]
+        original = repr(journal)
+        trades = equipment_trade_review(journal, "2026-11")
+        self.assertEqual(len(trades), 1)
+        self.assertTrue(trades[0]["journalBalanced"])
+        self.assertTrue(trades[0]["purchaseFundingReconciles"])
+        self.assertAlmostEqual(trades[0]["tradeInValueUsd"], 700)
+        self.assertAlmostEqual(trades[0]["cashPaidUsd"], 1250)
+        self.assertFalse(trades[0]["equipmentRegisterDisposalIndependentlyVerified"])
+        self.assertEqual(repr(journal), original)
+
     def test_missing_personal_valuation_flags_unknown(self):
         result=personal_assets_home_basis([asset("cash")])
         self.assertFalse(result["fullyValued"])
