@@ -311,22 +311,9 @@ function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now
     }
     const powerStart=device.powerStartTime || checkpoint.time;
     const power=Math.max(0,monthPosition(now)-monthPosition(powerStart))*(Number(device.power)||0);
-    if(singleKryptex && device.earningsStartDay){
-      const accrued=confirmedKryptexIncome(tracker,device.earningsStartDay,pacificDayKey(now));
-      return [device.id,Math.max(0,accrued-power)];
-    }
-    if(singleKryptex && checkpoint.allocationMode!=="allocated" &&
-      pacificDayKey(checkpoint.time)===pacificDayKey(now)){
-      const today=pacificDayKey(now);
-      const todayIncome=tracker?.kryptexConfirmedDays?.[today]
-        ? Math.max(0,Number(tracker?.kryptexMiningDaily?.[today])||0):0;
-      return [device.id,Math.max(0,todayIncome-power)];
-    }
     const earned=sources.reduce((sum,source)=>
       sum+incomeFor(source,checkpoint.month,currentMonth),0);
-    const baseline=checkpoint.allocationMode==="allocated"
-      ? Number(checkpoint.baseline)||0
-      : (Number(checkpoint.baseline)||0);
+    const baseline=Number(checkpoint.baseline)||0;
     return [device.id,Math.max(0,(Number(checkpoint.carried)||0)+earned-baseline-power)];
   }));
 }
