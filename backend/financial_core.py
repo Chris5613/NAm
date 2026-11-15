@@ -348,6 +348,42 @@ def project_automatic_expenses(month, base_rows, ledger_entries,
     }
 
 
+def trial_balance(accounts, ledger):
+    """Compute cumulative debit and credit activity by chart-of-account ID.
+
+    Balancing is diagnostic; a missing account is reported as an imbalance,
+    never fixed by inventing an account or a synthetic journal entry.
+    """
+    accounts = entries_list(accounts)
+    ledger = entries_list(ledger)
+    rows = []
+    seen = set()
+    for account in accounts:
+        if not isinstance(account, dict):
+            continue
+        key = account.get("id")
+        if not isinstance(key, str) or not key or key in seen:
+            continue
+        seen.add(key)
+        val = activity(ledger, key)
+        debit = max(0, val)
+        credit = max(0, -val)
+        if debit or credit:
+            rows.append({
+                **account, "debit": debit, "credit": credit,
+            })
+    debits = cents(sum(r["debit"] for r in rows))
+    credits = cents(sum(r["credit"] for r in rows))
+    return {
+        "sourceOfCalculation": "backend-trial-balance",
+        "rows": rows,
+        "debitsUsd": debits,
+        "creditsUsd": credits,
+        "differenceUsd": cents(debits - credits),
+        "balanced": abs(debits - credits) < .005,
+    }
+
+
 def evaluate_statement(data):
     """Read-only calculation of a complete supplied ledger. No persistence."""
     ledger = entries_list(data.get("entries"))
