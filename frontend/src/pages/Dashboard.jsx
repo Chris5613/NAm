@@ -15,7 +15,6 @@ import {
 import {
   remoteStorage as localStorage, subscribe,
 } from "@/lib/serverStore";
-import { getFinancialTotalAssets } from "@/lib/financialAssetsSnapshot";
 import { shouldRefreshHomeNetWorth } from "@/lib/netWorthRefreshKeys";
 
 import {
@@ -201,7 +200,7 @@ export default function Dashboard() {
     setAssets,
   ] = useState([]);
   const [chartRange, setChartRange] = useState("ALL");
-  const [financialAssets, setFinancialAssets] = useState(getFinancialTotalAssets);
+  const [financialAssets, setFinancialAssets] = useState({ value: null, incomplete: true, count: 0 });
   const [cashMonth, setCashMonth] = useState(() => new Date().toISOString().slice(0,7));
   const [bankAccounts, setBankAccounts] = useState([]);
   const [bankTransactions, setBankTransactions] = useState([]);
@@ -389,67 +388,33 @@ export default function Dashboard() {
             storage.getAssets?.() ||
             [];
 
-          const cryptoCache =
-            storage.getCryptoCache?.() ||
-            {};
-
-          /*
-           * Project Income is the source of truth for the
-           * active-project portfolio balance.
-           *
-           * cryptoCache.total can contain stale project
-           * values, so rebuild Crypto from:
-           *
-           *   Project Income Portfolio + Bitcoin
-           */
-          const projectIncomeSummary =
-            storage.get?.(
-              "project_income_portfolio_summary_v1"
-            ) || null;
-
-          const projectIncomeBalance =
-            Number(
-              projectIncomeSummary
-                ?.portfolioBalance
+          // Home is a consumer of the authenticated source-owned business
+          // Balance Sheet. Never reconstruct bank cash, GPU depreciation,
+          // Lulo withdrawals, provider holdings or BTC values in this tab.
+          let businessAssets;
+          let cryptoTotal;
+          try {
+            const source = await api.get(
+              "/api/project-tracking/financial-core/home-business"
             );
-
-          const bitcoinBalance =
-            Number(
-              cryptoCache
-                ?.projectPortfolio
-                ?.bitcoin
-                ?.value ??
-              cryptoCache
-                ?.projectPortfolio
-                ?.bitcoin
-                ?.balance
-            ) || 0;
-
-          const cachedCryptoTotal =
-            Number(
-              cryptoCache.total
-            ) || 0;
-
-          const cryptoTotal =
-            Number.isFinite(
-              projectIncomeBalance
-            )
-              ? (
-                  projectIncomeBalance +
-                  bitcoinBalance
-                )
-              : cachedCryptoTotal;
-
-          // Never overwrite the shared crypto cache from Home. That was a
-          // competing last-writer-wins path. This temporary legacy value
-          // remains a read-only fallback until BTC/Financials are migrated
-          // to a separate backend-owned business net-worth endpoint.
-
-          // Financials combines portfolio assets and business bank cash.
-          // The backend is the only authority for personal/business overlap.
-          // If it cannot calculate, preserve the last displayed financial
-          // state rather than creating a competing browser calculation.
-          const businessAssets = getFinancialTotalAssets();
+            const business = source?.business;
+            if (source?.sourceOfCalculation !== "backend-home-business" ||
+                !business || typeof business !== "object" ||
+                !Number.isFinite(source.cryptoTotalUsd) ||
+                (business.netValue != null &&
+                 !Number.isFinite(business.netValue)) ||
+                typeof business.incomplete !== "boolean" ||
+                typeof business.liabilitiesIncomplete !== "boolean") {
+              throw Error("Incomplete server-owned business snapshot");
+            }
+            businessAssets = business;
+            cryptoTotal = source.cryptoTotalUsd;
+          } catch {
+            if (isCurrent()) toast.error(
+              "Business assets unavailable. Previous verified values were preserved."
+            );
+            return;
+          }
           let calculatedNetWorth;
           try {
             const server = await api.post(
