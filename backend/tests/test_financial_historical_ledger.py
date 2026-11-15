@@ -85,6 +85,22 @@ class HistoricalLedgerCutoverTests(unittest.TestCase):
         results = movement_entries(moves, "2026-10", set(), manual)
         self.assertEqual(results, [])
 
+    def test_server_owned_sources_preserve_matching_historical_balance(self):
+        saved = {
+            "financials_journal_v1": self.data["journal"],
+            "financials_month_closes_v1": self.data["closedMonths"],
+            "monthly_business_changes_v1": self.data["records"],
+            "hardware_payback_devices_v1": self.data["hardwareDevices"],
+            "financials_unetwork_business_phones_v1": self.data["phones"],
+            "financials_confirmed_movements_v1": self.data["confirmedMovements"],
+        }
+        owned = persisted_historical_trial_inputs(
+            self.data, saved, self.data["incomeMonths"],
+            self.data["currentMonth"], self.data["todayKey"])
+        before = historical_trial_balance(self.data)
+        after = historical_trial_balance(owned)
+        self.assertEqual(before, after)
+
     def test_previous_month_inputs_are_server_owned(self):
         source = {
             "financials_journal_v1": [{
