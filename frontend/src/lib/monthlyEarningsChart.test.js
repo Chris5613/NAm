@@ -97,3 +97,46 @@ test("current-month project breakdown adds up to exact daily chart earnings", ()
   expect(chart[14].future).toBe(true);
   expect(chart[14].sources).toEqual({});
 });
+
+
+test("today's monthly point and month-to-date total track server-high-water earnings", () => {
+  const today = "2026-11-14";
+  const reconciled = {
+    Kryptex: 3.43481163,
+    Loopscale: 1.37571413,
+    Unetwork: 0.620796,
+    RollerCoin: 0.37592862,
+    Salad: 0.00046496,
+  };
+  const previousDays = { "2026-11-13": { Kryptex: 5.25 } };
+  const chart = buildMonthlyDailyEarningsChart({
+    todayKey: today,
+    // Local provider reads can lag while the server daily income is updated.
+    sourceTotalsForDay: day => day === today
+      ? { Kryptex: 3.18, Loopscale: 1.30, RollerCoin: 0.35 }
+      : previousDays[day] || {},
+    todaySources: reconciled,
+    todayTotal: 5.80771534,
+  });
+  const livePoint = chart.find(row => row.key === today);
+  expect(livePoint.value).toBeCloseTo(5.80771534, 8);
+  expect(livePoint.sources).toEqual(reconciled);
+  expect(livePoint.unattributedUsd).toBeCloseTo(0, 8);
+  const monthly = chart.reduce((total, day) => total + (day.value || 0), 0);
+  expect(monthly).toBeCloseTo(5.25 + 5.80771534, 8);
+  expect(Object.values(sumMonthlyChartSources(chart))
+    .reduce((sum, amount) => sum + amount, 0)).toBeCloseTo(monthly, 8);
+  expect(chart.find(row => row.key === "2026-11-15").value).toBeNull();
+});
+
+test("daily high-water is not silently lowered when provider breakdown lags", () => {
+  const chart = buildMonthlyDailyEarningsChart({
+    todayKey: "2026-11-14",
+    sourceTotalsForDay: () => ({}),
+    todaySources: { Kryptex: 3.4, Loopscale: 1.35 },
+    todayTotal: 5.2,
+  });
+  expect(chart[13].value).toBeCloseTo(5.2);
+  expect(chart[13].unattributedUsd).toBeCloseTo(0.45);
+  expect(chart[13].sources).toEqual({ Kryptex: 3.4, Loopscale: 1.35 });
+});

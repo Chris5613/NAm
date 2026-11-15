@@ -1327,28 +1327,6 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     mergeHighWaterSources,
   } = useDailyEarningsHighWater(todayKey, observedDailySourceTotals);
 
-  const monthlyChartData = buildMonthlyDailyEarningsChart({
-    todayKey,
-    sourceTotalsForDay,
-  });
-  const thisMonthEarned = monthlyChartData.reduce(
-    (sum, day) => sum + (Number(day.value) || 0),
-    0
-  );
-  const currentMonthSources = sumMonthlyChartSources(monthlyChartData);
-
-  const selectedBreakdown = buildSelectedEarningsBreakdown({
-    selection: selectedEarningsPoint,
-    earningsChartRange,
-    projectIncome: chartProjectIncome,
-    stockPayouts,
-    todayKey,
-    luloUtcDay: currentLuloUtc.utcDay,
-    hasLuloProjects: luloProjects.length > 0,
-    sourceTotalsForDay,
-    currentMonthSources,
-  });
-
   const serverDailyIncome =
     useServerDailyIncome(todayKey, dailySourceTotals, mergeHighWaterSources);
 
@@ -1377,6 +1355,34 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
         : null,
   });
 
+  // Charts and the daily panel MUST consume the same confirmed per-source
+  // high-water for today's Pacific day. Previously they recalculated from
+  // local extension snapshots while the panel used fresher server observations.
+  const chartSourceTotalsForDay = key => key === todayKey
+    ? displayDailySourceTotals : sourceTotalsForDay(key);
+  const monthlyChartData = buildMonthlyDailyEarningsChart({
+    todayKey,
+    sourceTotalsForDay: chartSourceTotalsForDay,
+    todaySources: displayDailySourceTotals,
+    todayTotal: todayEarnings,
+  });
+  const thisMonthEarned = monthlyChartData.reduce(
+    (sum, day) => sum + (Number(day.value) || 0), 0
+  );
+  const currentMonthSources = sumMonthlyChartSources(monthlyChartData);
+
+  const selectedBreakdown = buildSelectedEarningsBreakdown({
+    selection: selectedEarningsPoint,
+    earningsChartRange,
+    projectIncome: chartProjectIncome,
+    stockPayouts,
+    todayKey,
+    luloUtcDay: currentLuloUtc.utcDay,
+    hasLuloProjects: luloProjects.length > 0,
+    sourceTotalsForDay: chartSourceTotalsForDay,
+    currentMonthSources,
+  });
+
   const dailyEarningsObservations =
     useDailyEarningsObservations(todayEarnings, earningsClock, todayKey);
 
@@ -1388,7 +1394,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   } = buildWeeklyEarningsChart({
     todayKey,
     luloUtcDay: currentLuloUtc.utcDay,
-    sourceTotalsForDay,
+    sourceTotalsForDay: chartSourceTotalsForDay,
     earningsClock,
   });
 
@@ -1410,12 +1416,14 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const yesterdayAmountForDashboard = yesterdayForDashboard
     ? Number(yesterdayForDashboard.value) || 0
     : null;
+  // The plotted point is persisted so automated parity checks catch regressions.
+  const chartToday = monthlyChartData.find(day => day.key === todayKey)?.value ?? null;
   useEffect(() => {
     const month = todayKey.slice(0, 7);
     const current = readObject(PASSIVE_MONTHLY_INCOME_KEY);
     const next = {
       month, amount: thisMonthEarned, day: todayKey,
-      today: todayEarnings,
+      today: todayEarnings, chartToday,
       yesterdayDay: yesterdayKeyForDashboard,
       yesterday: yesterdayAmountForDashboard,
     };
@@ -1425,6 +1433,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       current?.day === todayKey &&
       Math.abs(Number(current.amount) - thisMonthEarned) < 0.000001 &&
       Math.abs(Number(current.today) - todayEarnings) < 0.000001 &&
+      current?.chartToday === chartToday &&
       current?.yesterdayDay === yesterdayKeyForDashboard &&
       (current.yesterday ?? null) === yesterdayAmountForDashboard
     ) return;
@@ -1432,7 +1441,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       ...next, updatedAt: new Date().toISOString(),
     });
   }, [
-    todayKey, thisMonthEarned, todayEarnings,
+    todayKey, thisMonthEarned, todayEarnings, chartToday,
     yesterdayKeyForDashboard, yesterdayAmountForDashboard,
     onMonthlyEarningsChange,
   ]);
