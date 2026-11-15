@@ -239,3 +239,128 @@ def evaluate_statement(data):
         ],
         "business": sum_business_rows(data.get("rows")),
     }
+
+
+SOURCE_KEYS = ("lulo", "loopscale", "stocks", "kryptex", "rollercoin",
+               "salad", "unetwork")
+
+
+def source_key(raw):
+    value = re.sub(r"\s+", " ", str(raw or "").strip().lower())
+    if re.search(r"roller\s*coin", value):
+        return "rollercoin"
+    if re.search(r"unity\s*network|unitynetwork|unetwork", value):
+        return "unetwork"
+    for key in ("kryptex", "loopscale", "lulo", "salad"):
+        if re.search(r"\b" + key + r"\b", value):
+            return key
+    if re.search(r"stocks|dividend|\bvoo\b|\bvti\b", value):
+        return "stocks"
+    return value
+
+
+def debit_for_income(source):
+    return {"lulo": "luloCash", "loopscale": "defi",
+            "stocks": "brokerage", "kryptex": "platform:kryptex",
+            "rollercoin": "platform:rollercoin", "salad": "platform:salad",
+            "unetwork": "platform:unetwork"}.get(source, "platform")
+
+
+def auto_income_journal(month, income_month, manual_journal,
+                        current_month, today_key=None):
+    """Read-only, idempotent projection matching the old automatic accruals.
+
+    A posted manual income credit substitutes for projected income. Asset
+    withdrawals do not. Unknown revenue accounts are flagged for review,
+    never fabricated as a platform receivable.
+    """
+    blank = {"entries": [], "syncedTotal": None, "manualRevenueTotal": 0,
+             "generatedRevenueTotal": 0, "unexplainedManualRevenue": 0,
+             "pendingReview": [], "pendingReviewTotal": 0}
+    if not isinstance(income_month, dict):
+        return blank
+    synced = max(0, cents(income_month.get("total")))
+    blank["syncedTotal"] = synced
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", str(month or "")):
+        return blank
+    sources = {}
+    for label, raw in (income_month.get("sources") or {}).items():
+        amount = max(0, cents(raw))
+        key = source_key(label)
+        if amount <= 0 or not key:
+            continue
+        if key not in sources:
+            sources[key] = {"key": key, "label": label, "amount": 0.}
+        sources[key]["amount"] = cents(sources[key]["amount"] + amount)
+    total_sources = cents(sum(s["amount"] for s in sources.values()))
+    residual = cents(synced - total_sources)
+    if synced > total_sources and not (
+        len(sources) >= 2 and residual <= .01
+    ):
+        sources["unallocated-income"] = {
+            "key": "unallocated-income", "label": "Unallocated tracked income",
+            "amount": residual,
+        }
+    manual_revenue = []
+    for entry in entries_list(manual_journal):
+        if not isinstance(entry, dict) or str(entry.get("date") or "")[:7] != month:
+            continue
+        amount = cents(sum(line["credit"] - line["debit"] for line in
+                           normalize_lines(entry)
+                           if line["account"] in ("revenue", "dividendRevenue")))
+        if amount > 0:
+            manual_revenue.append({**entry, "amount": amount})
+    manual_total = cents(sum(row["amount"] for row in manual_revenue))
+    remaining_sources = [dict(s) for s in sources.values()]
+    unattributed = 0.
+    for entry in manual_revenue:
+        description = source_key(entry.get("description"))
+        match = next((s for s in remaining_sources
+                      if s["key"] in description or
+                      (s["key"] == "stocks" and re.search(
+                          r"dividend|\bvoo\b|\bvti\b", description))), None)
+        if not match:
+            unattributed = cents(unattributed + entry["amount"])
+            continue
+        offset = min(match["amount"], cents(entry["amount"]))
+        match["amount"] = cents(match["amount"] - offset)
+        unattributed = cents(unattributed + max(0, cents(entry["amount"] - offset)))
+    for source in sorted(remaining_sources, key=lambda s: s["key"] != "unallocated-income"):
+        amount = min(unattributed, source["amount"])
+        source["amount"] = cents(source["amount"] - amount)
+        unattributed = cents(unattributed - amount)
+    limit = max(0, cents(synced - manual_total))
+    remaining = limit
+    day = (today_key if month == current_month and isinstance(today_key, str) and
+           today_key.startswith(month) else
+           f"{month}-{monthrange(int(month[:4]), int(month[5:]))[1]:02d}")
+    entries = []
+    review = []
+    for source in remaining_sources:
+        value = min(remaining, max(0, cents(source["amount"])))
+        if value <= 0:
+            continue
+        key = source["key"]
+        if key not in SOURCE_KEYS:
+            review.append({"source": source["label"], "amount": value})
+            remaining = cents(remaining - value)
+            continue
+        entries.append({
+            "id": "synced-income:" + month + ":" + quote(key, safe="-_.!~*'()"),
+            "date": day, "description": "Synced " + str(source["label"]) + " income",
+            "automatic": True, "origin": "crypto-income", "amount": value,
+            "lines": [
+                {"account": debit_for_income(key), "debit": value, "credit": 0},
+                {"account": "dividendRevenue" if key == "stocks" else "revenue",
+                 "debit": 0, "credit": value},
+            ],
+        })
+        remaining = cents(remaining - value)
+    return {
+        "entries": entries, "syncedTotal": synced,
+        "manualRevenueTotal": manual_total,
+        "generatedRevenueTotal": cents(sum(x["amount"] for x in entries)),
+        "pendingReview": review,
+        "pendingReviewTotal": cents(sum(x["amount"] for x in review)),
+        "unexplainedManualRevenue": max(0, cents(manual_total - synced)),
+    }
