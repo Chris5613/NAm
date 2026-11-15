@@ -10,7 +10,7 @@ import {
 } from "@/lib/unetworkPhonesAccounting";
 import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
-import { useBackendFinancialCore, financialReportMatches, financialFlowsMatch } from "@/hooks/useBackendFinancialCore";
+import { useBackendFinancialCore, financialReportMatches, financialFlowsMatch, statementRowsMatch } from "@/hooks/useBackendFinancialCore";
 import { useBackendAutoIncomeJournal, autoIncomeMatches } from "@/hooks/useBackendAutoIncomeJournal";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
@@ -475,8 +475,12 @@ export default function FinancialsPage() {
   // Compute server-side; keep the proven browser view only when the backend
   // response is stale or fails strict parity. This is read-only: it never
   // generates new posted transactions or adjusts a locked month.
+  const cashOpening = deriveCashOpening(
+    month, bankOpenings, journal, Object.values(confirmedMovements));
+  const payableOpening = derivePayableOpening(month, journal);
   const serverFinancial = useBackendFinancialCore(
-    month, entries, baseRows, hardwareDevices, savedExpenses);
+    month, entries, baseRows, hardwareDevices, savedExpenses,
+    cashOpening, payableOpening);
   const localReport = buildFinancialProfit(entries,savedExpenses);
   const report = financialReportMatches(localReport,serverFinancial?.profit)
     ? serverFinancial.profit : localReport;
@@ -510,9 +514,11 @@ export default function FinancialsPage() {
 
   // A bank payment really reduces Cash / Bank. If no opening bank balance
   // was provided, display its journal movement without fabricating an ending.
-  const cashOpening = deriveCashOpening(month,bankOpenings,journal,Object.values(confirmedMovements));
-  const rows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,
-    {cashOpening,payableOpening:derivePayableOpening(month,journal)});
+  const localRows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,
+    {cashOpening,payableOpening});
+  const rows = !closeSnapshot &&
+    statementRowsMatch(localRows, serverFinancial?.statementRows)
+      ? serverFinancial.statementRows : localRows;
   // Only presentation rows are filtered. Financial totals still use 'rows'.
   // Closed/past reporting months retain their Lulo historical reference.
   const reportingMonth = getCurrentMonthKey();
