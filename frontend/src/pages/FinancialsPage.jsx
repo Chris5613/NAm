@@ -15,6 +15,7 @@ import { useBackendAutoIncomeJournal, autoIncomeMatches } from "@/hooks/useBacke
 import { useBackendPhoneAssets } from "@/hooks/useBackendPhoneAssets";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
 import { useBackendAutomaticExpenses } from "@/hooks/useBackendAutomaticExpenses";
+import { reportFinancialParity } from "@/lib/financialParityTelemetry";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
@@ -405,6 +406,16 @@ export default function FinancialsPage() {
   const syncedIncomeJournal = autoIncomeMatches(
     localSyncedIncomeJournal, backendSyncedIncomeJournal)
     ? backendSyncedIncomeJournal : localSyncedIncomeJournal;
+  useEffect(() => {
+    if (!backendSyncedIncomeJournal) return;
+    reportFinancialParity(
+      "automatic-income", month,
+      autoIncomeMatches(localSyncedIncomeJournal, backendSyncedIncomeJournal),
+      "backend-projection",
+      JSON.stringify({ month, ledgerEntries, syncedRevenue })
+    );
+  }, [month, localSyncedIncomeJournal, backendSyncedIncomeJournal,
+      ledgerEntries, syncedRevenue]);
   const electricityCovered = hasFreeMiningPower(month);
   const estimatedPower = powerEstimates[month]?.source === "backend-power-meter-tariffs"
     ? valueOrNull(powerEstimates[month]?.outOfPocketUsd) : null;
@@ -595,6 +606,17 @@ export default function FinancialsPage() {
   const localCashFlow = classifyCashFlows(entries);
   const cashFlow = financialFlowsMatch(localCashFlow, serverFinancial?.cashFlow)
     ? serverFinancial.cashFlow : localCashFlow;
+  useEffect(() => {
+    if (!serverFinancial) return;
+    reportFinancialParity(
+      "financial-statement", month,
+      financialReportMatches(localReport, serverFinancial.profit) &&
+        financialFlowsMatch(localCashFlow, serverFinancial.cashFlow),
+      "backend-projection",
+      JSON.stringify({ month, entries, cashOpening, payableOpening, savedExpenses })
+    );
+  }, [month, serverFinancial, localReport, localCashFlow,
+      entries, cashOpening, payableOpening, savedExpenses]);
   const cashEvents = Object.values(cashFlow.sections).flat();
   const cashIn = moneyRound(cashEvents.filter(entry=>entry.delta>0)
     .reduce((sum,entry)=>sum+entry.delta,0));
