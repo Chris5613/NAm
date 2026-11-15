@@ -5,6 +5,36 @@
 **Disposition:** **NOT FULLY MIGRATED / NOT DEAD-CODE CLEAN / NOT SECURITY-CLEAN.**  
 **Distinction:** The earlier **six-of-six release checklist** was accepted for the defined financial integrity rollout; it was **not** a claim of zero client-owned calculations, no unused code, or every feature having a backend calculation endpoint.
 
+> **Scope update from owner (November 15):** The user narrowed this
+> review to the active sidebar pages: **Home, Spending, Crypto Dashboard,
+> Financials, Mining Power**. Crypto Dashboard's **embedded Passive Income**
+> content is in scope. Standalone routes that are not in the sidebar may be
+> ignored unless loaded by one of these pages. Cloud betting is explicitly
+> retired. Therefore broad original findings about standalone Delivery,
+> Investment Overview, and Monthly Changes do not individually block the
+> narrowed migration, although shared libraries still matter if live sidebar
+> pages import them.
+>
+> **Executed cleanup:** Removed `frontend/src/pages/CloudPage.jsx`,
+> `frontend/src/lib/cloudBetting.js`, its test, `MlbSlate.jsx`,
+> `mlb-api.js` and `odds.js` after checking their source references;
+> `/cloud` now redirects to Home. Preserved old saved Cloud betting
+> records in PostgreSQL rather than deleting financial/account data.
+> Removed an unused `currentRate`/Pacific time-of-use tariff calculator
+> and its constant from the live Crypto Dashboard, which instead consumes
+> backend power tariff output. Also removed dead derived project total
+> variables; these changes did not modify provider earnings.
+>
+> **Narrowed release assessment:** The source review still shows remaining
+> browser-side accounting/aggregation in **Spending** (totals, cash flow,
+> categories, charts), **Crypto Dashboard's embedded Passive Income and
+> per-project ROI summaries**, **Home's net-worth trends fallback** and
+> some **Financials display totals**. Core Home/Financials accounting and
+> power readings are backend-owned. The browser uses a server-backed
+> store but that is not equivalent to server-owned calculation. This
+> narrow-scope backend-only migration remains **NOT CERTIFIED**. More work,
+> parity tests, and a full authenticated 5-page browser journey are needed.
+>
 ## 1. How this audit was performed
 
 - Queried the actual GitHub recursive repository tree: **423 version-controlled blobs** at the time of inspection. Read application routing, major live page modules, shared data/finance modules, backend route decorators, Financials source modules, CI workflow definitions and specific dead-code references.
