@@ -30,12 +30,14 @@ export default function FinancialsIntegrityPanel() {
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState("");
   const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const runAudit = async () => {
     if (pending) return;
     setPending(true);
     setFailure("");
     setReport(null);
+    setCopied(false);
     try {
       // Do not route through Financials fast cache: a real-time audit
       // must re-query the backend on every explicit button press.
@@ -49,6 +51,30 @@ export default function FinancialsIntegrityPanel() {
       setFailure(error?.message || "The authenticated integrity audit is unavailable.");
     } finally {
       setPending(false);
+    }
+  };
+
+  const copyAudit = async () => {
+    if (!report) return;
+    const lines = [
+      "NAm authenticated read-only Financials integrity audit",
+      "Calculated at: " + (report.calculatedAt || report.asOfDay),
+      "Status: " + report.status,
+      ...report.checks.map(check =>
+        "[" + check.status.toUpperCase() + "] " + check.code + ": " +
+        check.message +
+        (Array.isArray(check.missingEvidence) && check.missingEvidence.length
+          ? " | Missing: " + check.missingEvidence.join("; ") : "") +
+        (Array.isArray(check.differingFields) && check.differingFields.length
+          ? " | Different fields: " + check.differingFields.join(", ") : "")
+      ),
+    ];
+    try {
+      await navigator.clipboard.writeText(lines.join("\n"));
+      setCopied(true);
+    } catch {
+      setCopied(false);
+      setFailure("Could not copy the report. Select the checks below to share them.");
     }
   };
 
@@ -94,6 +120,10 @@ export default function FinancialsIntegrityPanel() {
         A warning may reflect incomplete historical evidence rather than
         an incorrect balance. It does not certify missing receipts or closes.
       </p>
+      <button type="button" onClick={copyAudit}
+        className="mr-4 rounded-md border border-[#345063] px-2 py-1 text-xs text-sky-300">
+        {copied ? "Audit copied" : "Copy audit results"}
+      </button>
       <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}
         className="text-xs font-semibold text-sky-300 underline decoration-dotted">
         {open ? "Hide" : "Show"} individual audit checks
