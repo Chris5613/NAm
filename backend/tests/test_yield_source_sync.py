@@ -97,9 +97,12 @@ class YieldSourceNormalizationTests(TestCase):
     def test_lulo_failure_reports_safe_upstream_reasons(self):
         def fail(_url, _headers):
             raise ProviderRequestError("http_401")
-        with patch("backend.yield_source_sync.read_json", side_effect=fail):
-            with self.assertRaises(LuloSourceError) as failure:
-                fetch_lulo(LULO_WALLET, self.now)
+        # The unit test simulates upstream 401s, so it needs a dummy API key
+        # regardless of whether CI exposes a real LULO_API_KEY.
+        with patch.dict("os.environ", {"LULO_API_KEY": "unit-test-only"}):
+            with patch("backend.yield_source_sync.read_json", side_effect=fail):
+                with self.assertRaises(LuloSourceError) as failure:
+                    fetch_lulo(LULO_WALLET, self.now)
         self.assertEqual(failure.exception.code,
                          "primary_unavailable:account=http_401,custom=http_401")
         self.assertNotIn(LULO_WALLET, failure.exception.code)
