@@ -15,12 +15,13 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
-from ..models import Setting, User
+from ..models import Setting, User, Wallet
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
 from ..earnings_dashboard import build_backend_earnings_dashboard, TRACKERS as DASHBOARD_TRACKERS
 from ..project_freshness import is_project_stale
 from ..project_feed_sources import PROVIDER_TRACKERS, from_tracker
 from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
+from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..integration_audit import audit_integration_settings
@@ -674,6 +675,53 @@ async def calculate_provider_monthly_income(
         "months": monthly_provider_income(trackers, current_month),
         "calculatedAt": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get("/bitcoin-valuation")
+async def bitcoin_valuation(
+    response: Response,
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Read-only BTC quantity and single-quote valuation from server records.
+
+    Wallet data is previously observed, not a promise of live on-chain
+    ownership. Price changes affect USD holdings, NEVER mining income.
+    """
+    from .market import cached_get
+    now = datetime.now(timezone.utc)
+    wallets = db.scalars(select(Wallet).where(Wallet.user_id == user.id)).all()
+    evidence = wallet_evidence(
+        wallets, setting(db, user.id, "crypto_wallet_balance_cache"), now
+    )
+    feed = setting(db, user.id, LATEST_KEY) or {}
+    project_rows = feed.get("projects") if isinstance(feed, dict) else None
+    projects = portfolio_summary(project_rows) if isinstance(project_rows, list) else {}
+    project_balance = projects.get("totalUsd") if (
+        isinstance(feed, dict) and feed.get("receivedAt") and projects.get("complete")
+    ) else None
+    quote = None
+    quote_source = None
+    quote_at = None
+    if evidence["btcAmount"] is not None and evidence["walletCount"] > 0:
+        try:
+            price = await cached_get(
+                "coingecko:btc:usd",
+                "https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd",
+                {},
+            )
+            price = price.get("bitcoin", {}).get("usd") if isinstance(price, dict) else None
+            if price is not None and float(price) > 0:
+                quote = price
+                quote_source = "coingecko-backend"
+                quote_at = datetime.now(timezone.utc).isoformat()
+        except (HTTPException, TypeError, ValueError, OverflowError):
+            # Preserve a clearly marked previous wallet quote if the upstream
+            # fails. Unknown price must never be coerced into $0.
+            pass
+    response.headers["Cache-Control"] = "private, no-store"
+    return combine_crypto_valuation(
+        evidence, project_balance, quote, quote_source, quote_at, user.id, now
+    )
 
 
 @router.get("/crypto-dashboard")
