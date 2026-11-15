@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/apiClient";
+import { reportFinancialParity } from "@/lib/financialParityTelemetry";
 
 /**
  * Migration bridge: server computes *all* Balance Sheet asset/equipment rows,
@@ -20,7 +21,13 @@ export function useBackendFinancialBalanceRows(payload, localRows) {
     return () => { active = false; };
   }, [signature, payload.month]);
   const serverRows = result?.signature === signature ? result.rows : null;
-  return financialAssetRowsMatch(localRows, serverRows) ? serverRows : localRows;
+  const reconciled = financialAssetRowsMatch(localRows, serverRows);
+  useEffect(() => {
+    if (serverRows) reportFinancialParity(
+      "balance-rows", payload.month, reconciled,
+      "backend-projection", signature);
+  }, [serverRows, payload.month, reconciled, signature]);
+  return reconciled ? serverRows : localRows;
 }
 
 export function financialAssetRowsMatch(localRows, serverRows) {
