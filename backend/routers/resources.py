@@ -27,6 +27,7 @@ from ..networth_reconciliation import home_reconciliation_preview
 from ..financial_core import calculate_net_worth, maybe_number as accounting_number
 from ..networth_trends import networth_trends
 from ..monthly_changes_seal import seal_completed_business_months, preserve_locked_business_months
+from ..closed_month_guard import protect_closed_financial_months, reopen_closed_financial_month
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
@@ -294,6 +295,11 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
     if current != payload["before"] and current != payload["after"]:
         raise HTTPException(409, "Setting changed in another session. No changes were applied.")
     after = payload["after"]
+    if key == "financials_month_closes_v1":
+        try:
+            after = protect_closed_financial_months(current, after)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
     if key == "monthly_business_changes_v1":
         month = datetime.now(timezone.utc).astimezone(
             ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
@@ -442,6 +448,36 @@ async def persist_home_trends(
             db.add(Setting(user_id=user.id, key=key, value=value))
     db.commit()
     return {**result, "netWorth": calculated}
+
+
+@router.post("/financial-core/reopen-month/{month}")
+async def explicitly_reopen_financial_month(
+    month: str, user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Intentional authenticated reopen; generic settings saves cannot do this.
+
+    This changes only the saved Financials month-close marker, not posted
+    journal entries, source income or balances.
+    """
+    if not isinstance(month, str) or len(month) != 7:
+        raise HTTPException(422, "Invalid accounting month.")
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    key = "financials_month_closes_v1"
+    lock_setting_key(db, user.id, key)
+    row = db.scalar(select(Setting).where(
+        Setting.user_id == user.id, Setting.key == key
+    ))
+    try:
+        updated = reopen_closed_financial_month(
+            row.value if row else None, month
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    row.value = updated
+    db.commit()
+    return {"sourceOfCalculation": "backend-explicit-financial-reopen",
+            "month": month, "closedMonths": updated}
 
 
 @router.get("/net-worth/reconciliation")
