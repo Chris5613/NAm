@@ -333,8 +333,13 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
             Setting.key == "financials_month_closes_v1",
         ))
         closes = closes_row.value if closes_row else {}
+        business_row = db.scalar(select(Setting).where(
+            Setting.user_id == user.id,
+            Setting.key == "monthly_business_changes_v1",
+        ))
+        business_months = business_row.value if business_row else {}
         try:
-            after = guard_journal_write(current, after, closes)
+            after = guard_journal_write(current, after, closes, business_months)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     if key == "project_income_kryptex_tracker_v1":
