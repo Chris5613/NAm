@@ -29,7 +29,7 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
-from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal
+from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
@@ -800,6 +800,31 @@ async def evaluate_net_worth(
         payload.get("assets"), payload.get("business"), payload.get("cryptoTotal")
     )
     return {"sourceOfCalculation": "backend-financial-core", **result}
+
+
+@router.get("/project-break-even")
+async def backend_project_break_even(
+    user: User = Depends(current_user), db: Session = Depends(get_db),
+) -> dict:
+    """Server-owned lifetime earnings to paid-in capital; no inferred income."""
+    today, month = current_keys()
+    sources = {
+        "salad": "project_income_salad_tracker_v1",
+        "rollercoin": "project_income_rollercoin_tracker_v2",
+        "unetwork": "project_income_unetwork_tracker_v1",
+        "kryptex": "project_income_kryptex_tracker_v1",
+    }
+    trackers = {
+        key: setting(db, user.id, name) or {}
+        for key, name in sources.items()
+    }
+    stats = provider_stats(trackers, today, month)
+    result = project_break_even(
+        setting(db, user.id, "networth_yield_positions") or [],
+        stats, setting(db, user.id, "yield_project_payback_v1") or {},
+    )
+    return {"month": month, "calculatedAt": datetime.now(timezone.utc).isoformat(),
+            **result}
 
 
 @router.get("/provider-stats")
