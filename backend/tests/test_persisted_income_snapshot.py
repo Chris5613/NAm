@@ -2,7 +2,8 @@
 import copy
 import unittest
 
-from backend.persisted_income_snapshot import source_income_history
+from backend.persisted_income_snapshot import source_income_history, project_history_rows
+from types import SimpleNamespace
 
 
 class PersistedIncomeSnapshotTests(unittest.TestCase):
@@ -95,6 +96,48 @@ class PersistedIncomeSnapshotTests(unittest.TestCase):
         )
         self.assertEqual(result["months"][0]["total"], 12)
         self.assertEqual(snapshots["2026-11"]["total"], 15)
+
+    def test_project_embedded_earnings_survive_empty_relational_history(self):
+        projects = [
+            SimpleNamespace(
+                id="clore", name="Clore AI", earned=32.42,
+                data={"transactions": [
+                    {"date": "2026-06-07", "type": "earning", "amount": 6.75},
+                    {"date": "2026-06-07", "type": "earning", "amount": 25.67},
+                ]},
+            ),
+            SimpleNamespace(
+                id="unity", name="Unity  Network", earned=0,
+                data={"transactions": [
+                    {"date": "2026-08-01", "type": "earning", "amount": 1.155289},
+                ]},
+            ),
+        ]
+        rows = project_history_rows(projects, {})
+        self.assertEqual(len(rows[0]["transactions"]), 2)
+        self.assertEqual(len(rows[1]["transactions"]), 1)
+        history = source_income_history(
+            {}, {}, rows, {"monthly": {}}, "2026-11")
+        by_month = {month["monthKey"]: month for month in history["months"]}
+        self.assertAlmostEqual(by_month["2026-06"]["sources"]["Clore AI"],
+                               32.42)
+        self.assertAlmostEqual(by_month["2026-08"]["sources"]["Unity  Network"],
+                               1.155289)
+
+    def test_relational_project_history_replaces_embedded_not_adds_twice(self):
+        project = SimpleNamespace(
+            id="p1", name="Clore AI", earned=25,
+            data={"transactions": [
+                {"date": "2026-06-01", "type": "earning", "amount": 25},
+            ]},
+        )
+        relational = {"p1": [
+            {"date": "2026-06-01", "type": "earning", "amount": 25},
+        ]}
+        rows = project_history_rows([project], relational)
+        history = source_income_history({}, {}, rows, {}, "2026-11")
+        self.assertEqual(history["months"][0]["total"], 25)
+        self.assertEqual(len(rows[0]["transactions"]), 1)
 
     def test_wallet_balance_is_never_recognized_as_earnings(self):
         result = source_income_history(
