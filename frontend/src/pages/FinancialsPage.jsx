@@ -319,7 +319,7 @@ export default function FinancialsPage() {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
     depreciation: 0, expenses: 0, profit: 0,
   };
-  const incomeKnown = Boolean(syncedRevenue) ||
+  const incomeKnown = Number.isFinite(syncedIncomeJournal.syncedTotal) ||
     ledgerEntries.some(entry=>["revenue","dividendRevenue"].some(account=>journalActivity(entry,account)<0));
   const pnlRevenue = closeSnapshot ? closeSnapshot.revenue : incomeKnown ? report.revenue : null;
   const expenses = closeSnapshot ? closeSnapshot.expenses : report.expenses;
