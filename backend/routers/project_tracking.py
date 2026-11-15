@@ -19,6 +19,7 @@ from ..models import Setting, User, Wallet
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
 from ..earnings_dashboard import build_backend_earnings_dashboard, TRACKERS as DASHBOARD_TRACKERS
 from ..hardware_credit_audit import hardware_credit_audit
+from ..hardware_payback_lifetime import build_lifetime_hardware_payback
 from ..project_freshness import is_project_stale
 from ..project_feed_sources import PROVIDER_TRACKERS, from_tracker
 from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
@@ -635,6 +636,50 @@ async def hardware_payback_source_audit(
     month_income = await earnings_dashboard(month, user, db)
     devices = setting(db, user.id, "hardware_payback_devices_v1")
     return hardware_credit_audit(month, devices, month_income)
+
+
+@router.get("/hardware-payback-lifetime")
+async def hardware_payback_lifetime(
+    response: Response,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Reconcile cumulative per-device credits to dated backend provider evidence.
+
+    Legacy per-device checkpoint baselines can be stale after Kryptex
+    recovery; the explicit earningsStartDay always wins over the checkpoint.
+    This read-only preview does not rewrite user-selected payback recovery.
+    """
+    today = datetime.now(timezone.utc).astimezone(
+        ZoneInfo("America/Los_Angeles")).date()
+    devices = setting(db, user.id, "hardware_payback_devices_v1")
+    if not isinstance(devices, list):
+        response.headers["Cache-Control"] = "private, no-store"
+        return build_lifetime_hardware_payback(devices, {}, {}, today.isoformat())
+    starts = []
+    from datetime import date
+    for item in devices:
+        if not isinstance(item, dict):
+            continue
+        try:
+            val = date.fromisoformat(str(item.get("earningsStartDay") or ""))
+            if val <= today and (today-val).days <= 1096:
+                starts.append(val)
+        except (TypeError, ValueError):
+            continue
+    earliest = min(starts) if starts else today
+    prefix = "yield_server_daily_income_"
+    low = prefix + earliest.isoformat()
+    high = prefix + today.isoformat()
+    daily_rows = db.scalars(select(Setting).where(
+        Setting.user_id == user.id, Setting.key >= low, Setting.key <= high
+    )).all()
+    daily = {row.key.removeprefix(prefix): row.value
+             for row in daily_rows if isinstance(row.value, dict)}
+    trackers = {name: setting(db, user.id, key) or {}
+                for name, key in DASHBOARD_TRACKERS.items()}
+    response.headers["Cache-Control"] = "private, no-store"
+    return build_lifetime_hardware_payback(devices, daily, trackers, today.isoformat())
 
 
 @router.get("/provider-stats")
