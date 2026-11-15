@@ -19,11 +19,9 @@ import { extractBackendKryptexRunRate, projectedDailyMiningNet } from "@/lib/bac
 import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
 
 
-import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 
-import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 
-import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getKryptexStats, getRollerCoinTrackerStats, getSaladTrackerStats, getUnetworkTrackerStats, groupManualPositions, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadPositions, loadProjectPayback, saveProjectPayback, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
+import { formatCurrency, getCurrentMonthKey, getKryptexStats, getRollerCoinTrackerStats, getSaladTrackerStats, getUnetworkTrackerStats, groupManualPositions, loadKryptexTracker, loadPositions, loadProjectPayback, saveProjectPayback, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 
 const panel = "rounded-2xl border border-[#242b33] bg-[#0d1014] shadow-[0_12px_36px_rgba(0,0,0,0.16)]";
 const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
@@ -80,66 +78,14 @@ function readHardware() {
   }
 }
 
-function buildDailyIncomeHistory({ luloProjects, loopscaleHistory, saladTracker, rollerTracker, unetworkTracker, kryptexTracker }) {
-  const totals = new Map();
-  const add = (date, amount) => {
-    const day = String(date || "").slice(0, 10);
-    const value = Number(amount) || 0;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || value <= 0) return;
-    totals.set(day, (totals.get(day) || 0) + value);
-  };
-
-  Object.entries(saladTracker?.daily || {}).forEach(([day, amount]) => add(day, amount));
-
-  Object.entries(unetworkTracker?.daily || {}).forEach(([day, entry]) =>
-    add(day, typeof entry === "number" ? entry : entry?.usd)
-  );
-
-  const rollerDays = new Set([
-    ...Object.keys(rollerTracker?.daily || {}),
-    ...Object.keys(rollerTracker?.walletDaily || {}),
-  ]);
-  rollerDays.forEach(day => {
-    const wallet = rollerTracker?.walletDaily?.[day];
-    const mined = rollerTracker?.daily?.[day];
-    add(day, wallet ? wallet?.usd : mined?.usd);
-  });
-
-  Object.entries(kryptexTracker?.kryptexMiningDaily || {}).forEach(([day, amount]) => {
-    if (kryptexTracker?.kryptexConfirmedDays?.[day]) add(day, amount);
-  });
-
-  Object.values(loopscaleHistory?.positions || {}).forEach(position => {
-    Object.entries(position?.observedDaily || {}).forEach(([day, amount]) => add(day, amount));
-  });
-
-  (luloProjects || []).forEach(project => {
-    (project?.transactions || []).forEach(transaction => {
-      if (transaction?.source !== "lulo_yield") return;
-      add(transaction?.source_date || transaction?.date || transaction?.created_at, transaction?.amount);
-    });
-  });
-
-  return [...totals.entries()]
-    .map(([date, income]) => ({ date, income: Number(income.toFixed(6)) }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-}
-
-function readRecordedHistory() {
-  let legacyProjects = [];
-  try {
-    const saved = JSON.parse(remoteStorage.getItem("networth_projects") || "[]");
-    if (Array.isArray(saved)) legacyProjects = saved;
-  } catch { /* Keep other recorded income available. */ }
+function readPaybackTrackers() {
+  // These trackers are used only to preserve legacy device checkpoints while
+  // editing hardware. Displayed recovery is calculated by the backend.
   return {
-    legacyProjects,
-    luloProjects: (readObject(PROJECT_QUICK_CACHE_KEY).projects || []).filter(project => project?.yield_tracking === "lulo_lending"),
-    loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(),
-    unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(),
-    backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(),
-    payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
-    manualIncome: {},
-    luloBackfills: {},
+    kryptex: loadKryptexTracker(),
+    salad: loadSaladTracker(),
+    unetwork: loadUnetworkTracker(),
+    rollercoin: loadRollerCoinTracker(),
   };
 }
 
@@ -150,16 +96,6 @@ function readIncomeData() {
   const rollerTracker = loadRollerCoinTracker();
   const unetworkTracker = loadUnetworkTracker();
   const kryptexTracker = loadKryptexTracker();
-  const loopscaleHistory = loadLoopscaleHistory();
-  const months = buildProjectIncome(
-    lulo,
-    loopscaleHistory,
-    saladTracker,
-    loadMonthlyBackfills(),
-    rollerTracker,
-    unetworkTracker,
-    kryptexTracker,
-  );
   const manual = groupManualPositions(loadPositions());
   const salad = getSaladTrackerStats(saladTracker);
   const roller = getRollerCoinTrackerStats(rollerTracker);
@@ -232,15 +168,6 @@ function readIncomeData() {
   ];
   const payback = loadProjectPayback();
   return {
-    months,
-    dailyHistory: buildDailyIncomeHistory({
-      luloProjects: lulo,
-      loopscaleHistory,
-      saladTracker,
-      rollerTracker,
-      unetworkTracker,
-      kryptexTracker,
-    }),
     projects: projects.map(project => ({
       ...project,
       earned: Math.max(0, Number(project.earned) || 0),
@@ -491,7 +418,7 @@ export default function SideHustleDashboard() {
   const [power, setPower] = useState(() => readCryptoDashboardPowerCache(user?.id)?.data || null);
   const [powerIsCached, setPowerIsCached] = useState(() => Boolean(readCryptoDashboardPowerCache(user?.id)));
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
-  const [recordedHistory, setRecordedHistory] = useState(readRecordedHistory);
+  const [recordedHistory, setRecordedHistory] = useState(readPaybackTrackers);
   // All income cards read the same backend-owned server projection.
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
@@ -500,48 +427,6 @@ export default function SideHustleDashboard() {
   const [projectDraft, setProjectDraft] = useState({ id: "", cost: "" });
   const [addError, setAddError] = useState("");
   const [photoLoading, setPhotoLoading] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const result = await api.get("/api/yield-sources/earnings");
-        if (active && result) setRecordedHistory(current => ({
-          ...current,
-          loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory),
-          manualIncome: result.manualIncomeHistory || current.manualIncome,
-          luloBackfills: result.luloBackfills && typeof result.luloBackfills === "object"
-            ? result.luloBackfills : current.luloBackfills,
-        }));
-      } catch { /* Use saved history when backend is unavailable. */ }
-    };
-    refresh();
-    const timer = window.setInterval(refresh, 90000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
-
-  // The Dashboard must refresh provider projects independently. Previously
-  // only visiting Passive Income fetched Lulo projects and updated its quick
-  // cache, so Monthly Income could jump when returning from that page.
-  useEffect(() => {
-    let active=true;
-    const refreshProjects=async()=>{
-      try {
-        const response=await projectsApi.getAll();
-        if(!active || !Array.isArray(response?.data)) return;
-        const projects=response.data;
-        setRecordedHistory(current=>{
-          const luloProjects=projects.filter(project=>project?.yield_tracking==="lulo_lending");
-          return JSON.stringify(current.luloProjects)===JSON.stringify(luloProjects)
-            ? current : {...current,luloProjects};
-        });
-      } catch { /* Keep last saved project readings if unavailable. */ }
-    };
-    refreshProjects();
-    const timer=window.setInterval(refreshProjects,90000);
-    window.addEventListener("focus",refreshProjects);
-    return ()=>{active=false;window.clearInterval(timer);window.removeEventListener("focus",refreshProjects);};
-  }, []);
 
   const recordedMonths = useBackendIncomeHistory({
     currentMonth: getCurrentMonthKey(),
@@ -568,7 +453,7 @@ export default function SideHustleDashboard() {
 
   useEffect(() => subscribe(() => {
     setIncome(readIncomeData());
-    setRecordedHistory(current => ({ ...readRecordedHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
+    setRecordedHistory(readPaybackTrackers());
     setHardware(readHardware());
   }), []);
   useEffect(() => {
@@ -589,8 +474,6 @@ export default function SideHustleDashboard() {
   const { data: backendBitcoin, isCached: bitcoinCached, error: bitcoinError } = useBackendBitcoinValuation();
   const serverTodaySources = backendEarnings?.todaySources
     ? { date: backendEarnings.todayKey, sources: backendEarnings.todaySources } : null;
-  const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) ||
-    { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recordedCurrentMonth = recordedMonths.find(row => row.monthKey === currentMonthKey);
   // Monthly Income is the separately booked provider snapshot, not the
   // dated chart's provisional legacy receipts. Both are exposed by the same
