@@ -4,9 +4,9 @@ A browser's current-month Project Income view can be temporarily incomplete
 while its extensions hydrate. That partial view must never erase already
 recorded provider income in the shared monthly accounting snapshot.
 
-Only the four provider trackers are authoritative here. Loopscale and Lulo
-have different accounting models; their amounts are passed through unchanged.
-Locked historical months are never rewritten by a transient browser refresh.
+The four extension trackers remain authoritative. Lulo and Loopscale can
+additionally be booked from a narrowly scoped, explicitly user-attested dated
+receipt ledger. Locked historical months are never rewritten.
 """
 from copy import deepcopy
 from math import isfinite
@@ -41,7 +41,7 @@ def _platforms(raw):
     return result
 
 
-def guard_monthly_snapshots(current, proposed, canonical_months, month):
+def guard_monthly_snapshots(current, proposed, canonical_months, month, confirmed_legacy=None):
     """Merge a guarded browser PATCH with the backend's current provider facts.
 
     This is NOT a 'take the largest total' rule. Each available authoritative
@@ -53,8 +53,10 @@ def guard_monthly_snapshots(current, proposed, canonical_months, month):
         return old
     saved = {**old, **deepcopy(proposed)}
     for key, record in old.items():
-        if isinstance(record, dict) and record.get("locked") and key < month:
+        if isinstance(record, dict) and record.get("locked") and key <= month:
             saved[key] = deepcopy(record)
+    if isinstance(old.get(month), dict) and old[month].get("locked"):
+        return saved
 
     authoritative = {}
     if isinstance(canonical_months, list):
@@ -64,6 +66,15 @@ def guard_monthly_snapshots(current, proposed, canonical_months, month):
             authoritative = {name: item for name, item in _platforms(row).items()
                              if name in EXTENSION_PROVIDERS}
             break
+    # An account-owner confirmation is provided by the backend after checking
+    # the actual dated-source fingerprint. Never accept browser-supplied totals.
+    accepted = {}
+    for name, amount in (confirmed_legacy or {}).items():
+        parsed = _number(amount)
+        if name in {"Lulo", "Loopscale"} and parsed is not None and parsed >= 0:
+            accepted[name] = {"platform": name, "amount": round(parsed, 6),
+                              "basis": "user-confirmed-dated-receipts"}
+    authoritative.update(accepted)
 
     previous = old.get(month)
     candidate = saved.get(month)
@@ -82,6 +93,8 @@ def guard_monthly_snapshots(current, proposed, canonical_months, month):
             combined[name] = authoritative[name]
         elif name in _platforms(previous):
             combined[name] = _platforms(previous)[name]
+    for name, confirmed in accepted.items():
+        combined[name] = confirmed
     rows = sorted(combined.values(), key=lambda item: (-item["amount"], item["platform"]))
     saved[month] = {
         **(previous if isinstance(previous, dict) else {}),

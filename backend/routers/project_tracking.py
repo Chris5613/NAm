@@ -30,6 +30,7 @@ from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..monthly_snapshot_guard import guard_monthly_snapshots
+from ..legacy_income_reconciliation import confirmed_november_sources
 from ..integration_audit import audit_integration_settings
 from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
 
@@ -641,8 +642,11 @@ async def earnings_dashboard(
         canonical = monthly_provider_income(
             {key.lower(): value for key, value in trackers.items()},
             today_month)
+        confirmed_legacy = confirmed_november_sources(
+            daily, month, today.isoformat()) if month == today_month else {}
         normalized = guard_monthly_snapshots(
-            monthly_snapshots, monthly_snapshots, canonical, today_month)
+            monthly_snapshots, monthly_snapshots, canonical, today_month,
+            confirmed_legacy=confirmed_legacy)
         comparison = compare_monthly_snapshot(
             dashboard, normalized.get(month))
         if comparison is not None:

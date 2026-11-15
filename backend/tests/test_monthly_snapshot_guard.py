@@ -78,6 +78,61 @@ class MonthlySnapshotGuardTests(unittest.TestCase):
         before = {"2026-10": {"locked": True, "total": 45}}
         self.assertEqual(guard_monthly_snapshots(before, None, [], self.MONTH), before)
 
+    def test_owner_confirmed_legacy_values_replace_only_open_month(self):
+        from backend.legacy_income_reconciliation import confirmed_november_sources
+        from datetime import date, timedelta
+        start = date(2026, 11, 1)
+        receipts = {
+            (start + timedelta(days=i)).isoformat(): {"sources": {
+                "Lulo": 4.623146 if i == 0 else 0,
+                "Loopscale": 15.208745 if i == 0 else 0,
+            }} for i in range(14)
+        }
+        confirmed = confirmed_november_sources(receipts, self.MONTH, "2026-11-14")
+        self.assertEqual(confirmed, {"Lulo": 4.623146, "Loopscale": 15.208745})
+        initial = {self.MONTH: {
+            "platforms": [{"platform": "Kryptex", "amount": 41.826961},
+                          {"platform": "Loopscale", "amount": 12.57}],
+        }}
+        canonical = [{"monthKey": self.MONTH, "platforms": [
+            {"platform": "Kryptex", "amount": 41.826961}]}]
+        updated = guard_monthly_snapshots(
+            initial, initial, canonical, self.MONTH, confirmed_legacy=confirmed)
+        values = {p["platform"]: p["amount"]
+                  for p in updated[self.MONTH]["platforms"]}
+        self.assertEqual(values["Lulo"], 4.623146)
+        self.assertEqual(values["Loopscale"], 15.208745)
+        self.assertAlmostEqual(updated[self.MONTH]["total"], sum(values.values()))
+        self.assertEqual(initial[self.MONTH]["platforms"][1]["amount"], 12.57)
+        # The same approval is idempotent and never applies to another month.
+        self.assertEqual(guard_monthly_snapshots(
+            updated, updated, canonical, self.MONTH, confirmed_legacy=confirmed),
+            updated)
+        self.assertEqual(confirmed_november_sources(
+            receipts, "2026-12", "2026-12-01"), {})
+        self.assertEqual(confirmed_november_sources(
+            {"2026-11-01": {"sources": {"Lulo": 4.62, "Loopscale": 15.21}}},
+            self.MONTH, "2026-11-14"), {})
+
+    def test_confirmed_receipts_include_new_days_without_double_count(self):
+        from backend.legacy_income_reconciliation import confirmed_november_sources
+        from datetime import date, timedelta
+        start = date(2026, 11, 1)
+        receipts = {
+            (start + timedelta(days=i)).isoformat(): {"sources": {
+                "Lulo": 4.623146 if i == 0 else 0,
+                "Loopscale": 15.208745 if i == 0 else 0,
+            }} for i in range(14)
+        }
+        receipts["2026-11-15"] = {"sources": {"Loopscale": .3, "Lulo": .1}}
+        values = confirmed_november_sources(receipts, self.MONTH, "2026-11-15")
+        self.assertEqual(values, {"Loopscale": 15.508745, "Lulo": 4.723146})
+        original = {self.MONTH: {"locked": True,
+            "platforms": [{"platform": "Loopscale", "amount": 12.57}]}}
+        result = guard_monthly_snapshots(
+            original, original, [], self.MONTH, confirmed_legacy=values)
+        self.assertEqual(result, original)
+
 
 if __name__ == "__main__":
     unittest.main()

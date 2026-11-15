@@ -16,6 +16,7 @@ from .networth_reconciliation import legacy_nightly_components
 from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_project_balances
 from .provider_monthly_income import monthly_provider_income
 from .monthly_snapshot_guard import guard_monthly_snapshots
+from .legacy_income_reconciliation import confirmed_november_sources
 
 _scheduler_task: asyncio.Task | None = None
 _leader = False
@@ -189,8 +190,9 @@ def take_project_balance_snapshots(day: str, scheduled_at: datetime | None = Non
 
 # The server's provider trackers may advance while every browser is closed.
 # The browser PATCH guard protects writes but cannot repair an already-stale
-# snapshot by itself. Reconcile only the OPEN month and only extension-backed
-# provider values, leaving signed Loopscale/Lulo and locked history unchanged.
+# snapshot by itself. Reconcile the OPEN month using durable extension facts
+# and narrowly fingerprinted, owner-confirmed Lulo/Loopscale receipts.
+# Never alter historical locked periods or underlying source ledgers.
 MONTHLY_TRACKER_KEYS = {
     "kryptex": "project_income_kryptex_tracker_v1",
     "salad": "project_income_salad_tracker_v1",
@@ -237,7 +239,23 @@ def reconcile_open_monthly_snapshots() -> int:
             if not any(row.get("monthKey") == month for row in authoritative):
                 db.rollback()
                 continue
-            corrected = guard_monthly_snapshots(saved, saved, authoritative, month)
+            day_prefix = "yield_server_daily_income_"
+            dated_rows = db.scalars(select(Setting).where(
+                Setting.user_id == user_id,
+                Setting.key >= day_prefix + month + "-01",
+                Setting.key <= day_prefix + month + "-31",
+            )).all()
+            dated = {
+                item.key.removeprefix(day_prefix): item.value
+                for item in dated_rows if item.key.startswith(day_prefix)
+            }
+            local_day = datetime.now(timezone.utc).astimezone(
+                PACIFIC).date().isoformat()
+            confirmed_legacy = confirmed_november_sources(
+                dated, month, local_day)
+            corrected = guard_monthly_snapshots(
+                saved, saved, authoritative, month,
+                confirmed_legacy=confirmed_legacy)
             if corrected != saved:
                 snapshot.value = corrected
                 db.commit()

@@ -19,6 +19,7 @@ from ..project_writes import plan_project_changes, ProjectConflict
 from ..server_owned_settings import is_server_owned_setting
 from ..kryptex_setting_guard import merge_legacy_kryptex_setting
 from ..monthly_snapshot_guard import guard_monthly_snapshots
+from ..legacy_income_reconciliation import confirmed_november_sources
 from ..provider_monthly_income import monthly_provider_income
 from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_profile
 from ..networth_reconciliation import home_reconciliation_preview
@@ -309,7 +310,22 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
         month = datetime.now(timezone.utc).astimezone(
             ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
         authoritative = monthly_provider_income(trackers, month)
-        after = guard_monthly_snapshots(current, after, authoritative, month)
+        day_prefix = "yield_server_daily_income_"
+        daily_rows = db.scalars(select(Setting).where(
+            Setting.user_id == user.id,
+            Setting.key >= day_prefix + month + "-01",
+            Setting.key <= day_prefix + month + "-31",
+        )).all()
+        dated = {
+            item.key.removeprefix(day_prefix): item.value
+            for item in daily_rows if item.key.startswith(day_prefix)
+        }
+        local_day = datetime.now(timezone.utc).astimezone(
+            ZoneInfo("America/Los_Angeles")).date().isoformat()
+        confirmed_legacy = confirmed_november_sources(dated, month, local_day)
+        after = guard_monthly_snapshots(
+            current, after, authoritative, month,
+            confirmed_legacy=confirmed_legacy)
     if current != after:
         if row:
             row.value = after

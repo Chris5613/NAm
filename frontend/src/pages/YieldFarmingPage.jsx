@@ -1361,6 +1361,12 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const thisMonthBooked = monthAccounting?.status !== "invalid-snapshot" &&
     Number.isFinite(monthAccounting?.bookedTotalUsd)
       ? monthAccounting.bookedTotalUsd : null;
+  // The chart headline must use the same booked total as the yearly November
+  // point once the backend confirms parity (a sub-cent source rounding
+  // difference is allowed). Keep daily detail rows unchanged for auditability.
+  const thisMonthHeadline = thisMonthBooked != null &&
+    Math.abs(monthAccounting?.differenceUsd ?? Infinity) <= 0.02
+      ? thisMonthBooked : thisMonthEarned;
   const currentMonthSources = backendEarnings?.monthlySources || {};
   const chartSourceTotalsForDay = key =>
     backendEarnings?.days?.find(row => row.key === key)?.sources || {};
@@ -1856,7 +1862,7 @@ const summary =
               <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400"
                 title={backendEarnings?.fullyVerified === false
                   ? "Includes legacy receipts awaiting provider reconciliation"
-                  : undefined}>{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthEarned : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
+                  : undefined}>{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthHeadline : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-[#303842] bg-[#13181e] p-0.5" aria-label="Earnings chart period">
