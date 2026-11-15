@@ -722,6 +722,39 @@ async def hardware_payback_lifetime(
     return build_lifetime_hardware_payback(devices, daily, trackers, today.isoformat())
 
 
+@router.get("/financial-core/closed-month/{month}")
+async def financial_closed_month(
+    month: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Authoritative immutable month-close records, never browser math.
+
+    Only an explicitly posted and stored close is returned as certified
+    frozen accounting. Missing closes stay unknown, not manufactured zero.
+    """
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(status_code=422, detail="Invalid accounting month")
+    closes = setting(db, user.id, "financials_month_closes_v1")
+    closes = closes if isinstance(closes, dict) else {}
+    closed = closes.get(month)
+    if not isinstance(closed, dict) or not isinstance(closed.get("rows"), list):
+        return {"sourceOfCalculation": "backend-financial-closed-month",
+                "month": month, "complete": False, "rows": None}
+    recorded = closed.get("entries")
+    return {
+        "sourceOfCalculation": "backend-financial-closed-month",
+        "month": month, "complete": True,
+        "rows": closed["rows"],
+        "entries": recorded if isinstance(recorded, list) else None,
+        "revenue": closed.get("revenue"),
+        "expenses": closed.get("expenses"),
+        "pnlProfit": closed.get("pnlProfit"),
+        "statementBusiness": __import__(
+            "backend.financial_core", fromlist=["sum_business_rows"]
+        ).sum_business_rows(closed["rows"]),
+        "calculatedAt": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @router.post("/financial-core/evaluate")
 async def evaluate_financial_core(
     payload: dict, user: User = Depends(current_user),
