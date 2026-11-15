@@ -169,5 +169,40 @@ class KryptexRewardAuditTests(unittest.TestCase):
 
 
 
+    def test_repeated_chart_observation_does_not_double_count_income(self):
+        first = reconcile_kryptex_rewards(
+            {"lifetimeEarnedUsd": 0},
+            {"daily_sats": {"2026-11-13": 5000},
+             "daily_usd": {"2026-11-13": 4.0}},
+            self.now,
+        )
+        repeated = reconcile_kryptex_rewards(
+            first,
+            {"daily_sats": {"2026-11-13": 5000},
+             "daily_usd": {"2026-11-13": 4.0}},
+            self.now,
+        )
+        self.assertEqual(repeated["kryptexMiningDaily"]["2026-11-13"], 4.0)
+        self.assertEqual(repeated["monthlyEarnings"]["2026-11"], 4.0)
+        self.assertEqual(repeated["lifetimeEarnedUsd"], 4.0)
+        self.assertEqual(repeated["kryptexPendingEarningsDays"], [])
+
+    def test_two_days_reconcile_without_double_counting_month(self):
+        first = reconcile_kryptex_rewards(
+            {},
+            {"daily_sats": {"2026-11-12": 1000, "2026-11-13": 2000},
+             "daily_usd": {"2026-11-12": 1.0, "2026-11-13": 2.0}},
+            self.now,
+        )
+        repeated = reconcile_kryptex_rewards(
+            first,
+            {"daily_sats": {"2026-11-12": 1000, "2026-11-13": 2000},
+             "daily_usd": {"2026-11-12": 1.0, "2026-11-13": 2.0}},
+            self.now,
+        )
+        self.assertEqual(repeated["monthlyEarnings"]["2026-11"], 3.0)
+        self.assertEqual(repeated["lifetimeEarnedUsd"], 3.0)
+
+
 if __name__ == "__main__":
     unittest.main()
