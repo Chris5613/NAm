@@ -32,7 +32,7 @@ from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..financial_historical_ledger import (historical_trial_balance, persisted_historical_trial_inputs,
                                            HISTORICAL_SOURCE_KEYS)
-from ..home_business_snapshot import home_business_snapshot
+from ..home_business_snapshot import home_business_snapshot, financial_statement_openings
 from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
 from ..persisted_income_snapshot import source_income_history, project_history_rows
 from ..financial_parity import record_parity_observation, parity_summary
@@ -838,17 +838,35 @@ async def evaluate_financial_historical_trial_balance(
 @router.post("/financial-core/evaluate")
 async def evaluate_financial_core(
     payload: dict, user: User = Depends(current_user),
+    db: Session = Depends(get_db),
 ) -> dict:
-    """Read-only arithmetic on candidate statement lines.
+    """Read-only financial statement with server-owned bank/payable openings.
 
-    This endpoint computes, never posts, income, financial statements,
-    cash movements or equipment values. Only saved/locked source records
-    can authorize financial writes through their existing routes.
+    The browser still supplies the current unposted journal preview, but
+    cannot override historical opening cash, payable or approved movements.
+    No saved financial transaction or bank balance is changed.
     """
     if len(str(payload)) > 1_000_000:
         raise HTTPException(status_code=413, detail="Financial input too large")
+    source_keys = (
+        "financials_bank_openings_v1",
+        "financials_journal_v1",
+        "financials_confirmed_movements_v1",
+    )
+    saved = db.scalars(select(Setting).where(
+        Setting.user_id == user.id,
+        Setting.key.in_(source_keys),
+    )).all()
+    source = {row.key: row.value for row in saved}
+    month = payload.get("month")
+    # This creates an independent evaluation payload: never mutate request
+    # input and never trust browser-computed historical opening balances.
+    if not isinstance(month, str) or not re.fullmatch(
+            r"\d{4}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(status_code=422, detail="Invalid reporting month")
+    owned = {**payload, **financial_statement_openings(source, month)}
     try:
-        return evaluate_statement(payload)
+        return evaluate_statement(owned)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
