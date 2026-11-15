@@ -29,7 +29,7 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
-from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even
+from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
@@ -738,6 +738,21 @@ async def evaluate_financial_core(
         return evaluate_statement(payload)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/financial-core/phone-assets")
+async def evaluate_phone_equipment(
+    payload: dict, user: User = Depends(current_user),
+) -> dict:
+    """Read-only valuation of phones explicitly opted into business equipment."""
+    month = payload.get("month")
+    if not isinstance(month, str) or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(status_code=422, detail="Invalid equipment month")
+    phones = payload.get("phones") or []
+    if not isinstance(phones, list) or len(phones) > 100:
+        raise HTTPException(status_code=422, detail="Invalid phone asset register")
+    return {"sourceOfCalculation": "backend-financial-core", "month": month,
+            "rows": phone_asset_rows(phones, month)}
 
 
 @router.post("/financial-core/income-history")
