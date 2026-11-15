@@ -124,7 +124,7 @@ export default function HardwarePaybackPage() {
     event.preventDefault();
     const name = draft.name.trim(), cost = Number(draft.cost), power = Number(draft.power || 0);
     if (photoLoading || saving) return;
-    if (!name || (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(draft.earningsStartDay || "") || draft.earningsStartDay>currentDay) || !deviceSources(draft).length || !/^\\d{4}-\\d{2}$/.test(draft.startMonth) || draft.startMonth > currentMonth || !Number.isFinite(cost) || cost <= 0 || !Number.isFinite(power) || power < 0) {
+    if (!name || (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(draft.earningsStartDay || "") || draft.earningsStartDay>currentDay) || !deviceSources(draft).length || !/[0-9]{4}-[0-9]{2}$/.test(draft.startMonth) || draft.startMonth > currentMonth || !Number.isFinite(cost) || cost <= 0 || !Number.isFinite(power) || power < 0) {
       setError("Enter a name, purchase month, cost, earnings start date, and income source.");
       return;
     }
