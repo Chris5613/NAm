@@ -104,37 +104,6 @@ export function collectBankMovementCandidates(transactions) {
   return [...seen.values()].sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export function movementJournal(movements, month, excludeIds = new Set()) {
-  const entries = [];
-  for (const m of movements || []) {
-    if (String(m.date).slice(0, 7) !== month || excludeIds.has(m.id)) continue;
-    const from = resolveFinancialAccount(m.from);
-    const to = resolveFinancialAccount(m.to);
-    const amount = round(m.amount);
-    const isFee = ["fee","transaction_fee","network_fee"].includes(m.type);
-    if (!VALID_DATE.test(m.date) || !(amount > 0) || !from || (!isFee && (!to || from === to))) continue;
-    const description = isFee ? ("Transaction fee — " + (m.provider || "Transfer"))
-      : ("Transfer " + (m.provider || "") + " · " + from + " → " + to);
-    entries.push({
-      id: "auto-movement:" + m.id, date: m.date, description,
-      automatic: true, origin: "confirmed-movement",
-      lines: isFee
-        ? [{account:"fees",debit:amount,credit:0},{account:from,debit:0,credit:amount}]
-        : [{account:to,debit:amount,credit:0},{account:from,debit:0,credit:amount}],
-    });
-    if (!isFee && Number(m.feeUsd) > 0) {
-      const fee = round(m.feeUsd);
-      entries.push({
-        id: "auto-fee:" + m.id, date: m.date,
-        description: "Transfer fee — " + (m.provider || "Transfer"),
-        automatic: true, origin: "confirmed-movement",
-        lines: [{account:"fees",debit:fee,credit:0},{account:from,debit:0,credit:fee}],
-      });
-    }
-  }
-  return entries;
-}
-
 // Find account changes that might be explained by a transfer, payment,
 // valuation difference, or missing transaction. Never auto-post this variance.
 export function reconcileBalances(balanceRows, incomeMonth, movements, month) {
