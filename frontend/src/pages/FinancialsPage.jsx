@@ -11,10 +11,9 @@ import {
 import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { useBackendFinancialCore } from "@/hooks/useBackendFinancialCore";
-import { useBackendAutoIncomeJournal, autoIncomeMatches } from "@/hooks/useBackendAutoIncomeJournal";
+import { useBackendAutoIncomeJournal } from "@/hooks/useBackendAutoIncomeJournal";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
 import { useBackendAutomaticExpenses } from "@/hooks/useBackendAutomaticExpenses";
-import { reportFinancialParity } from "@/lib/financialParityTelemetry";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
@@ -389,24 +388,11 @@ export default function FinancialsPage() {
       manual.debitAccount === entry.lines[0]?.account &&
       manual.creditAccount === entry.lines[1]?.account));
   const unpostedEquipment = unmatchedEquipmentPurchases(baseRows,ledgerEntries,month);
-  const localSyncedIncomeJournal = useMemo(() => buildAutoIncomeJournal(
-    month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey(),
-  ), [month, syncedRevenue, ledgerEntries]);
   const backendSyncedIncomeJournal = useBackendAutoIncomeJournal(
     month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey());
-  const syncedIncomeJournal = autoIncomeMatches(
-    localSyncedIncomeJournal, backendSyncedIncomeJournal)
-    ? backendSyncedIncomeJournal : localSyncedIncomeJournal;
-  useEffect(() => {
-    if (!backendSyncedIncomeJournal) return;
-    reportFinancialParity(
-      "automatic-income", month,
-      autoIncomeMatches(localSyncedIncomeJournal, backendSyncedIncomeJournal),
-      "backend-projection",
-      JSON.stringify({ month, ledgerEntries, syncedRevenue })
-    );
-  }, [month, localSyncedIncomeJournal, backendSyncedIncomeJournal,
-      ledgerEntries, syncedRevenue]);
+  // Never post or display a locally reconstructed provider-income accrual.
+  // The page stays unavailable until the authoritative journal arrives.
+  const syncedIncomeJournal = backendSyncedIncomeJournal || { entries: [] };
   const electricityCovered = hasFreeMiningPower(month);
   const estimatedPower = powerEstimates[month]?.source === "backend-power-meter-tariffs"
     ? valueOrNull(powerEstimates[month]?.outOfPocketUsd) : null;
@@ -816,7 +802,7 @@ export default function FinancialsPage() {
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
-  if (!serverFinancial) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
+  if (!serverFinancial || !backendSyncedIncomeJournal) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <h1 className="text-2xl font-semibold">Financials</h1>
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
       {backendBalanceRows.error
