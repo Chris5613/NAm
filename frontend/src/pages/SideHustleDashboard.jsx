@@ -7,7 +7,7 @@ import {
 import { api, settingsApi } from "@/lib/apiClient";
 import { projectsApi } from "@/lib/api";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
-import { localStorage as appStorage } from "@/lib/localStorage";
+import { useBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
 import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
@@ -625,6 +625,7 @@ export default function SideHustleDashboard() {
   const currentMonthKey = getCurrentMonthKey();
   const { data: backendEarnings, isCached: earningsCached, error: earningsError } = useBackendEarningsDashboard(currentMonthKey);
   const { data: backendPortfolio, isCached: portfolioCached, error: portfolioError } = useCryptoDashboardSnapshot();
+  const { data: backendBitcoin, isCached: bitcoinCached, error: bitcoinError } = useBackendBitcoinValuation();
   const serverTodaySources = backendEarnings?.todaySources
     ? { date: backendEarnings.todayKey, sources: backendEarnings.todaySources } : null;
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) ||
@@ -683,15 +684,10 @@ export default function SideHustleDashboard() {
 
   // The server-owned provider feed, not a browser portfolio calculation.
   const totalProjectBalance = backendPortfolio?.totalUsd ?? null;
-  // Fast read of the previous BTC quote. Do not rebuild the wallet/token
-  // portfolio on every Crypto Dashboard render. Backend BTC migration pending.
-  const homeBitcoin = appStorage.getCryptoCache()?.projectPortfolio?.bitcoin;
-  const rawBitcoin = homeBitcoin?.value ?? homeBitcoin?.balance;
-  const bitcoinBalance = rawBitcoin == null ? null : Number(rawBitcoin);
-  const validBitcoin = bitcoinBalance !== null &&
-    Number.isFinite(bitcoinBalance) && bitcoinBalance >= 0;
-  const totalNetWorth = totalProjectBalance == null || !validBitcoin
-    ? null : totalProjectBalance + bitcoinBalance;
+  // One complete server calculation: provider balances and BTC wallet
+  // quantity are revalued from ONE server-fetched market quote.
+  const totalNetWorth = backendBitcoin?.complete === true
+    ? backendBitcoin.cryptoTotalUsd : null;
   // Use the same reconciled per-source monthly totals as Income History.
   // This includes Lulo earnings even when the quick dashboard cache lacks a Lulo row.
   // Match KPI, monthly chart, and Top Projects to the one backend ledger.
@@ -797,8 +793,8 @@ export default function SideHustleDashboard() {
     <div className="flex flex-wrap items-center justify-between gap-2 px-1">
       <h1 className="text-lg font-semibold text-white">Crypto Dashboard</h1>
       <span role="status" className="text-[10px] text-[#9da9b7]">
-        {earningsCached || portfolioCached || powerIsCached ? "Saved backend snapshot · Updating" : "Backend data · Auto-refreshing"}
-        {(earningsError || portfolioError) && " · Some sources unavailable"}
+        {earningsCached || portfolioCached || bitcoinCached || powerIsCached ? "Saved backend snapshot · Updating" : "Backend data · Auto-refreshing"}
+        {(earningsError || portfolioError || bitcoinError) && " · Some sources unavailable"}
       </span>
     </div>
 
@@ -830,7 +826,9 @@ export default function SideHustleDashboard() {
         icon={Layers3}
         title="Projects + Bitcoin"
         value={totalNetWorth == null ? "—" : money(totalNetWorth)}
-        detail="All projects (inactive included) + saved BTC estimate"
+        detail={backendBitcoin?.bitcoin?.quoteSource === "wallet-observation-fallback"
+          ? "Backend projects + BTC (cached market quote)"
+          : "Backend projects + BTC (single market quote)"}
         tone="violet"
       />
       <KpiCard

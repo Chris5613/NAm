@@ -3,6 +3,7 @@ import { authApi, ApiError } from "@/lib/apiClient";
 import { clearCryptoDashboardCache } from "@/lib/cryptoDashboardCache";
 import { clearBackendEarningsCache } from "@/lib/backendEarningsCache";
 import { clearCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
+import { clearBitcoinValuationCache } from "@/lib/backendBitcoinValuationCache";
 
 const AuthContext = createContext(null);
 
@@ -66,6 +67,7 @@ export function AuthProvider({ children }) {
         clearCryptoDashboardCache(user?.id);
         clearBackendEarningsCache(user?.id);
         clearCryptoDashboardPowerCache(user?.id);
+        clearBitcoinValuationCache(user?.id);
         setUser(null);
         await refresh();
       },
