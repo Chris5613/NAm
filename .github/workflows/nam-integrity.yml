@@ -13,9 +13,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
       - name: Reject unapproved Lulo source changes
-        run: python tools/lulo_freeze_guard.py --base HEAD^
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE=$(git merge-base "$PR_BASE_SHA" HEAD)
+          elif [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ]; then
+            BASE="HEAD^"
+          else
+            BASE="$BEFORE_SHA"
+          fi
+          python tools/lulo_freeze_guard.py --base "$BASE"
 
   frontend:
     runs-on: ubuntu-latest
