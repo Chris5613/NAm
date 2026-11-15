@@ -308,6 +308,39 @@ class IntegrationAuditTests(unittest.TestCase):
         self.assertEqual(checks["financial_core_migration_parity"]["status"],
                          "pass")
 
+    def test_expired_mismatch_is_marked_stale_not_active_or_resolved(self):
+        values = {"financial_core_parity_v1": {
+            "lastByArea": {
+                "income-history:2026-11:backend-persisted": {
+                    "area": "income-history", "month": "2026-11",
+                    "source": "backend-persisted", "status": "mismatched",
+                    "checkedAt": "2026-11-14T23:00:00Z",
+                },
+                "financial-statement:2026-11:backend-projection": {
+                    "area": "financial-statement", "month": "2026-11",
+                    "source": "backend-projection", "status": "matched",
+                    "checkedAt": "2026-11-14T23:59:00Z",
+                },
+            },
+        }}
+        checks = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        result = checks["financial_core_migration_parity"]
+        self.assertEqual(result["status"], "warning")
+        self.assertEqual(result["remainingMismatchAreas"], [])
+        self.assertEqual(result["staleAreas"], ["income-history"])
+        self.assertEqual(result["freshlyCheckedPaths"], 1)
+
+        values["financial_core_parity_v1"]["lastByArea"][
+            "income-history:2026-11:backend-persisted"]["checkedAt"] = (
+                "2026-11-14T23:59:00Z")
+        recent = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        self.assertEqual(recent["financial_core_migration_parity"]["status"], "warning")
+        self.assertEqual(recent["financial_core_migration_parity"]["remainingMismatchAreas"],
+                         ["income-history"])
+        self.assertEqual(recent["financial_core_migration_parity"]["staleAreas"], [])
+
     def test_locked_snapshot_keeps_historical_kryptex_total(self):
         result = audit_integration_settings({
             "project_income_kryptex_tracker_v1": {
