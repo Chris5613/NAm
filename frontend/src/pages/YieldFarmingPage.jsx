@@ -1419,9 +1419,12 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   useEffect(() => {
     const month = todayKey.slice(0, 7);
     const current = readObject(PASSIVE_MONTHLY_INCOME_KEY);
+    // Persist the actual point drawn at today's date separately from the
+    // right-hand earnings card. The integrity watcher can detect regressions.
+    const chartToday = monthlyChartData.find(day => day.key === todayKey)?.value ?? null;
     const next = {
       month, amount: thisMonthEarned, day: todayKey,
-      today: todayEarnings,
+      today: todayEarnings, chartToday,
       yesterdayDay: yesterdayKeyForDashboard,
       yesterday: yesterdayAmountForDashboard,
     };
@@ -1431,6 +1434,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       current?.day === todayKey &&
       Math.abs(Number(current.amount) - thisMonthEarned) < 0.000001 &&
       Math.abs(Number(current.today) - todayEarnings) < 0.000001 &&
+      current?.chartToday === chartToday &&
       current?.yesterdayDay === yesterdayKeyForDashboard &&
       (current.yesterday ?? null) === yesterdayAmountForDashboard
     ) return;
@@ -1438,7 +1442,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       ...next, updatedAt: new Date().toISOString(),
     });
   }, [
-    todayKey, thisMonthEarned, todayEarnings,
+    todayKey, thisMonthEarned, todayEarnings, monthlyChartData,
     yesterdayKeyForDashboard, yesterdayAmountForDashboard,
     onMonthlyEarningsChange,
   ]);
