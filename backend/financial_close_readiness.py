@@ -28,6 +28,27 @@ def financial_close_readiness(settings, month, current_month):
     unknown = [str(row.get("name") or "") for row in rows
                if isinstance(row, dict) and maybe_number(row.get("end")) is None]
     closed = isinstance(financial.get("rows"), list)
+    # Explicit per-asset evidence intake. An old saved value can be displayed
+    # as an estimate without asserting that it is a certified closing value.
+    asset_evidence = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        end_value = maybe_number(row.get("end"))
+        is_estimate = bool(row.get("estimated"))
+        asset_evidence.append({
+            "name": str(row.get("name") or "")[:100],
+            "reportedEndingUsd": end_value,
+            "status": ("unknown" if end_value is None else
+                       "estimated-needs-document" if is_estimate else
+                       "recorded-not-independently-audited"),
+            "requiredEvidence": (
+                "Dated provider statement, wallet balance, or bank record "
+                "from the reporting month end"
+                if is_estimate or end_value is None else
+                "Retain original source supporting this recorded value"
+            ),
+        })
     blockers = []
     if not source.get("locked"):
         blockers.append("Booked provider income is not locked")
@@ -55,6 +76,18 @@ def financial_close_readiness(settings, month, current_month):
         "postedManualJournalEntries": len(journal),
         "estimatedAssetRows": estimates,
         "unknownAssetRows": unknown,
+        "assetEvidenceRows": asset_evidence,
+        "bankOpeningEvidence": {
+            "month": month,
+            "recordedValueUsd": maybe_number(bank.get(month)),
+            "requiredEvidence": (
+                "Account statement showing verified opening cash on "
+                + month + "-01, or matching bank transactions and "
+                "an independently confirmed opening balance"
+            ),
+            "status": ("missing" if maybe_number(bank.get(month)) is None
+                       else "recorded-not-independently-audited"),
+        },
         "missingEvidence": blockers,
         "readyForNewCertifiedClose": not blockers,
         "readOnly": True,
