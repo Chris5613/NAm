@@ -138,7 +138,7 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
     lifetime.source === "booked-provider-monthly-ledger" &&
     typeof lifetime.totalUsd === "number" && Number.isFinite(lifetime.totalUsd) &&
     typeof lifetime.fromMonth === "string" &&
-    /^\\d{4}-\\d{2}$/.test(lifetime.fromMonth) &&
+    /^\d{4}-\d{2}$/.test(lifetime.fromMonth) &&
     lifetime.throughMonth === month
       ? { totalUsd: lifetime.totalUsd, fromMonth: lifetime.fromMonth,
           throughMonth: lifetime.throughMonth, source: lifetime.source } : null;
