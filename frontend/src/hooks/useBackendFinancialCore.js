@@ -15,17 +15,25 @@ export function useBackendFinancialCore(month, entries, rows, devices, savedExpe
     let active = true;
     let payload;
     try { payload = JSON.parse(signature); }
-    catch { return () => { active = false; }; }
+    catch {
+      setResult({ signature, error: true });
+      return () => { active = false; };
+    }
+    setResult(prev => prev?.signature === signature && prev?.data
+      ? prev : { signature, loading: true });
     api.post("/api/project-tracking/financial-core/evaluate", payload)
       .then(data => {
-        if (active && data?.sourceOfCalculation === "backend-financial-core" &&
-            data?.month === month) setResult({ signature, data });
+        if (!active) return;
+        const valid = data?.sourceOfCalculation === "backend-financial-core" &&
+          data.month === month && data.profit && data.revenueSources &&
+          data.cashFlow && Array.isArray(data.statementRows);
+        setResult(valid ? { signature, data } : { signature, error: true });
       }).catch(() => {
-        if (active) setResult(null);
+        if (active) setResult({ signature, error: true });
       });
     return () => { active = false; };
   }, [signature, month]);
-  return result?.signature === signature ? result.data : null;
+  return result?.signature === signature ? result : { loading: true };
 }
 
 export function financialReportMatches(frontend, backend) {
