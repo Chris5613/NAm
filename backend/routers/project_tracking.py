@@ -1116,32 +1116,6 @@ async def calculate_provider_stats(
     }
 
 
-@router.get("/provider-monthly-income")
-async def calculate_provider_monthly_income(
-    user: User = Depends(current_user), db: Session = Depends(get_db)
-) -> dict:
-    """Monthly earned USD calculated from persisted provider observations.
-
-    Returns extension-derived platform income only. Lulo/Loopscale results
-    are not inferred from current wallet balances or APY estimates.
-    """
-    _, current_month = current_keys()
-    keys = {
-        "salad": "project_income_salad_tracker_v1",
-        "unetwork": "project_income_unetwork_tracker_v1",
-        "kryptex": "project_income_kryptex_tracker_v1",
-        "rollercoin": "project_income_rollercoin_tracker_v2",
-    }
-    trackers = {
-        name: setting(db, user.id, key) or {} for name, key in keys.items()
-    }
-    return {
-        "currentMonth": current_month,
-        "months": monthly_provider_income(trackers, current_month),
-        "calculatedAt": datetime.now(timezone.utc).isoformat(),
-    }
-
-
 @router.get("/bitcoin-valuation")
 async def bitcoin_valuation(
     response: Response,
