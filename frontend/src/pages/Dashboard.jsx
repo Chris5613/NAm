@@ -24,10 +24,8 @@ import {
   calculateNetWorth,
   getCryptoBusinessValue,
   formatCurrency,
-  getCategoryDailyChanges,
-  getDailyNetWorthChange,
   getMonthKey,
-  getMonthlyNetWorthHistory,
+  readOnlyNetWorthTrends,
 } from "@/lib/dashboardMetrics";
 import {
   AllocationBar,
@@ -485,20 +483,33 @@ export default function Dashboard() {
           }
           setFinancialAssets(businessAssets);
 
-          const categoryChanges =
-            getCategoryDailyChanges(
-              calculatedNetWorth.breakdown
-            );
-
-          const monthlyHistory =
-            getMonthlyNetWorthHistory(
-              calculatedNetWorth.total_net_worth
-            );
-
-          const dailyChange =
-            getDailyNetWorthChange(
-              calculatedNetWorth.total_net_worth
-            );
+          let trends = null;
+          try {
+            const server = await api.post("/api/net-worth/home-trends", {
+              assets: storedAssets,
+              business: businessAssets,
+              cryptoTotal,
+              expectedNetWorth: calculatedNetWorth.total_net_worth,
+              expectedBreakdown: calculatedNetWorth.breakdown,
+            });
+            if (
+              server?.sourceOfCalculation === "backend-networth-trends-v1" &&
+              server.dailyChange?.dateKey === server.dateKey &&
+              Array.isArray(server.monthlyHistory) &&
+              server.categoryChanges &&
+              Math.abs(Number(server.netWorth?.total_net_worth) -
+                calculatedNetWorth.total_net_worth) < 0.005
+            ) {
+              trends = server;
+            }
+          } catch {
+            // Older backend, or unverified net-worth parity: display only.
+            // Never generate browser-side financial history writes.
+          }
+          const fallbackTrends = trends || readOnlyNetWorthTrends(calculatedNetWorth);
+          const categoryChanges = fallbackTrends.categoryChanges;
+          const monthlyHistory = fallbackTrends.monthlyHistory;
+          const dailyChange = fallbackTrends.dailyChange;
 
           setAssets(
             storedAssets
