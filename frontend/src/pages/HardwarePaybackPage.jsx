@@ -112,6 +112,7 @@ export default function HardwarePaybackPage() {
       // No checkpoint is persisted until the backend has reviewed the
       // complete proposed register against the currently saved version.
       remoteStorage.setItem(KEY, JSON.stringify(reviewed));
+      window.dispatchEvent(new Event("hardware-payback-updated"));
       setDevices(reviewed);
       setDraft(null);
     } catch (error) {
