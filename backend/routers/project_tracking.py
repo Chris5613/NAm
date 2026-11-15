@@ -29,7 +29,7 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
-from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows
+from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
 from ..financial_balance_rows import financial_balance_rows, with_journal_equipment
 from ..monthly_snapshot_guard import guard_monthly_snapshots
@@ -853,6 +853,21 @@ async def evaluate_income_history(
     )
     return {"sourceOfCalculation": "backend-income-history",
             "currentMonth": current_month, "months": history}
+
+
+@router.post("/financial-core/auto-expenses")
+async def evaluate_automatic_financial_expenses(
+    payload: dict, user: User = Depends(current_user),
+) -> dict:
+    """Compute unposted depreciation/power accruals with no browser arithmetic."""
+    if len(str(payload)) > 750_000:
+        raise HTTPException(status_code=413, detail="Expense input too large")
+    try:
+        return project_automatic_expenses(
+            payload.get("month"), payload.get("baseRows"),
+            payload.get("manualEntries"), payload.get("autoPower", 0))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/financial-core/auto-journal")
