@@ -569,38 +569,9 @@ export default function SideHustleDashboard() {
     return ()=>{active=false;window.clearInterval(timer);window.removeEventListener("focus",refreshProjects);};
   }, []);
 
-  const recordedTrackers = useMemo(() => ({
-    salad: recordedHistory.salad, rollercoin: recordedHistory.rollercoin,
-    unetwork: recordedHistory.unetwork, kryptex: recordedHistory.kryptex,
-  }), [recordedHistory.salad, recordedHistory.rollercoin, recordedHistory.unetwork, recordedHistory.kryptex]);
-  const recordedLocalMonths = useMemo(() => buildProjectIncome(
-    recordedHistory.luloProjects, recordedHistory.loopscale, recordedHistory.salad, recordedHistory.backfills,
-    recordedHistory.rollercoin, recordedHistory.unetwork, recordedHistory.kryptex,
-  ), [recordedHistory]);
-  const recordedLiveMonths = useBackendMonthlyIncome(recordedTrackers, recordedLocalMonths);
-  const recordedMonthKey = getCurrentMonthKey();
-  const recordedDayKey = getTodayKey();
-  const recordedProjectMonths = useMemo(() => reconcileLuloIncome(
-    getEffectiveProjectIncome(recordedLiveMonths, recordedHistory.snapshots),
-    recordedHistory.backfills, recordedHistory.luloBackfills, recordedMonthKey,
-    recordedHistory.luloProjects, recordedDayKey,
-  ), [recordedLiveMonths, recordedHistory.snapshots, recordedHistory.backfills,
-      recordedHistory.luloBackfills, recordedHistory.luloProjects, recordedMonthKey, recordedDayKey]);
-  const recordedLegacy = useMemo(() => legacyProjectIncome(recordedHistory.legacyProjects), [recordedHistory.legacyProjects]);
-  const localRecordedMonths = useMemo(() => mergeManualIncome(
-    buildIncomeHistory(recordedProjectMonths, recordedHistory.payouts, recordedMonthKey, recordedLegacy),
-    recordedHistory.manualIncome?.monthly || {}, recordedMonthKey,
-  ), [recordedProjectMonths, recordedHistory.payouts, recordedMonthKey, recordedLegacy, recordedHistory.manualIncome]);
   const recordedMonths = useBackendIncomeHistory({
-    months: getEffectiveProjectIncome(recordedLiveMonths, recordedHistory.snapshots),
-    localBackfills: recordedHistory.backfills,
-    backendBackfills: recordedHistory.luloBackfills,
-    luloProjects: recordedHistory.luloProjects,
-    currentMonth: recordedMonthKey, currentDay: recordedDayKey,
-    payouts: recordedHistory.payouts,
-    legacyProjects: recordedHistory.legacyProjects,
-    manualMonths: recordedHistory.manualIncome?.monthly || {},
-  }, localRecordedMonths);
+    currentMonth: getCurrentMonthKey(),
+  });
 
   const refreshPower = useCallback(async () => {
     try {
