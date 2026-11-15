@@ -23,6 +23,8 @@ TRUSTED_DATED = {
     "dated-rollercoin-reward",
     "dated-salad-reward",
     "dated-salad-lifetime-delta",
+    # Explicit user attestation, not independent provider API confirmation.
+    "user-attested-recorded-daily-receipt",
 }
 
 
