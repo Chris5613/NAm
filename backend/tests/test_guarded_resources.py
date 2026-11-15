@@ -1,5 +1,7 @@
 import asyncio
 import unittest
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from unittest.mock import MagicMock
 from fastapi import HTTPException
 from sqlalchemy import create_engine, select
@@ -51,6 +53,54 @@ class GuardedResourceTests(unittest.TestCase):
         with self.assertRaises(HTTPException) as legacy:
             asyncio.run(replace_collection("assets", [], self.user, self.db))
         self.assertEqual(legacy.exception.status_code, 409)
+
+    def test_monthly_snapshot_patch_reconciles_canonical_provider_trackers(self):
+        month = datetime.now(timezone.utc).astimezone(
+            ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+        day = month + "-14"
+        values = {
+            "project_income_kryptex_tracker_v1": {
+                "monthlyEarnings": {month: 41.76}},
+            "project_income_salad_tracker_v1": {
+                "monthlyEarnings": {month: 4.24}},
+            "project_income_rollercoin_tracker_v2": {
+                "walletDaily": {day: {"usd": 7.14}}},
+            "project_income_unetwork_tracker_v1": {
+                "daily": {day: {"micros": 9780000, "usd": 9.78}}},
+        }
+        initial = {month: {"monthKey": month, "locked": False,
+                            "platforms": [
+                                {"platform": "Kryptex", "amount": 40.0},
+                                {"platform": "RollerCoin", "amount": 7.0},
+                                {"platform": "Unetwork", "amount": 9.0},
+                                {"platform": "Loopscale", "amount": 12.5}]}}
+        for key, value in values.items():
+            self.db.add(Setting(user_id=1, key=key, value=value))
+        self.db.add(Setting(user_id=1, key="yield_monthly_snapshots_v1",
+                            value=initial))
+        self.db.commit()
+        incoming = {month: {"monthKey": month, "platforms": [
+            {"platform": "Kryptex", "amount": 38.0},
+            {"platform": "RollerCoin", "amount": 5.0},
+            {"platform": "Unetwork", "amount": 6.0},
+            {"platform": "Salad", "amount": 2.0},
+            {"platform": "Loopscale", "amount": 12.2},
+        ]}}
+        result = asyncio.run(patch_setting(
+            "yield_monthly_snapshots_v1",
+            {"before": initial, "after": incoming},
+            self.user, self.db))
+        rows = {p["platform"]: p["amount"]
+                for p in result["value"][month]["platforms"]}
+        self.assertEqual(rows["Kryptex"], 41.76)
+        self.assertEqual(rows["RollerCoin"], 7.14)
+        self.assertEqual(rows["Unetwork"], 9.78)
+        self.assertEqual(rows["Salad"], 4.24)
+        self.assertEqual(rows["Loopscale"], 12.2)
+        self.assertAlmostEqual(result["value"][month]["total"], 75.12)
+        committed = self.db.scalar(select(Setting).where(
+            Setting.key == "yield_monthly_snapshots_v1")).value
+        self.assertEqual(committed, result["value"])
 
     def test_setting_cas_and_legacy_rejection(self):
         first = {"days": {"2026-10-30": {"a": 1}}}
