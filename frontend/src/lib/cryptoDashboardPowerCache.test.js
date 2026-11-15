@@ -35,3 +35,21 @@ test("cached profitability is sanitized and never trusts a browser estimate",()=
   expect(validatePowerPreview({...sample,kryptexDailyRunRate:{
     ...valid,source:"browser"}}).kryptexDailyRunRate).toBeNull();
 });
+
+test("cached backend power costs cannot be replaced with browser tariffs", () => {
+  const canonical={sourceOfCalculation:"backend-power-meter-tariffs",month:"2026-11",
+    complete:true,freeMiningPower:true,nominalUsd:15.64,outOfPocketUsd:0,
+    hourlyOutOfPocketUsd:0,dailyOutOfPocketUsd:0,
+    currentRate:{label:"Basic",nominalUsdPerKwh:.1691,effectiveUsdPerKwh:0},
+    deviceCosts:{pc:{complete:true,nominalUsd:6.76,outOfPocketUsd:0,secret:"hidden"}}};
+  const validated=validatePowerPreview({...sample,powerCost:canonical,secret:"hidden"});
+  expect(validated.powerCost.complete).toBe(true);
+  expect(validated.powerCost.nominalUsd).toBe(15.64);
+  expect(validated.powerCost.outOfPocketUsd).toBe(0);
+  expect(validated.powerCost.deviceCosts.pc.secret).toBeUndefined();
+  expect(validated.secret).toBeUndefined();
+  expect(validatePowerPreview({...sample,powerCost:{
+    ...canonical,sourceOfCalculation:"browser"}}).powerCost).toBeNull();
+  expect(validatePowerPreview({...sample,powerCost:{
+    ...canonical,nominalUsd:undefined}}).powerCost.complete).toBe(false);
+});

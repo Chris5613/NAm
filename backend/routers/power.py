@@ -1,6 +1,7 @@
 """Secure ingestion and readback for local smart-plug power telemetry."""
 
 from datetime import datetime, timedelta, timezone
+import re
 import hashlib
 import hmac
 import secrets
@@ -14,11 +15,13 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
+from ..power_cost import server_power_cost_preview
 
 router = APIRouter(prefix="/api/power", tags=["power"])
 
 TOKEN_KEY = "power_ingest_token_v1"
 TELEMETRY_KEY = "power_telemetry_v1"
+POWER_SETTINGS_KEY = "mining_power_dashboard_v1"
 MAX_WATTS_PER_DEVICE = 3000.0
 MAX_DEVICES = 8
 HISTORY_LIMIT = 288
@@ -119,14 +122,37 @@ async def create_power_token(user: User = Depends(current_user), db: Session = D
 async def power_status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     token_row = _setting(db, user.id, TOKEN_KEY)
     telemetry = _setting(db, user.id, TELEMETRY_KEY)
+    settings = _setting(db, user.id, POWER_SETTINGS_KEY)
     value = dict(telemetry.value or {}) if telemetry else {}
     now = datetime.now(timezone.utc)
+    month = _current_month_usage(value, now)
+    cost = server_power_cost_preview(month, settings.value if settings else {},
+                                     value.get("latest"), now)
     return {
         "configured": bool(token_row and (token_row.value or {}).get("sha256")),
         "latest": value.get("latest"),
         "history": value.get("history") or [],
-        "currentMonth": _current_month_usage(value, now),
+        "currentMonth": month,
+        "powerCost": cost,
     }
+
+
+@router.get("/month-cost/{month}")
+async def power_month_cost(
+    month: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Read-only monthly tariff cost, never a booked utility expense."""
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(422, "Invalid calendar month.")
+    telemetry = _setting(db, user.id, TELEMETRY_KEY)
+    value = telemetry.value if telemetry and isinstance(telemetry.value, dict) else {}
+    months = (value.get("usage") or {}).get("months") or {}
+    row = months.get(month) if isinstance(months, dict) else None
+    settings = _setting(db, user.id, POWER_SETTINGS_KEY)
+    return server_power_cost_preview(
+        row, settings.value if settings else {}, value.get("latest"),
+        datetime.now(timezone.utc), month_override=month,
+    )
 
 
 @router.post("/ingest")

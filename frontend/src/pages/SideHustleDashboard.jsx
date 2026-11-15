@@ -663,14 +663,16 @@ export default function SideHustleDashboard() {
   const latest = power?.latest || null;
   const totalWatts = Number(latest?.totalWatts) || 0;
   const live = latest?.observedAt ? Date.now() - new Date(latest.observedAt).getTime() < 90000 : false;
-  const rateInfo = currentRate(powerSettings, new Date(clock));
   const powerMonth = power?.currentMonth || null;
   const monthKwh = Number(powerMonth?.totalKwh) || 0;
-  const freePower = hasFreeMiningPower(currentMonthKey);
-  const monthPowerCost = outOfPocketMiningPowerCost(usageCost(powerMonth, powerSettings, powerMonth?.month), powerMonth?.month || currentMonthKey);
-  // No hardcoded daily revenue. Use the same 2-PC backend Kryptex aggregate
-  // shown on Mining Power; a missing machine observation is UNKNOWN, not $0.
-  const miningDailyCost = outOfPocketMiningPowerCost(totalWatts / 1000 * Number(rateInfo.rate || 0) * 24, currentMonthKey);
+  const powerCost = power?.powerCost?.sourceOfCalculation === "backend-power-meter-tariffs"
+    ? power.powerCost : null;
+  const freePower = powerCost?.freeMiningPower === true;
+  const rateInfo = powerCost?.currentRate || null;
+  const monthPowerCost = powerCost?.complete ? powerCost.outOfPocketUsd : null;
+  // Both profitability and power charge are backend readings, neither is
+  // a historical earnings credit. Do not invent a zero for an offline meter.
+  const miningDailyCost = powerCost?.dailyOutOfPocketUsd ?? null;
   const miningDailyNet = projectedDailyMiningNet(power?.kryptexDailyRunRate, miningDailyCost);
   const deviceRows = Array.isArray(latest?.devices) ? latest.devices : [];
   const deviceUsage = powerMonth?.devices || {};
@@ -1016,12 +1018,12 @@ export default function SideHustleDashboard() {
 
           <div className="min-w-0 pr-4 sm:border-r sm:border-[#26313a] sm:px-4">
             <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Coins className="h-4 w-4 text-amber-400"/><span>Monthly Cost</span></div>
-            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-amber-400">{money(monthPowerCost)}</strong>
+            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-amber-400">{monthPowerCost == null ? "—" : money(monthPowerCost)}</strong>
           </div>
 
           <div className="min-w-0 px-0 sm:border-r sm:border-[#26313a] sm:px-4">
             <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Zap className="h-4 w-4 text-cyan-300"/><span>Effective Rate</span></div>
-            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{"$" + Number(freePower ? 0 : rateInfo.rate || 0).toFixed(4) + "/kWh"}</strong>
+            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{rateInfo ? "$" + Number(rateInfo.effectiveUsdPerKwh).toFixed(4) + "/kWh" : "—"}</strong>
           </div>
 
           <div className="col-span-2 min-w-0 sm:col-span-1 sm:pl-4">
@@ -1102,7 +1104,7 @@ export default function SideHustleDashboard() {
               </div>
               <div className="border-r border-[#242d35] pt-5 pr-5">
                 <p className="text-[10px] text-[#83909d]">Mining Cost</p>
-                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-amber-400">{money(monthPowerCost)}</strong>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-amber-400">{monthPowerCost == null ? "—" : money(monthPowerCost)}</strong>
                 
               </div>
               <div className="pt-5 pl-5">
