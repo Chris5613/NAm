@@ -210,6 +210,67 @@ def calculate_net_worth(assets, business, crypto_total=0):
             "needsTransferReconciliation": overlap > 0}
 
 
+def build_statement_rows(base_rows, ledger_entries, cash_opening=None,
+                         payable_opening=None):
+    """Project Cash / Bank and AP against recorded ledger movements.
+
+    Observed platform balances already include income. Only BANK and PAYABLE
+    are projected from journal movements, never a second copy of mining yield.
+    """
+    rows = [dict(r) for r in entries_list(base_rows) if isinstance(r, dict)]
+    cash_delta = activity(ledger_entries, "cash")
+    payable_delta = -activity(ledger_entries, "payable")
+    payable_start = maybe_number(payable_opening)
+    if payable_start is None:
+        payable_start = 0
+    bank_re = r"cash\s*/?\s*bank|bank|checking|business\s+cash|cash"
+    bank = next((r for r in rows if r.get("category") == "cash" and
+                 re.fullmatch(bank_re, str(r.get("name") or "").strip(), re.I)), None)
+    opening = maybe_number(cash_opening)
+    if bank is not None:
+        start = opening if opening is not None else maybe_number(bank.get("start"))
+        observed_end = maybe_number(bank.get("end"))
+        end = observed_end if observed_end is not None else (
+            cents(start + cash_delta) if start is not None else None)
+        bank.update({
+            "start": start, "end": end, "journalChange": cash_delta,
+            "unverifiedOpening": start is None,
+            "explicitEnd": observed_end is not None,
+        })
+        if observed_end is not None and start is not None:
+            bank["unreconciledCash"] = cents(end - start - cash_delta)
+    elif cash_delta != 0 or opening is not None:
+        rows.append({
+            "id": "ledger:cash", "name": "Cash / Bank", "category": "cash",
+            "start": opening,
+            "end": cents(opening + cash_delta) if opening is not None else None,
+            "journalChange": cash_delta, "unverifiedOpening": opening is None,
+            "source": "ledger",
+        })
+    payable = next((r for r in rows if re.fullmatch(
+        r"accounts\s+payable|payable",
+        str(r.get("name") or "").strip(), re.I)), None)
+    if payable is not None:
+        start = maybe_number(payable.get("start"))
+        if start is None:
+            start = payable_start
+        payable.update({
+            "start": start,
+            "end": maybe_number(payable.get("end")) if
+            maybe_number(payable.get("end")) is not None else
+            cents(start + payable_delta),
+            "journalChange": payable_delta,
+        })
+    elif payable_delta != 0 or payable_start != 0:
+        rows.append({
+            "id": "ledger:payable", "name": "Accounts Payable",
+            "category": "liabilities", "start": payable_start,
+            "end": cents(payable_start + payable_delta),
+            "journalChange": payable_delta, "source": "ledger",
+        })
+    return rows
+
+
 def evaluate_statement(data):
     """Read-only calculation of a complete supplied ledger. No persistence."""
     ledger = entries_list(data.get("entries"))
@@ -226,6 +287,9 @@ def evaluate_statement(data):
                line["debit"] > 1e12 or line["credit"] > 1e12 for line in lines):
             raise ValueError("Invalid ledger line")
     devices = entries_list(data.get("devices"))
+    statement_rows = build_statement_rows(
+        data.get("rows"), ledger,
+        data.get("cashOpening"), data.get("payableOpening"))
     return {
         "sourceOfCalculation": "backend-financial-core",
         "month": month,
@@ -237,7 +301,8 @@ def evaluate_statement(data):
             for row in devices if isinstance(row, dict)
             if (scheduled := equipment_schedule(row, month)) is not None
         ],
-        "business": sum_business_rows(data.get("rows")),
+        "statementRows": statement_rows,
+        "business": sum_business_rows(statement_rows),
     }
 
 
