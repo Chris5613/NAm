@@ -19,15 +19,6 @@ import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { localStorage as appStorage } from "@/lib/localStorage";
 
 const KEY = "monthly_business_changes_v1";
-const HARDWARE_SERVICE_MONTH = "2026-11";
-const HARDWARE_LIFE_MONTHS = 60;
-const DEPRECIATING_HARDWARE = [
-  { id: "hardware:rtx2080super-pc", name: "RTX 2080 Super PC", cost: 500 },
-  { id: "hardware:rtx5070", name: "RTX 5070 GPU", cost: 500 },
-];
-function hardwareBookValue(cost, months) {
-  return Math.round(Math.max(0, cost * (1 - Math.min(HARDWARE_LIFE_MONTHS, months) / HARDWARE_LIFE_MONTHS)) * 100) / 100;
-}
 // USD daily closing prices for BTC-USD on Yahoo Finance (UTC daily candles).
 // These price anchors do not establish how much BTC was held on each date.
 const BTC_CLOSE_USD = Object.freeze({
@@ -184,39 +175,10 @@ export default function MonthlyChangesPage() {
   const [bitcoinPrice, setBitcoinPrice] = useState(() => Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
   const [incomeSources, setIncomeSources] = useState(readIncomeSources);
   const [liveProjectBalances, setLiveProjectBalances] = useState(readLiveProjectBalances);
-  const [backendReady, setBackendReady] = useState(false);
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [editing, setEditing] = useState(null);
   const [draft, setDraft] = useState({ name: "", start: "", end: "" });
   const [error, setError] = useState("");
-  // Seed the two user-confirmed hardware costs into the new Balance Sheet only.
-  // Do not backfill earlier months without the purchase dates or change the
-  // original project table. Idempotent: user edits remain authoritative.
-  useEffect(() => {
-    const saved = readRecords();
-    const key = "2026-11";
-    const entry = saved[key] || {};
-    if (entry.hardwareCostSeededV1) return;
-    const items = Array.isArray(entry.balanceSheetItems) ? [...entry.balanceSheetItems] : [];
-    const original = Array.isArray(entry.items) ? entry.items : [];
-    const hardware = DEPRECIATING_HARDWARE.map(asset => ({
-      id: asset.id, name: asset.name, category: "equipment", start: asset.cost,
-      end: hardwareBookValue(asset.cost, 1), historicalCost: asset.cost,
-      usefulLifeMonths: HARDWARE_LIFE_MONTHS, salvageValue: 0,
-      placedInServiceMonth: HARDWARE_SERVICE_MONTH,
-    }));
-    for (const row of hardware) {
-      const matches = item => {
-        const name = String(item?.name || "").toLowerCase();
-        return row.id.includes("2080") ? /2080/.test(name) : /5070/.test(name);
-      };
-      if (!items.some(matches) && !original.some(matches)) items.push(row);
-    }
-    const next = { ...saved, [key]: { ...entry, balanceSheetItems: items, hardwareCostSeededV1: true } };
-    remoteStorage.setItem(KEY, JSON.stringify(next));
-    setRecords(next);
-  }, []);
-
   useEffect(() => subscribe(() => {
     setRecords(readRecords());
     setPortfolioItems(readPortfolioItems());
@@ -226,33 +188,6 @@ export default function MonthlyChangesPage() {
     setBitcoinPrice(Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
     setIncomeSources(current => ({ ...readIncomeSources(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
   }), []);
-  // Confirmed October 31 RollerCoin balance after the October withdrawal.
-  // Apply only once so later edits to the historical month remain untouched.
-  useEffect(() => {
-    const saved = readRecords();
-    const october = saved["2026-10"] || {};
-    if (october.rollerCoinOct2026CorrectedV1) return;
-    const correctedBalance = 11.79;
-    const updated = { ...saved };
-    for (const [key, field] of [["2026-10", "end"], ["2026-11", "start"]]) {
-      const entry = saved[key] || {};
-      const rows = Array.isArray(entry.items) ? entry.items : [];
-      const original = rows.find(row => String(row?.name || "").trim().toLowerCase() === "rollercoin");
-      const replacement = {
-        ...(original || { name: "RollerCoin" }),
-        [field]: correctedBalance,
-        octoberWithdrawalCorrected: true,
-      };
-      updated[key] = {
-        ...entry,
-        items: [...rows.filter(row => String(row?.name || "").trim().toLowerCase() !== "rollercoin"), replacement],
-        ...(key === "2026-10" ? { rollerCoinOct2026CorrectedV1: true } : {}),
-      };
-    }
-    remoteStorage.setItem(KEY, JSON.stringify(updated));
-    setRecords(updated);
-  }, []);
-
   useEffect(() => {
     let active = true;
     const refresh = async () => {
@@ -265,7 +200,6 @@ export default function MonthlyChangesPage() {
           manualIncome: result.manualIncomeHistory || current.manualIncome,
           luloBackfills: result.luloBackfills || current.luloBackfills,
         }));
-        setBackendReady(true);
       } catch { /* Existing saved records remain editable offline. */ }
     };
     refresh();
@@ -317,115 +251,6 @@ export default function MonthlyChangesPage() {
       window.removeEventListener("project-crypto-updated", refresh);
     };
   }, []);
-
-  // One-time Unetwork balance reconstruction from user-confirmed mining income:
-  // September $17.64, October $22.48, November-to-date $6.95.
-  // A live balance is the anchor; never overwrite saved historical values.
-  // Earnings and balances can diverge because of withdrawals or adjustments.
-  useEffect(() => {
-    if (getCurrentMonthKey() !== "2026-11") return;
-    const tracker = loadUnetworkTracker();
-    if (!tracker.lastSyncedAt || !Number.isFinite(Date.parse(tracker.lastSyncedAt))) return;
-    const balance = Number(tracker.currentBalance);
-    if (!Number.isFinite(balance) || balance < 0) return;
-
-    const novemberStart = round(balance - 6.95);
-    const octoberStart = round(novemberStart - 22.48);
-    const septemberStart = round(octoberStart - 17.64);
-    // Treat a negative inferred September opening as $0 rather than blank.
-    // Keep the other months anchored to the known earnings and synced balance.
-    const estimates = {
-      "2026-09": { start: Math.max(0, septemberStart), end: octoberStart >= 0 ? octoberStart : null },
-      "2026-10": { start: octoberStart >= 0 ? octoberStart : null, end: novemberStart >= 0 ? novemberStart : null },
-      "2026-11": { start: novemberStart >= 0 ? novemberStart : null },
-    };
-    const existing = readRecords();
-    const updated = { ...existing };
-    let changed = false;
-    for (const [key, values] of Object.entries(estimates)) {
-      const saved = updated[key] || {};
-      const rows = Array.isArray(saved.items) ? saved.items : [];
-      const index = rows.findIndex(row => String(row?.name || "").trim().toLowerCase() === "unetwork");
-      const prior = index >= 0 ? rows[index] : { name: "Unetwork" };
-      const nextRow = { ...prior };
-      let updatedRow = false;
-      for (const [field, value] of Object.entries(values)) {
-        if (value === null || parseAmount(prior[field]) !== null) continue;
-        nextRow[field] = value;
-        updatedRow = true;
-      }
-      if (!updatedRow) continue;
-      const nextRows = [...rows];
-      if (index >= 0) nextRows[index] = nextRow;
-      else nextRows.push(nextRow);
-      updated[key] = { ...saved, items: nextRows };
-      changed = true;
-    }
-    if (changed) {
-      remoteStorage.setItem(KEY, JSON.stringify(updated));
-      setRecords(updated);
-    }
-  }, [liveProjectBalances.unetwork]);
-
-  // Seal past months once, using the values already saved. Future live syncs and
-  // changes in project lists cannot rewrite those months. Existing entries stay intact.
-  useEffect(() => {
-    if (!backendReady) return;
-    const saved = readRecords();
-    const currentKey = getCurrentMonthKey();
-    let changed = false;
-    const next = { ...saved };
-    for (const [key, entry] of Object.entries(saved)) {
-      if (key >= currentKey || !Array.isArray(entry?.items) || !entry.items.length) continue;
-      if (entry.locked && entry.revenueSnapshot !== undefined) continue;
-      const monthIncome = monthEarnings.find(row => row.monthKey === key);
-      next[key] = {
-        ...entry,
-        locked: true,
-        // Capture historical income once, not on every subsequent sync.
-        revenueSnapshot: entry.revenueSnapshot !== undefined
-          ? entry.revenueSnapshot : monthIncome?.total ?? null,
-        // Lock the row set already saved for the completed month.
-        items: entry.items.map(row => ({ ...row })),
-      };
-      changed = true;
-    }
-    if (changed) {
-      remoteStorage.setItem(KEY, JSON.stringify(next));
-      setRecords(next);
-    }
-  }, [backendReady, monthEarnings]);
-
-  // Repair only missing historical ending balances using the *saved starting
-  // value of the following month*. This is a balance carry-forward, not a
-  // recalculation from today's prices or income. Once copied it stays fixed.
-  useEffect(() => {
-    const saved = readRecords();
-    const currentMonth = getCurrentMonthKey();
-    const updated = { ...saved };
-    let changed = false;
-    for (const [key, entry] of Object.entries(saved)) {
-      if (key >= currentMonth || !entry?.locked || !Array.isArray(entry.items)) continue;
-      const followingMonth = saved[nextMonth(key)];
-      if (!Array.isArray(followingMonth?.items)) continue;
-      const newItems = entry.items.map(row => {
-        if (parseAmount(row.end) !== null) return row;
-        const following = followingMonth.items.find(other =>
-          String(other?.name || "").trim().toLowerCase() === String(row?.name || "").trim().toLowerCase());
-        const carry = parseAmount(following?.start);
-        if (carry === null) return row;
-        changed = true;
-        return { ...row, end: carry, carriedFromNextMonth: true };
-      });
-      if (newItems.some((row, i) => row !== entry.items[i])) {
-        updated[key] = { ...entry, items: newItems };
-      }
-    }
-    if (changed) {
-      remoteStorage.setItem(KEY, JSON.stringify(updated));
-      setRecords(updated);
-    }
-  }, [records]);
 
   const selectableMonths = useMemo(() => {
     const current = getCurrentMonthKey();
