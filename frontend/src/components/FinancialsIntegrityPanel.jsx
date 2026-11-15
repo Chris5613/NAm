@@ -82,7 +82,17 @@ export default function FinancialsIntegrityPanel() {
           ? " | Review days: " + check.reviewEvidence.map(
               row => row.day + " (" +
                 (row.provisionalProviders || []).join(", ") + ")"
-            ).join("; ") : "")
+            ).join("; ") : "") +
+        (Array.isArray(check.missingCurrentDay) && check.missingCurrentDay.length
+          ? " | Current day still in progress: " +
+            check.missingCurrentDay.map(item =>
+              item.device + "/" + item.day + "/" + item.source).join(", ")
+          : "") +
+        (Array.isArray(check.missingCompletedDays) && check.missingCompletedDays.length
+          ? " | Missing completed days: " +
+            check.missingCompletedDays.map(item =>
+              item.device + "/" + item.day + "/" + item.source).join(", ")
+          : "")
       ),
     ];
     try {
@@ -163,6 +173,20 @@ export default function FinancialsIntegrityPanel() {
           {Array.isArray(check.differingFields) && check.differingFields.length > 0 &&
             <p className="mt-1 text-rose-200">
               Differing fields: {check.differingFields.join(", ")}
+            </p>}
+          {Array.isArray(check.missingCurrentDay) &&
+            check.missingCurrentDay.length > 0 &&
+            <p className="mt-1 text-[#a9c4d2]">
+              Current Pacific day still in progress (not an overdue receipt):
+              {" "}{check.missingCurrentDay.map(item =>
+                item.device + " " + item.day + "/" + item.source).join(", ")}
+            </p>}
+          {Array.isArray(check.missingCompletedDays) &&
+            check.missingCompletedDays.length > 0 &&
+            <p className="mt-1 text-amber-200">
+              Missing completed-day evidence: {check.missingCompletedDays.map(
+                item => item.device + " " + item.day + "/" + item.source
+              ).join(", ")}
             </p>}
           {Array.isArray(check.reviewFlags) && check.reviewFlags.length > 0 &&
             <p className="mt-1 text-amber-200">
