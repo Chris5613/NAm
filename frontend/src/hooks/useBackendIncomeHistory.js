@@ -43,7 +43,8 @@ export function useBackendIncomeHistory(payload, localMonths) {
   useEffect(() => {
     if (persistedMonths) reportFinancialParity(
       "income-history", payload.currentMonth, matchedPersisted,
-      "backend-persisted", signature);
+      "backend-persisted", signature,
+      matchedPersisted ? null : incomeHistoryMismatchReason(localMonths, persistedMonths));
   }, [signature, payload.currentMonth, persistedMonths, matchedPersisted]);
   return matchedPersisted ? persistedMonths :
     matchedProjection ? serverMonths : localMonths;
@@ -64,4 +65,31 @@ export function incomeHistoryMatches(local, remote) {
     return [...keys].every(k => Math.abs(Number(row.sources?.[k] || 0) -
       Number(b.sources?.[k] || 0)) < .005);
   });
+}
+
+/** Return a safe diagnostic code, never accounting figures. */
+export function incomeHistoryMismatchReason(local, remote) {
+  if (!Array.isArray(remote)) return "missing-server-month";
+  const localByKey = new Map((local || []).map(row => [row.monthKey, row]));
+  const remoteByKey = new Map(remote.map(row => [row.monthKey, row]));
+  if (remoteByKey.size !== remote.length) return "duplicate-server-month";
+  if ([...localByKey.keys()].some(key => !remoteByKey.has(key)))
+    return "missing-server-month";
+  if ([...remoteByKey.keys()].some(key => !localByKey.has(key)))
+    return "extra-server-month";
+  for (const [key, row] of localByKey) {
+    const other = remoteByKey.get(key);
+    const keys = new Set([...Object.keys(row.sources || {}),
+      ...Object.keys(other.sources || {})]);
+    if ([...keys].some(source => Math.abs(
+      Number(row.sources?.[source] || 0) - Number(other.sources?.[source] || 0)
+    ) >= .005)) return "source-difference";
+    if (Math.abs(Number(row.projectTotal || 0) -
+      Number(other.projectTotal || 0)) >= .005)
+      return "project-total-difference";
+    if (Math.abs(Number(row.total || 0) -
+      Number(other.total || 0)) >= .005)
+      return "monthly-total-difference";
+  }
+  return "other";
 }
