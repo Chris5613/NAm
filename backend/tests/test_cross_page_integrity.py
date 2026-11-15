@@ -102,6 +102,25 @@ class CrossPageIntegrityTests(unittest.TestCase):
         self.assertEqual(report["bookedProviderLifetimeUsd"], 10)
         self.assertEqual(found["home-financials"]["status"], "pass")
 
+    def test_audit_exposes_missing_hardware_days_and_daily_provider_evidence(self):
+        saved, trackers, income = fixture()
+        saved["hardware_payback_devices_v1"][0]["sources"] = ["Salad"]
+        saved["hardware_payback_devices_v1"][0]["earningsStartDay"] = "2026-11-14"
+        report = run(saved, trackers, income)
+        issues = checks(report)
+        hardware = issues["hardware-credit"]
+        self.assertEqual(hardware["status"], "warning")
+        self.assertFalse(hardware["complete"])
+        self.assertEqual(hardware["deviceEvidence"][0]["missingSourceDays"],
+                         [{"day": "2026-11-14", "source": "salad"},
+                          {"day": "2026-11-15", "source": "salad"}])
+        self.assertEqual(hardware["deviceEvidence"][0]["name"], "PC")
+        self.assertEqual(hardware["deviceEvidence"][0]
+                         ["provisionalSourceDays"], [])
+        saved["hardware_payback_devices_v1"][0]["sources"] = ["Kryptex"]
+        daily_report = run(saved, trackers, income)
+        self.assertIn("reviewEvidence", checks(daily_report)["dated-earnings"])
+
     def test_booked_provider_vs_dated_income_difference_is_visible(self):
         saved, trackers, income = fixture()
         before = deepcopy((saved, trackers, income))
