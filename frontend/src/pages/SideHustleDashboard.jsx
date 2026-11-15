@@ -863,7 +863,7 @@ export default function SideHustleDashboard() {
         tone="amber"
       />
     </div>
-    <div className="grid gap-3 xl:grid-cols-2">
+    <div className="grid min-w-0 items-stretch gap-3 xl:grid-cols-2">
       <section className={panel + " min-h-[210px] min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
@@ -987,7 +987,7 @@ export default function SideHustleDashboard() {
       </section>
     </div>
 
-    <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
+    <div className="grid min-w-0 items-stretch gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
@@ -999,8 +999,8 @@ export default function SideHustleDashboard() {
           </div>
         </div>
 
-        <div className="mt-3 min-w-[620px] overflow-x-auto">
-          <div className="grid grid-cols-[1.5fr_.9fr_1fr_1.05fr_.75fr] items-center gap-x-3 border-b border-[#25303a] px-1 pb-1.5 text-[9px] text-[#8a96a3]">
+        <div className="mt-3 w-full min-w-0 overflow-x-auto">
+          <div className="grid min-w-[620px] grid-cols-[1.5fr_.9fr_1fr_1.05fr_.75fr] items-center gap-x-3 border-b border-[#25303a] px-1 pb-1.5 text-[9px] text-[#8a96a3]">
             <span>Project</span>
             <span>Type</span>
             <span className="text-right">Income (Today)</span>
@@ -1010,7 +1010,7 @@ export default function SideHustleDashboard() {
 
           <div className="divide-y divide-[#202932]">
             {sourceTableRows.map(row => (
-              <div key={row.platform} className="grid grid-cols-[1.5fr_.9fr_1fr_1.05fr_.75fr] items-center gap-x-3 px-1 py-2 text-[11px]">
+              <div key={row.platform} className="grid min-w-[620px] grid-cols-[1.5fr_.9fr_1fr_1.05fr_.75fr] items-center gap-x-3 px-1 py-2 text-[11px]">
                 <div className="flex min-w-0 items-center gap-2">
                   <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px] font-bold ${row.meta.iconClass}`}>{row.meta.icon}</span>
                   <span className="truncate font-medium text-[#e8edf2]">{row.platform}</span>
