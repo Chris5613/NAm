@@ -8,6 +8,7 @@ from copy import deepcopy
 from datetime import date, datetime
 from .hardware_credit_audit import sources_for
 from .hardware_payback_lifetime import decimal_or_none
+from .hardware_source_segments import switch_source_segments, checked_segments, InvalidSourceSegments
 
 MAX_DEVICES = 100
 
@@ -60,17 +61,21 @@ def preview_hardware_edit(saved, expected, proposed, today_key, timestamp):
         selected = sources_for(device)
         if not selected:
             raise ValueError("Choose at least one income source")
-        if original is not None and set(sources_for(original)) != set(selected):
-            raise HardwareEditConflict(
-                "Changing income sources needs dated source-segment attribution; "
-                "existing verified earnings and checkpoints were not changed"
-            )
+        source_changed = original is not None and (
+            set(sources_for(original)) != set(selected))
         # Cosmetic/cost edits preserve the original earning dates even if a
         # legacy device predates the explicit-start policy. Only a requested
         # change to earning dates must pass the new strict date validation.
         same_dates = original is not None and (
             device.get("earningsStartDay") == original.get("earningsStartDay") and
             device.get("startMonth") == original.get("startMonth"))
+        if original is not None and original.get("sourceSegments") is not None and not same_dates:
+            raise HardwareEditConflict(
+                "Dated source assignments have already been recorded; changing "
+                "the original earnings start requires a separate history review")
+        if source_changed and not same_dates:
+            raise HardwareEditConflict(
+                "Change the earnings start date separately before switching providers")
         if not same_dates:
             beginning = str(device.get("earningsStartDay") or "")
             try:
@@ -85,11 +90,27 @@ def preview_hardware_edit(saved, expected, proposed, today_key, timestamp):
         if cost is None or cost <= 0 or power is None:
             raise ValueError("Valid positive purchase cost and nonnegative power are required")
         if original is not None:
-            # An existing checkpoint is immutable during ordinary edits.
-            # Explicit earningsStartDay changes affect the backend projection
-            # but must not rewrite a historical checkpoint.
+            # Preserve legacy credit evidence verbatim. Dated source
+            # assignments are independently reconstructed by the backend.
             device["checkpoint"] = deepcopy(original.get("checkpoint"))
+            try:
+                if source_changed:
+                    device["sourceSegments"] = switch_source_segments(
+                        original, selected, today_key)
+                    device["sourceSwitchRecordedAt"] = timestamp
+                elif original.get("sourceSegments") is not None:
+                    checked_segments(original)
+                    device["sourceSegments"] = deepcopy(original["sourceSegments"])
+                    device["sourceSwitchRecordedAt"] = original.get("sourceSwitchRecordedAt")
+                else:
+                    device.pop("sourceSegments", None)
+                    device.pop("sourceSwitchRecordedAt", None)
+            except InvalidSourceSegments as exc:
+                raise HardwareEditConflict(
+                    "Source-switch history requires review: " + str(exc)) from exc
         else:
+            device.pop("sourceSegments", None)
+            device.pop("sourceSwitchRecordedAt", None)
             # The new machine has no past checkpoint credits. The backend
             # dated-earnings ledger determines all observed recovery.
             device["checkpoint"] = {
