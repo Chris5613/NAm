@@ -3,6 +3,7 @@ import unittest
 from backend.financial_balance_rows import (
     financial_balance_rows, with_journal_equipment,
 )
+from backend.financial_core import phone_asset_rows
 
 
 class FinancialBalanceRowsTests(unittest.TestCase):
@@ -99,6 +100,24 @@ class FinancialBalanceRowsTests(unittest.TestCase):
         self.assertTrue(old_gpu["retired"])
         self.assertEqual(old_gpu["end"], 0)
         self.assertEqual(len([r for r in values if r["name"] == "RTX 5080"]), 1)
+
+    def test_registered_business_phone_acquisition_is_not_added_twice(self):
+        phone = {
+            "id": "phone-one", "name": "iPhone 13 — Unetwork #1",
+            "businessDate": "2026-05-20", "startMonth": "2026-05",
+            "cost": 360, "fundingAccount": "equity",
+        }
+        rows = phone_asset_rows([phone], "2026-11")
+        acquisition = [{
+            "id": "unetwork-phone:phone-one",
+            "date": "2026-05-20",
+            "description": "iPhone 13 — Unetwork #1",
+            "debitAccount": "equipment", "creditAccount": "equity",
+            "amount": 360,
+        }]
+        output = with_journal_equipment(rows, acquisition, "2026-11")
+        self.assertEqual(len(output), 1)
+        self.assertEqual(output[0]["id"], "unetwork-phone:phone-one")
 
     def test_locked_month_ignores_later_hardware_changes(self):
         records = {"2026-10": {"locked": True, "items": [
