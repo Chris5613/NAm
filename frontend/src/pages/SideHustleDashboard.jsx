@@ -989,49 +989,6 @@ export default function SideHustleDashboard() {
       </section>
     </div>
 
-    <section className={panel + " min-w-0 overflow-hidden px-5 pb-5 pt-4"}>
-        <div className="flex items-center justify-between gap-3">
-          <Link to="/mining-power" className="flex items-center gap-2.5">
-            <Zap className="h-5 w-5 text-emerald-400"/>
-            <h2 className="text-[16px] font-semibold">Mining Power</h2>
-          </Link>
-          <div className="flex items-center gap-2">
-          {freePower && <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-[9px] font-medium text-sky-300">Free power</span>}
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-medium ${live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[#303842] bg-[#13181e] text-[#8e9aa6]"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-[#6f7a84]"}`}/>
-            {live ? "Live" : powerIsCached ? "Saved" : "Stale"}
-          </span>
-          </div>
-        </div>
-
-        <div className="mt-7 grid grid-cols-2 gap-y-5 sm:grid-cols-5 sm:gap-y-0">
-          <div className="min-w-0 pr-4 sm:border-r sm:border-[#26313a]">
-            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Zap className="h-4 w-4 text-cyan-300"/><span>Total Power</span></div>
-            <strong className="mt-2 block text-[31px] font-semibold leading-none tracking-tight tabular-nums text-white">{totalWatts.toFixed(0)} W</strong>
-          </div>
-
-          <div className="min-w-0 px-0 sm:border-r sm:border-[#26313a] sm:px-4">
-            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><CalendarDays className="h-4 w-4 text-cyan-300"/><span>Monthly Energy</span></div>
-            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{monthKwh.toFixed(2)} kWh</strong>
-          </div>
-
-          <div className="min-w-0 pr-4 sm:border-r sm:border-[#26313a] sm:px-4">
-            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Coins className="h-4 w-4 text-amber-400"/><span>Monthly Cost</span></div>
-            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-amber-400">{monthPowerCost == null ? "—" : money(monthPowerCost)}</strong>
-          </div>
-
-          <div className="min-w-0 px-0 sm:border-r sm:border-[#26313a] sm:px-4">
-            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><Zap className="h-4 w-4 text-cyan-300"/><span>Effective Rate</span></div>
-            <strong className="mt-2 block text-[18px] font-semibold leading-none tabular-nums text-white">{rateInfo ? "$" + Number(rateInfo.effectiveUsdPerKwh).toFixed(4) + "/kWh" : "—"}</strong>
-          </div>
-
-          <div className="col-span-2 min-w-0 sm:col-span-1 sm:pl-4">
-            <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><TrendingUp className="h-4 w-4 text-emerald-400"/><span>Net Profit / Day</span></div>
-            <strong title="Daily profitability estimate from the backend Kryptex machine aggregate minus out-of-pocket electricity" className={`mt-2 block text-[18px] font-semibold leading-none tabular-nums ${miningDailyNet == null ? "text-[#83909d]" : miningDailyNet >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{miningDailyNet == null ? "—" : money(miningDailyNet)}</strong>
-          </div>
-        </div>
-    </section>
-
     <div className="grid gap-3 xl:grid-cols-[1.15fr_1fr]">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
