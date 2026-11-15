@@ -9,6 +9,7 @@ export function buildSelectedEarningsBreakdown({
   luloUtcDay,
   hasLuloProjects,
   sourceTotalsForDay,
+  currentMonthSources,
 }) {
   if (!selection || selection.range !== earningsChartRange) return null;
 
@@ -17,18 +18,29 @@ export function buildSelectedEarningsBreakdown({
   let note = "";
 
   if (selection.range === "yearly") {
-    const month = projectIncome.find(item => item.monthKey === selection.key);
-    sources = Object.fromEntries(
-      (month?.platforms || [])
-        .filter(item => Number.isFinite(Number(item.amount)))
-        .map(item => [String(item.platform), Number(item.amount)])
-    );
-    const paidStocks = stockPayoutTotal(stockPayouts, selection.key);
-    if (paidStocks > 0) sources.Stocks = paidStocks;
-    if (!month && !paidStocks) return null;
+    const currentMonth = String(todayKey).slice(0, 7);
+    const isCurrentMonth = selection.key === currentMonth &&
+      currentMonthSources && typeof currentMonthSources === "object";
+    if (isCurrentMonth) {
+      // Match the visible "Earnings This Month" chart, including restored
+      // daily mining income, rather than an independently cached monthly row.
+      sources = { ...currentMonthSources };
+    } else {
+      const month = projectIncome.find(item => item.monthKey === selection.key);
+      sources = Object.fromEntries(
+        (month?.platforms || [])
+          .filter(item => Number.isFinite(Number(item.amount)))
+          .map(item => [String(item.platform), Number(item.amount)])
+      );
+      const paidStocks = stockPayoutTotal(stockPayouts, selection.key);
+      if (paidStocks > 0) sources.Stocks = paidStocks;
+      if (!month && !paidStocks) return null;
+    }
 
     label = selection.key;
-    note = "Recorded monthly project totals and received stock payouts";
+    note = isCurrentMonth
+      ? "Recorded daily earnings for this month, summed by project"
+      : "Recorded monthly project totals and received stock payouts";
   } else {
     if (selection.key > todayKey && selection.key !== luloUtcDay) return null;
 
