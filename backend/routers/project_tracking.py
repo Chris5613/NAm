@@ -342,6 +342,8 @@ async def project_integration_audit(
         "project_income_rollercoin_tracker_v2",
         "project_income_unetwork_tracker_v1",
         "yield_monthly_snapshots_v1",
+        "yield_backend_source_wallets_v1",
+        "yield_backend_source_snapshots_v1",
         "financials_journal_v1",
         "hardware_payback_devices_v1",
         "yield_project_latest_balance_feed_v1",
