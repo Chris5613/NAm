@@ -8,12 +8,15 @@ import { api, settingsApi } from "@/lib/apiClient";
 import { projectsApi } from "@/lib/api";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { localStorage as appStorage } from "@/lib/localStorage";
-import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
+import { useCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
+import { backendCryptoProviderIncomeRows } from "@/lib/cryptoDashboardIncomeRows";
+import { useAuth } from "@/lib/AuthContext";
+import { readCryptoDashboardPowerCache, writeCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
 import { PASSIVE_MONTHLY_INCOME_KEY } from "@/lib/monthlyEarningsChart";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
@@ -508,10 +511,10 @@ function SectionTitle({ icon: Icon, title, to }) {
 export default function SideHustleDashboard() {
   const [income, setIncome] = useState(readIncomeData);
   const [hardware, setHardware] = useState(readHardware);
-  const [power, setPower] = useState(null);
+  const { user } = useAuth();
+  const [power, setPower] = useState(() => readCryptoDashboardPowerCache(user?.id)?.data || null);
+  const [powerIsCached, setPowerIsCached] = useState(() => Boolean(readCryptoDashboardPowerCache(user?.id)));
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
-  const [serverTodayIncome, setServerTodayIncome] = useState(null);
-  const [serverTodaySources, setServerTodaySources] = useState(null);
   const [recordedHistory, setRecordedHistory] = useState(readRecordedHistory);
   // All income cards read the same backend-owned server projection.
   const [activeView, setActiveView] = useState("overview");
@@ -521,25 +524,6 @@ export default function SideHustleDashboard() {
   const [projectDraft, setProjectDraft] = useState({ id: "", cost: "" });
   const [addError, setAddError] = useState("");
   const [photoLoading, setPhotoLoading] = useState(false);
-
-  const refreshIncomeMetrics = useCallback(async () => {
-    const today = pacificDayKey(Date.now());
-    const [dailyResult] = await Promise.allSettled([
-      api.get(`/api/project-tracking/daily-earnings/${today}`),
-    ]);
-
-    if (dailyResult.status === "fulfilled") {
-      const result = dailyResult.value;
-      const total = Number(result?.totalUsd);
-      if (result?.date === today && Number.isFinite(total)) setServerTodayIncome(total);
-      if (result?.date === today && result.sources && typeof result.sources === "object") {
-        setServerTodaySources({date:today,sources:result.sources});
-      } else {
-        setServerTodaySources(null);
-      }
-    }
-
-  }, []);
 
   useEffect(() => {
     let active = true;
@@ -613,39 +597,40 @@ export default function SideHustleDashboard() {
         settingsApi.get(POWER_SETTINGS_KEY).catch(() => null),
       ]);
       setPower(status);
+      writeCryptoDashboardPowerCache(user?.id, status);
+      setPowerIsCached(false);
       if (saved && typeof saved === "object") setPowerSettings(current => ({ ...current, ...saved }));
     } catch {
-      setPower(null);
+      // Preserve but label a saved measured snapshot during backend outages.
+      setPowerIsCached(true);
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => subscribe(() => {
     setIncome(readIncomeData());
     setRecordedHistory(current => ({ ...readRecordedHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
     setHardware(readHardware());
-    refreshIncomeMetrics();
-  }), [refreshIncomeMetrics]);
+  }), []);
   useEffect(() => {
     refreshPower();
-    refreshIncomeMetrics();
     const powerTimer = window.setInterval(refreshPower, 15000);
-    const incomeTimer = window.setInterval(refreshIncomeMetrics, 5000);
     const clockTimer = window.setInterval(() => setClock(Date.now()), 60000);
     return () => {
       window.clearInterval(powerTimer);
-      window.clearInterval(incomeTimer);
       window.clearInterval(clockTimer);
     };
-  }, [refreshPower, refreshIncomeMetrics]);
+  }, [refreshPower]);
 
   // Financial summary values are NEVER calculated from browser cache.
   const currentMonthKey = getCurrentMonthKey();
-  const { data: backendEarnings } = useBackendEarningsDashboard(currentMonthKey);
+  const { data: backendEarnings, isCached: earningsCached, error: earningsError } = useBackendEarningsDashboard(currentMonthKey);
+  const { data: backendPortfolio, isCached: portfolioCached, error: portfolioError } = useCryptoDashboardSnapshot();
+  const serverTodaySources = backendEarnings?.todaySources
+    ? { date: backendEarnings.todayKey, sources: backendEarnings.todaySources } : null;
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) ||
     { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recordedCurrentMonth = recordedMonths.find(row => row.monthKey === currentMonthKey);
   const monthlyIncome = backendEarnings?.monthTotalUsd ?? null;
-  const recentMonths = recordedMonths.slice(-12);
   const todayKey = pacificDayKey(clock);
   const passiveIncomeToday = backendEarnings?.todayKey === todayKey
     ? backendEarnings.todayTotalUsd ?? null : null;
@@ -653,8 +638,6 @@ export default function SideHustleDashboard() {
   const todayVsYesterday = passiveIncomeToday !== null && yesterdayIncome !== null && yesterdayIncome > 0
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
     : null;
-  const previousMonth = recentMonths.length > 1 ? recentMonths[recentMonths.length - 2] : null;
-  const monthChange = monthlyIncome !== null && previousMonth?.total > 0 ? ((monthlyIncome - previousMonth.total) / previousMonth.total * 100) : 0;
 
   const rankedProjects = [...income.projects].sort((a, b) => {
     const ar = a.spent > 0 ? a.earned / a.spent : 0;
@@ -698,29 +681,23 @@ export default function SideHustleDashboard() {
     .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
   const hardwareProgress = hardwareCost > 0 ? hardwareRecovered / hardwareCost * 100 : 0;
 
-  const projectSummary = readObject("project_income_portfolio_summary_v1");
-  const totalProjectBalance = Math.max(0, Number(projectSummary?.portfolioBalance) || 0);
-  // Match the Bitcoin balance used by Home and Monthly Changes.
-  // Project Income's portfolioBalance does not include Bitcoin.
+  // The server-owned provider feed, not a browser portfolio calculation.
+  const totalProjectBalance = backendPortfolio?.totalUsd ?? null;
+  // Fast read of the previous BTC quote. Do not rebuild the wallet/token
+  // portfolio on every Crypto Dashboard render. Backend BTC migration pending.
   const homeBitcoin = appStorage.getCryptoCache()?.projectPortfolio?.bitcoin;
-  const portfolioBitcoin = getStoredProjectCryptoPortfolio()?.bitcoin;
-  const bitcoinBalance = Math.max(0, Number(
-    homeBitcoin?.value ?? homeBitcoin?.balance ??
-    portfolioBitcoin?.value ?? portfolioBitcoin?.balance
-  ) || 0);
-  const totalNetWorth = totalProjectBalance + bitcoinBalance;
+  const rawBitcoin = homeBitcoin?.value ?? homeBitcoin?.balance;
+  const bitcoinBalance = rawBitcoin == null ? null : Number(rawBitcoin);
+  const validBitcoin = bitcoinBalance !== null &&
+    Number.isFinite(bitcoinBalance) && bitcoinBalance >= 0;
+  const totalNetWorth = totalProjectBalance == null || !validBitcoin
+    ? null : totalProjectBalance + bitcoinBalance;
   // Use the same reconciled per-source monthly totals as Income History.
   // This includes Lulo earnings even when the quick dashboard cache lacks a Lulo row.
-  const sourceRows = Object.entries(recordedCurrentMonth?.sources || {})
-    .filter(([, amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
-    .map(([platform, amount]) => ({ platform, amount: Number(amount) }))
-    .sort((a, b) => b.amount - a.amount);
+  // Match KPI, monthly chart, and Top Projects to the one backend ledger.
+  const sourceRows = backendCryptoProviderIncomeRows(backendEarnings, backendPortfolio);
   const sourceTableRows = sourceRows.map(row => ({
-    ...row,
-    // Only observed/confirmed dated earnings appear in "Income (Today)".
-    // Missing daily records render as a dash rather than APY estimates.
-    daily: recordedDailyProviderIncome(row.platform, todayKey, recordedHistory),
-    meta: projectTableMeta(row.platform),
+    ...row, meta: projectTableMeta(row.platform),
   }));
 
   const addSourceOptions = [...new Set([
@@ -817,9 +794,16 @@ export default function SideHustleDashboard() {
   }
 
   return <div className="min-w-0 space-y-3 pb-8 text-white" data-testid="side-hustle-dashboard">
+    <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+      <h1 className="text-lg font-semibold text-white">Crypto Dashboard</h1>
+      <span role="status" className="text-[10px] text-[#9da9b7]">
+        {earningsCached || portfolioCached || powerIsCached ? "Saved backend snapshot · Updating" : "Backend data · Auto-refreshing"}
+        {(earningsError || portfolioError) && " · Some sources unavailable"}
+      </span>
+    </div>
 
 
-    <nav aria-label="Dashboard sections" className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-2xl border border-[#242b33] bg-[#0d1014] px-2 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] [scrollbar-width:none]">
+    <nav aria-label="Crypto Dashboard sections" className="flex min-w-0 items-center gap-1 overflow-x-auto rounded-2xl border border-[#242b33] bg-[#0d1014] px-2 py-1.5 shadow-[0_10px_28px_rgba(0,0,0,0.18)] [scrollbar-width:none]">
       {[
         { id: "overview", label: "Overview", Icon: Home },
         { id: "passive", label: "Passive Income", Icon: Layers3 },
@@ -844,9 +828,9 @@ export default function SideHustleDashboard() {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <KpiCard
         icon={Layers3}
-        title="Total Net Worth"
-        value={money(totalNetWorth)}
-        detail="Project balances + Bitcoin"
+        title="Projects + Bitcoin"
+        value={totalNetWorth == null ? "—" : money(totalNetWorth)}
+        detail="All projects (inactive included) + saved BTC estimate"
         tone="violet"
       />
       <KpiCard
@@ -861,14 +845,14 @@ export default function SideHustleDashboard() {
         icon={CalendarDays}
         title="Monthly Income"
         value={monthlyIncome===null ? "—" : money(monthlyIncome)}
-        detail={previousMonth ? `${monthChange >= 0 ? "▲" : "▼"} ${Math.abs(monthChange).toFixed(1)}% vs. last month` : "Current month total"}
+        detail="Backend-recorded current month"
         tone="sky"
       />
       <KpiCard
         icon={Zap}
         title="Total Power"
         value={`${totalWatts.toFixed(0)} W`}
-        detail={`${deviceRows.length} GPUs • ${live ? "Live" : "Stale"}`}
+        detail={`${deviceRows.length} GPUs • ${live ? "Live" : powerIsCached ? "Saved" : "Stale"}`}
         tone="amber"
       />
     </div>
@@ -1012,7 +996,7 @@ export default function SideHustleDashboard() {
           {freePower && <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-[9px] font-medium text-sky-300">Free power</span>}
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[9px] font-medium ${live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-[#303842] bg-[#13181e] text-[#8e9aa6]"}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${live ? "bg-emerald-400" : "bg-[#6f7a84]"}`}/>
-            {live ? "Live" : "Stale"}
+            {live ? "Live" : powerIsCached ? "Saved" : "Stale"}
           </span>
           </div>
         </div>
@@ -1079,8 +1063,13 @@ export default function SideHustleDashboard() {
                 <strong className="text-right font-semibold tabular-nums text-[#eef2f6]" title={row.daily == null ? "No confirmed daily earnings record available" : "Recorded earnings for today"}>{row.daily == null ? "—" : money(row.daily)}</strong>
                 <strong className="text-right font-semibold tabular-nums text-[#eef2f6]">{money(row.amount)}</strong>
                 <div className="flex justify-end">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-medium text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Active
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-medium ${row.inactive === true
+                    ? "border-[#405165] bg-[#1b222a] text-[#9eabb9]"
+                    : row.inactive === false
+                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+                      : "border-amber-400/25 bg-amber-400/10 text-amber-300"}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current"/>
+                    {row.inactive === true ? "Inactive" : row.inactive === false ? "Active" : "Unverified"}
                   </span>
                 </div>
               </div>
@@ -1102,7 +1091,7 @@ export default function SideHustleDashboard() {
               <div className="border-b border-r border-[#242d35] pb-5 pr-5">
                 <p className="text-[10px] text-[#83909d]">Passive Income (MTD)</p>
                 <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{monthlyIncome===null ? "—" : money(monthlyIncome)}</strong>
-                <p className="mt-1 text-[9px] text-emerald-400/80">{previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"}</p>
+                <p className="mt-1 text-[9px] text-emerald-400/80">Backend-recorded month to date</p>
               </div>
               <div className="border-b border-[#242d35] pb-5 pl-5">
                 <p className="text-[10px] text-[#83909d]">Mining Energy</p>
@@ -1135,9 +1124,7 @@ export default function SideHustleDashboard() {
       </section>
     </div>
     </> : null}
-    <div className={activeView==="passive" ? "pt-1" : "hidden"}>
-      <YieldFarmingPage/>
-    </div>
+    {activeView === "passive" && <div className="pt-1"><YieldFarmingPage/></div>}
     {addModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
         onMouseDown={event => { if (event.target === event.currentTarget) setAddModal(null); }}>

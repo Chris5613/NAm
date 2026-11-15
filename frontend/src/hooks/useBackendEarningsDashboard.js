@@ -1,36 +1,108 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/apiClient";
+import { useAuth } from "@/lib/AuthContext";
+import { getTodayKey } from "@/lib/yieldFarmingAccounting";
+import {
+  readBackendEarningsCache, writeBackendEarningsCache,
+  validateBackendEarningsSnapshot,
+} from "@/lib/backendEarningsCache";
 
-/** Backend owns all money totals. No local cache or calculation fallback. */
+const pending = new Map();
+
+function fetchBackendEarnings(userId, month, todayKey) {
+  const key = String(userId) + ":" + month + ":" + todayKey;
+  if (pending.has(key)) return pending.get(key);
+  const request = api.get(`/api/project-tracking/earnings-dashboard/${month}`)
+    .then(result => {
+      const validated = validateBackendEarningsSnapshot(result, month, todayKey);
+      if (!validated) throw new Error("Invalid backend earnings dashboard response");
+      return validated;
+    }).finally(() => {
+      if (pending.get(key) === request) pending.delete(key);
+    });
+  pending.set(key, request);
+  return request;
+}
+
+/**
+ * Warm the authenticated Crypto Dashboard before opening it.
+ * A cancellation guard prevents logout/switching accounts from storing
+ * a response from the preceding session.
+ */
+export async function prefetchBackendEarningsDashboard(userId, month, isCurrent = () => true) {
+  if (userId == null || !/^\d{4}-\d{2}$/.test(String(month))) return null;
+  const todayKey = getTodayKey();
+  const previous = readBackendEarningsCache(userId, month, todayKey);
+  if (previous && Date.now() - previous.cachedAt < 30_000) return previous;
+  const data = await fetchBackendEarnings(userId, month, todayKey);
+  if (!isCurrent()) return null;
+  return writeBackendEarningsCache(userId, month, data);
+}
+
+/**
+ * Account-specific session preview followed by backend revalidation.
+ * No local earnings formula, cached figure writeback, or invented $0.
+ */
 export function useBackendEarningsDashboard(month) {
-  const [state, setState] = useState({ month: null, data: null, error: null });
+  const { user } = useAuth();
+  const userId = user?.id;
+  const [state, setState] = useState(() => {
+    const saved = readBackendEarningsCache(userId, month, getTodayKey());
+    return { userId, month, todayKey: getTodayKey(), data: saved?.data || null,
+      cachedAt: saved?.cachedAt || 0, isCached: Boolean(saved), error: null };
+  });
+
   useEffect(() => {
-    if (!/^\d{4}-\d{2}$/.test(String(month))) return;
+    const todayKey = getTodayKey();
+    const saved = readBackendEarningsCache(userId, month, todayKey);
+    setState({ userId, month, todayKey, data: saved?.data || null,
+      cachedAt: saved?.cachedAt || 0, isCached: Boolean(saved), error: null });
+    if (userId == null || !/^\d{4}-\d{2}$/.test(String(month))) return;
+
     let active = true;
     const refresh = async () => {
+      const requestingDay = getTodayKey();
+      if (requestingDay !== todayKey) {
+        // A Pacific midnight rollover requires a fresh date-specific result.
+        // Never carry a yesterday total forward as today's income.
+        if (active) setState(previous => ({ ...previous,
+          todayKey: requestingDay, data: null, isCached: false, cachedAt: 0 }));
+      }
       try {
-        const result = await api.get(`/api/project-tracking/earnings-dashboard/${month}`);
-        if (!active || result?.month !== month || result?.sourceOfCalculation !== "backend-postgres") return;
-        setState({ month, data: result, error: null });
+        const data = await fetchBackendEarnings(userId, month, requestingDay);
+        if (!active || requestingDay !== getTodayKey()) return;
+        const savedResult = writeBackendEarningsCache(userId, month, data);
+        if (active) setState({ userId, month, todayKey: requestingDay,
+          data: savedResult?.data || data, cachedAt: savedResult?.cachedAt || Date.now(),
+          isCached: Boolean(savedResult && Date.parse(savedResult.data.calculatedAt) >
+            Date.parse(data.calculatedAt)), error: null });
       } catch {
         if (active) setState(previous => ({
-          month, data: previous.month === month ? previous.data : null,
-          error: "Backend earnings unavailable",
+          ...previous, error: "Backend earnings unavailable; showing last verified snapshot.",
         }));
       }
     };
+
     refresh();
-    const interval = window.setInterval(refresh, 30000);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") refresh();
+    }, 30000);
     const visible = () => { if (!document.hidden) refresh(); };
+    window.addEventListener("focus", visible);
     document.addEventListener("visibilitychange", visible);
     return () => {
       active = false;
       window.clearInterval(interval);
+      window.removeEventListener("focus", visible);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [month]);
-  return {
-    data: state.month === month ? state.data : null,
-    error: state.month === month ? state.error : null,
-  };
+  }, [userId, month]);
+
+  const todayKey = getTodayKey();
+  const current = userId != null && String(state.userId) === String(userId) &&
+    state.month === month && state.todayKey === todayKey ? state :
+    { userId, month, data: null, cachedAt: 0, isCached: false,
+      error: null };
+  return { data: current.data, error: current.error,
+    isCached: current.isCached, cachedAt: current.cachedAt };
 }

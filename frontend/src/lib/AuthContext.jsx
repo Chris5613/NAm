@@ -1,6 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { authApi, ApiError } from "@/lib/apiClient";
 import { clearCryptoDashboardCache } from "@/lib/cryptoDashboardCache";
+import { clearBackendEarningsCache } from "@/lib/backendEarningsCache";
+import { clearCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
 
 const AuthContext = createContext(null);
 
@@ -62,6 +64,8 @@ export function AuthProvider({ children }) {
       logout: async () => {
         await authApi.logout();
         clearCryptoDashboardCache(user?.id);
+        clearBackendEarningsCache(user?.id);
+        clearCryptoDashboardPowerCache(user?.id);
         setUser(null);
         await refresh();
       },

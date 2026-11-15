@@ -7,7 +7,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import Sidebar from "@/components/Sidebar";
-import Dashboard from "@/pages/Dashboard";
+import HomePage from "@/pages/Dashboard";
 import InvestmentOverview from "@/pages/InvestmentOverview";
 import CloudPage from "@/pages/CloudPage";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
@@ -38,6 +38,8 @@ import {
 } from "@/lib/projectCryptoPortfolio";
 import { Loader2 } from "lucide-react";
 import { prefetchCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
+import { prefetchBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
+import { getCurrentMonthKey } from "@/lib/yieldFarmingAccounting";
 
 let kryptexExtensionListenerStarted = false;
 
@@ -76,7 +78,7 @@ function App() {
             <Routes>
               <Route
                 path="/"
-                element={<Dashboard />}
+                element={<HomePage />}
               />
 
               <Route
@@ -109,7 +111,8 @@ function App() {
                 }
               />
 
-              <Route path="/side-hustle-dashboard" element={<SideHustleDashboard />} />
+              <Route path="/crypto-dashboard" element={<SideHustleDashboard />} />
+              <Route path="/side-hustle-dashboard" element={<Navigate to="/crypto-dashboard" replace />} />
               <Route path="/financials" element={<FinancialsPage />} />
               <Route path="/income-history" element={<IncomeHistoryPage />} />
               <Route path="/project-break-even" element={<ProjectBreakEvenPage />} />
@@ -163,7 +166,7 @@ function AuthGate() {
    *
    * Project Income + Bitcoin
    *
-   * That means Dashboard sees the new Crypto total on
+   * That means Home sees the new Crypto total on
    * its very first render instead of waiting for the
    * retired Crypto page to populate it.
    */
@@ -183,6 +186,9 @@ function AuthGate() {
     // A tiny read-only Crypto snapshot is fetched concurrently, so Home's
     // Crypto panel is warm as soon as the full authenticated store is ready.
     prefetchCryptoDashboardSnapshot(user.id, () => !cancelled)
+      .catch(() => {});
+    // Warm the actual Crypto Dashboard income cards in parallel with login.
+    prefetchBackendEarningsDashboard(user.id, getCurrentMonthKey(), () => !cancelled)
       .catch(() => {});
 
     hydrate(user.id)
