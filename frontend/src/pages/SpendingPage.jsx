@@ -381,41 +381,6 @@ const syncNetWorthBalances = useCallback(async (serverAccounts = []) => {
     setSimplefinDialogOpen(true);
   };
 
-  const fetchSimplefinInBrowser = async (accessUrl) => {
-    reserveSimplefinHour();
-    // Save before sending because even a failed provider request counts against the hourly allowance.
-
-    const parsed = new URL(accessUrl);
-    const username = decodeURIComponent(parsed.username);
-    const password = decodeURIComponent(parsed.password);
-    parsed.username = "";
-    parsed.password = "";
-    const path = parsed.pathname.replace(/\/$/, "");
-    parsed.pathname = path.endsWith("/accounts") ? path : `${path}/accounts`;
-    const startDate = Math.floor((Date.now() - 90 * 86400000) / 1000);
-    parsed.search = `?start-date=${startDate}&version=2`;
-    const response = await fetch(parsed.toString(), {
-      headers: { Accept: "application/json", Authorization: `Basic ${window.btoa(`${username}:${password}`)}` },
-    });
-    const data = await response.json().catch(() => null);
-
-    if (response.status === 429) {
-      const retryAfter = Number(response.headers.get("Retry-After") || "0");
-      const waitMessage = retryAfter ? ` Wait ${retryAfter} seconds before trying again.` : " Wait a minute before trying again.";
-      const error = new Error(`SimpleFIN is rate-limiting requests.${waitMessage}`);
-      error.retryAfter = retryAfter || 60;
-      throw error;
-    }
-    if (!response.ok) {
-      const detail = data?.errlist?.map((item) => item.description || item.code).join(", ") || `SimpleFIN returned HTTP ${response.status}`;
-      throw new Error(detail);
-    }
-    if (!Array.isArray(data?.accounts) && !Array.isArray(data?.transactions)) {
-      throw new Error("SimpleFIN returned no account data.");
-    }
-    return data;
-  };
-
   const connectSimplefin = async () => {
     setIsLinking(true);
     try {
