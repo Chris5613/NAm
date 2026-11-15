@@ -17,6 +17,7 @@ from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
+from ..project_freshness import is_project_stale
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..integration_audit import audit_integration_settings
@@ -89,7 +90,7 @@ def validate_item(item: dict, old: dict | None, now: datetime) -> dict | None:
         "sourceLastSyncedAt": synced_at.isoformat() if synced_at else None,
         "observedAt": now.isoformat(),
         "requiresLiveSync": bool(item.get("requiresLiveSync", False)),
-        "stale": bool(item.get("requiresLiveSync", False)) and (synced_at is None or (now - synced_at).total_seconds() > 1200),
+        "stale": False,  # Recompute after normalizing inactive/source metadata.
     }
     for attr in ("balanceTrx", "trxUsdPrice", "lifetimeEarnedUsd"):
         val = number(item.get(attr))
@@ -105,6 +106,7 @@ def validate_item(item: dict, old: dict | None, now: datetime) -> dict | None:
             }
             for a in assets[:100] if isinstance(a, dict)
         ]
+    normalized["stale"] = is_project_stale(normalized, now)
     return normalized
 
 
@@ -370,6 +372,10 @@ async def receive_latest(payload: dict, user: User = Depends(current_user),
         current = validate_item(item, previous.get(str(item.get("id"))), now)
         if current:
             projects[current["id"]] = current
+    # Re-evaluate all preserved rows, even when their next source reading has
+    # not arrived. An inactive project must never appear in stale alerts.
+    for project in projects.values():
+        project["stale"] = is_project_stale(project, now)
     stored = {"receivedAt": now.isoformat(), "projects": list(projects.values())}
     save_setting(db, user.id, LATEST_KEY, stored)
     stale = [p["id"] for p in projects.values() if p.get("stale")]
@@ -600,13 +606,7 @@ async def tracking_status(user: User = Depends(current_user), db: Session = Depe
     received = timestamp(latest.get("receivedAt"))
     age = (now - received).total_seconds() if received else None
     projects = latest.get("projects") if isinstance(latest.get("projects"), list) else []
-    stale = [
-        p.get("id") for p in projects if
-        p.get("requiresLiveSync") and (
-            not timestamp(p.get("sourceLastSyncedAt")) or
-            (now - timestamp(p.get("sourceLastSyncedAt"))).total_seconds() > 1200
-        )
-    ]
+    stale = [p.get("id") for p in projects if is_project_stale(p, now)]
     return {"feedAgeSeconds": round(age) if age is not None else None,
             "staleProjects": stale, "alerts": alerts}
 
