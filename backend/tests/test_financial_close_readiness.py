@@ -46,6 +46,15 @@ class FinancialCloseReadinessTests(unittest.TestCase):
                 self.assertIn("Historical asset rows contain unverified estimates",
                               result["missingEvidence"])
                 self.assertEqual(result["postedManualJournalEntries"], 0)
+                self.assertEqual(result["bankOpeningEvidence"]["status"], "missing")
+                self.assertEqual(
+                    result["bankOpeningEvidence"]["month"], month)
+                self.assertEqual(
+                    result["assetEvidenceRows"][0]["status"],
+                    "estimated-needs-document")
+                self.assertEqual(
+                    result["assetEvidenceRows"][1]["status"],
+                    "recorded-not-independently-audited")
                 self.assertTrue(result["readOnly"])
                 self.assertFalse(result["financialLedgerMutated"])
         self.assertEqual(saved, frozen)
