@@ -9,7 +9,7 @@ from math import isfinite
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -20,6 +20,7 @@ from ..project_accounting import portfolio_summary, daily_income_summary, monoto
 from ..earnings_dashboard import build_backend_earnings_dashboard, TRACKERS as DASHBOARD_TRACKERS
 from ..project_freshness import is_project_stale
 from ..project_feed_sources import PROVIDER_TRACKERS, from_tracker
+from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..integration_audit import audit_integration_settings
@@ -671,6 +672,20 @@ async def calculate_provider_monthly_income(
         "months": monthly_provider_income(trackers, current_month),
         "calculatedAt": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.get("/crypto-dashboard")
+async def crypto_dashboard(
+    response: Response, user: User = Depends(current_user),
+    db: Session = Depends(get_db)
+) -> dict:
+    """Small authenticated source snapshot for the Crypto Dashboard cache.
+
+    Explicitly disable shared/proxy HTTP caches. The frontend manages a short
+    user-scoped session cache for *display only*, and revalidates in the back.
+    """
+    response.headers["Cache-Control"] = "private, no-store"
+    return crypto_dashboard_snapshot(user.id, setting(db, user.id, LATEST_KEY))
 
 
 @router.get("/portfolio")
