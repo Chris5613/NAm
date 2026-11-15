@@ -67,7 +67,11 @@ def hardware_credit_audit(month, devices, earnings):
                 continue
             providers[key] = {
                 "usd": n,
-                "provisional": provenance.get(name) == "legacy-server-receipt",
+                "provisional": provenance.get(name) not in {
+                    "confirmed-kryptex-mining-day", "dated-unetwork-reward",
+                    "dated-rollercoin-wallet", "dated-rollercoin-reward",
+                    "dated-salad-reward",
+                },
                 "unverifiableAlias": False,
             }
         daily[day] = providers
@@ -75,7 +79,6 @@ def hardware_credit_audit(month, devices, earnings):
     result_devices = []
     credits = Decimal("0")
     eligible = defaultdict(list)
-    observed_days = defaultdict(int)
     provisional = Decimal("0")
     unknown_starts = []
     for raw in devices[:100]:
@@ -122,7 +125,6 @@ def hardware_credit_audit(month, devices, earnings):
                 amount += match["usd"]
                 if match["provisional"]:
                     provisional_credit += match["usd"]
-                observed_days[(source, day)] += 1
                 eligible[(source, day)].append(device_id)
         credits += amount
         provisional += provisional_credit
@@ -159,7 +161,7 @@ def hardware_credit_audit(month, devices, earnings):
         "duplicateDeviceCreditsUsd": round(float(duplicate), 8),
         "provisionalDeviceCreditsUsd": round(float(provisional), 8),
         "differenceReconciles": abs(credits - unique - duplicate) <= Decimal("0.00000002"),
-        "complete": not bool(unknown_starts) and provisional == 0 and
+        "complete": bool(daily) and not bool(unknown_starts) and provisional == 0 and
                     all(row.get("missingSourceDays",0) == 0 for row in result_devices),
         "deviceCreditsAreUniqueIncome": False,
         "financialLedgerMutated": False,
