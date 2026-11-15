@@ -29,6 +29,7 @@ import LoginScreen from "@/components/LoginScreen";
 import {
   hydrate,
   resetStore,
+  refreshLiveSettings,
   setStoreErrorHandler,
 } from "@/lib/serverStore";
 import {
@@ -206,6 +207,19 @@ function AuthGate() {
       cancelled = true;
     };
   }, [user]);
+
+  // Shared provider updates may arrive directly from browser extensions or
+  // other devices. Keep the signed-in cache fresh without keeping background
+  // polling alive after sign-out.
+  useEffect(() => {
+    if (!user || !storeReady) return;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        refreshLiveSettings().catch(() => {});
+      }
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [user, storeReady]);
 
   if (
     loading ||
