@@ -2,7 +2,9 @@
 from datetime import datetime, timezone
 import unittest
 
-from backend.earnings_dashboard import build_backend_earnings_dashboard, provider_entries
+from backend.earnings_dashboard import (
+    build_backend_earnings_dashboard, compare_monthly_snapshot, provider_entries,
+)
 
 
 class BackendEarningsDashboardTests(unittest.TestCase):
@@ -89,6 +91,56 @@ class BackendEarningsDashboardTests(unittest.TestCase):
         self.assertEqual(result["reviewDays"][0]["sources"], ["Loopscale"])
         self.assertEqual(result["monthTotalUsd"], 5.5)
         self.assertEqual(result["days"][13]["provisionalSources"], ["Loopscale"])
+
+    def test_month_snapshot_disagreement_is_classified_without_mutation(self):
+        original = {"total": 75.44, "locked": False,
+                    "platforms": [
+                        {"platform": "Kryptex", "amount": 41.72},
+                        {"platform": "Loopscale", "amount": 12.55},
+                        {"platform": "Salad", "amount": 4.24},
+                        {"platform": "Unetwork", "amount": 9.79},
+                        {"platform": "RollerCoin", "amount": 7.14},
+                    ]}
+        receipts = {"monthTotalUsd": 82.71,
+                    "monthlySources": {
+                        "Kryptex": 41.72, "Loopscale": 15.21,
+                        "Lulo": 4.62, "Salad": 4.25,
+                        "Unetwork": 9.79, "RollerCoin": 7.12,
+                    },
+                    "days": [{"future": False,
+                              "provisionalSources": ["Lulo", "Loopscale"]}]}
+        original_before = str(original), str(receipts)
+        result = compare_monthly_snapshot(receipts, original)
+        self.assertEqual(result["status"], "different-basis")
+        self.assertAlmostEqual(result["differenceUsd"], 7.27)
+        self.assertEqual(result["providerDifferences"][0]["provider"], "Lulo")
+        self.assertTrue(result["providerDifferences"][0]["provisionalDaily"])
+        self.assertEqual((str(original), str(receipts)), original_before)
+
+    def test_month_snapshot_flags_critical_confirmed_provider_mismatch(self):
+        receipt = {"monthTotalUsd": 3.5, "monthlySources": {"Kryptex": 3.5},
+                   "days": [{"future": False, "provisionalSources": []}]}
+        book = {"total": 2, "platforms": [{"platform": "Kryptex", "amount": 2}]}
+        self.assertEqual(compare_monthly_snapshot(receipt, book)["status"],
+                         "needs-review")
+
+    def test_invalid_snapshot_is_not_treated_as_booked_income(self):
+        receipt = {"monthTotalUsd": 3, "monthlySources": {"Kryptex": 3},
+                   "days": []}
+        book = {"total": 500, "platforms": [
+            {"platform": "Kryptex", "amount": 3}]}
+        result = compare_monthly_snapshot(receipt, book)
+        self.assertEqual(result["status"], "invalid-snapshot")
+        self.assertNotIn("bookedTotalUsd", result)
+
+    def test_negative_monthly_pnl_is_preserved_for_comparison(self):
+        receipt = {"monthTotalUsd": 0, "monthlySources": {}, "days": [
+            {"future": False, "provisionalSources": ["Loopscale"]}]}
+        book = {"total": -1.5, "platforms": [
+            {"platform": "Loopscale", "amount": -1.5}]}
+        result = compare_monthly_snapshot(receipt, book)
+        self.assertEqual(result["status"], "different-basis")
+        self.assertEqual(result["bookedTotalUsd"], -1.5)
 
     def test_bad_numeric_does_not_become_fake_credit(self):
         row = provider_entries("2026-11-14", {"sources": {"Kryptex": float("nan"),
