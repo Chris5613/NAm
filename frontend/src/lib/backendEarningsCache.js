@@ -98,6 +98,39 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
   const fullyVerified = data.fullyVerified === true
     ? !days.some(row => !row.future && row.provisionalSources.length)
     : data.fullyVerified === false ? false : null;
+  // The booked provider-month snapshot and provisional dated receipts are
+  // distinct accounting views. Keep the backend's read-only comparison intact
+  // instead of silently forcing those totals to agree.
+  let monthAccountingComparison = null;
+  const rawComparison = data.monthAccountingComparison;
+  if (rawComparison && typeof rawComparison === "object" &&
+      rawComparison.source === "yield_monthly_snapshots_v1" &&
+      ["matched", "different-basis", "needs-review"].includes(rawComparison.status) &&
+      typeof rawComparison.bookedTotalUsd === "number" &&
+      Number.isFinite(rawComparison.bookedTotalUsd) &&
+      typeof rawComparison.differenceUsd === "number" &&
+      Number.isFinite(rawComparison.differenceUsd)) {
+    const differences = Array.isArray(rawComparison.providerDifferences)
+      ? rawComparison.providerDifferences.filter(row =>
+          row && typeof row.provider === "string" && row.provider.length <= 100 &&
+          typeof row.differenceUsd === "number" &&
+          Number.isFinite(row.differenceUsd)).map(row => ({
+            provider: row.provider,
+            differenceUsd: row.differenceUsd,
+            provisionalDaily: row.provisionalDaily === true,
+          })) : [];
+    monthAccountingComparison = {
+      status: rawComparison.status,
+      source: rawComparison.source,
+      bookedTotalUsd: rawComparison.bookedTotalUsd,
+      datedTotalUsd: data.monthTotalUsd,
+      differenceUsd: rawComparison.differenceUsd,
+      providerDifferences: differences,
+      snapshotUpdatedAt: typeof rawComparison.snapshotUpdatedAt === "string"
+        ? rawComparison.snapshotUpdatedAt : null,
+      locked: rawComparison.locked === true,
+    };
+  }
   return {
     sourceOfCalculation: "backend-postgres",
     month, todayKey, days, weekDays,
@@ -107,7 +140,7 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
     weeklyTotalUsd: data.weeklyTotalUsd,
     monthlySources: copySources(data.monthlySources),
     todaySources: copySources(data.todaySources),
-    reviewDays, fullyVerified,
+    reviewDays, fullyVerified, monthAccountingComparison,
     calculatedAt: data.calculatedAt,
   };
 }
