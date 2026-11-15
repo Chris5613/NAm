@@ -809,7 +809,7 @@ export default function SideHustleDashboard() {
                 <input type="date" max={pacificDayKey(Date.now())} value={hardwareDraft.earningsStartDay || ""}
                   onChange={event=>setHardwareDraft(current=>({...current,earningsStartDay:event.target.value}))}
                   className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
-                <span className="mt-1 block text-xs text-[#91a4b8]">Counts available daily earnings beginning at midnight Pacific on this date. The backend requires an explicit start date; existing historical checkpoints are preserved.</span>
+                <span className="mt-1 block text-xs text-[#91a4b8]">Counts available daily earnings beginning at midnight Pacific on this date. New devices need an explicit start date. Income source changes take effect the next Pacific day; earlier provider credits remain unchanged.</span>
               </label>
             </>
           ) : (
