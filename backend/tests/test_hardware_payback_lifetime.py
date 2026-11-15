@@ -121,8 +121,8 @@ class HardwarePaybackLifetimeTests(unittest.TestCase):
             if r["id"] == "5080")
         self.assertTrue(row["forecastPartial"])
         self.assertIsNotNone(row["estimatedPaybackDate"])
-        self.assertEqual(row["forecastProviderCoverage"]["Kryptex"], 7)
-        self.assertEqual(row["forecastProviderCoverage"]["Salad"], 2)
+        self.assertEqual(row["forecastProviderCoverage"]["kryptex"], 7)
+        self.assertEqual(row["forecastProviderCoverage"]["salad"], 2)
 
     def test_missing_recent_history_does_not_make_up_payback_date(self):
         devices, history, trackers = input_rows()
