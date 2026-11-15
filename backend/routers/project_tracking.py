@@ -19,6 +19,7 @@ from ..models import Setting, User
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
+from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
 
 router = APIRouter(prefix="/api/project-tracking", tags=["project tracking"])
 LATEST_KEY = "yield_project_latest_balance_feed_v1"
@@ -265,49 +266,10 @@ async def receive_kryptex_machine(
     # The account earnings chart is account-wide, not machine-specific. Merge
     # it here under the same lock so PC 1 and PC 2 cannot race tracker history.
     earnings = payload.get("earnings") if isinstance(payload.get("earnings"), dict) else {}
-    daily_usd = earnings.get("daily_usd") if isinstance(earnings.get("daily_usd"), dict) else {}
-    mining_daily = dict(tracker.get("kryptexMiningDaily") or {}) if isinstance(
-        tracker.get("kryptexMiningDaily"), dict
-    ) else {}
-    confirmed_days = dict(tracker.get("kryptexConfirmedDays") or {}) if isinstance(
-        tracker.get("kryptexConfirmedDays"), dict
-    ) else {}
-    previous_confirmed_total = sum(
-        max(0.0, number(value) or 0.0)
-        for day, value in mining_daily.items()
-        if confirmed_days.get(day)
-    )
-    touched_months: set[str] = set()
-    for day, raw in list(daily_usd.items())[:400]:
-        day = str(day)
-        amount = number(raw)
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", day) or amount is None or amount < 0:
-            continue
-        # A lower later USD conversion can reflect a BTC price decline,
-        # not fewer sats mined. Preserve already credited earnings for
-        # this day; the live account balance is tracked separately.
-        previous = number(mining_daily.get(day)) if confirmed_days.get(day) else None
-        mining_daily[day] = max(amount, previous if previous is not None and previous >= 0 else 0.0)
-        confirmed_days[day] = True
-        touched_months.add(day[:7])
-
-    monthly = dict(tracker.get("monthlyEarnings") or {}) if isinstance(
-        tracker.get("monthlyEarnings"), dict
-    ) else {}
-    for month in touched_months:
-        monthly[month] = round(sum(
-            max(0.0, number(value) or 0.0)
-            for day, value in mining_daily.items()
-            if str(day).startswith(month + "-") and confirmed_days.get(day)
-        ), 8)
-
-    next_confirmed_total = sum(
-        max(0.0, number(value) or 0.0)
-        for day, value in mining_daily.items()
-        if confirmed_days.get(day)
-    )
-    prior_lifetime = number(tracker.get("lifetimeEarnedUsd"))
-    historical_base = max(0.0, (prior_lifetime or 0.0) - previous_confirmed_total)
+    # Dated satoshi observations are retained even when BTC conversion is
+    # missing. Only positive confirmed daily USD rewards count as income.
+    # Existing records never decrease when BTC/USD falls.
+    reward_reconciliation = reconcile_kryptex_rewards(tracker, earnings, now)
 
     tracker.update({
         "initialized": True,
@@ -319,15 +281,31 @@ async def receive_kryptex_machine(
         "activeMachineCount": aggregate["machine_count"],
         "reachable": aggregate["machine_count"] > 0,
         "lastSyncedAt": now.isoformat(),
-        "kryptexMiningDaily": mining_daily,
-        "kryptexConfirmedDays": confirmed_days,
-        "monthlyEarnings": monthly,
-        "lifetimeEarnedUsd": round(historical_base + next_confirmed_total, 8)
-            if prior_lifetime is not None or next_confirmed_total > 0 else tracker.get("lifetimeEarnedUsd"),
+        **reward_reconciliation,
     })
     save_setting(db, user.id, KRYPTEX_TRACKER_KEY, tracker)
     db.commit()
     return {**aggregate, "tracker": tracker}
+
+
+@router.get("/kryptex/earnings-audit")
+async def kryptex_earnings_audit(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Read-only last-30-day health check for dated Kryptex mining rewards."""
+    now = datetime.now(timezone.utc).astimezone(ZoneInfo("America/Los_Angeles")).date()
+    from datetime import timedelta
+    saved = setting(db, user.id, KRYPTEX_TRACKER_KEY)
+    tracker = saved if isinstance(saved, dict) else {}
+    rows = audit_kryptex_days(tracker, (now - timedelta(days=29)).isoformat(), now.isoformat())
+    review_days = [row["date"] for row in rows if row["status"] == "needs-review"]
+    return {
+        "checkedThrough": now.isoformat(),
+        "days": rows,
+        "needsReview": review_days,
+        "confirmedDays": sum(row["confirmed"] for row in rows),
+        "lastChartSyncAt": tracker.get("kryptexLastChartSyncAt"),
+    }
 
 
 @router.get("/kryptex/aggregate")
