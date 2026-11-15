@@ -76,12 +76,23 @@ source records are supplied. Lulo historical data/code remains untouched.
   PostgreSQL**, with original source fixtures isolated from production.
 - [x] All three authenticated integration smoke tests passed in CI and
   cleanup left the disposable database unmodified after completion.
+- [x] A **Run live audit** action is deployed on Financials. It invokes the
+  authenticated `GET /api/project-tracking/cross-page-integrity` endpoint
+  directly, bypasses session display caches, validates the read-only response
+  shape, displays pass/warning/error checks and missing evidence, and lets
+  the signed-in owner **Copy audit results** for review. Frontend component
+  tests verify the button, reporting, failures and report copying.
 - [ ] A real signed-in **production browser session** has not been exercised
   by this audit. Never impersonate the account or claim UI click testing
   without a valid delegated browser session.
 
-**Status:** Authenticated API integration verified; production UI clickthrough
-is a separate remaining acceptance check.
+**Status:** Authenticated API integration, browser component interactions,
+and signed-in production audit controls verified in CI. To finish this
+remaining acceptance check, the account owner must open
+`https://nam-qyn8.onrender.com`, sign in, go to **Financials → Run live
+audit**, then use **Copy audit results** to share the exact production
+status. The automated assistant has no signed-in production browser session
+or valid session cookie, and must not claim that the owner clicked it.
 
 ## 5. Cross-page source reconciliation
 
@@ -96,6 +107,13 @@ is a separate remaining acceptance check.
   equipment PPE and business income are different accounting categories.
 - [x] CI cross-page integrity tests compare backend Home and Financials
   calculations, and reject contradictory totals rather than rebook them.
+- [x] Read-only source-level PostgreSQL rechecks on November 15 show
+  September **$330.062266**, October **$202.769111** and open November
+  **$86.541672** booked income each equal the sum of their own platform
+  breakdown to eight decimal places at the sampled time. Latest saved
+  backend portfolio is **$3,947.57529904** overall / **$2,388.21713298**
+  active, exactly equal to the most recent unique provider feed. Values
+  are **sampled**, not fixed forever.
 - [ ] The authenticated **live production** cross-page endpoint was not
   independently invoked with a real signed-in browser session. Available
   source-level PostgreSQL reconciliation was read-only.
@@ -126,6 +144,7 @@ checked over time, not declared permanently finished from one good run.
 continued operation. Full unconditional historical accounting certification
 is NOT yet supported.** Remaining blockers are the missing pre-November-13
 Salad dated observations; historic September/October bank openings and
-estimated asset valuations; and final production signed-in UI parity.
+estimated asset valuations; and the final production signed-in UI audit
+clickthrough, now available directly in Financials without a code change.
 
 Never mark a blocked box complete merely to reach six of six.
