@@ -31,6 +31,7 @@ from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..financial_current_journal import current_financial_ledger
+from ..financial_close_readiness import financial_close_readiness
 from ..financial_historical_ledger import (historical_trial_balance, persisted_historical_trial_inputs,
                                            HISTORICAL_SOURCE_KEYS)
 from ..home_business_snapshot import home_business_snapshot, financial_statement_openings
@@ -853,6 +854,33 @@ async def hardware_payback_lifetime(
     return build_lifetime_hardware_payback(
         devices, daily, trackers, today.isoformat(),
         current_kryptex_daily=current_daily)
+
+
+@router.get("/financial-core/close-readiness/{month}")
+async def financial_close_readiness_report(
+    month: str, response: Response,
+    user: User = Depends(current_user), db: Session = Depends(get_db),
+) -> dict:
+    """Historical close readiness, never a fabricated certified month close."""
+    today_month = datetime.now(timezone.utc).astimezone(
+        ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    keys = (
+        "yield_monthly_snapshots_v1",
+        "monthly_business_changes_v1",
+        "financials_month_closes_v1",
+        "financials_bank_openings_v1",
+        "financials_journal_v1",
+    )
+    rows = db.scalars(select(Setting).where(
+        Setting.user_id == user.id, Setting.key.in_(keys),
+    )).all()
+    try:
+        result = financial_close_readiness(
+            {row.key: row.value for row in rows}, month, today_month)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    response.headers["Cache-Control"] = "private, no-store"
+    return result
 
 
 @router.get("/financial-core/closed-month/{month}")
