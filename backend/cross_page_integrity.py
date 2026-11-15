@@ -19,6 +19,7 @@ from .financial_current_journal import current_financial_ledger
 from .hardware_payback_lifetime import build_lifetime_hardware_payback
 from .earnings_dashboard import build_backend_earnings_dashboard, compare_monthly_snapshot
 from .financial_close_readiness import financial_close_readiness
+from .salad_device_day_coverage import salad_device_day_coverage
 
 
 def amount(value):
@@ -236,6 +237,24 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
           unverifiedDeviceCreditsUsd=hardware.get("unverifiedDeviceCreditsUsd"),
           missingSourceDays=hardware.get("sourceDayMissingCount"),
           complete=hardware.get("complete"), reviewFlags=hardware.get("reviewFlags"))
+    salad_coverage = salad_device_day_coverage(
+        devices, daily_records, trackers, today_key)
+    if salad_coverage["devices"]:
+        incomplete = [
+            item for item in salad_coverage["devices"]
+            if item["status"] not in ("covered", "future-start")
+        ]
+        check("salad-device-dated-coverage",
+              "warning" if incomplete else "pass",
+              "Salad hardware earning-period coverage distinguishes "
+              "completed confirmed days, unverified historical receipts "
+              "and the current incomplete Pacific day",
+              covered=salad_coverage["allCompletedDaysCovered"],
+              devices=salad_coverage["devices"],
+              missingCompletedDays=sum(len(d["missingDays"])
+                                       for d in salad_coverage["devices"]),
+              provisionalCompletedDays=sum(len(d["provisionalDays"])
+                                           for d in salad_coverage["devices"]))
     dashboard = build_backend_earnings_dashboard(
         month, today_key, daily_records, trackers)
     check("dated-earnings", "warning" if not dashboard.get("fullyVerified")
