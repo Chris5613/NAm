@@ -43,6 +43,7 @@ const liveSettingKeys = [
   "yield_today_earnings_high_water_v1",
   "yield_backend_lulo_monthly_ledger_v1",
   "yield_project_quick_cache_v1",
+  "yield_inactive_project_ids_v1",
   "project_income_portfolio_summary_v1",
 ];
 const activeSettingWrites = new Set();
