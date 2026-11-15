@@ -3,6 +3,7 @@ import unittest
 
 from backend.home_business_snapshot import (
     home_business_snapshot, current_live_assets, cash_opening,
+    financial_statement_openings,
 )
 
 
@@ -89,6 +90,45 @@ class HomeBusinessSnapshotTests(unittest.TestCase):
         self.assertFalse(result["complete"])
         self.assertTrue(result["business"]["liabilitiesIncomplete"])
         self.assertIsNone(result["business"]["netValue"])
+
+    def test_statement_openings_read_only_and_source_owned(self):
+        saved = copy.deepcopy(self.saved)
+        saved["financials_bank_openings_v1"] = {"2026-10": 500}
+        saved["financials_journal_v1"] = [
+            {"id": "withdrawal", "date": "2026-10-09",
+             "debitAccount": "equity", "creditAccount": "cash", "amount": 100},
+            {"id": "bill", "date": "2026-10-10",
+             "debitAccount": "expense", "creditAccount": "payable", "amount": 25},
+        ]
+        original = copy.deepcopy(saved)
+        result = financial_statement_openings(saved, "2026-11")
+        self.assertEqual(result["cashOpening"], 400)
+        self.assertEqual(result["payableOpening"], 25)
+        self.assertEqual(saved, original)
+
+    def test_missing_cash_opening_is_not_invented(self):
+        saved = {"financials_journal_v1": [
+            {"date": "2026-10-05", "debitAccount": "cash",
+             "creditAccount": "equity", "amount": 1000},
+        ]}
+        result = financial_statement_openings(saved, "2026-11")
+        self.assertIsNone(result["cashOpening"])
+        self.assertEqual(result["payableOpening"], 0)
+
+    def test_approved_cash_transfer_not_double_counted_against_manual_journal(self):
+        saved = {
+            "financials_bank_openings_v1": {"2026-10": 500},
+            "financials_journal_v1": [
+                {"date": "2026-10-15", "debitAccount": "luloCash",
+                 "creditAccount": "cash", "amount": 75},
+            ],
+            "financials_confirmed_movements_v1": {"movement-1": {
+                "date": "2026-10-15", "from": "cash", "to": "luloCash",
+                "amount": 75,
+            }},
+        }
+        result = financial_statement_openings(saved, "2026-11")
+        self.assertEqual(result["cashOpening"], 425)
 
     def test_source_assets_are_read_only(self):
         original = copy.deepcopy(self.saved)
