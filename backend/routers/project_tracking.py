@@ -904,9 +904,36 @@ async def source_owned_income_history(
          "transactions": per_project.get(project.id, [])}
         for project in projects
     ]
+    # The provider snapshot can lag the extension's durable tracker by up to
+    # the scheduler interval. Compute today's snapshot projection in memory,
+    # using exactly the same sources as the background reconciler.
+    keys = {
+        "salad": "project_income_salad_tracker_v1",
+        "rollercoin": "project_income_rollercoin_tracker_v2",
+        "unetwork": "project_income_unetwork_tracker_v1",
+        "kryptex": "project_income_kryptex_tracker_v1",
+    }
+    tracker_rows = db.scalars(select(Setting).where(
+        Setting.user_id == user.id, Setting.key.in_(tuple(keys.values()))
+    )).all()
+    stored = {entry.key: entry.value for entry in tracker_rows}
+    trackers = {provider: stored.get(key) or {} for provider, key in keys.items()}
+    date_prefix = "yield_server_daily_income_" + month + "-"
+    dates = db.scalars(select(Setting).where(
+        Setting.user_id == user.id,
+        Setting.key >= date_prefix + "01",
+        Setting.key <= date_prefix + "31",
+    )).all()
+    dated = {entry.key.removeprefix("yield_server_daily_income_"):
+             entry.value for entry in dates if entry.key.startswith(date_prefix)}
+    day = datetime.now(timezone.utc).astimezone(
+        ZoneInfo("America/Los_Angeles")).date().isoformat()
     result = source_income_history(
         snapshots, dividends, project_rows,
-        manual_income_for_user(user.id), month)
+        manual_income_for_user(user.id), month,
+        current_provider_months=monthly_provider_income(trackers, month),
+        confirmed_legacy=confirmed_november_sources(dated, month, day),
+    )
     return {**result, "calculatedAt": datetime.now(timezone.utc).isoformat()}
 
 
