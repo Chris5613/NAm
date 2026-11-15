@@ -1,3 +1,4 @@
+import { financialAssetRowsMatch } from "./useBackendFinancialBalanceRows";
 import {
   financialReportMatches, financialFlowsMatch, statementRowsMatch,
 } from "./useBackendFinancialCore";
@@ -52,4 +53,18 @@ test("auto income parity rejects duplicate generated income", () => {
   };
   expect(autoIncomeMatches(local, { ...local, entries: local.entries })).toBe(true);
   expect(autoIncomeMatches(local, { ...local, generatedRevenueTotal: 3 })).toBe(false);
+});
+
+test("Balance Sheet parity refuses a changed GPU book value or missing device", () => {
+  const rows = [
+    { id: "device:5080", name: "RTX 5080 GPU", category: "equipment",
+      start: 0, end: 1917.5, depreciation: 32.5,
+      historicalCost: 1950, acquisitionMonth: "2026-11",
+      source: "hardware-payback" },
+  ];
+  expect(financialAssetRowsMatch(rows, [{ ...rows[0] }])).toBe(true);
+  expect(financialAssetRowsMatch(rows, [{
+    ...rows[0], historicalCost: 1250,
+  }])).toBe(false);
+  expect(financialAssetRowsMatch(rows, [])).toBe(false);
 });
