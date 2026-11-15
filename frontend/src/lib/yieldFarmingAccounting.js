@@ -632,10 +632,6 @@ function loadUnetworkTracker() {
     );
 
   return {
-    // Preserve backend-owned audit/evidence fields (notably
-    // kryptexMiningSatsDaily and kryptexPendingEarningsDays). Omitting them
-    // previously made a frontend re-save delete valid mining history.
-    ...parsed,
     initialized:
       Boolean(
         parsed.initialized
@@ -2573,6 +2569,9 @@ function loadKryptexTracker() {
         };
 
   return {
+    // Keep all backend reward evidence when the frontend reads this tracker.
+    // Previously the loader stripped satoshi observations and audit metadata.
+    ...parsed,
     initialized:
       Boolean(
         parsed.initialized
