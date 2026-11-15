@@ -77,10 +77,15 @@ def credited_to_asset(entry, asset_id):
 def reconcile_gpu_equipment(month, hardware, financial_monthly, journal):
     """Read assets without adding any entries or changing historical costs."""
     if month_index(month) is None:
-        return {"month": month, "complete": False, "issues": ["invalid-month"], "assets": []}
-    hardware = hardware if isinstance(hardware, list) else []
-    monthly = financial_monthly if isinstance(financial_monthly, dict) else {}
-    ledger = journal if isinstance(journal, list) else []
+        return {"month": month, "completeForReviewedScope": False,
+                "issues": ["invalid-month"], "assets": []}
+    if not isinstance(hardware, list) or not isinstance(financial_monthly, dict) or not isinstance(journal, list):
+        return {"month": month, "completeForReviewedScope": False,
+                "activeEquipmentBookValueUsd": None,
+                "issues": ["required-equipment-ledger-source-missing"],
+                "assets": [], "financialRecordsMutated": False}
+    monthly = financial_monthly
+    ledger = journal
     current_record = monthly.get(month)
     current_record = current_record if isinstance(current_record, dict) else {}
     extras = current_record.get("balanceSheetItems")
@@ -145,16 +150,21 @@ def reconcile_gpu_equipment(month, hardware, financial_monthly, journal):
         if not isinstance(entry, dict):
             continue
         date_str = str(entry.get("date") or "")
-        if not date_str.startswith(month):
+        purchase_month = date_str[:7]
+        if (month_index(purchase_month) is None or
+                month_index(purchase_month) > month_index(month)):
             continue
         debit = journal_equipment_debit(entry)
         if debit <= 0:
             continue
         description = canonical(entry.get("description"))
         candidates = [a for a in assets
-                      if a["start"] == month and
-                      canonical(a["name"]) in description and
-                      len(canonical(a["name"])) >= 5]
+                      if a["start"] == purchase_month and
+                      len(canonical(a["name"])) >= 5 and (
+                          canonical(a["name"]) in description or
+                          (canonical(a["name"]) == "rtx2080superpc" and
+                           "rtx2080pc" in description)
+                      )]
         if len(candidates) != 1:
             unmatched.append({"date": date_str, "reason":
                               "ambiguous-purchase" if len(candidates) > 1 else
