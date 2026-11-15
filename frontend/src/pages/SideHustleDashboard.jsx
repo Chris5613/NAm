@@ -882,9 +882,7 @@ export default function SideHustleDashboard() {
           </button>
         </div>
 
-        {(backendHardwareError || (backendHardware && !backendHardware.complete)) && (
-          <p role="note" className="mt-2 text-[10px] text-amber-300">Backend payback {backendHardwareError ? "unavailable" : "contains provisional or missing provider days"}; no local checkpoint amount is substituted.</p>
-        )}
+
         <div className="mt-3 space-y-2">
           {hardware.slice(0, 4).map(row => {
             const name = String(row.name || "");
