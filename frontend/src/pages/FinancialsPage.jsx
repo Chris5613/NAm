@@ -419,10 +419,7 @@ export default function FinancialsPage() {
   // Previous-month journal assembly, income and fixed-asset adjustments
   // now run in the backend, including the opening phone adjustment.
   const trialState = useBackendTrialBalance({
-    month, currentMonth: getCurrentMonthKey(), todayKey: getTodayKey(),
-    currentEntries: entries, journal, closedMonths, incomeMonths,
-    hardwareDevices, phones: businessPhones, records,
-    confirmedMovements, accounts: availableAccounts,
+    month, currentEntries: entries, accounts: availableAccounts,
   });
   const trial = trialState.result?.rows || [];
   const trialDebit = trialState.result?.debitsUsd ?? 0;
