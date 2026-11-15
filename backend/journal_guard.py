@@ -86,7 +86,10 @@ def guard_journal_write(current, proposed, closes):
         if ident in history and history[ident] == entry:
             continue
         check_entry(entry)
-        if isinstance(locked.get(entry["date"][:7]), dict):
+        previous = history.get(ident)
+        if (isinstance(locked.get(entry["date"][:7]), dict) or
+                (isinstance(previous, dict) and
+                 isinstance(locked.get(str(previous.get("date") or "")[:7]), dict))):
             raise ValueError("Cannot modify a closed accounting month.")
     # Deleting a previously posted entry in a closed month also counts as
     # editing the locked month, even if that row is absent from the payload.
