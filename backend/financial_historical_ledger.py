@@ -134,6 +134,39 @@ def opening_phone_depreciation(phones):
     }
 
 
+# The browser supplies only the current displayed journal projection and chart
+# of accounts. All prior-month financial source data is read from server settings.
+HISTORICAL_SOURCE_KEYS = {
+    "journal": "financials_journal_v1",
+    "closedMonths": "financials_month_closes_v1",
+    "records": "monthly_business_changes_v1",
+    "hardwareDevices": "hardware_payback_devices_v1",
+    "phones": "financials_unetwork_business_phones_v1",
+    "confirmedMovements": "financials_confirmed_movements_v1",
+}
+
+
+def persisted_historical_trial_inputs(request, settings, income_months,
+                                      current_month, today_key):
+    """Create a read-only historical projection from authenticated source state.
+
+    Browser-supplied previous-month journals, balances, snapshots and income
+    are deliberately ignored. Existing current-period entries are an unposted
+    UI preview; they are never saved or treated as historical evidence.
+    """
+    supplied = mapping(request)
+    stored = mapping(settings)
+    return {
+        "month": supplied.get("month"),
+        "currentMonth": current_month,
+        "todayKey": today_key,
+        "currentEntries": sequence(supplied.get("currentEntries")),
+        "accounts": sequence(supplied.get("accounts")),
+        "incomeMonths": sequence(income_months),
+        **{field: stored.get(key) for field, key in HISTORICAL_SOURCE_KEYS.items()},
+    }
+
+
 def historical_trial_balance(data):
     month = data.get("month")
     if not isinstance(month, str) or not MONTH.fullmatch(month):
