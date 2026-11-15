@@ -37,6 +37,7 @@ import {
   startProjectCryptoAutoSync,
 } from "@/lib/projectCryptoPortfolio";
 import { Loader2 } from "lucide-react";
+import { prefetchCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
 
 let kryptexExtensionListenerStarted = false;
 
@@ -178,6 +179,11 @@ function AuthGate() {
     setStoreErrorHandler((message) => {
       toast.error(message);
     });
+
+    // A tiny read-only Crypto snapshot is fetched concurrently, so Home's
+    // Crypto panel is warm as soon as the full authenticated store is ready.
+    prefetchCryptoDashboardSnapshot(user.id, () => !cancelled)
+      .catch(() => {});
 
     hydrate(user.id)
       .then(() => {

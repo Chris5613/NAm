@@ -102,6 +102,53 @@ class IntegrationAuditTests(unittest.TestCase):
         self.assertEqual(checks["hardware_register"]["status"], "error")
         self.assertTrue(checks["hardware_register"]["duplicateOrMissingIds"])
 
+    def test_backend_crypto_portfolio_is_reconciled_separately_from_income(self):
+        feed = {
+            "receivedAt": "2026-11-15T03:50:00Z",
+            "projects": [
+                {"id": "lulo-project", "balanceUsd": 1500.64, "inactive": True},
+                {"id": "kryptex-project", "balanceUsd": 270.0,
+                 "balanceSource": "backend-provider-tracker"},
+            ]
+        }
+        summary = {
+            "source": "backend-project-feed",
+            "portfolioBalance": 1770.64,
+            "activePortfolioBalance": 270.0,
+        }
+        values = {
+            "yield_project_latest_balance_feed_v1": feed,
+            "project_income_portfolio_summary_v1": summary,
+        }
+        checks = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        self.assertEqual(checks["crypto_portfolio_authority"]["status"], "pass")
+        self.assertEqual(checks["crypto_provider_authority"]["status"], "pass")
+        self.assertEqual(checks["crypto_portfolio_authority"]["activeUsd"], 270.0)
+
+        values["project_income_portfolio_summary_v1"] = {
+            **summary, "portfolioBalance": 1888.0,
+        }
+        checks = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        self.assertEqual(checks["crypto_portfolio_authority"]["status"], "error")
+        self.assertEqual(checks["crypto_provider_authority"]["status"], "pass")
+
+    def test_legacy_provider_cache_is_warning_not_canonical_source(self):
+        values = {
+            "yield_project_latest_balance_feed_v1": {
+                "receivedAt": "2026-11-15T03:50:00Z",
+                "projects": [{"id":"salad-project", "balanceUsd":58.0}],
+            },
+            "project_income_portfolio_summary_v1": {
+                "portfolioBalance":58.0,
+            },
+        }
+        checks = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        self.assertEqual(checks["crypto_portfolio_authority"]["status"],"warning")
+        self.assertEqual(checks["crypto_provider_authority"]["status"],"warning")
+
     def test_locked_snapshot_keeps_historical_kryptex_total(self):
         result = audit_integration_settings({
             "project_income_kryptex_tracker_v1": {

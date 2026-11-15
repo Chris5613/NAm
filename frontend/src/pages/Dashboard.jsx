@@ -40,6 +40,7 @@ import { getPrivateAccountingProfile } from "@/lib/yieldFarmingAccounting";
 import { toast } from "sonner";
 
 import AssetBreakdown from "@/components/AssetBreakdown";
+import CryptoBreakdown from "@/components/CryptoBreakdown";
 import AddAssetDialog from "@/components/AddAssetDialog";
 
 import { Button } from "@/components/ui/button";
@@ -439,29 +440,10 @@ export default function Dashboard() {
                 )
               : cachedCryptoTotal;
 
-          /*
-           * Repair the shared crypto cache too so every
-           * Net Worth surface reads the same total.
-           */
-          if (
-            Number.isFinite(
-              projectIncomeBalance
-            ) &&
-            Math.abs(
-              cachedCryptoTotal -
-                cryptoTotal
-            ) > 0.005
-          ) {
-            storage.setCryptoCache?.({
-              ...cryptoCache,
-
-              total:
-                cryptoTotal,
-
-              updated_at:
-                new Date().toISOString(),
-            });
-          }
+          // Never overwrite the shared crypto cache from Home. That was a
+          // competing last-writer-wins path. This temporary legacy value
+          // remains a read-only fallback until BTC/Financials are migrated
+          // to a separate backend-owned business net-worth endpoint.
 
           // Financials already includes crypto holdings and the business
           // bank balance. Cash moved out of Lulo is also in Home's tracked
@@ -1549,6 +1531,12 @@ export default function Dashboard() {
                         ))}
                 </p>
               </div>
+
+              {selectedCategory === "crypto" && (
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                  <CryptoBreakdown />
+                </div>
+              )}
 
               {selectedCategory !== "crypto" && (
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
