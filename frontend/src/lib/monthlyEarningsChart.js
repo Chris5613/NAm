@@ -31,6 +31,9 @@ export function buildMonthlyDailyEarningsChart({
     const dayNumber = index + 1;
     const key = `${monthKey}-${String(dayNumber).padStart(2, "0")}`;
     const future = key > todayKey;
+    // Keep the same per-day source breakdown used to draw the point.
+    // The current-month project popup must not use a separate snapshot total.
+    const sources = future ? {} : sourceTotalsForDay(key);
     return {
       key,
       day: String(dayNumber),
@@ -39,10 +42,29 @@ export function buildMonthlyDailyEarningsChart({
         day: "numeric",
         timeZone: "UTC",
       }).format(new Date(`${key}T12:00:00Z`)),
-      value: future ? null : Math.max(0, sumSources(sourceTotalsForDay(key))),
+      sources,
+      value: future ? null : Math.max(0, sumSources(sources)),
       future,
     };
   });
+}
+
+/**
+ * Aggregate the per-project data already used by the current-month daily
+ * earnings chart. This avoids drift from independently reconciled monthly
+ * accounting snapshots, especially following historical provider backfills.
+ */
+export function sumMonthlyChartSources(chartDays) {
+  const totals = {};
+  for (const day of chartDays || []) {
+    if (day?.future || !(Number(day?.value) > 0)) continue;
+    for (const [source, amount] of Object.entries(day.sources || {})) {
+      const value = Number(amount);
+      if (!Number.isFinite(value) || value === 0) continue;
+      totals[source] = (totals[source] || 0) + value;
+    }
+  }
+  return totals;
 }
 
 /**
