@@ -17,6 +17,7 @@ load_dotenv(Path(__file__).with_name(".env"))
 
 from .auth import current_user  # noqa: E402
 from .db import init_db  # noqa: E402  (imported after load_dotenv so DATABASE_URL is set)
+from .kryptex_historical_recovery import recover_verified_kryptex_november_rewards  # noqa: E402
 from .loop_watchdog import start_watchdog, stop_watchdog  # noqa: E402
 from .scheduler import scheduler_status, start_scheduler, stop_scheduler  # noqa: E402
 from .routers import auth_routes, market, migration, resources, simplefin_routes, spending, project_tracking, yield_sources, power  # noqa: E402
@@ -78,6 +79,9 @@ app.include_router(power.router)
 @app.on_event("startup")
 async def on_startup() -> None:
     init_db()
+    # One-time recovery of six confirmed historical BTC mining rewards;
+    # full backup and audit marker make retries safe and reversible.
+    recover_verified_kryptex_november_rewards()
     start_watchdog()
     start_scheduler()
 
