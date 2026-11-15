@@ -3,11 +3,11 @@ import { Plus, Pencil, Trash2, X, Cpu, CalendarDays, Zap } from "lucide-react";
 import { api } from "@/lib/apiClient";
 import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
-import { sharedPaybackSources, fullSourceDailyPaybackCredit } from "@/lib/hardwarePaybackReporting";
+import { sharedPaybackSources } from "@/lib/hardwarePaybackReporting";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
-import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMonth } from "@/lib/incomeHistory";
+import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
@@ -86,55 +86,6 @@ function readHistory() {
   ].filter(Boolean);
   return { legacyProjects, activeProjectNames, luloProjects: quickProjects.filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {} };
 }
-const estimatedDailyForDevice = (device, months, currentMonth, kryptexTracker) => {
-  const dayOfMonth = Number(new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles", day: "numeric",
-  }).format(new Date()));
-  const current = months.find(item => item.monthKey === currentMonth);
-  // The actual payback cards credit each selected source in full, even when
-  // two devices share it. Estimates must follow that same rule, rather than
-  // silently splitting Kryptex by purchase cost.
-  const incomePerDay = fullSourceDailyPaybackCredit(deviceSources(device), source =>
-    source === "Kryptex"
-      ? Math.max(0, Number(kryptexTracker?.profitabilityUsdDay) || 0)
-      : monthSourceAmount(current, source, kryptexTracker) / Math.max(1, dayOfMonth)
-  );
-  return Math.max(0,incomePerDay - outOfPocketMiningPowerCost(Number(device.power) || 0,currentMonth)/30);
-};
-const recoveryDateLabel = date => new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Los_Angeles", month: "short", day: "numeric", year: "numeric",
-}).format(date);
-function buildTimeline(devices, months, currentMonth, kryptexTracker) {
-  if (!devices.length) return { points: [], cost: 0, earned: 0, remaining: 0, halfway: null, breakEven: null, pace: 0 };
-  const cost = devices.reduce((sum, d) => sum + Number(d.cost || 0), 0);
-  const start = devices.map(d => d.startMonth).sort()[0];
-  const day = Number(new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "America/Los_Angeles" }).format(new Date()));
-  const days = new Date(Number(currentMonth.slice(0, 4)), Number(currentMonth.slice(5, 7)), 0).getDate();
-  const points = [{ month: `${start}-start`, label: "Purchase", actual: 0, forecast: null }]; let cumulative = 0;
-  for (let month = start, count = 0; month <= currentMonth && count < 240; month = shiftMonth(month, 1), count++) {
-    const fraction = month === currentMonth ? day / days : 1;
-    const row = months.find(item => item.monthKey === month);
-    const activeSources = new Set(devices.filter(device => month >= device.startMonth).flatMap(deviceSources));
-    const income = Array.from(activeSources).reduce((sum, source) => sum + monthSourceAmount(row, source, kryptexTracker), 0);
-    cumulative = Math.max(0, cumulative + income - devices.reduce((sum, d) => month >= d.startMonth ? sum + outOfPocketMiningPowerCost(Number(d.power) || 0, month) * fraction : sum, 0));
-    points.push({ month, label: label(month), actual: Math.round(cumulative * 100) / 100, forecast: null });
-  }
-  const earned = cumulative;
-  const closed = points.slice(0, -1).slice(-3);
-  const pace = closed.length ? closed.reduce((sum, row) => { const i = points.indexOf(row); return sum + row.actual - (i ? points[i - 1].actual : 0); }, 0) / closed.length : 0;
-  const halfway = points.find(p => p.actual >= cost / 2)?.month || null;
-  let breakEven = points.find(p => p.actual >= cost)?.month || null;
-  if (points.length && pace > 0 && !breakEven) {
-    points[points.length - 1].forecast = points[points.length - 1].actual;
-    for (let i = 1; i <= 36; i++) {
-      const month = shiftMonth(currentMonth, i);
-      const forecast = Math.round((earned + pace * i) * 100) / 100;
-      points.push({ month, label: label(month), actual: null, forecast });
-      if (forecast >= cost) { breakEven = month; break; }
-    }
-  }
-  return { points, cost, earned, remaining: Math.max(0, cost - earned), halfway, breakEven, pace };
-}
 // Fractional Pacific calendar month, used to prorate power after a checkpoint.
 function monthPosition(time) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
@@ -146,7 +97,7 @@ function monthPosition(time) {
     (parts.day - 1 + (parts.hour + parts.minute / 60 + parts.second / 3600) / 24) / days;
 }
 
-function deviceEarnings(devices, months, month, now, legacyStats, kryptexTracker) {
+function deviceEarnings(devices, months, month, now, kryptexTracker) {
   return Object.fromEntries(devices.map(device => {
     const sources=deviceSources(device);
     if(!device.checkpoint || !sources.length) return [device.id,0];
@@ -248,8 +199,6 @@ export default function HardwarePaybackPage() {
     setDevices(migrated);
   }, [historyReady, devices, months, currentMonth, history.kryptex]);
   const sourceOptions = useMemo(() => sourceOptionsFor(history, months), [history, months]);
-  const stats = useMemo(() => buildTimeline(devices, months, currentMonth, history.kryptex), [devices, months, currentMonth, history.kryptex]);
-  const earnings = deviceEarnings(devices, months, currentMonth, Date.now(), stats, history.kryptex);
   // Per-device credits intentionally use full selected source earnings.
   // When multiple devices share Kryptex (or another provider), summing these
   // credits is NOT distinct business revenue. Preserve the user's chosen
@@ -266,7 +215,7 @@ export default function HardwarePaybackPage() {
   const totalCost = backendRecovery?.sumDeviceCashCostUsd ?? null;
   function persist(next) {
     const time=Date.now();
-    const carried=deviceEarnings(devices,months,currentMonth,time,stats,history.kryptex);
+    const carried=deviceEarnings(devices,months,currentMonth,time,history.kryptex);
     const currentRow=months.find(row=>row.monthKey===currentMonth);
     const updated=next.map(device=>{
       const sources=deviceSources(device);

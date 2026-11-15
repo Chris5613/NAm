@@ -679,7 +679,6 @@ export default function SideHustleDashboard() {
   const deviceRows = Array.isArray(latest?.devices) ? latest.devices : [];
   const deviceUsage = powerMonth?.devices || {};
 
-  const hardwareCost = hardware.reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
   // Use the same provider observations for Top Projects and Hardware Payback.
   const kryptexTracker = recordedHistory.kryptex;
   const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock, recordedMonths, {
