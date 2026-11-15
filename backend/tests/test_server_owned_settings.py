@@ -50,6 +50,7 @@ class AccountingSettingsWriteProtectionTests(unittest.TestCase):
             "yield_loopscale_cutover_backup_v1",
             "yield_project_latest_balance_feed_v1",
             "yield_project_sync_alerts_v1",
+            "project_income_portfolio_summary_v1",
             "yield_project_balance_backup_2026-10-30",
             "yield_server_daily_income_2026-10-30",
         )

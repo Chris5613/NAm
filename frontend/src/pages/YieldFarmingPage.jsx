@@ -1419,35 +1419,11 @@ const summary =
        * is only for Total Earned and must not remain in the portfolio
        * after a withdrawal.
        */
-      const assetProjectBalance =
-        projectCards.reduce(
-          (
-            sum,
-            project
-          ) =>
-            sum +
-            (
-              Number(
-                project?.totalBalance
-              ) || 0
-            ),
-          0
-        );
-
-      const localPortfolioBalance =
-        assetProjectBalance +
-        (Number(rollerCoinStats?.currentBalanceUsd) || 0) +
-        (Number(saladStats?.currentBalance) || 0) +
-        (Number(unetworkStats?.currentBalance) || 0) +
-        (Number(kryptexStats?.currentBalanceUsd) || 0);
-
-      // The server-validated per-provider feed owns the portfolio total.
-      // Local calculations are temporary only until that feed is available.
-      // Never silently prefer a competing local total because it differs.
+      // Portfolio valuation is computed by /api/project-tracking/latest on
+      // the backend from validated current provider amounts. No browser sum.
       const serverAvailable = serverPortfolio?.projectCount === sortedProgramCards.length &&
         Number.isFinite(Number(serverPortfolio?.totalUsd));
-      const portfolioBalance = serverAvailable
-        ? Number(serverPortfolio.totalUsd) : localPortfolioBalance;
+      const portfolioBalance = serverAvailable ? Number(serverPortfolio.totalUsd) : null;
 
       /*
        * Keep Weighted APY based on the positions that
@@ -1699,50 +1675,8 @@ const summary =
     ]
   );
 
-  /*
-   * Make the Project Income page the source of truth for
-   * the active project portfolio balance used by Net Worth.
-   *
-   * This prevents the Crypto tab from independently
-   * rebuilding the balance and drifting away from the
-   * number shown at the top of this page.
-   */
-  useEffect(
-    () => {
-      const next = {
-        portfolioBalance:
-          Number(
-            summary?.portfolioBalance
-          ) || 0,
-
-        activePositions:
-          Number(
-            summary?.activePositions
-          ) || 0,
-
-        updatedAt:
-          new Date().toISOString(),
-      };
-
-      remoteStorage.setItem(
-        PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY,
-        JSON.stringify(next)
-      );
-
-      window.dispatchEvent(
-        new CustomEvent(
-          "project-income-portfolio-balance-updated",
-          {
-            detail: next,
-          }
-        )
-      );
-    },
-    [
-      summary?.portfolioBalance,
-      summary?.activePositions,
-    ]
-  );
+  // The backend owns project_income_portfolio_summary_v1. Never publish
+  // browser-computed values into a shared setting or another page.
 
   function deletePosition(
     id
