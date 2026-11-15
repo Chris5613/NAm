@@ -32,6 +32,22 @@ const writes = new Map();
 let projectWrite = Promise.resolve();
 let storeGeneration = 0;
 let onError = (message) => console.warn(message);
+const liveSettingKeys = [
+  "project_income_kryptex_tracker_v1",
+  "project_income_salad_tracker_v1",
+  "project_income_rollercoin_tracker_v2",
+  "project_income_unetwork_tracker_v1",
+  "yield_loopscale_position_history_v1",
+  "yield_monthly_snapshots_v1",
+  "yield_daily_earnings_by_source_v2",
+  "yield_today_earnings_high_water_v1",
+  "yield_backend_lulo_monthly_ledger_v1",
+  "yield_project_quick_cache_v1",
+  "project_income_portfolio_summary_v1",
+];
+const activeSettingWrites = new Set();
+let liveRefreshPromise = null;
+
 
 const clone = value =>
   value === undefined ? null : JSON.parse(JSON.stringify(value));
@@ -222,6 +238,7 @@ async function pushKey(key, { throwOnError = false } = {}) {
 
   const job = previous.catch(() => {}).then(async () => {
     if (generation !== storeGeneration) return;
+    activeSettingWrites.add(key);
 
     const sent = clone(cache.get(key));
     const before = clone(savedValues.get(key));
@@ -273,7 +290,7 @@ async function pushKey(key, { throwOnError = false } = {}) {
       onError(`Could not save "${key}": ${error.message}. The edit remains in this tab until reload.`);
       if (throwOnError) throw error;
     }
-  });
+  }).finally(() => activeSettingWrites.delete(key));
 
   writes.set(key, job);
   return job;
@@ -381,6 +398,35 @@ export async function refreshCollection(key) {
   applyServerValue(key, records || []);
 }
 
+/**
+ * Refresh backend-owned provider settings after external extension/API writes.
+ * This repairs stale cross-page data without creating any new income entries.
+ * Pending or newer local edits always win until their own save finishes.
+ */
+export async function refreshLiveSettings() {
+  if (!hydrated) return;
+  if (liveRefreshPromise) return liveRefreshPromise;
+  const generation = storeGeneration;
+  const refresh = async () => {
+    const results = await Promise.allSettled(liveSettingKeys.map(async key =>
+      ({ key, value: await settingsApi.get(key) })
+    ));
+    if (generation !== storeGeneration || !hydrated) return;
+    for (const result of results) {
+      if (result.status !== "fulfilled") continue;
+      const { key, value } = result.value;
+      if (pendingTimers.has(key) || activeSettingWrites.has(key)) continue;
+      // A locally edited value must never be overwritten by a remote poll.
+      if (JSON.stringify(savedValues.get(key)) !== JSON.stringify(cache.get(key))) continue;
+      const next = value ?? null;
+      if (JSON.stringify(cache.get(key) ?? null) === JSON.stringify(next)) continue;
+      applyServerValue(key, next);
+    }
+  };
+  liveRefreshPromise = refresh().finally(() => { liveRefreshPromise = null; });
+  return liveRefreshPromise;
+}
+
 /** Mirrors the Web Storage API so existing synchronous call sites work. */
 export const remoteStorage = {
   get length() {
@@ -438,6 +484,14 @@ export const remoteStorage = {
 if (typeof window !== "undefined") {
   window.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flushPendingWrites();
+    if (document.visibilityState === "visible") refreshLiveSettings().catch(() => {});
   });
+  window.addEventListener("focus", () => refreshLiveSettings().catch(() => {}));
+  // Poll only while the page is visible; providers write directly to the
+  // backend even when the Passive Income tab is not the active view.
+  window.setInterval(() => {
+    if (document.visibilityState === "visible")
+      refreshLiveSettings().catch(() => {});
+  }, 60000);
   window.addEventListener("pagehide", () => flushPendingWrites());
 }
