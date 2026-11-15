@@ -24,7 +24,7 @@ from ..legacy_income_reconciliation import confirmed_november_sources
 from ..provider_monthly_income import monthly_provider_income
 from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_profile
 from ..networth_reconciliation import home_reconciliation_preview
-from ..financial_core import calculate_net_worth, finite_number as accounting_number
+from ..financial_core import calculate_net_worth, maybe_number as accounting_number
 from ..networth_trends import networth_trends
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
