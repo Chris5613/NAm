@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from .db import SessionLocal, engine
 from .models import Asset, NetWorthSnapshot, Project, Setting, User, utcnow
+from .project_freshness import is_project_stale
 from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_project_balances
 
 _scheduler_task: asyncio.Task | None = None
@@ -172,7 +173,7 @@ def take_project_balance_snapshots(day: str, scheduled_at: datetime | None = Non
                 except (ValueError, TypeError):
                     age = None
                 item["sourceAgeSeconds"] = round(age) if age is not None else None
-                item["stale"] = age is None or age > 20 * 60
+                item["stale"] = is_project_stale(item, now)
                 saved_projects.append(item)
             snapshot = {
                 "date": day,
