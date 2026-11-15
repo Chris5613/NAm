@@ -90,6 +90,21 @@ class HardwareCheckpointPreviewTests(unittest.TestCase):
         self.assertEqual(reviewed["devices"][1]["checkpoint"],
                          saved[1]["checkpoint"])
 
+    def test_cancel_same_day_pending_switch_restores_old_source_without_overlap(self):
+        saved = hardware()
+        planned = copy.deepcopy(saved)
+        planned[1]["sources"] = ["Salad"]
+        scheduled = preview(saved, copy.deepcopy(saved), planned)["devices"]
+        restored = copy.deepcopy(scheduled)
+        restored[1]["sources"] = ["Kryptex", "Salad"]
+        result = preview(scheduled, copy.deepcopy(scheduled), restored)
+        rows = result["devices"][1]["sourceSegments"]
+        self.assertEqual(rows, [{
+            "startDay": "2026-11-13", "sources": ["kryptex", "salad"]
+        }])
+        self.assertEqual(result["devices"][1]["checkpoint"],
+                         saved[1]["checkpoint"])
+
     def test_stale_browser_copy_fails_closed(self):
         saved = hardware()
         stale = copy.deepcopy(saved)
