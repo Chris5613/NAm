@@ -478,55 +478,14 @@ export default function FinancialsPage() {
   // Roll forward recorded journal activity from the start of tracking.
   // This includes previous earning accruals and depreciation, but opening
   // external account balances are still not invented.
-  const cumulativeEntries = useMemo(() => {
-    const all=[];
-    const phoneStart=businessPhones.map(item=>item.startMonth).filter(Boolean).sort()[0];
-    const journalStart=journal.map(item=>String(item.date||"").slice(0,7)).filter(item=>/^\d{4}-\d{2}$/.test(item)).sort()[0];
-    const firstMonth=[phoneStart,journalStart,"2026-09"].filter(Boolean).sort()[0];
-    for(let key=firstMonth, n=0; key<=month && n<240; key=shift(key,1),n++) {
-      if(key===month) {all.push(...entries);continue;}
-      if(key < LEGACY_LEDGER_CUTOFF) {
-        all.push(...preSeptemberLedgerEntries(journal.filter(item=>String(item.date||"").startsWith(key))
-          .map(item=>({...item,lines:journalLines(item)})),
-          key,businessPhones));
-        continue;
-      }
-      if(closedMonths[key]?.entries) {all.push(...closedMonths[key].entries);continue;}
-      const periodManual=journal.filter(item=>String(item.date||"").startsWith(key));
-      const manualLines=periodManual.map(item=>({...item,lines:journalLines(item)}));
-      const recordedIncome=incomeMonths.find(item=>item.monthKey===key);
-      const income=buildAutoIncomeJournal(key,recordedIncome,periodManual,getCurrentMonthKey(),getTodayKey());
-      const historicalHardware=includeJournalEquipment(
-        [
-          ...buildFinancialBalanceRows(key,records,{},hardwareDevices,getCurrentMonthKey()),
-          ...(records[key]?.locked ? [] : phoneAssetRows(businessPhones,key)),
-        ],
-        journal,key,Boolean(records[key]?.locked));
-      const scheduled=moneyRound(historicalHardware.filter(item=>item.category==="equipment")
-        .reduce((sum,item)=>sum+Number(item.depreciation||0),0));
-      const previouslyPostedDep=moneyRound(periodManual.reduce((sum,item)=>sum+journalActivity(item,"depreciation"),0));
-      const extraDep=Math.max(0,moneyRound(scheduled-previouslyPostedDep));
-      const already=new Set(periodManual.filter(item=>item.movementSourceId).map(item=>item.movementSourceId));
-      const knownMovements=movementJournal(Object.values(confirmedMovements)
-        .filter(item=>String(item.date||"").startsWith(key)),key,already)
-        .filter(item=>!periodManual.some(manual=>manual.date===item.date &&
-          Math.abs(Number(manual.amount)-Number(item.lines[0]?.debit))<.005 &&
-          manual.debitAccount===item.lines[0]?.account &&
-          manual.creditAccount===item.lines[1]?.account));
-      all.push(...manualLines,...income.entries,...knownMovements);
-      if(extraDep) all.push({id:"auto-depreciation:"+key,date:key+"-28",
-        description:"Monthly equipment depreciation",automatic:true,
-        lines:[line("depreciation",extraDep,0),line("accDep",0,extraDep)]});
-    }
-    // Earlier frozen September snapshots may predate this adjustment.
-    // Include it once in the cumulative Trial Balance, without modifying history.
-    if (month >= LEGACY_LEDGER_CUTOFF) {
-      const opening = openingPhoneDepreciationEntry(businessPhones);
-      if (opening && !all.some(entry => entry.id === opening.id)) all.push(opening);
-    }
-    return all;
-  },[month,entries,closedMonths,journal,incomeMonths,hardwareDevices,businessPhones,records,confirmedMovements]);
-  const trialState = useBackendTrialBalance(cumulativeEntries,availableAccounts);
+  // Previous-month journal assembly, income and fixed-asset adjustments
+  // now run in the backend, including the opening phone adjustment.
+  const trialState = useBackendTrialBalance({
+    month, currentMonth: getCurrentMonthKey(), todayKey: getTodayKey(),
+    currentEntries: entries, journal, closedMonths, incomeMonths,
+    hardwareDevices, phones: businessPhones, records,
+    confirmedMovements, accounts: availableAccounts,
+  });
   const trial = trialState.result?.rows || [];
   const trialDebit = trialState.result?.debitsUsd ?? 0;
   const trialCredit = trialState.result?.creditsUsd ?? 0;
