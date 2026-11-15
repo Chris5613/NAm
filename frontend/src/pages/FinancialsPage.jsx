@@ -1,3 +1,4 @@
+import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe, isHydrated } from "@/lib/serverStore";
@@ -331,7 +332,7 @@ export default function FinancialsPage() {
     cryptoIncome.kryptex,
   ), [cryptoIncome]);
   const cryptoBackendMonths = useBackendMonthlyIncome(cryptoTrackers, cryptoLocalMonths);
-  const incomeMonths = useMemo(() => {
+  const localIncomeMonths = useMemo(() => {
     const current = getCurrentMonthKey();
     const reconciled = reconcileLuloIncome(
       getEffectiveProjectIncome(cryptoBackendMonths, cryptoIncome.snapshots),
@@ -343,6 +344,14 @@ export default function FinancialsPage() {
     );
     return mergeManualIncome(recorded, cryptoIncome.manualIncome?.monthly || {}, current);
   }, [cryptoBackendMonths, cryptoIncome]);
+  const incomeMonths = useBackendIncomeHistory({
+    months: getEffectiveProjectIncome(cryptoBackendMonths, cryptoIncome.snapshots),
+    localBackfills: cryptoIncome.backfills, backendBackfills: cryptoIncome.luloBackfills,
+    luloProjects: cryptoIncome.luloProjects, currentMonth: getCurrentMonthKey(),
+    currentDay: getTodayKey(), payouts: cryptoIncome.payouts,
+    legacyProjects: cryptoIncome.legacyProjects,
+    manualMonths: cryptoIncome.manualIncome?.monthly || {},
+  }, localIncomeMonths);
   useEffect(() => {
     let active = true;
     // Backend tariff calculations are display-only; never publish locally
