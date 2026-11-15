@@ -16,6 +16,7 @@ from .networth_reconciliation import legacy_nightly_components
 from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_project_balances
 from .provider_monthly_income import monthly_provider_income
 from .monthly_snapshot_guard import guard_monthly_snapshots
+from .monthly_snapshot_rollover import lock_finished_months
 from .monthly_changes_seal import seal_completed_business_months
 from .legacy_income_reconciliation import confirmed_november_sources
 
@@ -203,62 +204,68 @@ MONTHLY_TRACKER_KEYS = {
 
 
 def reconcile_open_monthly_snapshots() -> int:
-    """Repair incomplete live provider rows from durable tracker facts.
+    """Keep recorded month totals consistent even when all browsers close.
 
-    This procedure never edits dated earnings receipts, historical locked
-    snapshots, journal transactions or source provider trackers. It uses the
-    same account row lock as the guarded browser PATCH to serialize updates.
+    Past provider snapshots are locked once (without changing their numeric
+    totals). A new open month can be born from durable earned USD observations
+    or confirmed dated legacy receipts, not from balances or projections.
     """
-    month = datetime.now(timezone.utc).astimezone(PACIFIC).strftime("%Y-%m")
+    now = datetime.now(timezone.utc)
+    month = now.astimezone(PACIFIC).strftime("%Y-%m")
+    local_day = now.astimezone(PACIFIC).date().isoformat()
     updated = 0
     with SessionLocal() as db:
         user_ids = db.scalars(select(User.id)).all()
         for user_id in user_ids:
-            # Prevent stale frontend snapshot writes racing a server repair.
             db.scalar(select(User).where(User.id == user_id).with_for_update())
             snapshot = db.scalar(select(Setting).where(
                 Setting.user_id == user_id,
                 Setting.key == "yield_monthly_snapshots_v1",
             ))
             saved = snapshot.value if snapshot is not None else None
-            if not isinstance(saved, dict) or not isinstance(saved.get(month), dict):
-                db.rollback()
-                continue
-            if saved[month].get("locked"):
-                db.rollback()
-                continue
-            provider_rows = db.scalars(select(Setting).where(
-                Setting.user_id == user_id,
-                Setting.key.in_(tuple(MONTHLY_TRACKER_KEYS.values())),
-            )).all()
-            by_key = {row.key: row.value for row in provider_rows}
-            trackers = {
-                name: by_key.get(key) or {}
-                for name, key in MONTHLY_TRACKER_KEYS.items()
-            }
-            authoritative = monthly_provider_income(trackers, month)
-            if not any(row.get("monthKey") == month for row in authoritative):
-                db.rollback()
-                continue
-            day_prefix = "yield_server_daily_income_"
-            dated_rows = db.scalars(select(Setting).where(
-                Setting.user_id == user_id,
-                Setting.key >= day_prefix + month + "-01",
-                Setting.key <= day_prefix + month + "-31",
-            )).all()
-            dated = {
-                item.key.removeprefix(day_prefix): item.value
-                for item in dated_rows if item.key.startswith(day_prefix)
-            }
-            local_day = datetime.now(timezone.utc).astimezone(
-                PACIFIC).date().isoformat()
-            confirmed_legacy = confirmed_november_sources(
-                dated, month, local_day)
-            corrected = guard_monthly_snapshots(
-                saved, saved, authoritative, month,
-                confirmed_legacy=confirmed_legacy)
+            if not isinstance(saved, dict):
+                saved = {}
+            sealed = lock_finished_months(saved, month, now.isoformat())
+            existing_month = sealed.get(month)
+            if isinstance(existing_month, dict) and existing_month.get("locked"):
+                corrected = sealed
+            else:
+                provider_rows = db.scalars(select(Setting).where(
+                    Setting.user_id == user_id,
+                    Setting.key.in_(tuple(MONTHLY_TRACKER_KEYS.values())),
+                )).all()
+                by_key = {row.key: row.value for row in provider_rows}
+                trackers = {
+                    name: by_key.get(key) or {}
+                    for name, key in MONTHLY_TRACKER_KEYS.items()
+                }
+                authoritative = monthly_provider_income(trackers, month)
+                day_prefix = "yield_server_daily_income_"
+                dated_rows = db.scalars(select(Setting).where(
+                    Setting.user_id == user_id,
+                    Setting.key >= day_prefix + month + "-01",
+                    Setting.key <= day_prefix + month + "-31",
+                )).all()
+                dated = {
+                    item.key.removeprefix(day_prefix): item.value
+                    for item in dated_rows if item.key.startswith(day_prefix)
+                }
+                confirmed_legacy = confirmed_november_sources(
+                    dated, month, local_day)
+                # Guard creates the new current month only when there is
+                # confirmed earning evidence, or it preserves an existing row.
+                corrected = guard_monthly_snapshots(
+                    sealed, sealed, authoritative, month,
+                    confirmed_legacy=confirmed_legacy)
             if corrected != saved:
-                snapshot.value = corrected
+                if snapshot is not None:
+                    snapshot.value = corrected
+                else:
+                    db.add(Setting(
+                        user_id=user_id,
+                        key="yield_monthly_snapshots_v1",
+                        value=corrected,
+                    ))
                 db.commit()
                 updated += 1
             else:
