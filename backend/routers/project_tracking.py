@@ -34,7 +34,7 @@ from ..financial_current_journal import current_financial_ledger
 from ..financial_historical_ledger import (historical_trial_balance, persisted_historical_trial_inputs,
                                            HISTORICAL_SOURCE_KEYS)
 from ..home_business_snapshot import home_business_snapshot, financial_statement_openings
-from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
+from ..financial_core import evaluate_statement, calculate_net_worth, project_break_even, phone_asset_rows, sum_business_rows
 from ..persisted_income_snapshot import source_income_history, project_history_rows
 from ..financial_parity import record_parity_observation, parity_summary
 from ..manual_income_history import manual_income_for_user
@@ -1065,40 +1065,6 @@ async def source_owned_income_history(
         confirmed_legacy=confirmed_november_sources(dated, month, day),
     )
     return {**result, "calculatedAt": datetime.now(timezone.utc).isoformat()}
-
-
-@router.post("/financial-core/auto-expenses")
-async def evaluate_automatic_financial_expenses(
-    payload: dict, user: User = Depends(current_user),
-) -> dict:
-    """Compute unposted depreciation/power accruals with no browser arithmetic."""
-    if len(str(payload)) > 750_000:
-        raise HTTPException(status_code=413, detail="Expense input too large")
-    try:
-        return project_automatic_expenses(
-            payload.get("month"), payload.get("baseRows"),
-            payload.get("manualEntries"), payload.get("autoPower", 0))
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
-@router.post("/financial-core/auto-journal")
-async def project_automatic_income_journal(
-    payload: dict, user: User = Depends(current_user),
-) -> dict:
-    """Compute non-posting accruals on the server; never touch the journal."""
-    if len(str(payload)) > 300_000:
-        raise HTTPException(status_code=413, detail="Income history input too large")
-    month = payload.get("month")
-    current_month = payload.get("currentMonth") or current_keys()[1]
-    if not isinstance(month, str) or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
-        raise HTTPException(status_code=422, detail="Invalid accounting month")
-    result = auto_income_journal(
-        month, payload.get("incomeMonth"), payload.get("manualJournal"),
-        current_month, payload.get("todayKey"),
-    )
-    return {"sourceOfCalculation": "backend-financial-core",
-            "month": month, **result}
 
 
 @router.get("/financial-core/home-business")
