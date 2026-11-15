@@ -271,21 +271,47 @@ def audit_integration_settings(values, now=None):
 
     parity = as_object(values.get("financial_core_parity_v1"))
     last = as_object(parity.get("lastByArea"))
+    current_parity_month = now.astimezone(
+        ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    fresh_rows = []
+    stale_rows = []
+    for row in last.values():
+        if not isinstance(row, dict) or row.get("month") != current_parity_month:
+            continue
+        raw_time = row.get("checkedAt")
+        checked = None
+        if isinstance(raw_time, str):
+            try:
+                checked = datetime.fromisoformat(raw_time.replace("Z", "+00:00"))
+                if checked.tzinfo is None:
+                    checked = checked.replace(tzinfo=timezone.utc)
+            except ValueError:
+                checked = None
+        # Older observations without a recorded timestamp preserve their
+        # diagnostic meaning until they can be regenerated. Dated evidence
+        # expires after 15 minutes, but is never silently counted as a pass.
+        if checked and (now - checked).total_seconds() > 900:
+            stale_rows.append(row)
+        else:
+            fresh_rows.append(row)
     mismatched = sorted({
         str(row.get("area"))
-        for row in last.values()
-        if isinstance(row, dict) and row.get("status") == "mismatched"
-        and row.get("month") == now.astimezone(
-            ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+        for row in fresh_rows if row.get("status") == "mismatched"
+    })
+    stale_areas = sorted({
+        str(row.get("area")) for row in stale_rows
     })
     if last:
         add("financial_core_migration_parity",
-            "warning" if mismatched else "pass",
+            "warning" if mismatched or stale_areas else "pass",
             "Some frontend financial calculations still differ from backend results."
             if mismatched else
-            "All sampled financial migration paths have matching calculations.",
-            remainingMismatchAreas=mismatched,
-            sampledPaths=len(last), updatedAt=parity.get("updatedAt"))
+            "Financial parity evidence is stale; a new client comparison is required."
+            if stale_areas else
+            "All freshly sampled financial migration paths have matching calculations.",
+            remainingMismatchAreas=mismatched, staleAreas=stale_areas,
+            sampledPaths=len(last), freshlyCheckedPaths=len(fresh_rows),
+            updatedAt=parity.get("updatedAt"))
 
     journal = values.get("financials_journal_v1")
     entries = journal if isinstance(journal, list) else []
