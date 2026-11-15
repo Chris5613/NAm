@@ -12,10 +12,8 @@ import { useBackendAutoIncomeJournal } from "@/hooks/useBackendAutoIncomeJournal
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
 import { useBackendAutomaticExpenses } from "@/hooks/useBackendAutomaticExpenses";
 import { useBackendTrialBalance } from "@/hooks/useBackendTrialBalance";
-import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 
 
-import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { visibleLedgerEntries } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
 import { balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName, cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow } from "@/lib/financialAccountNames";
@@ -24,7 +22,7 @@ import { hasFreeMiningPower } from "@/lib/powerOutOfPocket";
 import { journalLines, validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
 import { openingPhoneDepreciationEntry } from "@/lib/phoneOpeningDepreciation";
 
-import { formatCurrency, getCurrentMonthKey, getTodayKey, loadMonthlyBackfills, loadMonthlySnapshots, loadLoopscaleHistory, loadKryptexTracker, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, readObject, PROJECT_QUICK_CACHE_KEY } from "@/lib/yieldFarmingAccounting";
+import { formatCurrency, getCurrentMonthKey, getTodayKey } from "@/lib/yieldFarmingAccounting";
 
 const RECORDS_KEY = "monthly_business_changes_v1";
 const JOURNAL_KEY = "financials_journal_v1";
@@ -84,19 +82,6 @@ function shift(month, delta) {
 }
 function monthTitle(month) {
   return new Intl.DateTimeFormat("en-US", { timeZone: "UTC", month: "long", year: "numeric" }).format(new Date(month + "-15T12:00:00Z"));
-}
-function readCryptoIncomeSources() {
- const quick = readObject(PROJECT_QUICK_CACHE_KEY);
- const projects = readJson("networth_projects", []);
- return {
-  legacyProjects: Array.isArray(projects) ? projects : [],
-  luloProjects: (quick.projects || []).filter(item => item?.yield_tracking === "lulo_lending"),
-  loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(),
-  rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(),
-  kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(),
-  snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY),
-  manualIncome: {}, luloBackfills: {},
- };
 }
 const emptyDraft = () => ({ date: getTodayKey(), description: "", lines:[{account:"cash",debit:"",credit:""},{account:"revenue",debit:"",credit:""}] });
 const line = (account, debit, credit) => ({ account, debit: rounded(debit), credit: rounded(credit) });
@@ -205,7 +190,6 @@ export default function FinancialsPage() {
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
   const { live, error: liveError } = useBackendFinancialLiveBalances();
-  const [cryptoIncome, setCryptoIncome] = useState(readCryptoIncomeSources);
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [businessPhones, setBusinessPhones] = useState(readUnetworkPhones);
   const [phoneInventory, setPhoneInventory] = useState(readPhoneInventory);
@@ -246,30 +230,7 @@ export default function FinancialsPage() {
     setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
     setBankOpenings(readJson(BANK_OPENINGS_KEY, {}));
     setAccountLabels(cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
-    setCryptoIncome(current => ({
-      ...readCryptoIncomeSources(), manualIncome: current.manualIncome,
-      luloBackfills: current.luloBackfills,
-    }));
   }), []);
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const result = await api.get("/api/yield-sources/earnings");
-        if (!active || !result) return;
-        setCryptoIncome(current => ({
-          ...current,
-          loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory),
-          manualIncome: result.manualIncomeHistory || current.manualIncome,
-          luloBackfills: result.luloBackfills && typeof result.luloBackfills === "object"
-            ? result.luloBackfills : current.luloBackfills,
-        }));
-      } catch { /* Keep local income records if the backend is offline. */ }
-    };
-    refresh();
-    const interval = window.setInterval(refresh, 90000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, []);
   // Server-owned source history is the sole income attribution input.
   const incomeMonths = useBackendIncomeHistory({
     currentMonth: getCurrentMonthKey(),
