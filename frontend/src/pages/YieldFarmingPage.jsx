@@ -284,6 +284,18 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
 
   // RollerCoin TRX price is supplied with each extension wallet sync.
 
+  // All project refresh paths share one response-order gate. An older
+  // request must not overwrite a newer response that has already applied.
+  const projectRequestSequenceRef = useRef(0);
+  const projectAppliedSequenceRef = useRef(0);
+  const beginProjectRequest = useCallback(() => ++projectRequestSequenceRef.current, []);
+
+  const applyOrderedProjectData = useCallback((projects, requestSequence) => {
+    if (!Array.isArray(projects) || requestSequence < projectAppliedSequenceRef.current) return false;
+    projectAppliedSequenceRef.current = requestSequence;
+    return true;
+  }, []);
+
   const applyProjectData =
     useCallback(
       (projects) => {
@@ -315,6 +327,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const refreshProjectsOnly =
     useCallback(
       async () => {
+        const requestSequence = beginProjectRequest();
         try {
           const response =
             await projectsApi.getAll();
@@ -324,7 +337,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
           if (!Array.isArray(response?.data)) {
             throw new Error("Invalid project refresh response");
           }
-          applyProjectData(response.data);
+          if (applyOrderedProjectData(response.data, requestSequence)) applyProjectData(response.data);
         } catch (
           error
         ) {
@@ -336,6 +349,8 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       },
       [
         applyProjectData,
+        beginProjectRequest,
+        applyOrderedProjectData,
       ]
     );
 
@@ -423,6 +438,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     requestKryptexLatest();
 
     const errors = [];
+    const projectRequestSequence = beginProjectRequest();
     // Load independent sources concurrently so slow network calls do not
     // delay updates from the other projects.
     await Promise.all([
@@ -430,13 +446,13 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
         try {
           const response = await projectsApi.accrueApyTransactions();
           if (!Array.isArray(response?.data)) throw new Error("Invalid project response");
-          applyProjectData(response.data);
+          if (applyOrderedProjectData(response.data, projectRequestSequence)) applyProjectData(response.data);
         } catch (error) {
           console.error("Yield page project sync failed:", error);
           errors.push(`Projects: ${error?.message || "sync failed"}`);
           try {
             const response = await projectsApi.getAll();
-            if (Array.isArray(response?.data)) applyProjectData(response.data);
+            if (Array.isArray(response?.data) && applyOrderedProjectData(response.data, projectRequestSequence)) applyProjectData(response.data);
           } catch (fallbackError) {
             console.error("Yield page project fallback failed:", fallbackError);
             // Leave cached project cards in place if the connection fails.
@@ -467,6 +483,8 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     if (errors.length) setSyncError(errors.join(" · "));
   }, [
     applyProjectData,
+    beginProjectRequest,
+    applyOrderedProjectData,
     requestRollerCoinLatest,
     requestSaladLatest,
     requestUnetworkLatest,
