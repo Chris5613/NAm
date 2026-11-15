@@ -98,3 +98,38 @@ test("confirmed corrections are retained without inventing unresolved receipts",
   expect(normalized.reviewDays[0].corrections.Kryptex).toBe(0.12);
   expect(normalized.reviewDays[0].sources).toEqual([]);
 });
+
+test("backend ledger comparison survives the earnings dashboard cache", () => {
+  const storage = store();
+  const data = backend();
+  data.monthAccountingComparison = {
+    source: "yield_monthly_snapshots_v1",
+    status: "different-basis",
+    bookedTotalUsd: 4.4,
+    datedTotalUsd: 5.81,
+    differenceUsd: 1.41,
+    locked: false,
+    providerDifferences: [
+      { provider: "Lulo", differenceUsd: 1.41, provisionalDaily: true },
+    ],
+  };
+  writeBackendEarningsCache(7, "2026-11", data, storage);
+  const cached = readBackendEarningsCache(7, "2026-11",
+    "2026-11-14", storage);
+  expect(cached.data.monthAccountingComparison.bookedTotalUsd).toBe(4.4);
+  expect(cached.data.monthAccountingComparison.differenceUsd).toBe(1.41);
+  expect(cached.data.monthAccountingComparison.providerDifferences[0].provisionalDaily)
+    .toBe(true);
+  expect(cached.data.monthTotalUsd).toBe(5.81);
+});
+
+test("invalid backend comparison never becomes the booked monthly total", () => {
+  const data = backend();
+  data.monthAccountingComparison = {
+    source: "yield_monthly_snapshots_v1", status: "invalid-snapshot",
+    bookedTotalUsd: 1000000, differenceUsd: -999999,
+  };
+  const validated = validateBackendEarningsSnapshot(data, "2026-11", "2026-11-14");
+  expect(validated.monthAccountingComparison).toBeNull();
+  expect(validated.monthTotalUsd).toBe(5.81);
+});
