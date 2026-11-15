@@ -5,7 +5,6 @@ using the same *stored* inputs, rather than comparing unlike concepts
 (provider earnings, wallet value, cost basis, or repeated GPU credits).
 It does not write, reprice, repair or backfill any financial record.
 """
-from datetime import date
 from decimal import Decimal, InvalidOperation
 from .crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from .home_business_snapshot import (
@@ -128,6 +127,29 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
               "Provider feed is incomplete or stale; do not invent a portfolio value",
               staleIds=crypto["staleProjectIds"],
               missingIds=crypto["missingProjectIds"])
+
+    # A withdrawn, inactive Lulo asset has a different accounting meaning
+    # from a historical project card's cached portfolio value. Make the
+    # divergence visible; never erase either saved historical record here.
+    lulo_rows = [row for row in crypto.get("projects", [])
+                 if str(row.get("name") or "").strip().lower() == "lulo"
+                 and row.get("inactive")]
+    if lulo_rows:
+        lulo_value = sum((amount(row.get("balanceUsd")) or Decimal("0"))
+                         for row in lulo_rows)
+        lulo_financial = current_live_assets(saved, bitcoin_usd).get("lulo")
+        if lulo_value > Decimal(".02") and same(lulo_financial, 0):
+            check("inactive-lulo-valuation", "warning",
+                  "Inactive Lulo project cards retain a historical balance "
+                  "in all-project portfolio totals, while Home/Financials "
+                  "correctly show zero following the recorded withdrawal. "
+                  "These values must not be added together.",
+                  historicalPortfolioLuloUsd=float(lulo_value),
+                  currentBusinessLuloUsd=lulo_financial)
+    if bitcoin_usd is None:
+        check("btc-valuation-coverage", "warning",
+              "A current Bitcoin wallet quotation was unavailable; "
+              "Home/Financials parity is tested without inventing BTC value")
 
     records = obj(saved.get("monthly_business_changes_v1"))
     journal = arr(saved.get("financials_journal_v1"))
