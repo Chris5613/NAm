@@ -59,9 +59,19 @@ export function useBackendHardwarePayback() {
     const visible=()=>{if(document.visibilityState==="visible")refresh();};
     window.addEventListener("focus",focus);
     document.addEventListener("visibilitychange",visible);
+    // The settings writer persists device edits shortly after the local
+    // confirmation. Refresh once that write can be read from PostgreSQL.
+    let editTimer = null;
+    const edited = () => {
+      window.clearTimeout(editTimer);
+      editTimer = window.setTimeout(refresh, 1400);
+    };
+    window.addEventListener("hardware-payback-updated", edited);
     return ()=>{active=false;window.clearInterval(timer);
+      window.clearTimeout(editTimer);
       window.removeEventListener("focus",focus);
-      document.removeEventListener("visibilitychange",visible);};
+      document.removeEventListener("visibilitychange",visible);
+      window.removeEventListener("hardware-payback-updated", edited);};
   },[userId,today]);
   if(userId==null||state.userId!==userId||state.day!==today)
     return {data:null,isCached:false,error:null};
