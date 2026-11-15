@@ -13,7 +13,7 @@ export function useBackendIncomeHistory(payload) {
     validator: data => data?.sourceOfCalculation ===
       "backend-persisted-income-history" &&
       data.currentMonth === month && Array.isArray(data.months) &&
-      data.months.every(row => /^\\d{4}-\\d{2}$/.test(row.monthKey) &&
+      data.months.every(row => /^[0-9]{4}-[0-9]{2}$/.test(row.monthKey) &&
         Number.isFinite(row.total) &&
         row.sources && typeof row.sources === "object" &&
         !Array.isArray(row.sources)),
