@@ -1,3 +1,4 @@
+import { automaticExpenseEntriesMatch } from "./useBackendAutomaticExpenses";
 import { financialAssetRowsMatch } from "./useBackendFinancialBalanceRows";
 import {
   financialReportMatches, financialFlowsMatch, statementRowsMatch,
@@ -67,4 +68,45 @@ test("Balance Sheet parity refuses a changed GPU book value or missing device", 
     ...rows[0], historicalCost: 1250,
   }])).toBe(false);
   expect(financialAssetRowsMatch(rows, [])).toBe(false);
+});
+
+test("automatic depreciation parity matches posted lines, not just a headline total", () => {
+  const expenses = [
+    { id: "auto-depreciation:2026-11", date: "2026-11-28",
+      description: "Monthly equipment depreciation", automatic: true,
+      lines: [
+        { account: "depreciation", debit: 32.5, credit: 0 },
+        { account: "accDep", debit: 0, credit: 32.5 },
+      ],
+    },
+  ];
+  expect(automaticExpenseEntriesMatch(expenses, [{
+    ...expenses[0], lines: expenses[0].lines.map(row => ({ ...row })),
+  }])).toBe(true);
+  expect(automaticExpenseEntriesMatch(expenses, [{
+    ...expenses[0], lines: [
+      { ...expenses[0].lines[0], debit: 31.5 },
+      expenses[0].lines[1],
+    ],
+  }])).toBe(false);
+  expect(automaticExpenseEntriesMatch(expenses, [])).toBe(false);
+});
+
+test("estimated electricity accrual is not treated as a paid cash entry", () => {
+  const estimate = [{
+    id: "auto-power-estimate:2026-11",
+    date: "2026-11-28", automatic: true, estimated: true,
+    description: "Estimated mining electricity — not a confirmed payment",
+    lines: [
+      { account: "electric", debit: 5, credit: 0 },
+      { account: "payable", debit: 0, credit: 5 },
+    ],
+  }];
+  expect(automaticExpenseEntriesMatch(estimate, estimate)).toBe(true);
+  expect(automaticExpenseEntriesMatch(estimate, [{
+    ...estimate[0], lines: [
+      estimate[0].lines[0],
+      { account: "cash", debit: 0, credit: 5 },
+    ],
+  }])).toBe(false);
 });
