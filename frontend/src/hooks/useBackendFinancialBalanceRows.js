@@ -1,52 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/apiClient";
-import { reportFinancialParity } from "@/lib/financialParityTelemetry";
 
 /**
- * Migration bridge: server computes *all* Balance Sheet asset/equipment rows,
- * including saved custom assets and one-off journal equipment. Retain the
- * exact prior result until every row reconciles; no record is written.
+ * Financials asset, equipment, GPU disposal, and phone PPE calculations
+ * are owned by the authenticated backend. This adapter never reconstructs
+ * accounting values in the browser or writes a local substitute.
  */
-export function useBackendFinancialBalanceRows(payload, localRows) {
+export function useBackendFinancialBalanceRows(payload) {
   const signature = useMemo(() => JSON.stringify(payload), [payload]);
   const [result, setResult] = useState(null);
   useEffect(() => {
     let active = true;
+    setResult(previous => previous?.signature === signature
+      ? previous : { signature, loading: true });
     api.post("/api/project-tracking/financial-core/balance-rows",
       JSON.parse(signature)).then(data => {
-      if (active && data?.sourceOfCalculation === "backend-financial-core" &&
-          data.month === payload.month && Array.isArray(data.rows))
-        setResult({ signature, rows: data.rows });
-    }).catch(() => { if (active) setResult(null); });
+      if (!active) return;
+      const valid = data?.sourceOfCalculation === "backend-financial-core" &&
+        data.month === payload.month && Array.isArray(data.rows) &&
+        data.rows.every(row => row && typeof row.id === "string" &&
+          typeof row.category === "string" &&
+          (row.end == null || Number.isFinite(row.end)));
+      setResult(valid ? { signature, rows: data.rows }
+        : { signature, error: true });
+    }).catch(() => {
+      if (active) setResult({ signature, error: true });
+    });
     return () => { active = false; };
   }, [signature, payload.month]);
-  const serverRows = result?.signature === signature ? result.rows : null;
-  const reconciled = financialAssetRowsMatch(localRows, serverRows);
-  useEffect(() => {
-    if (serverRows) reportFinancialParity(
-      "balance-rows", payload.month, reconciled,
-      "backend-projection", signature);
-  }, [serverRows, payload.month, reconciled, signature]);
-  return reconciled ? serverRows : localRows;
-}
-
-export function financialAssetRowsMatch(localRows, serverRows) {
-  if (!Array.isArray(localRows) || !Array.isArray(serverRows) ||
-      localRows.length !== serverRows.length) return false;
-  return localRows.every((local, index) => {
-    const server = serverRows[index];
-    if (!server || local?.id !== server.id ||
-        local?.name !== server.name ||
-        local?.category !== server.category ||
-        local?.source !== server.source) return false;
-    const keys = new Set([...Object.keys(local || {}), ...Object.keys(server)]);
-    return [...keys].every(key => {
-      const a = local[key], b = server[key];
-      if (a == null || b == null) return a == b;
-      if (typeof a === "number" || typeof b === "number")
-        return Number.isFinite(Number(a)) && Number.isFinite(Number(b)) &&
-          Math.abs(Number(a) - Number(b)) < .005;
-      return a === b;
-    });
-  });
+  return result?.signature === signature ? result : { loading: true };
 }
