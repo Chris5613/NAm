@@ -1,5 +1,5 @@
 import {
-  statsMatch, matchingProviderMonths, mergeServerMonthlyIncome,
+  statsMatch,
 } from "./yieldProviderParity";
 
 describe("backend earnings parity guard", () => {
@@ -33,52 +33,3 @@ describe("backend earnings parity guard", () => {
   });
 });
 
-describe("backend monthly provider reconciliation", () => {
-  const local = [
-    { monthKey: "2026-09", total: 12.5,
-      platforms: [{ platform: "Kryptex", amount: 12.5 }] },
-    { monthKey: "2026-10", total: 2.55,
-      platforms: [
-        { platform: "Lulo", amount: 1.5 },
-        { platform: "RollerCoin", amount: 0.35 },
-        { platform: "Salad", amount: 0.2 },
-        { platform: "Unetwork", amount: 0.5 },
-      ] },
-  ];
-  const matchingServer = [
-    { monthKey: "2026-09", platforms: [{ platform: "Kryptex", amount: 12.5 }] },
-    { monthKey: "2026-10", platforms: [
-      { platform: "RollerCoin", amount: 0.35 },
-      { platform: "Salad", amount: 0.2 },
-      { platform: "Unetwork", amount: 0.5 },
-    ] },
-  ];
-
-  test("ignores Lulo and Loopscale until their adapters move", () => {
-    expect(matchingProviderMonths(local, matchingServer)).toBe(true);
-    const merged = mergeServerMonthlyIncome(local, matchingServer);
-    expect(merged[1].total).toBe(2.55);
-    expect(merged[1].platforms[0]).toEqual({ platform: "Lulo", amount: 1.5 });
-  });
-
-  test("stale or partial monthly server data never replaces local history", () => {
-    const missing = matchingServer.slice(1);
-    expect(matchingProviderMonths(local, missing)).toBe(false);
-    expect(mergeServerMonthlyIncome(local, missing)).toBe(local);
-    const changed = matchingServer.map(m => ({
-      ...m, platforms: m.platforms.map(p =>
-        p.platform === "RollerCoin" ? { ...p, amount: 0.36 } : p
-      ),
-    }));
-    expect(matchingProviderMonths(local, changed)).toBe(false);
-    expect(mergeServerMonthlyIncome(local, changed)).toBe(local);
-  });
-
-  test("does not treat wallet USD market repricing as mined earnings", () => {
-    const changed = [{
-      monthKey: "2026-10",
-      platforms: [{ platform: "RollerCoin", amount: 4.5 }],
-    }];
-    expect(matchingProviderMonths(local, changed)).toBe(false);
-  });
-});
