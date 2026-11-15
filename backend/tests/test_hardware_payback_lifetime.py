@@ -61,11 +61,12 @@ class HardwarePaybackLifetimeTests(unittest.TestCase):
         devices=[devices[0]]
         for i in range(2,13):
             d=f"2026-11-{i:02d}"
-            trackers["Kryptex"]["kryptexMiningDaily"][d]=.5
+            trackers["Kryptex"]["kryptexMiningDaily"][d]=0
             trackers["Kryptex"]["kryptexConfirmedDays"][d]=True
         result=build_lifetime_hardware_payback(devices,history,trackers,"2026-11-14")
         self.assertTrue(result["complete"])
         self.assertAlmostEqual(result["devices"][0]["verifiedRecoveryUsd"],41.41238012)
+        self.assertAlmostEqual(result["selectedSourceRevenueUsd"] if "selectedSourceRevenueUsd" in result else result["observedSelectedSourceRevenueUsd"],41.41238012)
         self.assertEqual(result["devices"][0]["paidMiningPowerUsd"],0)
 
     def test_invalid_or_future_earnings_start_never_invents_money(self):
