@@ -1,0 +1,206 @@
+{
+  "month": "2026-11",
+  "entries": [
+    {
+      "id": "synced-income:2026-11:kryptex",
+      "date": "2026-11-15",
+      "description": "Synced Kryptex income",
+      "lines": [
+        {
+          "account": "platform:kryptex",
+          "debit": 40,
+          "credit": 0
+        },
+        {
+          "account": "revenue",
+          "debit": 0,
+          "credit": 40
+        }
+      ]
+    },
+    {
+      "id": "synced-income:2026-11:loopscale",
+      "date": "2026-11-15",
+      "description": "Synced Loopscale income",
+      "lines": [
+        {
+          "account": "defi",
+          "debit": 12,
+          "credit": 0
+        },
+        {
+          "account": "revenue",
+          "debit": 0,
+          "credit": 12
+        }
+      ]
+    },
+    {
+      "id": "dividend",
+      "date": "2026-11-14",
+      "description": "VTI dividend",
+      "lines": [
+        {
+          "account": "brokerage",
+          "debit": 3,
+          "credit": 0
+        },
+        {
+          "account": "dividendRevenue",
+          "debit": 0,
+          "credit": 3
+        }
+      ]
+    },
+    {
+      "id": "gpu-trade",
+      "date": "2026-11-13",
+      "description": "Purchase: RTX 5080",
+      "lines": [
+        {
+          "account": "equipment",
+          "debit": 1950,
+          "credit": 0
+        },
+        {
+          "account": "cash",
+          "debit": 0,
+          "credit": 1250
+        },
+        {
+          "account": "equipment:hardware:rtx5070",
+          "debit": 0,
+          "credit": 491.67
+        },
+        {
+          "account": "gainDisposal",
+          "debit": 0,
+          "credit": 208.33
+        }
+      ]
+    },
+    {
+      "id": "provider-fees",
+      "date": "2026-11-14",
+      "description": "Network fees",
+      "lines": [
+        {
+          "account": "fees",
+          "debit": 1,
+          "credit": 0
+        },
+        {
+          "account": "cash",
+          "debit": 0,
+          "credit": 1
+        }
+      ]
+    },
+    {
+      "id": "auto-depreciation:2026-11",
+      "date": "2026-11-28",
+      "description": "Monthly equipment depreciation",
+      "lines": [
+        {
+          "account": "depreciation",
+          "debit": 40.83,
+          "credit": 0
+        },
+        {
+          "account": "accDep",
+          "debit": 0,
+          "credit": 40.83
+        }
+      ]
+    }
+  ],
+  "savedExpenses": 0,
+  "expectedProfit": {
+    "revenue": 55,
+    "disposalGain": 208.33,
+    "operating": 0,
+    "fees": 1,
+    "depreciation": 40.83,
+    "expenses": 1,
+    "profit": 221.5,
+    "unitemizedExpenseOverlap": false,
+    "savedExpenses": 0
+  },
+  "expectedRevenue": {
+    "mining": 40,
+    "yield": 12,
+    "dividends": 3,
+    "unclassified": 0
+  },
+  "expectedCashFlow": {
+    "operating": -1,
+    "investing": -1250,
+    "financing": 0,
+    "transfers": 0,
+    "total": -1251
+  },
+  "devices": [
+    {
+      "id": "gpu-5080",
+      "name": "RTX 5080",
+      "cost": 1950,
+      "startMonth": "2026-11",
+      "usefulLifeMonths": 60
+    }
+  ],
+  "expectedDevice": {
+    "start": 0,
+    "end": 1917.5,
+    "depreciation": 32.5,
+    "cost": 1950
+  },
+  "businessRows": [
+    {
+      "id": "cash",
+      "name": "Cash / Bank",
+      "category": "cash",
+      "start": 100,
+      "end": 100
+    },
+    {
+      "id": "equipment",
+      "name": "RTX 5080",
+      "category": "equipment",
+      "start": 0,
+      "end": 1950
+    },
+    {
+      "id": "payable",
+      "name": "Accounts Payable",
+      "category": "liabilities",
+      "start": 50,
+      "end": 50
+    }
+  ],
+  "expectedBusiness": {
+    "value": 2050,
+    "knownSubtotal": 2050,
+    "incomplete": false,
+    "count": 2,
+    "liabilityValue": 50,
+    "bankCashValue": 100,
+    "liabilitiesIncomplete": false,
+    "netValue": 2000
+  },
+  "personalAssets": [
+    {
+      "category": "cash",
+      "manual_value": 150
+    },
+    {
+      "category": "stocks",
+      "quantity": 3,
+      "current_price": 100
+    },
+    {
+      "category": "debts",
+      "manual_value": 50
+    }
+  ],
+  "expectedNetWorth": 2300
+}
