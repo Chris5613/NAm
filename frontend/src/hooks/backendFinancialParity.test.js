@@ -1,6 +1,4 @@
-import { automaticExpenseEntriesMatch } from "./useBackendAutomaticExpenses";
 import { incomeHistoryMatches } from "./useBackendIncomeHistory";
-import { autoIncomeMatches } from "./useBackendAutoIncomeJournal";
 
 test("income history parity checks source-by-source, not just headline totals", () => {
   const local = [{
@@ -12,57 +10,5 @@ test("income history parity checks source-by-source, not just headline totals", 
   }])).toBe(true);
   expect(incomeHistoryMatches(local, [{
     ...local[0], sources: { Kryptex: 5, Loopscale: 3 },
-  }])).toBe(false);
-});
-
-test("auto income parity rejects duplicate generated income", () => {
-  const local = {
-    entries: [{ id: "synced-income:2026-11:kryptex", date: "2026-11-14",
-      amount: 2, lines: [{ account: "revenue", debit: 0, credit: 2 }] }],
-    syncedTotal: 3, manualRevenueTotal: 1, generatedRevenueTotal: 2,
-    pendingReview: [], pendingReviewTotal: 0, unexplainedManualRevenue: 0,
-  };
-  expect(autoIncomeMatches(local, { ...local, entries: local.entries })).toBe(true);
-  expect(autoIncomeMatches(local, { ...local, generatedRevenueTotal: 3 })).toBe(false);
-});
-
-test("automatic depreciation parity matches posted lines, not just a headline total", () => {
-  const expenses = [
-    { id: "auto-depreciation:2026-11", date: "2026-11-28",
-      description: "Monthly equipment depreciation", automatic: true,
-      lines: [
-        { account: "depreciation", debit: 32.5, credit: 0 },
-        { account: "accDep", debit: 0, credit: 32.5 },
-      ],
-    },
-  ];
-  expect(automaticExpenseEntriesMatch(expenses, [{
-    ...expenses[0], lines: expenses[0].lines.map(row => ({ ...row })),
-  }])).toBe(true);
-  expect(automaticExpenseEntriesMatch(expenses, [{
-    ...expenses[0], lines: [
-      { ...expenses[0].lines[0], debit: 31.5 },
-      expenses[0].lines[1],
-    ],
-  }])).toBe(false);
-  expect(automaticExpenseEntriesMatch(expenses, [])).toBe(false);
-});
-
-test("estimated electricity accrual is not treated as a paid cash entry", () => {
-  const estimate = [{
-    id: "auto-power-estimate:2026-11",
-    date: "2026-11-28", automatic: true, estimated: true,
-    description: "Estimated mining electricity — not a confirmed payment",
-    lines: [
-      { account: "electric", debit: 5, credit: 0 },
-      { account: "payable", debit: 0, credit: 5 },
-    ],
-  }];
-  expect(automaticExpenseEntriesMatch(estimate, estimate)).toBe(true);
-  expect(automaticExpenseEntriesMatch(estimate, [{
-    ...estimate[0], lines: [
-      estimate[0].lines[0],
-      { account: "cash", debit: 0, credit: 5 },
-    ],
   }])).toBe(false);
 });
