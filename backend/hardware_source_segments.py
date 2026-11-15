@@ -80,7 +80,12 @@ def switch_source_segments(original, new_sources, today_key):
     # Replacing a switch already scheduled for tomorrow must not create an
     # overlapping segment or silently reassign today's earned income.
     if new[-1]["start"] == effective:
-        new[-1]["sources"] = chosen
+        if len(new) > 1 and set(new[-2]["sources"]) == set(chosen):
+            # A same-day cancellation restores the original assignment.
+            new.pop()
+            new[-1]["end"] = None
+        else:
+            new[-1]["sources"] = chosen
     elif new[-1]["start"] > today:
         raise InvalidSourceSegments("Existing future source assignment needs review")
     else:
