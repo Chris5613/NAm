@@ -29,6 +29,7 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
+from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..integration_audit import audit_integration_settings
 from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
 
@@ -628,9 +629,20 @@ async def earnings_dashboard(
         month, today.isoformat(), daily, trackers)
     monthly_snapshots = setting(db, user.id, "yield_monthly_snapshots_v1")
     if isinstance(monthly_snapshots, dict):
+        # The browser may have saved a partially hydrated current-month
+        # snapshot before extensions caught up. Project the authoritative
+        # provider totals for display without mutating any saved history.
+        today_month = today.strftime("%Y-%m")
+        canonical = monthly_provider_income(
+            {key.lower(): value for key, value in trackers.items()},
+            today_month)
+        normalized = guard_monthly_snapshots(
+            monthly_snapshots, monthly_snapshots, canonical, today_month)
         comparison = compare_monthly_snapshot(
-            dashboard, monthly_snapshots.get(month))
+            dashboard, normalized.get(month))
         if comparison is not None:
+            comparison["snapshotNeedsReconciliation"] = (
+                normalized.get(month) != monthly_snapshots.get(month))
             dashboard["monthAccountingComparison"] = comparison
     return dashboard
 
