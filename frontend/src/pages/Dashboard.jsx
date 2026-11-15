@@ -1,5 +1,5 @@
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis, BarChart, Bar } from "recharts";
-import { spendingApi } from "@/lib/apiClient";
+import { spendingApi, api } from "@/lib/apiClient";
 import {
   useState,
   useEffect,
@@ -451,10 +451,38 @@ export default function Dashboard() {
           // not from the business Balance Sheet or PPE.
           const businessAssets = getFinancialTotalAssets();
           const personalCash = calculateNetWorth(storedAssets, 0).breakdown.cash;
-          const calculatedNetWorth = calculateNetWorth(
+          const localNetWorth = calculateNetWorth(
             storedAssets,
             getCryptoBusinessValue(businessAssets, cryptoTotal, personalCash),
           );
+          // The backend now owns the calculation. During migration require
+          // penny-level parity before accepting a response; otherwise retain
+          // the known local snapshot and never rewrite saved balances.
+          let calculatedNetWorth = localNetWorth;
+          try {
+            const server = await api.post(
+              "/api/project-tracking/financial-core/net-worth", {
+                assets: storedAssets,
+                business: businessAssets,
+                cryptoTotal,
+              },
+            );
+            const matches = server?.sourceOfCalculation === "backend-financial-core" &&
+              ["stocks", "crypto", "cash", "other", "debts"].every(key =>
+                Math.abs(Number(server.breakdown?.[key]) -
+                  Number(localNetWorth.breakdown[key])) < 0.005) &&
+              Math.abs(Number(server.total_net_worth) -
+                Number(localNetWorth.total_net_worth)) < 0.005;
+            if (matches) {
+              calculatedNetWorth = {
+                total_net_worth: server.total_net_worth,
+                breakdown: server.breakdown,
+                asset_count: server.asset_count,
+              };
+            }
+          } catch {
+            // Signed-in backend unavailable: don't erase Home financials.
+          }
           setFinancialAssets(businessAssets);
 
           const categoryChanges =
