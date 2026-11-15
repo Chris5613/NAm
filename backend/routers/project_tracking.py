@@ -31,6 +31,7 @@ from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
+from ..financial_balance_rows import financial_balance_rows, with_journal_equipment
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
 from ..lifetime_income import lifetime_earned_from_snapshots
@@ -769,6 +770,38 @@ async def evaluate_financial_core(
         return evaluate_statement(payload)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/financial-core/balance-rows")
+async def evaluate_financial_asset_rows(
+    payload: dict, user: User = Depends(current_user),
+) -> dict:
+    """Nonposting backend Balance Sheet asset construction and equipment joins."""
+    month = payload.get("month")
+    current = payload.get("currentMonth") or current_keys()[1]
+    if (not isinstance(month, str) or not
+            re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month)):
+        raise HTTPException(status_code=422, detail="Invalid reporting month")
+    if len(str(payload)) > 1_500_000:
+        raise HTTPException(status_code=413, detail="Financial records too large")
+    records = payload.get("records") or {}
+    live = payload.get("live") or {}
+    devices = payload.get("hardwareDevices") or []
+    journal = payload.get("journal") or []
+    if (not isinstance(records, dict) or not isinstance(live, dict) or
+            not isinstance(devices, list) or not isinstance(journal, list)):
+        raise HTTPException(status_code=422, detail="Invalid financial inputs")
+    try:
+        rows = financial_balance_rows(month, records, live, devices, current)
+        locked = bool((records.get(month) or {}).get("locked"))
+        rows = with_journal_equipment(rows, journal, month, locked)
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid financial asset record") from exc
+    return {
+        "sourceOfCalculation": "backend-financial-core",
+        "month": month, "rows": rows,
+        "business": sum_business_rows(rows),
+    }
 
 
 @router.post("/financial-core/phone-assets")
