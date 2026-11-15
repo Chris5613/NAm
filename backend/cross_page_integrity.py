@@ -225,6 +225,45 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
     hardware = build_lifetime_hardware_payback(
         devices, daily_records, trackers, today_key,
         current_kryptex_daily=current_kryptex_daily)
+    # The payback calculator correctly treats an absent *current* provider
+    # observation as incomplete. The integrity report must distinguish that
+    # expected in-progress day from overdue missing completed-day evidence.
+    # Historical checkpoint baselines remain audit-only, not booked income.
+    evidence_rows = hardware.get("devices") or []
+    missing_completed = [
+        {"device": row.get("name"), **item}
+        for row in evidence_rows
+        for item in (row.get("missingSourceDays") or [])
+        if item.get("day") < today_key
+    ]
+    missing_current = [
+        {"device": row.get("name"), **item}
+        for row in evidence_rows
+        for item in (row.get("missingSourceDays") or [])
+        if item.get("day") == today_key
+    ]
+    provisional_completed = [
+        {"device": row.get("name"), **item}
+        for row in evidence_rows
+        for item in (row.get("provisionalSourceDays") or [])
+        if item.get("day") < today_key
+    ]
+    hardware_warning_flags = hardware.get("reviewFlags") or []
+    check("hardware-completed-day-coverage",
+          ("error" if not hardware.get("mathReconciles") else
+           "warning" if missing_completed or provisional_completed or
+           any(row.get("reasons") for row in evidence_rows) else "pass"),
+          "All completed device earning days have supported source records"
+          if not missing_completed and not provisional_completed else
+          "Some completed device earning days still lack verified evidence",
+          missingCompletedDays=missing_completed,
+          provisionalCompletedDays=provisional_completed,
+          missingCurrentDay=missing_current,
+          checkpointAuditFlags=[
+              flag for flag in hardware_warning_flags
+              if flag.startswith("checkpoint-baseline-")
+          ],
+          currentDayExcludedFromCompletedDayCertification=True)
     check("hardware-credit", "error" if not hardware.get("mathReconciles") else
           ("warning" if not hardware.get("complete") else "pass"),
           "Hardware credits reconcile to unique dated provider rewards, "
@@ -237,6 +276,9 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
           unverifiedDeviceCreditsUsd=hardware.get("unverifiedDeviceCreditsUsd"),
           missingSourceDays=hardware.get("sourceDayMissingCount"),
           complete=hardware.get("complete"), reviewFlags=hardware.get("reviewFlags"),
+          missingCompletedDays=missing_completed,
+          missingCurrentDay=missing_current,
+          provisionalCompletedDays=provisional_completed,
           deviceEvidence=[{
               "name": row.get("name"), "startDay": row.get("startDay"),
               "missingSourceDays": row.get("missingSourceDays") or [],
