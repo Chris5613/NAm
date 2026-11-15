@@ -3,6 +3,7 @@ import unittest
 
 from backend.financial_historical_ledger import (
     historical_trial_balance, opening_phone_depreciation, movement_entries,
+    persisted_historical_trial_inputs,
 )
 
 
@@ -83,6 +84,48 @@ class HistoricalLedgerCutoverTests(unittest.TestCase):
         # Do not credit cash twice when comparing resolved account IDs.
         results = movement_entries(moves, "2026-10", set(), manual)
         self.assertEqual(results, [])
+
+    def test_previous_month_inputs_are_server_owned(self):
+        source = {
+            "financials_journal_v1": [{
+                "id": "saved-oct", "date": "2026-10-04",
+                "debitAccount": "cash", "creditAccount": "equity", "amount": 22,
+            }],
+            "financials_month_closes_v1": {},
+            "monthly_business_changes_v1": {},
+            "hardware_payback_devices_v1": [],
+            "financials_unetwork_business_phones_v1": [],
+            "financials_confirmed_movements_v1": {},
+        }
+        payload = copy.deepcopy(self.data)
+        payload["journal"] = [{"id": "forged", "date": "2026-10-04",
+                               "debitAccount": "cash", "creditAccount": "equity",
+                               "amount": 99999}]
+        payload["incomeMonths"] = [{"monthKey": "2026-10", "total": 99999,
+                                    "sources": {"Kryptex": 99999}}]
+        payload["closedMonths"] = {"2026-10": {"entries": []}}
+        result = persisted_historical_trial_inputs(
+            payload, source, [], "2026-11", "2026-11-15")
+        self.assertEqual(result["journal"], source["financials_journal_v1"])
+        self.assertEqual(result["incomeMonths"], [])
+        self.assertEqual(result["closedMonths"], {})
+        self.assertNotIn("forged", str(result))
+        self.assertNotIn("99999", str(result))
+        self.assertEqual(result["currentEntries"], payload["currentEntries"])
+        self.assertEqual(result["accounts"], payload["accounts"])
+
+    def test_persisted_projection_never_modifies_inputs(self):
+        request, saved = copy.deepcopy(self.data), {
+            "financials_journal_v1": [],
+            "financials_month_closes_v1": {},
+            "monthly_business_changes_v1": {},
+        }
+        original_request, original_saved = copy.deepcopy(request), copy.deepcopy(saved)
+        result = persisted_historical_trial_inputs(
+            request, saved, [], "2026-11", "2026-11-15")
+        historical_trial_balance(result)
+        self.assertEqual(request, original_request)
+        self.assertEqual(saved, original_saved)
 
     def test_source_inputs_not_changed_by_backend_trial(self):
         original = copy.deepcopy(self.data)
