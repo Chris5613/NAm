@@ -620,7 +620,7 @@ export default function SideHustleDashboard() {
       window.clearInterval(powerTimer);
       window.clearInterval(clockTimer);
     };
-  }, [refreshPower, refreshIncomeMetrics]);
+  }, [refreshPower]);
 
   // Financial summary values are NEVER calculated from browser cache.
   const currentMonthKey = getCurrentMonthKey();
