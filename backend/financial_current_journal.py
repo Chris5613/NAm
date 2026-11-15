@@ -33,6 +33,9 @@ def current_financial_ledger(data):
         raise ValueError("Journal too large")
     manual = [entry for entry in manual if isinstance(entry, dict)
               and month_of(entry) == month]
+    income = auto_income_journal(
+        month, data.get("incomeMonth"), manual, current_month, today_key)
+    expenses = {"entries": []}
     if month < CUTOFF:
         frozen = snapshot.get("entries")
         source = frozen if isinstance(frozen, list) else manual
@@ -44,6 +47,7 @@ def current_financial_ledger(data):
             "manualEntryCount": len(manual), "generatedEntryCount": 0,
             "frozen": isinstance(frozen, list),
             "financialLedgerMutated": False,
+            "income": income, "automaticExpenses": expenses,
         }
     frozen = snapshot.get("entries")
     if isinstance(frozen, list):
@@ -53,9 +57,6 @@ def current_financial_ledger(data):
         if not isinstance(rows, list):
             raise ValueError("Backend asset rows required")
         manual_entries = [posted(entry) for entry in manual]
-        income = auto_income_journal(
-            month, data.get("incomeMonth"), manual,
-            current_month, today_key)
         movements = data.get("confirmedMovements")
         movements = (list(movements.values()) if isinstance(movements, dict)
                      else sequence(movements))
@@ -82,4 +83,5 @@ def current_financial_ledger(data):
         "generatedEntryCount": max(0, len(entries) - len(manual)),
         "frozen": isinstance(frozen, list),
         "financialLedgerMutated": False,
+        "income": income, "automaticExpenses": expenses,
     }
