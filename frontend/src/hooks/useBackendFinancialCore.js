@@ -27,17 +27,28 @@ export function useBackendFinancialCore(month, entries, rows, devices, savedExpe
     }
     setResult(prev => prev?.signature === signature && prev?.data
       ? prev : { signature, loading: true });
-    api.post("/api/project-tracking/financial-core/evaluate", payload)
-      .then(data => {
-        if (!active) return;
-        const valid = data?.sourceOfCalculation === "backend-financial-core" &&
-          data.month === month && data.profit && data.revenueSources &&
-          data.cashFlow && Array.isArray(data.statementRows);
-        setResult(valid ? { signature, data } : { signature, error: true });
-      }).catch(() => {
-        if (active) setResult({ signature, error: true });
-      });
-    return () => { active = false; };
+    const refresh = () => api.post(
+      "/api/project-tracking/financial-core/evaluate", payload
+    ).then(data => {
+      if (!active) return;
+      const valid = data?.sourceOfCalculation === "backend-financial-core" &&
+        data.month === month && data.profit && data.revenueSources &&
+        data.cashFlow && Array.isArray(data.statementRows);
+      setResult(valid ? { signature, data } : { signature, error: true });
+    }).catch(() => {
+      if (active) setResult({ signature, error: true });
+    });
+    refresh();
+    // Saved cash openings or historical payable journals can change even
+    // when this month's unposted entries do not. Refresh server-owned
+    // statement evidence without reconstructing any opening in the browser.
+    const timer = window.setInterval(refresh, 90000);
+    window.addEventListener("focus", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", refresh);
+    };
   }, [signature, month, rows]);
   return result?.signature === signature ? result : { loading: true };
 }
