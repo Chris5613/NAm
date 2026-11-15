@@ -492,11 +492,5 @@ if (typeof window !== "undefined") {
     if (document.visibilityState === "visible") refreshLiveSettings().catch(() => {});
   });
   window.addEventListener("focus", () => refreshLiveSettings().catch(() => {}));
-  // Poll only while the page is visible; providers write directly to the
-  // backend even when the Passive Income tab is not the active view.
-  window.setInterval(() => {
-    if (document.visibilityState === "visible")
-      refreshLiveSettings().catch(() => {});
-  }, 60000);
   window.addEventListener("pagehide", () => flushPendingWrites());
 }
