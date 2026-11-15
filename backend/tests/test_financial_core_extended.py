@@ -3,7 +3,7 @@ import unittest
 
 from backend.financial_core import (
     auto_income_journal, build_statement_rows, project_break_even,
-    project_automatic_expenses, split_revenue,
+    project_automatic_expenses, split_revenue, trial_balance,
 )
 from backend.income_history_core import (
     reconcile_lulo_months, historical_income, legacy_months,
@@ -88,6 +88,29 @@ class BackendAccountingMigrationTests(unittest.TestCase):
             "2026-08", [{"category": "equipment", "depreciation": 8}], [], 2)
         self.assertEqual(result["entries"], [])
         self.assertEqual(result["autoDepreciationUsd"], 0)
+
+    def test_trial_balance_uses_cumulative_signed_subaccounts_without_browser_math(self):
+        entries = [
+            {"id": "purchase", "lines": [
+                {"account": "equipment", "debit": 1950, "credit": 0},
+                {"account": "cash", "debit": 0, "credit": 1250},
+                {"account": "equipment:hardware:rtx5070", "debit": 0, "credit": 491.67},
+                {"account": "gainDisposal", "debit": 0, "credit": 208.33},
+            ]},
+        ]
+        accounts = [
+            {"id": "equipment", "name": "Equipment"},
+            {"id": "cash", "name": "Cash"},
+            {"id": "equipment:hardware:rtx5070", "name": "Traded GPU"},
+            {"id": "gainDisposal", "name": "Disposal gain"},
+            {"id": "revenue", "name": "Unused"},
+        ]
+        result = trial_balance(entries, accounts)
+        self.assertEqual(len(result["rows"]), 4)
+        self.assertEqual(result["debitTotal"], 1950)
+        self.assertEqual(result["creditTotal"], 1950)
+        self.assertEqual(result["rows"][0]["debit"], 1950)
+        self.assertEqual(result["rows"][1]["credit"], 1250)
 
     def test_statement_cash_unknown_remains_null_even_with_journal_activity(self):
         rows = build_statement_rows([], [{
