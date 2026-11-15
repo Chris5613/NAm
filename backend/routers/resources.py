@@ -26,6 +26,7 @@ from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_prof
 from ..networth_reconciliation import home_reconciliation_preview
 from ..financial_core import calculate_net_worth, maybe_number as accounting_number
 from ..networth_trends import networth_trends
+from ..monthly_changes_seal import seal_completed_business_months, preserve_locked_business_months
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
@@ -281,7 +282,7 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
         raise HTTPException(422, "Expected before and after values.")
     if key in ("project_income_kryptex_tracker_v1",
                "yield_monthly_snapshots_v1", "financials_journal_v1",
-               "financials_month_closes_v1"):
+               "financials_month_closes_v1", "monthly_business_changes_v1"):
         # Snapshot reconciliation also reads the Kryptex provider tracker.
         # Share its account row lock so a fresh mining reward is never
         # partially observed during this accounting projection.
@@ -293,6 +294,33 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
     if current != payload["before"] and current != payload["after"]:
         raise HTTPException(409, "Setting changed in another session. No changes were applied.")
     after = payload["after"]
+    if key == "monthly_business_changes_v1":
+        month = datetime.now(timezone.utc).astimezone(
+            ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+        try:
+            after = preserve_locked_business_months(current, after, month)
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        month_snapshots = db.scalar(select(Setting).where(
+            Setting.user_id == user.id, Setting.key == "yield_monthly_snapshots_v1",
+        ))
+        # A browser may have saved an incomplete provisional income estimate
+        # while the month was open. For a newly sealed month, discard that
+        # guess and use only the confirmed server's locked source ledger.
+        original = current if isinstance(current, dict) else {}
+        for old_month, entry in list(after.items()):
+            if (not isinstance(old_month, str) or old_month >= month or
+                    not isinstance(entry, dict) or
+                    (isinstance(original.get(old_month), dict) and
+                     original[old_month].get("locked"))):
+                continue
+            if isinstance(entry.get("items"), list) and entry["items"]:
+                revised = dict(entry)
+                revised.pop("revenueSnapshot", None)
+                revised.pop("locked", None)
+                after[old_month] = revised
+        after = seal_completed_business_months(
+            after, month_snapshots.value if month_snapshots else None, month)
     if key == "financials_journal_v1":
         closes_row = db.scalar(select(Setting).where(
             Setting.user_id == user.id,
