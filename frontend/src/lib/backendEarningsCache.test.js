@@ -61,3 +61,40 @@ test("cache expires and logout only clears current user", () => {
   expect(storage.getItem(earningsCacheKey(8,"2026-11"))).toBeNull();
   expect(earningsCacheKey(7,"2026-11")).not.toBe(earningsCacheKey(8,"2026-11"));
 });
+
+test("provisional source evidence survives validation and session caching", () => {
+  const storage = store();
+  const data = backend();
+  const row = data.days.find(item => item.key === "2026-11-14");
+  row.sources = { Kryptex: 3.43, Loopscale: 2.38 };
+  row.provenance = {
+    Kryptex: "confirmed-kryptex-mining-day",
+    Loopscale: "legacy-server-receipt",
+  };
+  row.provisionalSources = ["Loopscale"];
+  row.correctedSourcesUsd = { Kryptex: -0.7 };
+  data.fullyVerified = false;
+  const saved = writeBackendEarningsCache(7, "2026-11", data, storage);
+  expect(saved.data.fullyVerified).toBe(false);
+  expect(saved.data.reviewDays).toEqual([{
+    date: "2026-11-14", sources: ["Loopscale"],
+    corrections: { Kryptex: -0.7 },
+  }]);
+  const reloaded = readBackendEarningsCache(7, "2026-11",
+    "2026-11-14", storage);
+  expect(reloaded.data.days[13].provenance.Loopscale).toBe("legacy-server-receipt");
+  expect(reloaded.data.days[13].provisionalSources).toEqual(["Loopscale"]);
+  expect(reloaded.data.fullyVerified).toBe(false);
+});
+
+test("confirmed corrections are retained without inventing unresolved receipts", () => {
+  const data = backend();
+  const row = data.days.find(item => item.key === "2026-11-14");
+  row.provisionalSources = [];
+  row.correctedSourcesUsd = { Kryptex: 0.12 };
+  data.fullyVerified = true;
+  const normalized = validateBackendEarningsSnapshot(data, "2026-11", "2026-11-14");
+  expect(normalized.fullyVerified).toBe(true);
+  expect(normalized.reviewDays[0].corrections.Kryptex).toBe(0.12);
+  expect(normalized.reviewDays[0].sources).toEqual([]);
+});
