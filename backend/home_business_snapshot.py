@@ -116,12 +116,12 @@ def home_business_snapshot(settings, month, bitcoin_usd=None):
     phones = arr(settings.get("financials_unetwork_business_phones_v1"))
     closed = obj(settings.get("financials_month_closes_v1"))
     saved = obj(closed.get(month))
+    live = current_live_assets(settings, bitcoin_usd)
     if isinstance(saved.get("rows"), list):
         business = sum_business_rows(saved["rows"])
         return {"sourceOfCalculation": "backend-home-business",
-                "month": month, "business": business,
+                "month": month, "business": business, "live": live,
                 "source": "locked-month-rows", "complete": True}
-    live = current_live_assets(settings, bitcoin_usd)
     base = financial_balance_rows(month, records, live, hardware, month)
     if not obj(records.get(month)).get("locked"):
         base += phone_asset_rows(phones, month)
@@ -162,7 +162,7 @@ def home_business_snapshot(settings, month, bitcoin_usd=None):
     # with a manufactured zero.
     return {
         "sourceOfCalculation": "backend-home-business",
-        "month": month, "business": business,
+        "month": month, "business": business, "live": live,
         "source": "saved-financial-ledger-and-provider-observations",
         "complete": (not business["incomplete"] and
                      not business["liabilitiesIncomplete"]),
