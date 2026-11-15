@@ -196,38 +196,23 @@ export default function HardwarePaybackPage() {
   const [clock, setClock] = useState(Date.now());
   useEffect(() => subscribe(() => { setDevices(readDevices()); setHistory(current => ({ ...readHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills })); }), []);
   useEffect(() => {
-    const receiveChartEarnings = event => {
-      if (event.source !== window || event.origin !== window.location.origin ||
-          event.data?.source !== "kryptex-tracker-ext" || event.data?.type !== "KRYPTEX_PUSH") return;
-      const chartDays = event.data.payload?.earnings?.daily_usd || {};
-      const today = pacificDayKey(Date.now());
-      const current = loadKryptexTracker();
-      const daily = { ...(current.kryptexMiningDaily || {}) };
-      const confirmed = { ...(current.kryptexConfirmedDays || {}) };
-      let changed = false;
-      for (const [day, value] of Object.entries(chartDays)) {
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || day < "2026-11-01" || day > today) continue;
-        const amount = Number(value);
-        if (!Number.isFinite(amount) || amount < 0) continue;
-        if (daily[day] !== amount || !confirmed[day]) changed = true;
-        daily[day] = amount;
-        confirmed[day] = true;
+    // The canonical Kryptex endpoint reconciles chart rewards, satoshi
+    // evidence, and BTC/USD repricing. Hardware Payback must observe its
+    // confirmed tracker rather than write raw, potentially lower chart
+    // conversions back over recovered historical income.
+    const receiveAggregate = event => {
+      const tracker = event?.detail?.tracker;
+      if (tracker && typeof tracker === "object") {
+        setHistory(current => ({ ...current, kryptex: tracker }));
       }
-      if (!changed) return;
-      const monthKey = getCurrentMonthKey();
-      const monthlyEarnings = { ...(current.monthlyEarnings || {}) };
-      const oldMonth = Number(monthlyEarnings[monthKey]) || 0;
-      const newMonth = Object.entries(daily).reduce((sum, [day, amount]) =>
-        day.startsWith(`${monthKey}-`) && confirmed[day] ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
-      monthlyEarnings[monthKey] = Number(newMonth.toFixed(6));
-      const lifetimeEarnedUsd = Math.max(getKryptexOpeningBalanceUsd(),
-        (Number(current.lifetimeEarnedUsd) || getKryptexOpeningBalanceUsd()) - oldMonth) + newMonth;
-      saveKryptexTracker({ ...current, kryptexMiningDaily: daily,
-        kryptexConfirmedDays: confirmed, monthlyEarnings, lifetimeEarnedUsd: Number(lifetimeEarnedUsd.toFixed(6)) });
     };
-    window.addEventListener("message", receiveChartEarnings);
-    window.postMessage({ source: "kryptex-tracker-app", type: "REQUEST_LATEST" }, window.location.origin);
-    return () => window.removeEventListener("message", receiveChartEarnings);
+    window.addEventListener("kryptex-aggregate-update", receiveAggregate);
+    window.postMessage(
+      { source: "kryptex-tracker-app", type: "REQUEST_LATEST" },
+      window.location.origin
+    );
+    return () =>
+      window.removeEventListener("kryptex-aggregate-update", receiveAggregate);
   }, []);
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 60000); return () => clearInterval(timer); }, []);
   useEffect(() => {
