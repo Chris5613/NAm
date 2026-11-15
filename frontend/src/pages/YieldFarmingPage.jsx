@@ -41,7 +41,6 @@ import {
   loadProjectLogos,
   loadMonthlyBackfills,
   loadLuloMonthlyBaselines,
-  loadMonthlySnapshots,
   loadLoopscaleHistory,
   getSaladTrackerStats,
   getUnetworkTrackerStats,
@@ -171,13 +170,6 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     requestUnetworkLatest,
   } = useUnetworkExtension();
 
-  const [
-    monthlySnapshots,
-    setMonthlySnapshots,
-  ] = useState(
-    loadMonthlySnapshots
-  );
-
   const {
     rollerCoinTracker,
     rollerCoinConnected,
@@ -191,7 +183,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     setRollerCoinTo,
     syncRollerCoinRange,
     requestRollerCoinLatest,
-  } = useRollerCoinExtension({ setMonthlySnapshots });
+  } = useRollerCoinExtension();
 
   const [
     syncError,
@@ -258,7 +250,6 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     kryptexTracker,
     rollerCoinTracker,
     unetworkTracker,
-    monthlySnapshots,
   });
 
   // RollerCoin TRX price is supplied with each extension wallet sync.
