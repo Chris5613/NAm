@@ -40,6 +40,7 @@ import { getPrivateAccountingProfile } from "@/lib/yieldFarmingAccounting";
 import { toast } from "sonner";
 
 import AssetBreakdown from "@/components/AssetBreakdown";
+import CryptoBreakdown from "@/components/CryptoBreakdown";
 import AddAssetDialog from "@/components/AddAssetDialog";
 
 import { Button } from "@/components/ui/button";
@@ -1549,6 +1550,12 @@ export default function Dashboard() {
                         ))}
                 </p>
               </div>
+
+              {selectedCategory === "crypto" && (
+                <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+                  <CryptoBreakdown />
+                </div>
+              )}
 
               {selectedCategory !== "crypto" && (
                 <div className="min-h-0 flex-1 overflow-y-auto p-6">
