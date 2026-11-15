@@ -380,6 +380,19 @@ export function resetStore() {
   hydrated = false;
 }
 
+/**
+ * Refresh exactly one saved setting after a separate authenticated server
+ * action. Unlike setItem, this does not enqueue a competing browser PATCH.
+ */
+export async function refreshSetting(key) {
+  if (typeof key !== "string" || !key || key === "networth_projects")
+    throw new Error("Invalid setting refresh key");
+  if (pendingTimers.has(key)) {
+    await flushKey(key);
+  }
+  return refreshFromServer(key, storeGeneration);
+}
+
 export async function refreshCollection(key) {
   const resource = COLLECTION_RESOURCES[key];
   if (!resource) return;
