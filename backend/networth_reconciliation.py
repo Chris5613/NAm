@@ -11,6 +11,7 @@ from math import isfinite
 
 from .bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from .project_accounting import portfolio_summary
+from .gpu_equipment_reconciliation import reconcile_gpu_equipment
 
 
 def finite_number(raw):
@@ -265,7 +266,8 @@ def equipment_trade_review(journal, month):
 def home_reconciliation_preview(
     assets, wallets, wallet_cache, provider_feed, portfolio_setting,
     legacy_crypto_cache, financial_monthly, journal, month, user_id,
-    now=None, bank_openings=None, confirmed_movements=None
+    now=None, bank_openings=None, confirmed_movements=None,
+    hardware_devices=None,
 ):
     now = now or datetime.now(timezone.utc)
     personal = personal_assets_home_basis(assets)
@@ -290,6 +292,8 @@ def home_reconciliation_preview(
     )
     transfer = lulo_withdrawal_review(journal, financial_monthly, month)
     equipment_trades = equipment_trade_review(journal, month)
+    equipment = reconcile_gpu_equipment(month, hardware_devices,
+                                         financial_monthly, journal)
     cash_projection = projected_business_cash(
         month, bank_openings, journal, confirmed_movements
     )
@@ -311,8 +315,10 @@ def home_reconciliation_preview(
         flags.append("lulo-withdrawal-vs-opening-requires-review")
     if any(not trade["purchaseFundingReconciles"] for trade in equipment_trades):
         flags.append("equipment-trade-journal-imbalance")
-    if equipment_trades:
+    if equipment_trades and equipment.get("retiredCount", 0) == 0:
         flags.append("traded-equipment-register-disposal-requires-review")
+    if equipment.get("issues"):
+        flags.append("gpu-equipment-valuation-needs-review")
     if max_overlap is not None and max_overlap > 0:
         flags.append("possible-business-cash-overlap-unverified")
     if not cash_projection["completeForJournalOnly"]:
@@ -339,6 +345,7 @@ def home_reconciliation_preview(
         "bankCashDeduplication": "unverified",
         "luloTransfer": transfer,
         "equipmentTrades": equipment_trades,
+        "gpuEquipment": equipment,
         "businessCashProjection": cash_projection,
         "possibleBankCashOverlapMaximumUsd": max_overlap,
         "bankCashOverlapVerified": False,
