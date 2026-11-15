@@ -114,6 +114,26 @@ def payable_opening(month, journal):
     ))
 
 
+def financial_statement_openings(settings, month):
+    """Read-only statement openings from persisted, authenticated settings.
+
+    Browser-provided openings are never accepted as evidence. A missing cash
+    opening remains unknown; unpaid amounts use historical posted payable
+    activity. The function never writes or synthesizes bank balances.
+    """
+    source = obj(settings)
+    journal = arr(source.get("financials_journal_v1"))
+    approved = source.get("financials_confirmed_movements_v1")
+    movements = (list(approved.values()) if isinstance(approved, dict)
+                 else arr(approved))
+    return {
+        "cashOpening": cash_opening(
+            month, source.get("financials_bank_openings_v1"),
+            journal, movements),
+        "payableOpening": payable_opening(month, journal),
+    }
+
+
 def home_business_snapshot(settings, month, bitcoin_usd=None):
     records = obj(settings.get("monthly_business_changes_v1"))
     journal = arr(settings.get("financials_journal_v1"))
