@@ -35,6 +35,47 @@
 > narrow-scope backend-only migration remains **NOT CERTIFIED**. More work,
 > parity tests, and a full authenticated 5-page browser journey are needed.
 >
+## Implementation follow-up: current sidebar calculation ownership
+
+The owner narrowed the release-quality code audit to the five **sidebar pages**
+and any content embedded in them. These are the results of further changes,
+separate from the earlier broad initial snapshot:
+
+| Current sidebar page | Verified server-owned calculation paths | Remaining browser-owned / scope limitations |
+| --- | --- | --- |
+| **Home** | Main business assets, net worth and daily/monthly trends | Retired browser-calculated trends fallback; visual formatting and graph projection still run in React |
+| **Spending** | Added authenticated `POST /api/spending/analytics/preview`: user-scoped PostgreSQL transaction totals, income, cashflow, category shares, month-to-month trends, monthly/YTD chart data. React now consumes strictly validated backend results and clearly displays unavailable state | The backend receives passive month values from the existing authenticated income-history consumer; budget display ratio is still calculated for UI. No authenticated all-click production journey yet |
+| **Crypto Dashboard** | Booked monthly income, actual today, portfolio/Bitcoin and Hardware Payback via backend hooks | Per-project ROI/daily preview, some card sorting/progress and embedded **Passive Income** providers/chart transforms still execute browser math; frozen Lulo calculations must not be changed |
+| **Financials** | Server owns balance rows, current ledger, recognized revenue/profit, trial balance, start/end Balance Sheet/net-change subtotals and cash flow movements. Saved archived closings are totaled by backend independently of unposted current ledger | Journal editor's visible debits/credits, some P&L display decomposition and other presentation-only transforms remain in React; historical owner-accepted estimates not independent statements |
+| **Mining Power** | Backend reads power meter, Kryptex machine aggregate and tariff expense, including free-power policy | Meter visualization and values formatting remain in React |
+
+**Implemented during this scope refinement:**
+- Removed explicitly retired Cloud betting route and six Cloud-only frontend
+  modules without deleting saved DB records; old `/cloud` redirects Home.
+- Removed unused browser electricity tariff formula and dead aggregate totals
+  from active Crypto Dashboard; server power source remains authoritative.
+- Removed Home fallback which used browser-local baselines to synthesize
+  read-only financial trend history. Last backend-verified trends are retained
+  when the service cannot recalculate them.
+- Moved Spending cash flow, totals, category and chart calculations to the
+  authenticated backend with pure unit tests and disposable DB session
+  regression coverage.
+- Added server-sourced Balance Sheet and cash-movement totals to the existing
+  authenticated Financials evaluator, with strict frontend validation and
+  regression coverage. Archived close display totals are computed from saved
+  server-owned closing rows; no source financial values were modified.
+- Lulo source freeze remains enforced. Do not attempt deletion of retired
+  Lulo-bearing CryptoPage source or rewrite Lulo earnings as a way to satisfy
+  this code-cleanliness request.
+
+**Remaining gates for literal 100% backend-owned business calculation:**
+per-project Crypto Dashboard estimates/ROI and embedded Passive Income
+transforms, surviving Financials presentation calculations if the requirement
+includes *every* display subtotal, and a real authenticated browser sweep
+through all five pages. The project remains **not certified as zero unused code**:
+green React build checks local lint issues but no whole-codebase reachability
+graph or isolated unused-export gate exists.
+
 ## 1. How this audit was performed
 
 - Queried the actual GitHub recursive repository tree: **423 version-controlled blobs** at the time of inspection. Read application routing, major live page modules, shared data/finance modules, backend route decorators, Financials source modules, CI workflow definitions and specific dead-code references.
