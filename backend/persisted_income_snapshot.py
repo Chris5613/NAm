@@ -5,10 +5,20 @@ booked provider snapshot; separately recorded dividends, legacy project
 rewards, and explicitly configured manual imports are added once only.
 """
 from .income_history_core import historical_income, legacy_months
+from .monthly_snapshot_guard import guard_monthly_snapshots
 
 
-def source_income_history(snapshots, payouts, projects, manual, current_month):
+def source_income_history(snapshots, payouts, projects, manual, current_month,
+                          current_provider_months=None, confirmed_legacy=None):
+    # The scheduler reconciles every five minutes. During that interval
+    # today's provider earnings can change while the saved snapshot is old.
+    # Compute an up-to-date read-only projection from durable trackers. Never
+    # persist the projection, and never change a locked historical month.
     existing = snapshots if isinstance(snapshots, dict) else {}
+    if isinstance(current_provider_months, list) or confirmed_legacy:
+        existing = guard_monthly_snapshots(
+            existing, existing, current_provider_months, current_month,
+            confirmed_legacy=confirmed_legacy)
     months = []
     for month, raw in sorted(existing.items()):
         if not isinstance(raw, dict) or raw.get("monthKey", month) != month:
