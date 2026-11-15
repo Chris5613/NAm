@@ -11,13 +11,6 @@ import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { localStorage as appStorage } from "@/lib/localStorage";
 
 const KEY = "monthly_business_changes_v1";
-// USD daily closing prices for BTC-USD on Yahoo Finance (UTC daily candles).
-// These price anchors do not establish how much BTC was held on each date.
-const BTC_CLOSE_USD = Object.freeze({
-  "2026-08-31": 78548.63,
-  "2026-09-30": 83553.85,
-  "2026-10-31": 77434.75,
-});
 // Track each existing investment/project individually; Bitcoin holdings have their own row.
 function portfolioBalances() {
   const portfolio = getStoredProjectCryptoPortfolio();
