@@ -68,6 +68,31 @@ class CurrentFinancialJournalTests(unittest.TestCase):
                          {row["id"] for row in rows})
         self.assertAlmostEqual(-activity(rows, "revenue"), 10)
 
+    def test_transfer_with_fee_is_expense_not_revenue(self):
+        data = fixture()
+        data["incomeMonth"] = {"monthKey": "2026-11", "total": 0, "sources": {}}
+        data["confirmedMovements"]["transfer-1"]["feeUsd"] = 0.50
+        result = current_financial_ledger(data)
+        entries = result["entries"]
+        self.assertEqual(sum(row["id"] == "auto-movement:transfer-1"
+                             for row in entries), 1)
+        self.assertEqual(sum(row["id"] == "auto-fee:transfer-1"
+                             for row in entries), 1)
+        self.assertAlmostEqual(activity(entries, "fees"), 0.50)
+        self.assertAlmostEqual(activity(entries, "revenue"), 0)
+
+    def test_approved_transfer_already_posted_manually_not_duplicated(self):
+        data = fixture()
+        data["journalPreview"].append({
+            "id": "already-posted", "date": "2026-11-12",
+            "debitAccount": "cash", "creditAccount": "platform:kryptex",
+            "amount": 3,
+        })
+        result = current_financial_ledger(data)
+        ids = [row["id"] for row in result["entries"]]
+        self.assertIn("already-posted", ids)
+        self.assertNotIn("auto-movement:transfer-1", ids)
+
     def test_locked_snapshot_is_unchanged_by_later_provider_observations(self):
         data = fixture()
         frozen = [{
