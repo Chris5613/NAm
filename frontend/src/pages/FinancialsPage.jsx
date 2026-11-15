@@ -17,7 +17,7 @@ import { useBackendTrialBalance } from "@/hooks/useBackendTrialBalance";
 import { visibleLedgerEntries } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
 import { balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName, cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow } from "@/lib/financialAccountNames";
-import { unmatchedEquipmentPurchases, deriveCashOpening, derivePayableOpening, moneyRound, valueOrNull } from "@/lib/financialAccounting";
+import { unmatchedEquipmentPurchases, moneyRound, valueOrNull } from "@/lib/financialAccounting";
 import { hasFreeMiningPower } from "@/lib/powerOutOfPocket";
 import { journalLines, validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
 import { openingPhoneDepreciationEntry } from "@/lib/phoneOpeningDepreciation";
@@ -30,7 +30,6 @@ const HARDWARE_KEY = "hardware_payback_devices_v1";
 const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
 const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
-const BANK_OPENINGS_KEY = "financials_bank_openings_v1";
 const FINANCIAL_LABELS_KEY = "financials_account_labels_v1";
 const card = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const field = "w-full rounded-lg border border-[#3c5267] bg-[#101923] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400";
@@ -202,7 +201,6 @@ export default function FinancialsPage() {
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
-  const [bankOpenings, setBankOpenings] = useState(() => readJson(BANK_OPENINGS_KEY, {}));
   const [accountLabels, setAccountLabels] = useState(() =>
     cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
   const [renaming, setRenaming] = useState(null);
@@ -228,7 +226,6 @@ export default function FinancialsPage() {
     setPowerEstimates(readJson(POWER_ESTIMATE_KEY, {}));
     setConfirmedMovements(readJson(CONFIRMED_MOVEMENTS_KEY, {}));
     setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
-    setBankOpenings(readJson(BANK_OPENINGS_KEY, {}));
     setAccountLabels(cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
   }), []);
   // Server-owned source history is the sole income attribution input.
@@ -343,12 +340,9 @@ export default function FinancialsPage() {
   // Compute server-side; keep the proven browser view only when the backend
   // response is stale or fails strict parity. This is read-only: it never
   // generates new posted transactions or adjusts a locked month.
-  const cashOpening = deriveCashOpening(
-    month, bankOpenings, journal, Object.values(confirmedMovements));
-  const payableOpening = derivePayableOpening(month, journal);
   const serverFinancialState = useBackendFinancialCore(
     month, entries, backendBalanceRows.rows || null, hardwareDevices,
-    savedExpenses, cashOpening, payableOpening);
+    savedExpenses);
   const serverFinancial = serverFinancialState?.data;
   const report = serverFinancial?.profit || {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
