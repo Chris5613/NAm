@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from backend.kryptex_earnings_audit import (
     audit_kryptex_days,
     reconcile_kryptex_rewards,
+    recognize_mined_satoshi_increment,
 )
 
 
@@ -69,6 +70,48 @@ class KryptexRewardAuditTests(unittest.TestCase):
         self.assertNotIn("2026-11-20", result["kryptexMiningDaily"])
         self.assertNotIn("2026-11-20", result["kryptexMiningSatsDaily"])
         self.assertEqual(result["kryptexPendingEarningsDays"], ["2026-11-12"])
+
+    def test_btc_price_rise_without_new_satoshis_does_not_create_mining_income(self):
+        before = {
+            "kryptexMiningDaily": {"2026-11-13": 4.0},
+            "kryptexConfirmedDays": {"2026-11-13": True},
+            "kryptexMiningSatsDaily": {"2026-11-13": 5000},
+            "monthlyEarnings": {"2026-11": 4.0},
+            "lifetimeEarnedUsd": 100.0,
+        }
+        after = reconcile_kryptex_rewards(
+            before,
+            {"daily_sats": {"2026-11-13": 5000},
+             "daily_usd": {"2026-11-13": 8.0}},
+            self.now,
+        )
+        self.assertEqual(after["kryptexMiningDaily"]["2026-11-13"], 4.0)
+        self.assertEqual(after["monthlyEarnings"]["2026-11"], 4.0)
+        self.assertEqual(after["lifetimeEarnedUsd"], 100.0)
+
+    def test_new_satoshis_credit_only_newly_mined_portion(self):
+        # Earlier 5000 sats at $4; now 5500 sats worth $8.80 at a
+        # doubled BTC price. Only the new 500 sats create $0.80 income.
+        after = recognize_mined_satoshi_increment(4.0, 5000, 5500, 8.8)
+        self.assertAlmostEqual(after, 4.8, places=7)
+
+        tracker = {
+            "kryptexMiningDaily": {"2026-11-13": 4.0},
+            "kryptexConfirmedDays": {"2026-11-13": True},
+            "kryptexMiningSatsDaily": {"2026-11-13": 5000},
+            "monthlyEarnings": {"2026-11": 4.0},
+            "lifetimeEarnedUsd": 100.0,
+        }
+        result = reconcile_kryptex_rewards(
+            tracker,
+            {"daily_sats": {"2026-11-13": 5500},
+             "daily_usd": {"2026-11-13": 8.8}},
+            self.now,
+        )
+        self.assertEqual(result["kryptexMiningDaily"]["2026-11-13"], 4.8)
+        self.assertEqual(result["kryptexMiningSatsDaily"]["2026-11-13"], 5500)
+        self.assertEqual(result["lifetimeEarnedUsd"], 100.8)
+
 
 
 if __name__ == "__main__":
