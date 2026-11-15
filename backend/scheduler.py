@@ -16,6 +16,7 @@ from .networth_reconciliation import legacy_nightly_components
 from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_project_balances
 from .provider_monthly_income import monthly_provider_income
 from .monthly_snapshot_guard import guard_monthly_snapshots
+from .monthly_changes_seal import seal_completed_business_months
 from .legacy_income_reconciliation import confirmed_november_sources
 
 _scheduler_task: asyncio.Task | None = None
@@ -265,6 +266,42 @@ def reconcile_open_monthly_snapshots() -> int:
     return updated
 
 
+def seal_monthly_business_periods() -> int:
+    """Server-side month rollover with no inferred asset changes.
+
+    Only historically saved balance rows are locked. Revenue comes from the
+    provider snapshot for that same month if the snapshot is explicitly
+    locked. Missing source income is left unknown, not forced to zero.
+    """
+    month = datetime.now(timezone.utc).astimezone(PACIFIC).strftime("%Y-%m")
+    updated = 0
+    with SessionLocal() as db:
+        user_ids = db.scalars(select(User.id)).all()
+        for user_id in user_ids:
+            db.scalar(select(User).where(User.id == user_id).with_for_update())
+            entry = db.scalar(select(Setting).where(
+                Setting.user_id == user_id,
+                Setting.key == "monthly_business_changes_v1",
+            ))
+            if entry is None or not isinstance(entry.value, dict):
+                db.rollback()
+                continue
+            snapshot = db.scalar(select(Setting).where(
+                Setting.user_id == user_id,
+                Setting.key == "yield_monthly_snapshots_v1",
+            ))
+            revised = seal_completed_business_months(
+                entry.value, snapshot.value if snapshot else None, month
+            )
+            if revised != entry.value:
+                entry.value = revised
+                db.commit()
+                updated += 1
+            else:
+                db.rollback()
+    return updated
+
+
 def scheduler_status() -> dict[str, Any]:
     return {"status": "leader" if _leader else "standby", "last_daily_key": _last_daily_key,
             "last_project_day": _last_project_day,
@@ -365,6 +402,10 @@ async def scheduler_loop() -> None:
                     await asyncio.to_thread(reconcile_open_monthly_snapshots)
                 except Exception:
                     log.exception("Open-month provider reconciliation failed; will retry")
+                try:
+                    await asyncio.to_thread(seal_monthly_business_periods)
+                except Exception:
+                    log.exception("Historical monthly business sealing failed; will retry")
             await asyncio.sleep(30)
     finally:
         _leader = False
