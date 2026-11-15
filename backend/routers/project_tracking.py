@@ -1005,6 +1005,7 @@ async def evaluate_financial_core(
         "financials_bank_openings_v1",
         "financials_journal_v1",
         "financials_confirmed_movements_v1",
+        "financials_month_closes_v1",
     )
     saved = db.scalars(select(Setting).where(
         Setting.user_id == user.id,
@@ -1018,6 +1019,14 @@ async def evaluate_financial_core(
             r"\d{4}-(0[1-9]|1[0-2])", month):
         raise HTTPException(status_code=422, detail="Invalid reporting month")
     owned = {**payload, **financial_statement_openings(source, month)}
+    # Historical archived Financials statements are immutable source records.
+    # Never allow caller-supplied closing rows to set their display totals.
+    closes = source.get("financials_month_closes_v1")
+    close = closes.get(month) if isinstance(closes, dict) else None
+    if isinstance(close, dict) and isinstance(close.get("rows"), list):
+        owned["displayRows"] = close["rows"]
+    else:
+        owned.pop("displayRows", None)
     try:
         return evaluate_statement(owned)
     except (ValueError, TypeError) as exc:
