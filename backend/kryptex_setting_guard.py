@@ -77,10 +77,18 @@ def merge_legacy_kryptex_setting(current, proposed):
             continue
         prior_usd = _nonnegative(daily.get(day)) or 0
         prior_credited = credited.get(day)
-        daily[day] = recognize_mined_satoshi_increment(
+        # A legacy client's repeated/stale chart USD is not new evidence
+        # for uncredited sats. Preserve the pending amount until an updated
+        # positive USD reading supports conversion. Canonical ingestion uses
+        # its own timestamped source reconciliation path.
+        if prior_usd > 0 and value <= prior_usd:
+            daily[day] = prior_usd
+            continue
+        updated = recognize_mined_satoshi_increment(
             prior_usd, prior_credited, merged_sats.get(day), value
         )
-        if value > 0 and (_nonnegative(merged_sats.get(day)) or 0) > 0:
+        daily[day] = updated
+        if updated > prior_usd and (_nonnegative(merged_sats.get(day)) or 0) > 0:
             credited[day] = max(
                 _nonnegative(prior_credited) or 0,
                 _nonnegative(merged_sats[day]) or 0,

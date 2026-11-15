@@ -336,9 +336,9 @@ if (total > 0) {
     [tokenPrefs]
   );
 
+  // Hiding a token changes visibility, never the owned asset total.
   const visibleTotal = allTokensRaw
-    .filter((t) => !hiddenSymbols.has(t.symbol))
-    .reduce((s, t) => s + (t.usd_value || 0), 0);
+    .reduce((s, t) => s + (Number(t.usd_value) || 0), 0);
 
 const defiTotalValue = allDefiPositions.reduce(
   (s, p) => s + (Number(p.total_value) || 0),
@@ -348,9 +348,14 @@ const defiTotalValue = allDefiPositions.reduce(
   // Home already values Bitcoin through its shared portfolio. Reuse it if
   // this Crypto page doesn't have the same BTC wallet among its own tokens.
   // Never add the shared holding on top of an existing Bitcoin wallet.
-  const hasBitcoinWallet = allTokensRaw.some(token => String(token.symbol || "").toUpperCase() === "BTC");
+  // An already represented BTC holding (including a manual BTC token)
+  // must not get the shared Home BTC amount added a second time.
+  const hasBitcoinWallet = allTokensRaw.some(token =>
+    String(token.symbol || "").toUpperCase() === "BTC" &&
+    Number(token.usd_value) > 0
+  );
   const sharedBitcoinValue = Number(homeBitcoin?.value ?? homeBitcoin?.balance) || 0;
-  const bitcoinFallbackValue = !hasBitcoinWallet && !hiddenSymbols.has("BTC") && sharedBitcoinValue > 0
+  const bitcoinFallbackValue = !hasBitcoinWallet && sharedBitcoinValue > 0
     ? sharedBitcoinValue : 0;
   const grandTotal = visibleTotal + defiTotalValue + bitcoinFallbackValue;
 
@@ -363,18 +368,15 @@ const defiTotalValue = allDefiPositions.reduce(
     const tokens = balances[w.id]?.tokens || [];
 
     const visibleValue = tokens
-      .filter((t) => !hiddenSymbols.has(t.symbol))
-      .reduce((s, t) => s + (t.usd_value || 0), 0);
+      .reduce((s, t) => s + (Number(t.usd_value) || 0), 0);
 
     chainBreakdown[w.chain] = (chainBreakdown[w.chain] || 0) + visibleValue;
   });
 
   customTokens.forEach((ct) => {
-    if (!hiddenSymbols.has(ct.symbol)) {
-      const ctChain = ct.chain || "custom";
-      chainBreakdown[ctChain] =
-        (chainBreakdown[ctChain] || 0) + (ct.amount * ct.price);
-    }
+    const ctChain = ct.chain || "custom";
+    chainBreakdown[ctChain] =
+      (chainBreakdown[ctChain] || 0) + (Number(ct.amount) || 0) * (Number(ct.price) || 0);
   });
 
   if (bitcoinFallbackValue > 0) chainBreakdown.bitcoin = (chainBreakdown.bitcoin || 0) + bitcoinFallbackValue;
@@ -489,7 +491,6 @@ useEffect(() => {
 
     wallets.forEach((w) => {
       (balances[w.id]?.tokens || []).forEach((t) => {
-        if (hiddenSymbols.has(t.symbol)) return;
         if ((t.usd_value || 0) < 0.01) return;
 
         if (!tokensByChain[w.chain]) {
@@ -510,8 +511,6 @@ useEffect(() => {
     });
 
     customTokens.forEach((ct) => {
-      if (hiddenSymbols.has(ct.symbol)) return;
-
       const value = (ct.amount || 0) * (ct.price || 0);
 
       if (value < 0.01) return;
@@ -589,7 +588,8 @@ useEffect(() => {
 
     cryptoCacheApi
       .set({
-        total: grandTotal,
+        // Wallet/DeFi value is a separate view, not the project+BTC total.
+        walletView: { total: grandTotal, updatedAt: new Date().toISOString() },
         chains: chainsPayload,
         tokens: allTokensFlat,
       })

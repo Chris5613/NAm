@@ -5,7 +5,7 @@ import {
   refreshProjectCryptoPortfolio,
 } from "@/lib/projectCryptoPortfolio";
 
-import { remoteStorage } from "@/lib/serverStore";
+import { remoteStorage, subscribe } from "@/lib/serverStore";
 
 import {
   Card,
@@ -134,6 +134,16 @@ export default function CryptoBreakdown() {
       );
     };
   }, []);
+
+  useEffect(() => subscribe(key => {
+    if (key == null || key === "project_income_portfolio_summary_v1") {
+      setProjectIncomeSummary(getProjectIncomePortfolioSummary());
+    }
+    if (key == null || key === "project_crypto_portfolio_v1" ||
+        key === "networth_projects" || key === "crypto_wallet_balance_cache") {
+      setPortfolio(getStoredProjectCryptoPortfolio());
+    }
+  }), []);
 
   useEffect(() => {
     let cancelled = false;

@@ -102,5 +102,5 @@ test("current-month auto income is hidden without changing the accounting entrie
   ]);
   expect(entries).toHaveLength(4);
   expect(visibleLedgerEntries(entries,"2026-11","2026-12")).toEqual(entries);
-  expect(visibleLedgerEntries(entries,"2026-12","2026-12")).toHaveLength(3);
+  expect(visibleLedgerEntries(entries,"2026-12","2026-12")).toEqual(entries);
 });

@@ -464,20 +464,16 @@ export function calculateNetWorth(
 
   assets.forEach(
     (asset) => {
-      const value =
-        asset.category !==
-          "stocks" &&
-        asset.manual_value !=
-          null
-          ? Number(
-              asset.manual_value
-            ) || 0
-          : (Number(
-              asset.quantity
-            ) || 0) *
-            (Number(
-              asset.current_price
-            ) || 0);
+      // Quoted stock positions use shares × price. A stock holding entered
+      // with only an explicit manual valuation must not silently vanish.
+      const validQuote = asset.quantity != null && asset.current_price != null &&
+        Number.isFinite(Number(asset.quantity)) &&
+        Number.isFinite(Number(asset.current_price));
+      const useManual = asset.manual_value != null &&
+        (asset.category !== "stocks" || !validQuote);
+      const value = useManual
+        ? Number(asset.manual_value) || 0
+        : (Number(asset.quantity) || 0) * (Number(asset.current_price) || 0);
 
       if (
         asset.category ===

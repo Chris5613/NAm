@@ -3,7 +3,9 @@ import { journalLines } from "./compoundJournal";
 // remain in every statement calculation; they reappear in historical months.
 export function visibleLedgerEntries(entries, reportingMonth, currentMonth) {
   if(reportingMonth !== currentMonth) return entries;
-  return entries.filter(entry=>!String(entry?.id || "").startsWith("synced-income:"));
+  // Hide only accruals for the reporting/current month; older source
+  // earnings remain visible in historical periods.
+  return entries.filter(entry=>!String(entry?.id || "").startsWith("synced-income:" + currentMonth + ":"));
 }
 
 // Dynamic, read-only accruals from Crypto Dashboard's reconciled monthly income.
