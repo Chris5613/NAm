@@ -636,7 +636,21 @@ export default function SideHustleDashboard() {
   const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) ||
     { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recordedCurrentMonth = recordedMonths.find(row => row.monthKey === currentMonthKey);
-  const monthlyIncome = backendEarnings?.monthTotalUsd ?? null;
+  // Monthly Income is the separately booked provider snapshot, not the
+  // dated chart's provisional legacy receipts. Both are exposed by the same
+  // backend response so a stale browser cache cannot silently swap them.
+  const monthAccounting = backendEarnings?.monthAccountingComparison;
+  const bookedMonthlyIncome = monthAccounting?.status !== "invalid-snapshot" &&
+    Number.isFinite(monthAccounting?.bookedTotalUsd)
+      ? monthAccounting.bookedTotalUsd : null;
+  const monthlyIncome = bookedMonthlyIncome ?? backendEarnings?.monthTotalUsd ?? null;
+  const monthIncomeDetail = bookedMonthlyIncome != null
+    ? Math.abs(monthAccounting.differenceUsd) > 0.02
+      ? `Provider ledger; dated receipts differ by ${money(Math.abs(monthAccounting.differenceUsd))}`
+      : "Recorded monthly provider ledger"
+    : backendEarnings?.fullyVerified === false
+      ? "Includes legacy receipts awaiting provider reconciliation"
+      : "Backend-recorded current month";
   const todayKey = pacificDayKey(clock);
   const passiveIncomeToday = backendEarnings?.todayKey === todayKey
     ? backendEarnings.todayTotalUsd ?? null : null;
@@ -852,9 +866,7 @@ export default function SideHustleDashboard() {
         icon={CalendarDays}
         title="Monthly Income"
         value={monthlyIncome===null ? "—" : money(monthlyIncome)}
-        detail={backendEarnings?.fullyVerified === false
-          ? "Includes legacy receipts awaiting provider reconciliation"
-          : "Backend-recorded current month"}
+        detail={monthIncomeDetail}
         tone="sky"
       />
       <KpiCard
@@ -1051,9 +1063,11 @@ export default function SideHustleDashboard() {
               <div className="border-b border-r border-[#242d35] pb-5 pr-5">
                 <p className="text-[10px] text-[#83909d]">Passive Income (MTD)</p>
                 <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{monthlyIncome===null ? "—" : money(monthlyIncome)}</strong>
-                <p className="mt-1 text-[9px] text-emerald-400/80">{backendEarnings?.fullyVerified === false
-                  ? "Includes unverified historical receipts"
-                  : "Backend-recorded month to date"}</p>
+                <p className="mt-1 text-[9px] text-emerald-400/80">{bookedMonthlyIncome != null
+                  ? "Recorded provider ledger (daily chart tracked separately)"
+                  : backendEarnings?.fullyVerified === false
+                    ? "Includes unverified historical receipts"
+                    : "Backend-recorded month to date"}</p>
               </div>
               <div className="border-b border-[#242d35] pb-5 pl-5">
                 <p className="text-[10px] text-[#83909d]">Mining Energy</p>
