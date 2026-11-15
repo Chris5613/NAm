@@ -15,7 +15,8 @@ test("historical May acquisition is included in November equipment, not expensed
   expect(rows).toHaveLength(1);
   expect(rows[0].name).toBe("iPhone 13 — Unetwork #1");
   expect(rows[0].category).toBe("equipment");
-  expect(rows[0].end).toBe(527.33);
+  // $360 cost less May–November depreciation at $3 per month.
+  expect(rows[0].end).toBe(339);
   expect(rows[0].depreciation).toBe(3);
   const entry=phoneJournal(phone);
   expect(entry.date).toBe("2026-05-20");

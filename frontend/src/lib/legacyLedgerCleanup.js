@@ -24,7 +24,10 @@ export function isAllowedHistoricalEntry(entry, phones = []) {
 
 export function preSeptemberLedgerEntries(entries, month, phones = []) {
   if (month >= LEGACY_LEDGER_CUTOFF) return entries || [];
-  return (entries || []).filter(entry => isAllowedHistoricalEntry(entry, phones));
+  // An old frozen snapshot can contain entries from other months. Never
+  // let even an allowed September+ record leak into the May ledger view.
+  return (entries || []).filter(entry =>
+    monthOf(entry?.date) === month && isAllowedHistoricalEntry(entry, phones));
 }
 
 export function pruneLegacyLedger(journal, movements, closedMonths, phones) {
