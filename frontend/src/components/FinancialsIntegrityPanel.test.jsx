@@ -62,6 +62,30 @@ test("explicit click makes one authenticated read-only request and shows warning
   expect(element.textContent).toContain("2026-11-12");
 });
 
+test("confirmed authenticated report can be copied for independent review", async () => {
+  api.get.mockResolvedValue(valid);
+  const writeText = jest.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator, "clipboard", {
+    configurable: true, value: { writeText },
+  });
+  await act(async () => { root.render(<FinancialsIntegrityPanel/>); });
+  await act(async () => {
+    element.querySelector("button").dispatchEvent(
+      new MouseEvent("click", { bubbles: true }));
+  });
+  const copyButton = Array.from(element.querySelectorAll("button"))
+    .find(button => button.textContent.includes("Copy audit results"));
+  expect(copyButton).toBeDefined();
+  await act(async () => {
+    copyButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  expect(writeText).toHaveBeenCalledTimes(1);
+  const copied = writeText.mock.calls[0][0];
+  expect(copied).toContain("[PASS] home-financials");
+  expect(copied).toContain("2026-11-12");
+  expect(element.textContent).toContain("Audit copied");
+});
+
 test("invalid or inaccessible backend never reports a successful audit", async () => {
   api.get.mockResolvedValue({ ...valid, sourceOfCalculation: "unknown" });
   await act(async () => { root.render(<FinancialsIntegrityPanel/>); });
