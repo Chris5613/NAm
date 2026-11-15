@@ -78,23 +78,23 @@ class ProductionHardwareSnapshotTests(unittest.TestCase):
         total_daily = round(sum(KRYPTEX.values()), 8)
         self.assertAlmostEqual(total_daily, 41.99000223)
         output = build_lifetime_hardware_payback(
-            devices, daily, trackers, "2026-11-14"
+            devices, daily, trackers, "2026-11-14")
         rows = {r["id"]: r for r in output["devices"]}
         self.assertTrue(output["mathReconciles"])
         self.assertAlmostEqual(output["sumDeviceCashCostUsd"], 1750)
         self.assertAlmostEqual(rows["hardware-2080"]["observedCreditUsd"],
-                               41.99000223
+                               41.99000223)
         self.assertTrue(rows["hardware-2080"]["complete"])
         self.assertAlmostEqual(rows["hardware-2080"]["paidMiningPowerUsd"], 0)
         self.assertAlmostEqual(rows["hardware-5080"]["observedCreditUsd"],
-                               7.76304282
+                               7.76304282)
         self.assertAlmostEqual(output["repeatedDeviceCreditsUsd"], 7.73519845)
         self.assertTrue(rows["hardware-5080"]["complete"])
         self.assertAlmostEqual(rows["hardware-5080"]["verifiedRecoveryUsd"],
                                7.76304282)
         self.assertEqual(rows["hardware-5080"]["missingSourceDayCount"], 0)
         self.assertAlmostEqual(rows["hardware-5080"]["verifiedRewardSubtotalUsd"],
-                               7.76304282
+                               7.76304282)
         self.assertAlmostEqual(rows["hardware-5080"]["provisionalRewardSubtotalUsd"],
                                0)
         self.assertFalse(output["financialLedgerMutated"])
