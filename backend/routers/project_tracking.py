@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from ..auth import current_user
 from ..db import get_db
-from ..models import Setting, User, Wallet
+from ..models import Setting, User, Wallet, Project, ProjectTransaction
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
 from ..earnings_dashboard import (
     build_backend_earnings_dashboard, compare_monthly_snapshot,
@@ -31,6 +31,8 @@ from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
+from ..persisted_income_snapshot import source_income_history
+from ..manual_income_history import manual_income_for_user
 from ..financial_balance_rows import financial_balance_rows, with_journal_equipment
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
@@ -823,6 +825,45 @@ async def evaluate_phone_equipment(
         raise HTTPException(status_code=422, detail="Invalid phone asset register")
     return {"sourceOfCalculation": "backend-financial-core", "month": month,
             "rows": phone_asset_rows(phones, month)}
+
+
+@router.get("/financial-core/source-income-history")
+async def source_owned_income_history(
+    user: User = Depends(current_user), db: Session = Depends(get_db),
+) -> dict:
+    """Read-only history from the current durable provider/accounting stores.
+
+    Dividends are accepted only when their dated payout records are present.
+    Lulo/Loopscale balances cannot be inferred as earned income.
+    """
+    month = datetime.now(timezone.utc).astimezone(
+        ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    snapshots = setting(db, user.id, "yield_monthly_snapshots_v1")
+    dividends = setting(db, user.id, "yield_stock_dividend_payouts_v1")
+    # No browser supplied financial totals or temporary Quick Cache inputs.
+    projects = db.scalars(select(Project).where(Project.user_id == user.id)).all()
+    transactions = db.scalars(select(ProjectTransaction).where(
+        ProjectTransaction.user_id == user.id
+    )).all()
+    per_project = {}
+    for entry in transactions:
+        info = entry.data if isinstance(entry.data, dict) else {}
+        per_project.setdefault(entry.project_id, []).append({
+            **info, "id": entry.id,
+            "date": entry.occurred_at, "type": entry.type,
+            "amount": entry.amount,
+        })
+    project_rows = [
+        {**(project.data if isinstance(project.data, dict) else {}),
+         "id": project.id, "name": project.name,
+         "earned": project.earned,
+         "transactions": per_project.get(project.id, [])}
+        for project in projects
+    ]
+    result = source_income_history(
+        snapshots, dividends, project_rows,
+        manual_income_for_user(user.id), month)
+    return {**result, "calculatedAt": datetime.now(timezone.utc).isoformat()}
 
 
 @router.post("/financial-core/income-history")
