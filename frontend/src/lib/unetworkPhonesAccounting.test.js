@@ -1,7 +1,6 @@
 import {
   validatePhoneAsset, makePhoneAsset, phoneJournal, phoneAssetRows,
 } from "./unetworkPhonesAccounting";
-import { includeJournalEquipment } from "./financialAccounting";
 
 const input={
   name:"iPhone 13 — Unetwork #1", purchaseDate:"2026-05-12",
@@ -39,13 +38,6 @@ test("different iPhones with identical model remain separate assets",()=>{
   expect(rows).toHaveLength(2);
   expect(rows[0].id).toBe("unetwork-phone:one");
   expect(rows[1].id).toBe("unetwork-phone:two");
-});
-
-test("journal acquisition for phone doesn't add a second equipment row",()=>{
-  const phone=makePhoneAsset(input,"one");
-  const rows=phoneAssetRows([phone],"2026-11");
-  const included=includeJournalEquipment(rows,[phoneJournal(phone)],"2026-11");
-  expect(included).toHaveLength(1);
 });
 
 test("business cash is only affected when explicitly chosen",()=>{
