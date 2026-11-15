@@ -1,5 +1,5 @@
 import { resetStore, remoteStorage } from "./serverStore";
-import { loadKryptexTracker, saveKryptexTracker } from "./yieldFarmingAccounting";
+import { loadKryptexTracker, saveKryptexTracker, loadSaladTracker, loadUnetworkTracker, loadRollerCoinTracker, loadLoopscaleHistory } from "./yieldFarmingAccounting";
 
 const key = "project_income_kryptex_tracker_v1";
 
@@ -55,4 +55,24 @@ test("legacy extension cannot erase backend evidence or lower confirmed earnings
   expect(saved.kryptexLastChartSyncAt).toBe("2026-11-14T08:30:00Z");
   expect(saved.monthlyEarnings["2026-11"]).toBe(4.16);
   expect(saved.lifetimeEarnedUsd).toBe(388.16);
+});
+
+test("all provider loaders round-trip newly added backend evidence fields", () => {
+  const providers = [
+    ["project_income_salad_tracker_v1", loadSaladTracker],
+    ["project_income_unetwork_tracker_v1", loadUnetworkTracker],
+    ["project_income_rollercoin_tracker_v2", loadRollerCoinTracker],
+    ["yield_loopscale_position_history_v1", loadLoopscaleHistory],
+  ];
+  for (const [providerKey, load] of providers) {
+    remoteStorage.setItem(providerKey, JSON.stringify({
+      backendReconciliationVersion: 5,
+      backendEvidence: { receivedAt: "2026-11-14T23:00:00Z", proof: 7 },
+    }));
+    const hydrated = load();
+    expect(hydrated.backendReconciliationVersion).toBe(5);
+    expect(hydrated.backendEvidence).toEqual({
+      receivedAt: "2026-11-14T23:00:00Z", proof: 7,
+    });
+  }
 });
