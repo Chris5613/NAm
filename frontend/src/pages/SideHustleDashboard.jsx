@@ -412,6 +412,7 @@ export default function SideHustleDashboard() {
     try {
       const reviewed = await previewHardwareCheckpointEdit(hardware, proposed);
       remoteStorage.setItem(HARDWARE_KEY, JSON.stringify(reviewed));
+      window.dispatchEvent(new Event("hardware-payback-updated"));
       setHardware(reviewed);
       setAddModal(null);
     } catch (error) {
