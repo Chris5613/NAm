@@ -1,5 +1,13 @@
 # September–October 2026 Financials: source-evidence intake
 
+**Owner release acceptance on November 15, 2026:** The user
+explicitly opted to skip additional historical evidence collection and
+accept the saved September/October amounts as correct for the application
+release. This **closes the release checklist exception by owner waiver**,
+without claiming independent verification, creating a certified historical
+Financials close, or changing the original stored estimates. This document
+remains the preserved source-evidence limitations inventory.
+
 **Status:** protected / uncertified. Read-only inspection of the live NAm
 PostgreSQL settings on November 15, 2026. This document is an audit
 workpaper, **not** a certified General Ledger close or accounting entry.
@@ -84,7 +92,10 @@ dated September bank movements and ending Sep cash.
 - Salad **receipt amounts** are accepted by the owner for the release
   checklist; this does not create or certify a provider balance statement.
 
-**Release decision:** Technical integrity and user-accepted Salad are
-complete. The two formal historical Financials closes remain **blocked by
-missing independent source documents**. They cannot be truthfully certified
-by code or from the current NAm settings alone.
+**Release decision:** All six engineering/release checklist
+workstreams are complete or explicitly owner-accepted. Independent
+September/October historical certification has **not been performed**,
+because its original source documents are missing; the owner expressly
+waived that additional evidence as a release requirement. These months
+remain locked and appropriately described as historically uncertified
+in the underlying read-only accounting audit.
