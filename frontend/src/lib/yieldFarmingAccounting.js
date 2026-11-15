@@ -233,6 +233,8 @@ function loadLoopscaleHistory() {
     );
 
   return {
+    // Preserve fields added by newer backend/provider sync versions.
+    ...parsed,
     positions:
       parsed.positions &&
       typeof parsed.positions ===
@@ -258,6 +260,8 @@ function loadSaladTracker() {
     );
 
   return {
+    // Preserve fields added by newer backend/provider sync versions.
+    ...parsed,
     initialized:
       Boolean(
         parsed.initialized
@@ -632,6 +636,8 @@ function loadUnetworkTracker() {
     );
 
   return {
+    // Preserve fields added by newer backend/provider sync versions.
+    ...parsed,
     initialized:
       Boolean(
         parsed.initialized
@@ -1010,6 +1016,8 @@ function loadRollerCoinTracker() {
     );
 
   return {
+    // Preserve fields added by newer backend/provider sync versions.
+    ...parsed,
     daily:
       parsed.daily &&
       typeof parsed.daily ===
