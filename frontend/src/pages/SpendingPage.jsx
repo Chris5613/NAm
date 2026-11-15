@@ -159,7 +159,7 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
   const chartData = analytics?.chartData || [];
   const previousMonthToDate = analytics?.previousMonthToDate ?? 0;
   const monthDelta = analytics?.monthDelta ?? 0;
-  const categoryBreakdown = analytics?.categoryBreakdown || [];
+  const categoryBreakdown = useMemo(() => analytics?.categoryBreakdown || [], [analytics]);
 
   // A missing backend response must be visible; zeros while loading are
   // placeholders rather than re-computed browser accounting.
