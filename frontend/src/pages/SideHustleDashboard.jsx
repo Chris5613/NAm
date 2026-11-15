@@ -15,6 +15,7 @@ import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOf
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { useCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
+import { backendCryptoProviderIncomeRows } from "@/lib/cryptoDashboardIncomeRows";
 import { useAuth } from "@/lib/AuthContext";
 import { readCryptoDashboardPowerCache, writeCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
 import { PASSIVE_MONTHLY_INCOME_KEY } from "@/lib/monthlyEarningsChart";
@@ -698,16 +699,10 @@ export default function SideHustleDashboard() {
   const totalNetWorth = totalProjectBalance == null ? null : totalProjectBalance + bitcoinBalance;
   // Use the same reconciled per-source monthly totals as Income History.
   // This includes Lulo earnings even when the quick dashboard cache lacks a Lulo row.
-  const sourceRows = Object.entries(recordedCurrentMonth?.sources || {})
-    .filter(([, amount]) => Number.isFinite(Number(amount)) && Number(amount) > 0)
-    .map(([platform, amount]) => ({ platform, amount: Number(amount) }))
-    .sort((a, b) => b.amount - a.amount);
+  // Match KPI, monthly chart, and Top Projects to the one backend ledger.
+  const sourceRows = backendCryptoProviderIncomeRows(backendEarnings, backendPortfolio);
   const sourceTableRows = sourceRows.map(row => ({
-    ...row,
-    // Only observed/confirmed dated earnings appear in "Income (Today)".
-    // Missing daily records render as a dash rather than APY estimates.
-    daily: recordedDailyProviderIncome(row.platform, todayKey, recordedHistory),
-    meta: projectTableMeta(row.platform),
+    ...row, meta: projectTableMeta(row.platform),
   }));
 
   const addSourceOptions = [...new Set([
@@ -838,9 +833,9 @@ export default function SideHustleDashboard() {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       <KpiCard
         icon={Layers3}
-        title="Total Net Worth"
+        title="Projects + Bitcoin"
         value={totalNetWorth == null ? "—" : money(totalNetWorth)}
-        detail="Backend projects + Bitcoin estimate"
+        detail="All projects (inactive included) + saved BTC estimate"
         tone="violet"
       />
       <KpiCard
@@ -1073,8 +1068,13 @@ export default function SideHustleDashboard() {
                 <strong className="text-right font-semibold tabular-nums text-[#eef2f6]" title={row.daily == null ? "No confirmed daily earnings record available" : "Recorded earnings for today"}>{row.daily == null ? "—" : money(row.daily)}</strong>
                 <strong className="text-right font-semibold tabular-nums text-[#eef2f6]">{money(row.amount)}</strong>
                 <div className="flex justify-end">
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-medium text-emerald-400">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400"/>Active
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[9px] font-medium ${row.inactive === true
+                    ? "border-[#405165] bg-[#1b222a] text-[#9eabb9]"
+                    : row.inactive === false
+                      ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+                      : "border-amber-400/25 bg-amber-400/10 text-amber-300"}`}>
+                    <span className="h-1.5 w-1.5 rounded-full bg-current"/>
+                    {row.inactive === true ? "Inactive" : row.inactive === false ? "Active" : "Unverified"}
                   </span>
                 </div>
               </div>
