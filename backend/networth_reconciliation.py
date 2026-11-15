@@ -57,7 +57,10 @@ def legacy_nightly_components(assets, project_summary, crypto_cache):
 
     crypto = project + btc if project_valid else cached
     subtotal = categories["stocks"] + categories["cash"] + categories["other"] - categories["debts"]
-    total = subtotal + crypto
+    # Preserve the exact original addition order for historical snapshot
+    # compatibility, without inventing any new money or rounding the ledger.
+    total = (categories["stocks"] + crypto + categories["cash"] +
+             categories["other"] - categories["debts"])
     return {
         "formula": "legacy-personal-plus-projects-btc-v1",
         "personal": categories,
@@ -66,7 +69,7 @@ def legacy_nightly_components(assets, project_summary, crypto_cache):
         "bitcoinLegacyUsd": round(btc, 8),
         "cryptoLegacyFallbackUsd": cached if not project_valid else None,
         "cryptoSubtotalUsd": round(crypto, 8),
-        "totalUsd": round(total, 8),
+        "totalUsd": total,
         "businessBalanceSheetIncluded": False,
         "bankCashDeduplicated": False,
         "componentSources": {

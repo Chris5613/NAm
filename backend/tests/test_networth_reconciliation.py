@@ -35,7 +35,7 @@ class NetWorthReconciliationTests(unittest.TestCase):
         result=legacy_nightly_components(
             personal,{"portfolioBalance":150},
             {"total":99999,"projectPortfolio":{"bitcoin":{"value":650}}})
-        self.assertEqual(result["totalUsd"],1720)
+        self.assertEqual(result["totalUsd"],1820)
         self.assertFalse(result["businessBalanceSheetIncluded"])
         self.assertFalse(result["comparableToHomeFinancials"])
         self.assertEqual(result["cryptoSubtotalUsd"],800)

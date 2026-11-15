@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from .db import SessionLocal, engine
 from .models import Asset, NetWorthSnapshot, Project, Setting, User, utcnow
 from .project_freshness import is_project_stale
+from .networth_reconciliation import legacy_nightly_components
 from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_project_balances
 
 _scheduler_task: asyncio.Task | None = None
@@ -42,52 +43,22 @@ def set_setting(db: Session, user_id: int, key: str, value: Any) -> None:
         db.add(Setting(user_id=user_id, key=key, value=value))
 
 
-def calculate_net_worth(db: Session, user_id: int) -> float:
-    """Match the live Dashboard net-worth formula from persisted server data."""
+def nightly_net_worth_components(db: Session, user_id: int) -> dict:
+    """Explicitly label the *legacy* nightly source without changing ledger data.
+
+    This is not equal to Home's Financials-derived business balance sheet.
+    Preserve the old numeric basis until cash/equipment/debt reconciliation
+    can safely migrate both Home and the daily snapshot together.
+    """
     assets = db.scalars(select(Asset).where(Asset.user_id == user_id)).all()
-    breakdown = {"stocks": 0.0, "cash": 0.0, "other": 0.0, "debts": 0.0}
+    project = setting_value(db, user_id, "project_income_portfolio_summary_v1")
+    crypto = setting_value(db, user_id, "networth_crypto_cache")
+    return legacy_nightly_components(assets, project, crypto)
 
-    for asset in assets:
-        category = str(asset.category or "")
-        if category != "stocks" and asset.manual_value is not None:
-            value = float(asset.manual_value or 0)
-        else:
-            value = float(asset.quantity or 0) * float(asset.current_price or 0)
-        if category in breakdown:
-            breakdown[category] += value
 
-    project_summary = setting_value(db, user_id, "project_income_portfolio_summary_v1")
-    project_summary = project_summary if isinstance(project_summary, dict) else {}
-    crypto_cache = setting_value(db, user_id, "networth_crypto_cache")
-    crypto_cache = crypto_cache if isinstance(crypto_cache, dict) else {}
-
-    project_balance = project_summary.get("portfolioBalance")
-    try:
-        project_balance = float(project_balance)
-        project_balance_valid = project_balance == project_balance and abs(project_balance) != float("inf")
-    except (TypeError, ValueError, OverflowError):
-        project_balance = 0.0
-        project_balance_valid = False
-
-    project_portfolio = crypto_cache.get("projectPortfolio")
-    project_portfolio = project_portfolio if isinstance(project_portfolio, dict) else {}
-    bitcoin = project_portfolio.get("bitcoin")
-    bitcoin = bitcoin if isinstance(bitcoin, dict) else {}
-    try:
-        bitcoin_balance = float(bitcoin.get("value", bitcoin.get("balance", 0)) or 0)
-    except (TypeError, ValueError, OverflowError):
-        bitcoin_balance = 0.0
-
-    try:
-        cached_crypto_total = float(crypto_cache.get("total") or 0)
-    except (TypeError, ValueError, OverflowError):
-        cached_crypto_total = 0.0
-
-    crypto_total = project_balance + bitcoin_balance if project_balance_valid else cached_crypto_total
-    return (
-        breakdown["stocks"] + crypto_total + breakdown["cash"] +
-        breakdown["other"] - breakdown["debts"]
-    )
+def calculate_net_worth(db: Session, user_id: int) -> float:
+    """Backward-compatible legacy scheduler subtotal; NOT certified Home NW."""
+    return nightly_net_worth_components(db, user_id)["totalUsd"]
 
 
 def take_daily_snapshots() -> int:
@@ -106,15 +77,29 @@ def take_daily_snapshots() -> int:
             )
             if exists:
                 continue
+            components = nightly_net_worth_components(db, user.id)
             db.add(
                 NetWorthSnapshot(
                     user_id=user.id,
                     # Store the Pacific-local ISO timestamp so its date prefix
                     # matches the Dashboard's calendar day.
                     timestamp=local_now.isoformat(),
-                    value=calculate_net_worth(db, user.id),
+                    value=components["totalUsd"],
                     source="server-scheduler",
-                    data={"scheduler": "daily-net-worth", "pacificDate": day},
+                    data={
+                        "scheduler": "daily-net-worth",
+                        "pacificDate": day,
+                        "formula": components["formula"],
+                        "personal": components["personal"],
+                        "personalSubtotalUsd": components["personalSubtotalUsd"],
+                        "projectBalanceUsd": components["projectBalanceUsd"],
+                        "bitcoinLegacyUsd": components["bitcoinLegacyUsd"],
+                        "cryptoSubtotalUsd": components["cryptoSubtotalUsd"],
+                        "businessBalanceSheetIncluded": False,
+                        "bankCashDeduplicated": False,
+                        "comparableToHomeFinancials": False,
+                        "sourceProvenance": components["componentSources"],
+                    },
                 )
             )
             set_setting(db, user.id, "scheduler_status", {"last_daily_snapshot_at": now.isoformat(), "status": "ok"})
