@@ -935,7 +935,6 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       platform, amount,
     })),
   })), [sourceIncomeMonths]);
-  const liveProjectIncome = projectIncome;
 
   // Version 2 records earnings changes by project rather than storing a
   // single unexplained sum. The original v1 ledger is retained untouched.
@@ -969,70 +968,9 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     return () => window.clearInterval(timer);
   }, []);
 
-  useEffect(() => {
-    const today = getTodayKey();
-    const monthKey = today.slice(0, 7);
-    const month = liveProjectIncome.find(entry => entry.monthKey === monthKey);
-    const sources = Object.fromEntries((month?.platforms || [])
-      .filter(item => Number.isFinite(Number(item.amount)) && Number(item.amount) >= 0)
-      .map(item => [String(item.platform).trim(), Number(item.amount)]));
-    setEarningsLedger(previous => {
-      const sameMonth = previous.lastMonth === monthKey;
-      // When a source temporarily disappears from an incomplete sync, keep
-      // its last observed baseline to prevent counting old earnings again.
-      const lastSources = sameMonth ? { ...previous.lastSources } : {};
-      const increments = {};
-      for (const [name, amount] of Object.entries(sources)) {
-        // RollerCoin's month-to-date USD valuation changes with the TRX
-        // market price. Those changes are P/L, not newly mined rewards.
-        // Actual dated mining income is rendered from RollerCoin daily rows.
-        // Unetwork's saved daily rows use the Pacific posting day; its
-        // month-to-date increase can arrive after a month-boundary baseline.
-        if (name === "RollerCoin" || name === "Unetwork") {
-          lastSources[name] = amount;
-          continue;
-        }
-        const prior = lastSources[name];
-        if (sameMonth && Number.isFinite(prior) && amount > prior) {
-          increments[name] = amount - prior;
-        }
-        // Do not count a temporary downward correction and subsequent rebound twice.
-        lastSources[name] = sameMonth && Number.isFinite(prior) ? Math.max(prior, amount) : amount;
-      }
-      const todaySources = {
-        ...((previous.days[today] && previous.days[today].sources) || {}),
-      };
-      for (const [name, change] of Object.entries(increments)) {
-        todaySources[name] = (Number(todaySources[name]) || 0) + change;
-      }
-      const days = Object.keys(increments).length
-        ? { ...previous.days, [today]: { sources: todaySources } }
-        : previous.days;
-      // Capture each observed increase with its Pacific-time clock position.
-      // The historical daily totals are preserved, but intraday timing starts
-      // from this release since the previous ledger did not retain timestamps.
-      const pacificTime = new Intl.DateTimeFormat("en-US", {
-        timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit",
-        second: "2-digit", hourCycle: "h23",
-      }).formatToParts(new Date());
-      const timePart = key => Number(pacificTime.find(part => part.type === key)?.value || 0);
-      const hour = timePart("hour") + timePart("minute") / 60 + timePart("second") / 3600;
-      const totalIncrease = Object.values(increments).reduce((sum, amount) => sum + amount, 0);
-      const priorTimeline = previous.timeline?.[today] || [];
-      const timeline = totalIncrease > 0
-        ? {
-            ...previous.timeline,
-            [today]: [...priorTimeline, { hour, amount: Object.values(todaySources).reduce((sum, amount) => sum + (Number(amount) || 0), 0) }].slice(-250),
-          }
-        : previous.timeline || {};
-      const next = { days, lastMonth: monthKey, lastSources, timeline };
-      if (JSON.stringify(previous) !== JSON.stringify(next)) {
-        saveObject(DAILY_LEDGER_KEY, next);
-        return next;
-      }
-      return previous;
-    });
-  }, [liveProjectIncome, earningsClock]);
+  // Daily provider earnings come from backend dated receipts. The retired
+  // browser month-to-month delta observer must not create dated income from
+  // changes to a historical monthly snapshot.
 
   // Commit Lulo's accepted interest increases to the persistent daily ledger.
   // Keep legacy tracked earnings and the verified opening-day amount; never add
