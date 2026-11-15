@@ -554,8 +554,8 @@ export default function FinancialsPage() {
   },[month,entries,closedMonths,journal,incomeMonths,hardwareDevices,businessPhones,records,confirmedMovements]);
   const trialState = useBackendTrialBalance(cumulativeEntries,availableAccounts);
   const trial = trialState.result?.rows || [];
-  const trialDebit = trialState.result?.debitTotal ?? 0;
-  const trialCredit = trialState.result?.creditTotal ?? 0;
+  const trialDebit = trialState.result?.debitsUsd ?? 0;
+  const trialCredit = trialState.result?.creditsUsd ?? 0;
   const cashFlow = serverFinancial?.cashFlow || {
     sections: { operating: [], investing: [], financing: [], transfers: [] },
     totals: { operating: 0, investing: 0, financing: 0, transfers: 0 },
