@@ -42,6 +42,9 @@ class ProjectFeedAuthorityTests(unittest.TestCase):
 
     def test_backend_sums_unique_feeds_and_preserves_inactive_assets(self):
         at = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+        self.db.add(Setting(user_id=1,key="project_income_unetwork_tracker_v1",
+                            value={"currentBalance":44.90,"lastSyncedAt":at}))
+        self.db.commit()
         result = self.save([
             {"id":"lulo-project-1","name":"Lulo","balanceUsd":1500.64,
              "sourceLastSyncedAt":at,"inactive":True,"requiresLiveSync":True},
@@ -60,6 +63,9 @@ class ProjectFeedAuthorityTests(unittest.TestCase):
         now = datetime.now(timezone.utc)
         recent = (now - timedelta(minutes=1)).isoformat()
         old = (now - timedelta(minutes=4)).isoformat()
+        self.db.add(Setting(user_id=1,key="project_income_kryptex_tracker_v1",
+                            value={"currentBalance":259.34,"lastSyncedAt":recent}))
+        self.db.commit()
         self.save([{"id":"kryptex-project","name":"Kryptex",
                     "balanceUsd":259.34,"sourceLastSyncedAt":recent,
                     "requiresLiveSync":True}])
@@ -75,16 +81,35 @@ class ProjectFeedAuthorityTests(unittest.TestCase):
 
     def test_rollercoin_price_update_is_not_extra_income(self):
         recent = (datetime.now(timezone.utc)-timedelta(minutes=1)).isoformat()
+        self.db.add(Setting(user_id=1,key="project_income_rollercoin_tracker_v2",
+                            value={"currentTrxBalance":60,"lastTrxPrice":0.3,
+                                   "balanceSyncedAt":recent}))
+        self.db.commit()
         self.save([{"id":"rollercoin-project","name":"RollerCoin",
                     "balanceUsd":18.0,"balanceTrx":60,"trxUsdPrice":0.3,
                     "sourceLastSyncedAt":recent,"requiresLiveSync":True}])
+        stored = self.db.scalar(select(Setting).where(
+            Setting.user_id == 1,
+            Setting.key == "project_income_rollercoin_tracker_v2"))
+        stored.value = {**stored.value, "lastTrxPrice": 0.31}
+        self.db.commit()
         self.save([{"id":"rollercoin-project","name":"RollerCoin",
                     "balanceUsd":500.0,"balanceTrx":60,"trxUsdPrice":0.31,
                     "sourceLastSyncedAt":recent,"requiresLiveSync":True}])
         self.assertAlmostEqual(self.summary()["portfolioBalance"],18.6)
 
+    def test_browser_spoofed_provider_balance_uses_saved_tracker(self):
+        synced = (datetime.now(timezone.utc)-timedelta(seconds=30)).isoformat()
+        self.db.add(Setting(user_id=1,key="project_income_kryptex_tracker_v1",
+                            value={"currentBalance":264.09,"lastSyncedAt":synced}))
+        self.db.commit()
+        result=self.save([{"id":"kryptex-project","name":"Kryptex",
+                          "balanceUsd":9999999,"sourceLastSyncedAt":synced}])
+        self.assertAlmostEqual(result["portfolio"]["totalUsd"],264.09)
+        self.assertAlmostEqual(self.summary()["portfolioBalance"],264.09)
+
     def test_invalid_feed_does_not_replace_saved_summary_with_zero(self):
-        self.save([{"id":"salad-project","name":"Salad",
+        self.save([{"id":"manual-project","name":"Manual",
                     "balanceUsd":5.0,"requiresLiveSync":False}])
         self.save([{"id":"missing-project","name":"Unknown","balanceUsd":-1000}])
         self.assertAlmostEqual(self.summary()["portfolioBalance"],5.0)
