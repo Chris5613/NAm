@@ -206,6 +206,35 @@ class IntegrationAuditTests(unittest.TestCase):
         self.assertEqual(checks["extension_provider_snapshot_2026-11"]["status"],
                          "pass")
 
+    def test_lulo_upstream_staleness_alerts_without_exposing_wallet(self):
+        wallet = "11111111111111111111111111111111"
+        values = {
+            "yield_backend_source_wallets_v1": {
+                "lulo": [wallet], "loopscale": "22222222222222222222222222222222"},
+            "yield_backend_source_snapshots_v1": {
+                "checkedAt": "2026-11-14T23:59:00Z",
+                "errors": {"lulo:" + wallet: "primary_unavailable:http_401"},
+                "lulo": {wallet: {
+                    "syncedAt": "2026-11-13T04:00:00Z", "totalBalanceUsd": 2488}},
+                "loopscale": {"syncedAt": "2026-11-14T23:55:00Z"},
+            },
+        }
+        checks = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        issue = checks["yield_upstream_source_health"]
+        self.assertEqual(issue["status"], "warning")
+        self.assertEqual(issue["staleLuloWalletCount"], 1)
+        self.assertFalse(issue["loopscaleStale"])
+        self.assertEqual(issue["failingProviders"], ["lulo"])
+        self.assertNotIn(wallet, str(issue))
+
+        values["yield_backend_source_snapshots_v1"]["errors"] = {}
+        values["yield_backend_source_snapshots_v1"]["lulo"][wallet]["syncedAt"] = (
+            "2026-11-14T23:55:00Z")
+        checks = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        self.assertEqual(checks["yield_upstream_source_health"]["status"], "pass")
+
     def test_locked_snapshot_keeps_historical_kryptex_total(self):
         result = audit_integration_settings({
             "project_income_kryptex_tracker_v1": {
