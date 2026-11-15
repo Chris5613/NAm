@@ -794,6 +794,8 @@ async def evaluate_financial_asset_rows(
     try:
         rows = financial_balance_rows(month, records, live, devices, current)
         locked = bool((records.get(month) or {}).get("locked"))
+        if not locked:
+            rows += phone_asset_rows(payload.get("phones") or [], month)
         rows = with_journal_equipment(rows, journal, month, locked)
     except (ValueError, TypeError, AttributeError) as exc:
         raise HTTPException(status_code=422, detail="Invalid financial asset record") from exc
