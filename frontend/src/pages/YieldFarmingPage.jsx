@@ -10,7 +10,7 @@ import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
 import { useDailyEarningsHighWater } from "../hooks/useDailyEarningsHighWater";
 import { buildSourceTotalsForDay } from "../lib/yieldIncomeSources";
-import { buildMonthlyDailyEarningsChart, buildYearlyEarningsChart, PASSIVE_MONTHLY_INCOME_KEY } from "../lib/monthlyEarningsChart";
+import { buildMonthlyDailyEarningsChart, buildYearlyEarningsChart, sumMonthlyChartSources, PASSIVE_MONTHLY_INCOME_KEY } from "../lib/monthlyEarningsChart";
 import { buildDailyEarningsChart } from "../lib/dailyEarningsChart";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
@@ -1327,6 +1327,16 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     mergeHighWaterSources,
   } = useDailyEarningsHighWater(todayKey, observedDailySourceTotals);
 
+  const monthlyChartData = buildMonthlyDailyEarningsChart({
+    todayKey,
+    sourceTotalsForDay,
+  });
+  const thisMonthEarned = monthlyChartData.reduce(
+    (sum, day) => sum + (Number(day.value) || 0),
+    0
+  );
+  const currentMonthSources = sumMonthlyChartSources(monthlyChartData);
+
   const selectedBreakdown = buildSelectedEarningsBreakdown({
     selection: selectedEarningsPoint,
     earningsChartRange,
@@ -1336,6 +1346,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     luloUtcDay: currentLuloUtc.utcDay,
     hasLuloProjects: luloProjects.length > 0,
     sourceTotalsForDay,
+    currentMonthSources,
   });
 
   const serverDailyIncome =
@@ -1383,14 +1394,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
 
   const { dailyChartData, dailyChartMax, dailyChartMin, dailyChartEnd, dailyChartTicks } =
     buildDailyEarningsChart(dailyEarningsObservations, todayKey, currentHour, todayEarnings);
-  const monthlyChartData = buildMonthlyDailyEarningsChart({
-    todayKey,
-    sourceTotalsForDay,
-  });
-  const thisMonthEarned = monthlyChartData.reduce(
-    (sum, day) => sum + (Number(day.value) || 0),
-    0
-  );
+
   // Publish the exact value displayed by Passive Income's "This Month"
   // chart so the Crypto Dashboard uses the same figure rather than an
   // independent monthly snapshot calculation.
@@ -1426,7 +1430,9 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     stockPayouts,
     earningsChartYear,
     todayKey
-  );
+  ).map(month => month.monthKey === todayKey.slice(0, 7)
+    ? { ...month, value: thisMonthEarned }
+    : month);
   const thisYearEarned = yearlyChartData.reduce(
     (sum, month) => sum + (Number(month.value) || 0),
     0
