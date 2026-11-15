@@ -112,7 +112,7 @@ function usageCost(usage, settings, monthKey) {
   );
 }
 
-function DeviceCard({ device, monthlyUsage, settings, monthKey, label, onRename }) {
+function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename }) {
   const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const [renameError, setRenameError] = useState("");
@@ -138,7 +138,7 @@ function DeviceCard({ device, monthlyUsage, settings, monthKey, label, onRename 
   };
   const watts = Number(device?.watts) || 0;
   const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
-  const monthlyCost = outOfPocketMiningPowerCost(usageCost(monthlyUsage, settings, monthKey), monthKey || getCurrentMonthKey());
+  const monthlyCost = backendDeviceCost?.complete ? backendDeviceCost.outOfPocketUsd : null;
   const originalMeta = DEVICE_META[device?.id] || null;
   // Do not display an RTX 5070 product photo for a renamed RTX 5080.
   const meta = /5080/i.test(label || "") && device?.id === "rtx5070" ? null : originalMeta;
@@ -215,7 +215,7 @@ function DeviceCard({ device, monthlyUsage, settings, monthKey, label, onRename 
         <div className="pl-4">
           <div className="flex items-center gap-2 text-amber-400">
             <Coins className="h-4 w-4" />
-            <span className="text-sm font-semibold tabular-nums">{money(monthlyCost)}</span>
+            <span className="text-sm font-semibold tabular-nums">{monthlyCost == null ? "—" : money(monthlyCost)}</span>
           </div>
           <p className="mt-1 text-[10px] text-muted-foreground">Total monthly cost</p>
         </div>
@@ -281,14 +281,17 @@ export default function MiningPowerCard() {
   const totalWatts = Number(latest?.totalWatts) || 0;
   const staleMs = latest?.observedAt ? Date.now() - new Date(latest.observedAt).getTime() : Infinity;
   const live = staleMs < 90000;
-  const rateInfo = currentRate(settings);
-  const freePower = hasFreeMiningPower(getCurrentMonthKey());
-  const hourlyCost = outOfPocketMiningPowerCost(totalWatts / 1000 * rateInfo.rate, getCurrentMonthKey());
-  const dailyCost = hourlyCost * 24;
-  // The same live two-PC Kryptex aggregate shown in Yield Farming.
-  // Do not substitute a hardcoded estimate when no machine is reporting.
+  const powerCost = status?.powerCost?.sourceOfCalculation === "backend-power-meter-tariffs"
+    ? status.powerCost : null;
+  const rateInfo = powerCost?.currentRate || null;
+  const freePower = powerCost?.freeMiningPower === true;
+  const hourlyCost = powerCost?.hourlyOutOfPocketUsd ?? null;
+  const dailyCost = powerCost?.dailyOutOfPocketUsd ?? null;
+  // The observed two-PC Kryptex machine estimate is separate from real
+  // credited earnings. The meter expense is computed by the backend only.
   const dailyRevenue = kryptexDailyRevenue;
-  const dailyNet = dailyRevenue == null ? null : dailyRevenue - dailyCost;
+  const dailyNet = dailyRevenue == null || dailyCost == null
+    ? null : dailyRevenue - dailyCost;
 
   const currentMonth = status?.currentMonth || null;
   const monthTiers = currentMonth?.tiers || {};
@@ -298,16 +301,13 @@ export default function MiningPowerCard() {
   const monthKwh = Number(currentMonth?.totalKwh) || 0;
   const monthTrackedSeconds = Number(currentMonth?.trackedSeconds) || 0;
   const monthTrackedDays = trackedDays(monthTrackedSeconds);
-  const monthCost = outOfPocketMiningPowerCost(
-    usageCost(currentMonth, settings, currentMonth?.month), currentMonth?.month || getCurrentMonthKey()
-  );
+  const monthCost = powerCost?.complete ? powerCost.outOfPocketUsd : null;
   const monthEstimatedRevenue = dailyRevenue == null ? null : dailyRevenue * monthTrackedDays;
-  const monthEstimatedNet = monthEstimatedRevenue == null ? null : monthEstimatedRevenue - monthCost;
-  const monthDays = daysInPacificMonth();
+  const monthEstimatedNet = monthEstimatedRevenue == null || monthCost == null
+    ? null : monthEstimatedRevenue - monthCost;
   const projectionReady = monthTrackedSeconds >= 900;
-  const projectedMonthCost = projectionReady && monthTrackedDays > 0
-    ? monthCost / monthTrackedDays * monthDays
-    : 0;
+  const projectedMonthCost = projectionReady
+    ? powerCost?.projectedOutOfPocketMonthEndUsd ?? null : null;
 
   const monthlyDevices = currentMonth?.devices || {};
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
@@ -374,13 +374,13 @@ export default function MiningPowerCard() {
           </div>
           <div className="p-5">
             <p className="text-xs text-muted-foreground">Cost so far</p>
-            <p className="mt-1 text-2xl font-semibold text-amber-400 tabular-nums">{money(monthCost)}</p>
+            <p className="mt-1 text-2xl font-semibold text-amber-400 tabular-nums">{monthCost == null ? "—" : money(monthCost)}</p>
             <p className="mt-1 text-[10px] text-muted-foreground">{freePower ? "Power provided at no cost" : "Tracked energy cost"}</p>
           </div>
           <div className="p-5">
             <p className="text-xs text-muted-foreground">Projected month-end cost</p>
             <p className="mt-1 text-2xl font-semibold tabular-nums">
-              {projectionReady ? money(projectedMonthCost) : "Collecting…"}
+              {projectionReady && projectedMonthCost != null ? money(projectedMonthCost) : "Collecting…"}
             </p>
             <p className="mt-1 text-[10px] text-muted-foreground">{freePower ? "Power provided at no cost" : "Based on tracked usage rate"}</p>
           </div>
@@ -402,13 +402,13 @@ export default function MiningPowerCard() {
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4 text-amber-400" />
             <span className="text-muted-foreground">Cost / Hour</span>
-            <span className="font-semibold tabular-nums">{money(hourlyCost)}</span>
+            <span className="font-semibold tabular-nums">{hourlyCost == null ? "—" : money(hourlyCost)}</span>
           </div>
           <div className="flex items-center gap-2">
             <PlugZap className="h-4 w-4 text-cyan-300" />
             <span className="text-muted-foreground">Effective Rate</span>
-            <span className="font-semibold tabular-nums">{(freePower ? 0 : rateInfo.rate * 100).toFixed(2)}¢/kWh</span>
-            <span className="text-xs text-muted-foreground">{rateInfo.label}</span>
+            <span className="font-semibold tabular-nums">{rateInfo ? (rateInfo.effectiveUsdPerKwh * 100).toFixed(2) : "—"}¢/kWh</span>
+            <span className="text-xs text-muted-foreground">{rateInfo?.label || "Unverified"}</span>
           </div>
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-emerald-400" />
@@ -427,8 +427,7 @@ export default function MiningPowerCard() {
             label={settings.deviceLabels?.[device.id] || device.label}
             onRename={renameDevice}
             monthlyUsage={monthlyDevices[device.id]}
-            settings={settings}
-            monthKey={currentMonth?.month}
+            backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
           />
         ))}
       </div>
