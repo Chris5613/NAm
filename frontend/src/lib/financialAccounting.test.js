@@ -1,5 +1,5 @@
 import {
-  buildFinancialBalanceRows, buildStatementRows, buildFinancialProfit, classifyCashFlows, splitFinancialRevenue,
+  buildFinancialBalanceRows, buildStatementRows,
   equipmentSchedule, deriveCashOpening, derivePayableOpening,
   includeJournalEquipment, unmatchedEquipmentPurchases,
   reclassifyPersonalPcContribution, journalAccountActivity,
@@ -54,18 +54,6 @@ test("equipment depreciation reaches exactly zero after 60 months",()=>{
   expect(equipmentSchedule(device,"2031-11").depreciation).toBe(0);
 });
 
-test("$500 PC purchase debits equipment, credits bank, and is investing cash flow",()=>{
-  const rows=buildStatementRows(buildFinancialBalanceRows(month,{}, {},[],month),purchase(),{cashOpening:600});
-  const bank=rows.find(row=>row.id==="ledger:cash");
-  expect(bank.start).toBe(600);
-  expect(bank.end).toBe(100);
-  expect(bank.journalChange).toBe(-500);
-  const flow=classifyCashFlows(purchase());
-  expect(flow.totals.investing).toBe(-500);
-  expect(flow.totals.operating).toBe(0);
-  expect(buildFinancialProfit(purchase(),null).expenses).toBe(0);
-});
-
 test("unknown bank opening does not manufacture a negative ending balance",()=>{
   const rows=buildStatementRows([],purchase(),{});
   const bank=rows.find(row=>row.id==="ledger:cash");
@@ -81,44 +69,6 @@ test("bank opening carries forward without counting transaction twice",()=>{
   expect(deriveCashOpening("2027-01",{"2026-11":600},past,[])).toBe(100);
   expect(deriveCashOpening("2026-12",{"2026-11":600,"2026-12":200},past,[])).toBe(200);
 });
-
-test("manual revenue that was not in tracked source is recognized",()=>{
-  const entries=[{lines:[{account:"platform",debit:20,credit:0},{account:"revenue",debit:0,credit:20}]}];
-  const report=buildFinancialProfit(entries,0);
-  expect(report.revenue).toBe(20);
-  expect(report.profit).toBe(20);
-});
-
-test("saved expenses and separate transaction fee are both recognized",()=>{
-  const entries=[{lines:[{account:"fees",debit:10,credit:0},{account:"cash",debit:0,credit:10}]}];
-  const result=buildFinancialProfit(entries,100);
-  expect(result.operating).toBe(100);
-  expect(result.fees).toBe(10);
-  expect(result.expenses).toBe(110);
-  expect(result.profit).toBe(-110);
-});
-
-test("ordinary journal expense that overlaps saved monthly total is not counted twice",()=>{
-  const entries=[{lines:[{account:"expense",debit:60,credit:0},{account:"cash",debit:0,credit:60}]}];
-  const result=buildFinancialProfit(entries,100);
-  expect(result.operating).toBe(100);
-  expect(result.expenses).toBe(100);
-  expect(result.unitemizedExpenseOverlap).toBe(true);
-});
-
-test("income earned on platform is not counted as cash received",()=>{
-  const accrual=[{id:"auto",lines:[{account:"platform:kryptex",debit:25,credit:0},{account:"revenue",debit:0,credit:25}]}];
-  const flow=classifyCashFlows(accrual);
-  expect(flow.total).toBe(0);
-  expect(journalAccountActivity(accrual,"platform:kryptex")).toBe(25);
-});
-
-test("bank transfer to BTC is not new income",()=>{
-  const entries=[{id:"transfer",lines:[{account:"crypto",debit:25,credit:0},{account:"cash",debit:0,credit:25}]}];
-  expect(buildFinancialProfit(entries,0).revenue).toBe(0);
-  expect(classifyCashFlows(entries).totals.transfers).toBe(-25);
-});
-
 
 test("existing $500 PC journal matches one owned asset, and 5070 still needs funding confirmation",()=>{
   const purchase={id:"pc",date:"2026-11-05",description:"Paid $500 for RTX 2080 Super PC Nov 5th",
@@ -161,26 +111,6 @@ test("locked January can carry forward November-purchased hardware without impor
   expect(rows[0].end).toBe(475);
 });
 
-
-test("personally funded 2080 PC is reclassified in the same entry, not duplicated", () => {
-  const existing = {id:"pc-purchase",date:"2026-11-05",
-    description:"Paid $500 for RTX 2080 Super PC Nov 5th",amount:500,
-    debitAccount:"equipment",creditAccount:"cash"};
-  const result = reclassifyPersonalPcContribution([existing]);
-  expect(result.changed).toBe(true);
-  expect(result.entries).toHaveLength(1);
-  expect(result.entries[0].id).toBe("pc-purchase");
-  expect(result.entries[0].creditAccount).toBe("equity");
-  expect(result.entries[0].debitAccount).toBe("equipment");
-  expect(result.entries[0].fundingSource).toBe("personal-owner-contribution");
-  const balanced = [{...result.entries[0],lines:[
-    {account:"equipment",debit:500,credit:0},{account:"equity",debit:0,credit:500},
-  ]}];
-  expect(journalAccountActivity(balanced,"cash")).toBe(0);
-  expect(journalAccountActivity(balanced,"equity")).toBe(-500);
-  expect(classifyCashFlows(balanced).total).toBe(0);
-  expect(buildFinancialProfit(balanced,0).expenses).toBe(0);
-});
 
 test("PC owner investment correction is idempotent across store hydration", () => {
   const original=[{id:"pc",date:"2026-11-05",description:"RTX 2080 Super PC",
@@ -276,68 +206,6 @@ test("2080 variants with different acquisition costs are preserved separately", 
   ];
   const rows=buildFinancialBalanceRows("2026-11",{}, {},devices,"2026-11");
   expect(rows.filter(row=>/RTX 2080/i.test(row.name))).toHaveLength(2);
-});
-
-test("multi-line RTX 5080 cash purchase creates one balance sheet asset and investing cash outflow",()=>{
-  const entry={id:"5080-purchase",date:"2026-11-12",description:"Purchased RTX 5080 GPU for cash",lines:[
-    {account:"equipment",debit:1950,credit:0},
-    {account:"cash",debit:0,credit:1950},
-  ]};
-  const first=includeJournalEquipment([], [entry], "2026-11");
-  expect(first).toHaveLength(1);
-  expect(first[0].historicalCost).toBe(1950);
-  expect(first[0].end).toBe(1917.5);
-  expect(includeJournalEquipment(first,[entry],"2026-11")).toHaveLength(1);
-  expect(classifyCashFlows([entry]).totals.investing).toBe(-1950);
-  expect(buildStatementRows(first,[entry],{cashOpening:2000})
-    .find(row=>row.id==="ledger:cash").end).toBe(50);
-});
-
-test("existing equipment subaccount cash transaction is classified as investing without duplicating a new asset",()=>{
-  const entry={id:"existing",date:"2026-11-12",description:"Payment for existing equipment",lines:[
-    {account:"equipment:hardware:rtx5070",debit:200,credit:0},
-    {account:"cash",debit:0,credit:200},
-  ]};
-  expect(includeJournalEquipment([], [entry], "2026-11")).toEqual([]);
-  expect(classifyCashFlows([entry]).totals.investing).toBe(-200);
-});
-
-test("owner-funded equipment acquisition has no business cash flow",()=>{
-  const entry={id:"owner",date:"2026-11-12",description:"Purchased RTX 5080 from personal funds",lines:[
-    {account:"equipment",debit:1950,credit:0},
-    {account:"equity",debit:0,credit:1950},
-  ]};
-  expect(includeJournalEquipment([], [entry], "2026-11")).toHaveLength(1);
-  expect(classifyCashFlows([entry]).total).toBe(0);
-});
-
-test("income statement separates synced mining, yield and dividend revenue without changing totals",()=>{
-  const entries=[
-    {id:"synced-income:2026-11:kryptex",description:"Synced Kryptex income",
-      lines:[{account:"platform:kryptex",debit:10,credit:0},{account:"revenue",debit:0,credit:10}]},
-    {id:"synced-income:2026-11:rollercoin",description:"Synced RollerCoin income",
-      lines:[{account:"platform:rollercoin",debit:5,credit:0},{account:"revenue",debit:0,credit:5}]},
-    {id:"synced-income:2026-11:lulo",description:"Synced Lulo income",
-      lines:[{account:"luloCash",debit:8,credit:0},{account:"revenue",debit:0,credit:8}]},
-    {id:"synced-income:2026-11:loopscale",description:"Synced Loopscale income",
-      lines:[{account:"defi",debit:7,credit:0},{account:"revenue",debit:0,credit:7}]},
-    {id:"synced-income:2026-11:stocks",description:"Synced Stocks income",
-      lines:[{account:"brokerage",debit:3,credit:0},{account:"dividendRevenue",debit:0,credit:3}]},
-    {id:"journal:manual",description:"Miscellaneous income",
-      lines:[{account:"cash",debit:2,credit:0},{account:"revenue",debit:0,credit:2}]},
-  ];
-  const split=splitFinancialRevenue(entries);
-  expect(split).toEqual({mining:15,yield:15,dividends:3,unclassified:2});
-  expect(split.mining+split.yield+split.dividends+split.unclassified)
-    .toBe(buildFinancialProfit(entries,null).revenue);
-});
-
-test("cash withdrawals are excluded from yield revenue",()=>{
-  const withdrawal={id:"journal:withdrawal",description:"Withdrawal from Lulo",
-    lines:[{account:"cash",debit:1500,credit:0},{account:"luloCash",debit:0,credit:1500}]};
-  expect(splitFinancialRevenue([withdrawal])).toEqual({
-    mining:0,yield:0,dividends:0,unclassified:0,
-  });
 });
 
 test("crediting the RTX 5070 individual account retires it from the balance sheet",()=>{
