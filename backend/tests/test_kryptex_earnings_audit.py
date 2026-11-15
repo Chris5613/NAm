@@ -143,6 +143,31 @@ class KryptexRewardAuditTests(unittest.TestCase):
         self.assertEqual(second["lifetimeEarnedUsd"], 100.8)
 
 
+    def test_legacy_confirmed_usd_without_sats_cannot_be_repriced(self):
+        self.assertEqual(
+            recognize_mined_satoshi_increment(4.0, None, 5000, 8.0), 4.0
+        )
+        initial = {
+            "kryptexMiningDaily": {"2026-11-12": 4.0},
+            "kryptexConfirmedDays": {"2026-11-12": True},
+            "monthlyEarnings": {"2026-11": 4.0},
+            "lifetimeEarnedUsd": 100.0,
+        }
+        baseline = reconcile_kryptex_rewards(initial, {
+            "daily_sats": {"2026-11-12": 5000},
+            "daily_usd": {"2026-11-12": 8.0},
+        }, self.now)
+        self.assertEqual(baseline["kryptexMiningDaily"]["2026-11-12"], 4.0)
+        self.assertEqual(
+            baseline["kryptexIncomeCreditedSatsDaily"]["2026-11-12"], 5000
+        )
+        earned = reconcile_kryptex_rewards(baseline, {
+            "daily_sats": {"2026-11-12": 5500},
+            "daily_usd": {"2026-11-12": 8.8},
+        }, self.now)
+        self.assertEqual(earned["kryptexMiningDaily"]["2026-11-12"], 4.8)
+
+
 
 if __name__ == "__main__":
     unittest.main()
