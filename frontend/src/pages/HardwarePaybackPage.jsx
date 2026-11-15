@@ -254,6 +254,12 @@ export default function HardwarePaybackPage() {
   const sourceOptions = useMemo(() => sourceOptionsFor(history, months), [history, months]);
   const stats = useMemo(() => buildTimeline(devices, months, currentMonth, history.kryptex), [devices, months, currentMonth, history.kryptex]);
   const earnings = deviceEarnings(devices, months, currentMonth, Date.now(), stats, history.kryptex);
+  // Per-device credits intentionally use full selected source earnings.
+  // When multiple devices share Kryptex (or another provider), summing these
+  // credits is NOT distinct business revenue. Preserve the user's chosen
+  // payback method, but label the rollup accurately.
+  const sharedSources = [...new Set(devices.flatMap(deviceSources))]
+    .filter(source => devices.filter(device => deviceSources(device).includes(source)).length > 1);
   const totalEarned = Object.values(earnings).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
   const left = devices.reduce((sum, device) => sum + Math.max(0, device.cost - earnings[device.id]), 0);
   function persist(next) {
@@ -300,7 +306,8 @@ export default function HardwarePaybackPage() {
   const remove = id => { const next = devices.filter(row => row.id !== id); persist(next); };
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="hardware-payback-page">
     <header className="flex flex-wrap items-center justify-between gap-3 px-1"><h1 className="text-[32px] font-semibold tracking-tight">Hardware Payback</h1><button type="button" onClick={() => { setError(""); setDraft({ name: "", cost: "", power: "", startMonth: currentMonth, source: "", sources: [], earningsStartDay:currentDay }); }} className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"><Plus className="h-4 w-4"/>Add hardware</button></header>
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[["Hardware cost", stats.cost], ["Net project earnings", totalEarned], ["Left to recover", left]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[["Hardware cost", stats.cost], ["Sum of device payback credits", totalEarned], ["Left to recover", left]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
+    {sharedSources.length > 0 && <p role="note" className="px-1 text-xs leading-relaxed text-[#91a4b8]">Shared source{sharedSources.length === 1 ? "" : "s"} ({sharedSources.join(", ")}) appear{sharedSources.length === 1 ? "s" : ""} on multiple devices. The credit total above counts each device's payback separately, so it is not unique mining income. Use Passive Income for the unduplicated earnings total.</p>}
     {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{left <= 0 ? "Recovered" : stats.pace > 0 ? `Estimated break-even: ${label(shiftMonth(currentMonth, Math.min(1200, Math.ceil(left / stats.pace))))}` : "No positive earnings pace yet"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => {
           const progress = Math.max(0, Math.min(1, earnings[d.id] / d.cost));
           const remaining = Math.max(0, d.cost - earnings[d.id]);
