@@ -47,6 +47,7 @@ class PowerCostTests(unittest.TestCase):
         self.assertFalse(result["complete"])
         self.assertIsNone(result["nominalUsd"])
         self.assertIsNone(result["dailyOutOfPocketUsd"])
+        self.assertIsNone(result["outOfPocketUsd"])
         self.assertIsNone(result["measuredKwh"])
 
     def test_dec_tier_mismatch_fails_closed(self):

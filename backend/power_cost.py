@@ -92,13 +92,15 @@ def usage_nominal_cost(usage, rates):
     return sum((value * rates[name] for name, value in values.items()), Decimal("0")), None
 
 
-def server_power_cost_preview(usage, settings, latest=None, now=None):
+def server_power_cost_preview(usage, settings, latest=None, now=None, month_override=None):
     now = now or datetime.now(timezone.utc)
     local = now.astimezone(PACIFIC)
     month = local.strftime("%Y-%m")
     rates = read_rates(settings)
     row = usage if isinstance(usage, dict) else None
-    if row is not None and row.get("month"):
+    if month_override is not None:
+        month = month_override
+    elif row is not None and row.get("month"):
         month = str(row["month"])
     free = is_free_month(month)
     if rates is None:
@@ -112,7 +114,9 @@ def server_power_cost_preview(usage, settings, latest=None, now=None):
     current_tier = rate_for_now(now, rates)
     nominal, reason = usage_nominal_cost(row, rates)
     nominal_usd = money(nominal) if nominal is not None else None
-    paid_usd = 0.0 if free else nominal_usd
+    # Even when electricity is supplied free, unknown metering is not a
+    # verified $0 cost observation.
+    paid_usd = None if nominal is None else (0.0 if free else nominal_usd)
     measured = decimal_nonnegative(row.get("totalKwh")) if row else None
     device_costs = {}
     for key, item in (row.get("devices") or {}).items() if row and isinstance(row.get("devices"), dict) else []:
@@ -125,7 +129,7 @@ def server_power_cost_preview(usage, settings, latest=None, now=None):
         value, fault = usage_nominal_cost(dev_usage, rates)
         device_costs[str(key)] = {
             "nominalUsd": money(value) if value is not None else None,
-            "outOfPocketUsd": 0.0 if free else (money(value) if value is not None else None),
+            "outOfPocketUsd": None if value is None else (0.0 if free else money(value)),
             "complete": fault is None,
         }
     observation = latest if isinstance(latest, dict) else {}
@@ -164,6 +168,7 @@ def server_power_cost_preview(usage, settings, latest=None, now=None):
             "calculatedAt": now.isoformat(),
         },
         "dailyNominalUsd": money(daily_nominal) if daily_nominal is not None else None,
+        "hourlyOutOfPocketUsd": round(daily_paid / 24, 5) if daily_paid is not None else None,
         "dailyOutOfPocketUsd": daily_paid,
         "projectedOutOfPocketMonthEndUsd": projection,
         "deviceCosts": device_costs,

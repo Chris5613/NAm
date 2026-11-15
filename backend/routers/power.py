@@ -1,6 +1,7 @@
 """Secure ingestion and readback for local smart-plug power telemetry."""
 
 from datetime import datetime, timedelta, timezone
+import re
 import hashlib
 import hmac
 import secrets
@@ -134,6 +135,24 @@ async def power_status(user: User = Depends(current_user), db: Session = Depends
         "currentMonth": month,
         "powerCost": cost,
     }
+
+
+@router.get("/month-cost/{month}")
+async def power_month_cost(
+    month: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Read-only monthly tariff cost, never a booked utility expense."""
+    if not re.fullmatch(r"\\d{4}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(422, "Invalid calendar month.")
+    telemetry = _setting(db, user.id, TELEMETRY_KEY)
+    value = telemetry.value if telemetry and isinstance(telemetry.value, dict) else {}
+    months = (value.get("usage") or {}).get("months") or {}
+    row = months.get(month) if isinstance(months, dict) else None
+    settings = _setting(db, user.id, POWER_SETTINGS_KEY)
+    return server_power_cost_preview(
+        row, settings.value if settings else {}, value.get("latest"),
+        datetime.now(timezone.utc), month_override=month,
+    )
 
 
 @router.post("/ingest")
