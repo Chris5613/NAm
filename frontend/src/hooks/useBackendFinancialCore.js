@@ -6,10 +6,10 @@ import { api } from "@/lib/apiClient";
  * Never posts transactions or modifies balances. A response is accepted only
  * for the current exact input; older async requests cannot replace it.
  */
-export function useBackendFinancialCore(month, entries, rows, devices, savedExpenses) {
+export function useBackendFinancialCore(month, entries, rows, devices, savedExpenses, cashOpening, payableOpening) {
   const signature = useMemo(() => JSON.stringify({
-    month, entries, rows, devices, savedExpenses,
-  }), [month, entries, rows, devices, savedExpenses]);
+    month, entries, rows, devices, savedExpenses, cashOpening, payableOpening,
+  }), [month, entries, rows, devices, savedExpenses, cashOpening, payableOpening]);
   const [result, setResult] = useState(null);
   useEffect(() => {
     let active = true;
@@ -43,4 +43,19 @@ export function financialFlowsMatch(frontend, backend) {
     Math.abs(Number(frontend.totals?.[key] ?? 0) -
       Number(backend.totals?.[key] ?? 0)) < 0.005
   );
+}
+
+export function statementRowsMatch(local, remote) {
+  if (!Array.isArray(local) || !Array.isArray(remote) ||
+      local.length !== remote.length) return false;
+  return local.every((row, i) => {
+    const candidate = remote[i];
+    if (row.id !== candidate?.id || row.category !== candidate.category)
+      return false;
+    return ["start", "end", "journalChange", "unreconciledCash"].every(key => {
+      const a = row[key], b = candidate[key];
+      if (a == null || b == null) return a == b;
+      return Math.abs(Number(a) - Number(b)) < .005;
+    });
+  });
 }
