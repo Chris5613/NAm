@@ -9,6 +9,7 @@ import {
   getKryptexOpeningBalanceUsd,
   getTodayKey,
   loadKryptexTracker,
+  saveKryptexTracker,
   readObject,
 } from "@/lib/yieldFarmingAccounting";
 
@@ -175,7 +176,12 @@ export function useKryptexExtension() {
       return;
     }
 
-    setKryptexTracker(current => updateKryptexTracker(current, payload));
+    // Only old extension payloads use the legacy browser-side importer.
+    // Modern per-machine telemetry is saved directly by the backend; do not
+    // echo its full tracker back through the generic settings write path.
+    const next = updateKryptexTracker(loadKryptexTracker(), payload);
+    saveKryptexTracker(next);
+    setKryptexTracker(next);
     setKryptexConnected(true);
     setKryptexMessage(kryptexStatusMessage(payload));
   }, []);
