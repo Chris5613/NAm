@@ -896,7 +896,7 @@ export default function SideHustleDashboard() {
             const progress=verified?.observedProgressPct ?? null;
             const remaining=verified?.observedRemainingUsd ?? null;
             const payoffDay=verified?.estimatedPaybackDate || null;
-            const payoffLabel=payoffDay && /^\\d{4}-\\d{2}-\\d{2}$/.test(payoffDay)
+            const payoffLabel=payoffDay && /^\d{4}-\d{2}-\d{2}$/.test(payoffDay)
               ? new Date(payoffDay+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})
               : remaining != null && remaining <= 0 ? "Recovered" : "—";
 
