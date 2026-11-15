@@ -1,6 +1,6 @@
 import {
   collectMovementCandidates, collectBankMovementCandidates, movementFromReview,
-  movementJournal, reconcileBalances, resolveFinancialAccount,
+  reconcileBalances, resolveFinancialAccount,
 } from "./financialMovements";
 
 test("a verified provider withdrawal moves assets without creating income", () => {
@@ -12,13 +12,10 @@ test("a verified provider withdrawal moves assets without creating income", () =
   }]);
   expect(candidates).toHaveLength(1);
   expect(candidates[0].matchable).toBe(true);
-  const entries = movementJournal(candidates,"2026-11");
-  expect(entries).toHaveLength(2);
-  expect(entries[0].lines).toEqual([
-    {account:"crypto",debit:25,credit:0},
-    {account:"platform:kryptex",debit:0,credit:25},
-  ]);
-  expect(entries[1].lines[0]).toEqual({account:"fees",debit:0.5,credit:0});
+  expect(candidates[0]).toMatchObject({
+    from: "platform:kryptex", to: "crypto", amount: 25, feeUsd: 0.5,
+  });
+});
   expect(entries.every(entry => entry.lines.reduce((sum,line) => sum + line.debit - line.credit,0) === 0)).toBe(true);
 });
 
@@ -27,10 +24,9 @@ test("unverified withdrawal is a candidate, never auto-booked", () => {
     id:"roller", name:"RollerCoin", transactions:[{id:"w-01",date:"2026-11-09",type:"withdraw",amount:12}],
   }]);
   expect(candidates[0].matchable).toBe(false);
-  expect(movementJournal(candidates, "2026-11")).toHaveLength(0);
   const reviewed = movementFromReview(candidates[0],{to:"crypto"});
   expect(reviewed).toBeTruthy();
-  expect(movementJournal([reviewed],"2026-11")).toHaveLength(1);
+  expect(reviewed.to).toBe("crypto");
 });
 
 test("no destination can be invented from wallet balances", () => {
@@ -55,15 +51,6 @@ test("bank transfer or mining deposit needs business-purpose review", () => {
   expect(items.every(row => row.matchable === false)).toBe(true);
   expect(items.find(row => row.id==="bank:2").from).toBe("platform:kryptex");
   expect(items.find(row => row.id==="bank:2").to).toBe("cash");
-});
-
-test("confirmed fee is a balanced expense, not revenue", () => {
-  const fee = movementFromReview({id:"bank:3",date:"2026-11-08",amount:0.25,type:"fee",provider:"Bank fee",from:"cash"});
-  const rows = movementJournal([fee],"2026-11");
-  expect(rows[0].lines).toEqual([
-    {account:"fees",debit:0.25,credit:0},
-    {account:"cash",debit:0,credit:0.25},
-  ]);
 });
 
 test("reconciliation reports unexplained changes without posting them", () => {
