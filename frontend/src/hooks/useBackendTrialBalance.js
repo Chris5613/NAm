@@ -24,6 +24,6 @@ export function useBackendTrialBalance(payload) {
         { signature, error: true });
     }).catch(() => { if (active) setState({ signature, error: true }); });
     return () => { active = false; };
-  }, [signature]);
+  }, [signature, payload.month]);
   return state?.signature === signature ? state : { loading: true };
 }
