@@ -81,6 +81,11 @@ function readJson(key, fallback) {
   try { const value = JSON.parse(remoteStorage.getItem(key) || "null"); return value ?? fallback; }
   catch { return fallback; }
 }
+// Read the persisted equipment register without altering existing asset values.
+function readHardwareRegister() {
+  const devices = readJson(HARDWARE_KEY, []);
+  return Array.isArray(devices) ? devices : [];
+}
 const rounded = value => Math.round((Number(value) || 0) * 100) / 100;
 const money = value => value === null ? "—" : formatCurrency(value);
 const signed = value => value === null ? "—" : (value > 0 ? "+" : value < 0 ? "−" : "") + money(Math.abs(value));
