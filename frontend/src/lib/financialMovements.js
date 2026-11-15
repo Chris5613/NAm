@@ -104,38 +104,6 @@ export function collectBankMovementCandidates(transactions) {
   return [...seen.values()].sort((a, b) => b.date.localeCompare(a.date));
 }
 
-// Find account changes that might be explained by a transfer, payment,
-// valuation difference, or missing transaction. Never auto-post this variance.
-export function reconcileBalances(balanceRows, incomeMonth, movements, month) {
-  const result = [];
-  const earningByKey = {};
-  for (const [name, amount] of Object.entries(incomeMonth?.sources || {})) {
-    const key = sourceKey(name);
-    earningByKey[key] = round((earningByKey[key] || 0) + Number(amount || 0));
-  }
-  const movedByAccount = {};
-  for (const entry of movementJournal(movements, month)) {
-    for (const part of entry.lines) {
-      movedByAccount[part.account] = round((movedByAccount[part.account] || 0) + part.debit - part.credit);
-    }
-  }
-  for (const row of balanceRows || []) {
-    if (row.start == null || row.end == null || row.category === "equipment" || row.category === "liabilities") continue;
-    const acct = resolveFinancialAccount(row.name);
-    if (!acct) continue;
-    const delta = round(row.end - row.start);
-    const estimatedIncome = earningByKey[sourceKey(row.name)] || 0;
-    const transfers = movedByAccount[acct] || 0;
-    const unexplained = round(delta - estimatedIncome - transfers);
-    result.push({ name: row.name, account: acct, start: row.start, end: row.end,
-      delta, estimatedIncome, transfers, unexplained,
-      // BTC is USD-marked-to-market, and DeFi can have market price changes.
-      valuationSensitive: row.name.toLowerCase() === "btc" || row.category === "defi",
-    });
-  }
-  return result;
-}
-
 export function movementFromReview(candidate, overrides = {}) {
   const next = {...candidate,...overrides};
   const from = resolveFinancialAccount(next.from), to = resolveFinancialAccount(next.to);
