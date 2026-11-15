@@ -906,8 +906,8 @@ export default function SideHustleDashboard() {
                   <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Earned so far</p>
                 </div>
                 <div className="min-w-0 text-right">
-                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]" title={verified?.forecastBasis==="trailing-seven-completed-days"
-                    ? `7-day earning rate: ${money(verified.estimatedDailyCreditUsd || 0)}/day · ${verified.estimatedDaysRemaining} days remaining`
+                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]" title={verified?.estimatedDailyCreditUsd != null
+                    ? `${verified.forecastBasis==="blend-70pct-7day-30pct-live-kryptex" ? "70% 7-day average + 30% live Kryptex estimate" : "7-day observed average (live Kryptex unavailable)"}: ${money(verified.estimatedDailyCreditUsd)}/day · ${verified.estimatedDaysRemaining ?? "?"} days remaining`
                     : "No reliable estimate available yet"}>{payoffLabel}</strong>
                   <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">{payoffDay && verified?.forecastPartial ? "Est. payback · partial data" : "Estimated payback date"}</p>
                 </div>

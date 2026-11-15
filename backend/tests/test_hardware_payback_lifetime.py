@@ -108,7 +108,52 @@ class HardwarePaybackLifetimeTests(unittest.TestCase):
         self.assertEqual(row["estimatedDaysRemaining"],
                          __import__("math").ceil(row["observedRemainingUsd"] / 5))
         self.assertIsNotNone(row["estimatedPaybackDate"])
-        self.assertFalse(row["forecastPartial"])
+        self.assertTrue(row["forecastPartial"])  # No fresh machine telemetry.
+        self.assertIsNone(row["forecastLiveKryptexDailyUsd"])
+
+    def test_blend_kryptex_and_salad_without_mutating_earned_credit(self):
+        devices, history, trackers = input_rows()
+        before = copy.deepcopy((devices, history, trackers))
+        for i in range(8, 15):
+            day = f"2026-11-{i:02d}"
+            trackers["Kryptex"]["kryptexConfirmedDays"][day] = True
+            trackers["Kryptex"]["kryptexMiningDaily"][day] = 3.0
+            history[day] = {"sources": {"Salad": 0.70}}
+        before = copy.deepcopy((devices, history, trackers))
+        blended = build_lifetime_hardware_payback(
+            devices, history, trackers, "2026-11-15",
+            current_kryptex_daily=7.0)
+        original = build_lifetime_hardware_payback(
+            devices, history, trackers, "2026-11-15")
+        rows = {r["id"]: r for r in blended["devices"]}
+        self.assertEqual(rows["2080"]["forecastBasis"],
+                         "blend-70pct-7day-30pct-live-kryptex")
+        self.assertAlmostEqual(rows["2080"]["estimatedDailyCreditUsd"], 4.2)
+        self.assertAlmostEqual(rows["5080"]["forecastOtherDailyUsd"], .7)
+        self.assertAlmostEqual(rows["5080"]["estimatedDailyCreditUsd"], 4.9)
+        self.assertAlmostEqual(rows["2080"]["forecastLiveKryptexDailyUsd"], 7)
+        for key in rows:
+            previous = next(r for r in original["devices"] if r["id"] == key)
+            self.assertEqual(rows[key]["observedCreditUsd"], previous["observedCreditUsd"])
+            self.assertEqual(rows[key]["observedRemainingUsd"], previous["observedRemainingUsd"])
+            self.assertEqual(rows[key]["observedProgressPct"], previous["observedProgressPct"])
+        self.assertTrue(blended["mathReconciles"])
+        self.assertEqual((devices, history, trackers), before)
+
+    def test_missing_or_invalid_live_rate_uses_history_not_fake_zero(self):
+        devices, history, trackers = input_rows()
+        for i in range(8, 15):
+            day = f"2026-11-{i:02d}"
+            trackers["Kryptex"]["kryptexConfirmedDays"][day] = True
+            trackers["Kryptex"]["kryptexMiningDaily"][day] = 3.0
+        for candidate in (None, -7, float("nan"), "invalid"):
+            result = build_lifetime_hardware_payback(
+                devices, history, trackers, "2026-11-15",
+                current_kryptex_daily=candidate)
+            row = next(x for x in result["devices"] if x["id"] == "2080")
+            self.assertAlmostEqual(row["estimatedDailyCreditUsd"], 3.0)
+            self.assertEqual(row["forecastBasis"], "trailing-seven-completed-days")
+            self.assertTrue(row["forecastPartial"])
 
     def test_partial_provider_history_is_labeled_provisional(self):
         devices, history, trackers = input_rows()

@@ -55,14 +55,15 @@ def safe_day(raw):
         return None
 
 
-def forecast_payback_date(today, remaining, selected, day_sources, recovered):
-    """Indicative ETA from seven completed days of recorded source revenue.
+def forecast_payback_date(today, remaining, selected, day_sources, recovered,
+                          current_kryptex_daily=None):
+    """Project recovery from 70% completed-day Kryptex average + 30% live rate.
 
-    This is not a verified payoff commitment. Use a constant seven-day
-    denominator, excluding today's incomplete earnings. Require at least
-    three days with recorded revenue and no more than ten years to payoff.
-    Missing provider-days lower confidence rather than becoming an
-    invented zero-revenue observation.
+    Salad and other selected providers use only the seven completed-day
+    observations, never the live Kryptex rate. A stale/missing live reading
+    falls back to the seven-day estimate and is marked partial. All sources
+    remain *forecast only*: never book them as earned revenue. The historical
+    seven-day denominator excludes today's unfinished earnings.
     """
     if remaining <= 0:
         return {"estimatedPaybackDate": today.isoformat(),
@@ -91,22 +92,53 @@ def forecast_payback_date(today, remaining, selected, day_sources, recovered):
         return {"estimatedPaybackDate": None, "estimatedDaysRemaining": None,
                 "estimatedDailyCreditUsd": None, "forecastBasis": "insufficient-history",
                 "forecastPartial": True}
-    daily = total / Decimal("7")
+    historical_kryptex = Decimal("0")
+    if "kryptex" in selected:
+        for day in lookback:
+            entry = day_sources(day).get("kryptex")
+            if entry is not None:
+                historical_kryptex += entry["usd"]
+    historical_kryptex /= Decimal("7")
+    other_daily = (total / Decimal("7")) - historical_kryptex
+    live_kryptex = decimal_or_none(current_kryptex_daily)
+    blend_available = "kryptex" in selected and live_kryptex is not None
+    kryptex_daily = (
+        historical_kryptex * Decimal("0.70") +
+        live_kryptex * Decimal("0.30")
+        if blend_available else historical_kryptex
+    )
+    daily = kryptex_daily + other_daily
+    if daily <= 0:
+        return {"estimatedPaybackDate": None, "estimatedDaysRemaining": None,
+                "estimatedDailyCreditUsd": 0.0,
+                "forecastBasis": "insufficient-positive-run-rate",
+                "forecastPartial": True}
+    if "kryptex" in selected and not blend_available:
+        provisional = True
+    basis = ("blend-70pct-7day-30pct-live-kryptex"
+             if blend_available else "trailing-seven-completed-days")
     days = int((remaining / daily).to_integral_value(rounding=ROUND_CEILING))
     if days > 3650:
         return {"estimatedPaybackDate": None, "estimatedDaysRemaining": None,
                 "estimatedDailyCreditUsd": numeric(daily),
-                "forecastBasis": "beyond-ten-year-window", "forecastPartial": True}
+                "forecastBasis": "beyond-ten-year-window", "forecastPartial": True,
+                "forecastHistoricalKryptexDailyUsd": numeric(historical_kryptex),
+                "forecastLiveKryptexDailyUsd": numeric(live_kryptex) if blend_available else None,
+                "forecastOtherDailyUsd": numeric(other_daily)}
     return {"estimatedPaybackDate": (today + timedelta(days=days)).isoformat(),
             "estimatedDaysRemaining": days,
             "estimatedDailyCreditUsd": numeric(daily),
-            "forecastBasis": "trailing-seven-completed-days",
+            "forecastBasis": basis,
+            "forecastHistoricalKryptexDailyUsd": numeric(historical_kryptex),
+            "forecastLiveKryptexDailyUsd": numeric(live_kryptex) if blend_available else None,
+            "forecastOtherDailyUsd": numeric(other_daily),
             "forecastPartial": provisional,
             "forecastObservedDays": len(observed_days),
             "forecastProviderCoverage": source_coverage}
 
 
-def build_lifetime_hardware_payback(devices, records, trackers, today_key):
+def build_lifetime_hardware_payback(devices, records, trackers, today_key,
+                                    current_kryptex_daily=None):
     """Diagnostic only: not a historical financial transaction writer.
 
     Daily provider amounts are the *same source logic* as the Crypto
@@ -239,7 +271,8 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key):
 
         complete = not missing and not unknown
         forecast = forecast_payback_date(
-            now_day, max(cost-observed, Decimal("0")), selected, day_sources, observed)
+            now_day, max(cost-observed, Decimal("0")), selected, day_sources,
+            observed, current_kryptex_daily=current_kryptex_daily)
         results.append({
             **forecast,
             "id": identity, "name": str(device.get("name") or "")[:128],

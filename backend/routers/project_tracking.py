@@ -729,8 +729,20 @@ async def hardware_payback_lifetime(
              for row in daily_rows if isinstance(row.value, dict)}
     trackers = {name: setting(db, user.id, key) or {}
                 for name, key in DASHBOARD_TRACKERS.items()}
+    # The *same* server-owned five-minute-active machine aggregate used by
+    # Mining Power is the live Kryptex projection. No stale browser estimate,
+    # account balance, BTC price change, or daily observation is booked here.
+    live_kryptex = _kryptex_aggregate(
+        setting(db, user.id, KRYPTEX_MACHINES_KEY),
+        datetime.now(timezone.utc))
+    current_daily = (
+        live_kryptex["status"]["profitability_usd_day"]
+        if live_kryptex["machine_count"] > 0 else None
+    )
     response.headers["Cache-Control"] = "private, no-store"
-    return build_lifetime_hardware_payback(devices, daily, trackers, today.isoformat())
+    return build_lifetime_hardware_payback(
+        devices, daily, trackers, today.isoformat(),
+        current_kryptex_daily=current_daily)
 
 
 @router.get("/financial-core/closed-month/{month}")
