@@ -49,6 +49,28 @@ class JournalGuardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             guard_journal_write([self.entry], [], locked)
 
+    def test_monthly_changes_lock_blocks_journal_without_independent_close(self):
+        business = {
+            "2026-09": {"locked": True, "revenueSnapshot": 330.062266},
+            "2026-10": {"locked": True, "revenueSnapshot": 202.769111},
+        }
+        september = {**self.entry, "id": "old-september", "date": "2026-09-13"}
+        october = {**self.entry, "id": "old-october", "date": "2026-10-14"}
+        for entry in (september, october):
+            with self.subTest(month=entry["date"][:7]):
+                with self.assertRaisesRegex(ValueError, "closed accounting month"):
+                    guard_journal_write([], [entry], {}, business)
+                with self.assertRaisesRegex(ValueError, "closed month"):
+                    guard_journal_write([entry], [], {}, business)
+                self.assertEqual(
+                    guard_journal_write([entry], [entry], {}, business),
+                    [entry])
+                moved = {**entry, "date": "2026-11-15"}
+                with self.assertRaisesRegex(ValueError, "closed accounting month"):
+                    guard_journal_write([entry], [moved], {}, business)
+        self.assertEqual(guard_journal_write([], [self.entry], {}, business),
+                         [self.entry])
+
     def test_duplicate_manual_journal_id_rejected(self):
         with self.assertRaises(ValueError):
             guard_journal_write([], [self.entry, self.entry], {})
