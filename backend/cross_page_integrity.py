@@ -269,6 +269,37 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
                   "income or contain provisional legacy receipts; "
                   "no earnings were rebooked",
                   reconciliation=reconciliation)
+    # The user tracks earnings to eight decimal places. A generic $0.02
+    # financial tolerance is useful for materiality but must not hide small
+    # source attribution gaps. Report even sub-cent mismatches without
+    # treating an in-progress, unobserved day as fraudulent or booked income.
+    precision = []
+    month_booked = obj(snapshots.get(month))
+    if isinstance(month_booked.get("platforms"), list):
+        posted = {
+            str(row.get("platform")): amount(row.get("amount"))
+            for row in month_booked["platforms"] if isinstance(row, dict)
+        }
+        dated = obj(dashboard.get("monthlySources"))
+        for source in sorted(set(posted) | set(dated)):
+            booked_amount = posted.get(source) or Decimal("0")
+            dated_amount = amount(dated.get(source)) or Decimal("0")
+            difference = dated_amount - booked_amount
+            if abs(difference) >= Decimal("0.00000001"):
+                precision.append({
+                    "provider": source,
+                    "bookedUsd": float(booked_amount),
+                    "datedUsd": float(dated_amount),
+                    "differenceUsd": float(difference.quantize(
+                        Decimal("0.00000001"))),
+                })
+        if precision:
+            check("provider-precision-gaps",
+                  "warning" if any(abs(amount(row["differenceUsd"]) or 0) >
+                                   Decimal("0.02") for row in precision) else "info",
+                  "Eight-decimal provider differences remain visible "
+                  "even when below a two-cent accounting materiality threshold",
+                  differences=precision)
     statuses = [c["status"] for c in checks]
     outcome = ("error" if "error" in statuses else
                "warning" if "warning" in statuses else "pass")
