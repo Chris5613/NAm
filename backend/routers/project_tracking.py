@@ -30,6 +30,7 @@ from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..financial_historical_ledger import historical_trial_balance
+from ..home_business_snapshot import home_business_snapshot
 from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses, trial_balance
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
 from ..persisted_income_snapshot import source_income_history, project_history_rows
@@ -1019,6 +1020,47 @@ async def project_automatic_income_journal(
     )
     return {"sourceOfCalculation": "backend-financial-core",
             "month": month, **result}
+
+
+@router.get("/financial-core/home-business")
+async def source_owned_home_business(
+    response: Response, user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Reconstruct business assets from saved server records, not browser math.
+
+    Uses the existing authenticated wallet valuation for consistent current
+    BTC quantity and quote, without relabeling portfolio balances as income.
+    """
+    month = datetime.now(timezone.utc).astimezone(
+        ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    keys = (
+        "monthly_business_changes_v1", "financials_journal_v1",
+        "hardware_payback_devices_v1", "financials_unetwork_business_phones_v1",
+        "financials_month_closes_v1", "financials_confirmed_movements_v1",
+        "financials_bank_openings_v1", "financials_power_estimates_v1",
+        "yield_project_latest_balance_feed_v1", "yield_project_quick_cache_v1",
+        "project_income_salad_tracker_v1", "project_income_unetwork_tracker_v1",
+        "project_income_kryptex_tracker_v1",
+        "project_income_rollercoin_tracker_v2",
+    )
+    rows = db.scalars(select(Setting).where(
+        Setting.user_id == user.id, Setting.key.in_(keys)
+    )).all()
+    source = {row.key: row.value for row in rows}
+    valuation = await bitcoin_valuation(response, user, db)
+    btc = valuation.get("bitcoin") or {}
+    result = home_business_snapshot(source, month, btc.get("valueUsd"))
+    response.headers["Cache-Control"] = "private, no-store"
+    return {
+        **result,
+        "cryptoTotalUsd": valuation.get("cryptoTotalUsd"),
+        "bitcoinQuoteSource": btc.get("quoteSource"),
+        "bitcoinEvidenceComplete": (
+            btc.get("valueUsd") is not None and
+            btc.get("missingWalletCount") == 0
+        ),
+    }
 
 
 @router.post("/financial-core/net-worth")
