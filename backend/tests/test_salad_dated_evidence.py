@@ -59,7 +59,7 @@ class SaladDatedEvidenceTests(unittest.TestCase):
             {"Salad": sal})
         self.assertEqual(entry["provenance"]["Salad"], "dated-salad-reward")
 
-    def test_5080_receives_verified_nov14_but_nov13_stays_provisional(self):
+    def test_5080_receives_provider_verified_nov14_and_user_confirmed_nov13(self):
         device = [{
             "id": "5080", "name": "RTX 5080", "cost": 1250,
             "startMonth": "2026-11", "earningsStartDay": "2026-11-13",
@@ -72,8 +72,8 @@ class SaladDatedEvidenceTests(unittest.TestCase):
         result = build_lifetime_hardware_payback(
             device, daily, {"Salad": snapshots()}, "2026-11-15")
         row = result["devices"][0]
-        self.assertAlmostEqual(row["verifiedRewardSubtotalUsd"], 0.00046496)
-        self.assertAlmostEqual(row["provisionalRewardSubtotalUsd"], 0.02737941)
+        self.assertAlmostEqual(row["verifiedRewardSubtotalUsd"], 0.02784437)
+        self.assertAlmostEqual(row["provisionalRewardSubtotalUsd"], 0)
         self.assertFalse(row["complete"])
         self.assertTrue(result["mathReconciles"])
         self.assertEqual(result["checkpointWrites"], False)
