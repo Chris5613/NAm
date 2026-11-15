@@ -155,6 +155,30 @@ def equipment_schedule(device, month):
             "end": end, "depreciation": cents(previous - end), "cost": cost}
 
 
+def phone_asset_rows(phones, month):
+    """Business-use Unetwork phones: 120-month life from opt-in start month."""
+    rows = []
+    for phone in entries_list(phones):
+        if not isinstance(phone, dict):
+            continue
+        device = {**phone, "usefulLifeMonths": 120}
+        schedule = equipment_schedule(device, month)
+        if not schedule:
+            continue
+        rows.append({
+            "id": "unetwork-phone:" + str(phone.get("id") or ""),
+            "name": phone.get("name"),
+            "category": "equipment",
+            "start": schedule["start"], "end": schedule["end"],
+            "depreciation": schedule["depreciation"],
+            "historicalCost": schedule["cost"],
+            "acquisitionMonth": phone.get("startMonth"),
+            "source": "unetwork-business-phone",
+            "fundingAccount": phone.get("fundingAccount"),
+        })
+    return rows
+
+
 def sum_business_rows(rows):
     rows = [r for r in entries_list(rows) if isinstance(r, dict)]
     assets = [r for r in rows if r.get("category") != "liabilities"]
