@@ -12,8 +12,18 @@ export function validatePowerPreview(raw) {
     !Array.isArray(latest.devices) || latest.devices.length > 16)) return null;
   if (month != null && (typeof month !== "object" || Array.isArray(month) ||
     !Number.isFinite(Number(month.totalKwh || 0)) || Number(month.totalKwh || 0) < 0)) return null;
+  const mining = raw.kryptexDailyRunRate;
+  const validMining = mining && typeof mining === "object" &&
+    mining.source === "backend-kryptex-machine-aggregate" &&
+    typeof mining.usdPerDay === "number" && Number.isFinite(mining.usdPerDay) &&
+    mining.usdPerDay >= 0 &&
+    Number.isInteger(mining.machineCount) && mining.machineCount > 0
+      ? { usdPerDay: mining.usdPerDay, machineCount: mining.machineCount,
+          source: "backend-kryptex-machine-aggregate", observedAt: mining.observedAt || null }
+      : null;
   return {
     configured: raw.configured === true,
+    kryptexDailyRunRate: validMining,
     latest: latest == null ? null : {
       observedAt: latest.observedAt, totalWatts: Number(latest.totalWatts),
       devices: latest.devices.map(d => ({

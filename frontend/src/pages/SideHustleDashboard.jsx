@@ -17,6 +17,7 @@ import { useCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
 import { backendCryptoProviderIncomeRows } from "@/lib/cryptoDashboardIncomeRows";
 import { useAuth } from "@/lib/AuthContext";
 import { readCryptoDashboardPowerCache, writeCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
+import { extractBackendKryptexRunRate, projectedDailyMiningNet } from "@/lib/backendKryptexRunRate";
 import { PASSIVE_MONTHLY_INCOME_KEY } from "@/lib/monthlyEarningsChart";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
@@ -54,7 +55,6 @@ const HARDWARE_KEY = "hardware_payback_devices_v1";
 const TOD_EFFECTIVE_AT = new Date("2026-12-10T00:00:00-08:00");
 const TOD_EFFECTIVE_MONTH = "2026-12";
 const POWER_DEFAULTS = {
-  dailyRevenueUsd: 3.55,
   offPeakRate: 0.0893,
   midPeakRate: 0.1670,
   peakRate: 0.4313,
@@ -592,12 +592,15 @@ export default function SideHustleDashboard() {
 
   const refreshPower = useCallback(async () => {
     try {
-      const [status, saved] = await Promise.all([
+      const [status, saved, kryptex] = await Promise.all([
         api.get("/api/power/status"),
         settingsApi.get(POWER_SETTINGS_KEY).catch(() => null),
+        api.get("/api/project-tracking/kryptex/aggregate").catch(() => null),
       ]);
-      setPower(status);
-      writeCryptoDashboardPowerCache(user?.id, status);
+      const snapshot = { ...status,
+        kryptexDailyRunRate: extractBackendKryptexRunRate(kryptex) };
+      setPower(snapshot);
+      writeCryptoDashboardPowerCache(user?.id, snapshot);
       setPowerIsCached(false);
       if (saved && typeof saved === "object") setPowerSettings(current => ({ ...current, ...saved }));
     } catch {
@@ -665,9 +668,10 @@ export default function SideHustleDashboard() {
   const monthKwh = Number(powerMonth?.totalKwh) || 0;
   const freePower = hasFreeMiningPower(currentMonthKey);
   const monthPowerCost = outOfPocketMiningPowerCost(usageCost(powerMonth, powerSettings, powerMonth?.month), powerMonth?.month || currentMonthKey);
-  const miningDailyRevenue = Math.max(0, Number(powerSettings.dailyRevenueUsd) || 0);
+  // No hardcoded daily revenue. Use the same 2-PC backend Kryptex aggregate
+  // shown on Mining Power; a missing machine observation is UNKNOWN, not $0.
   const miningDailyCost = outOfPocketMiningPowerCost(totalWatts / 1000 * Number(rateInfo.rate || 0) * 24, currentMonthKey);
-  const miningDailyNet = miningDailyRevenue - miningDailyCost;
+  const miningDailyNet = projectedDailyMiningNet(power?.kryptexDailyRunRate, miningDailyCost);
   const deviceRows = Array.isArray(latest?.devices) ? latest.devices : [];
   const deviceUsage = powerMonth?.devices || {};
 
@@ -1022,7 +1026,7 @@ export default function SideHustleDashboard() {
 
           <div className="col-span-2 min-w-0 sm:col-span-1 sm:pl-4">
             <div className="flex items-center gap-1.5 text-[10px] text-[#8b98a5]"><TrendingUp className="h-4 w-4 text-emerald-400"/><span>Net Profit / Day</span></div>
-            <strong className={`mt-2 block text-[18px] font-semibold leading-none tabular-nums ${miningDailyNet >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(miningDailyNet)}</strong>
+            <strong title="Daily profitability estimate from the backend Kryptex machine aggregate minus out-of-pocket electricity" className={`mt-2 block text-[18px] font-semibold leading-none tabular-nums ${miningDailyNet == null ? "text-[#83909d]" : miningDailyNet >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{miningDailyNet == null ? "—" : money(miningDailyNet)}</strong>
           </div>
         </div>
     </section>
