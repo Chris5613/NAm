@@ -157,6 +157,70 @@ def lulo_withdrawal_review(journal, monthly_rows, month):
     }
 
 
+def projected_business_cash(month, openings, journal, confirmed_movements=None):
+    """Cash changes from POSTED journal lines, not inferred provider transfers.
+
+    This is only a book-ledger projection. Even with a known opening, there is
+    no independent bank statement proving that personal Home cash holds the
+    same dollars. An unreviewed external movement renders it incomplete.
+    """
+    opening = finite_number(object_value(openings).get(month))
+    transactions = journal if isinstance(journal, list) else []
+    delta = 0.0
+    invalid = False
+    entry_count = 0
+    for entry in transactions:
+        if not isinstance(entry, dict) or not str(entry.get("date") or "").startswith(month):
+            continue
+        lines = entry.get("lines")
+        entry_delta = 0.0
+        relevant = False
+        if isinstance(lines, list):
+            for row in lines:
+                if not isinstance(row, dict) or row.get("account") != "cash":
+                    continue
+                relevant = True
+                debit = finite_number(row.get("debit"))
+                credit = finite_number(row.get("credit"))
+                if debit is None or credit is None or debit < 0 or credit < 0:
+                    invalid = True
+                    continue
+                entry_delta += debit - credit
+        else:
+            amount = finite_number(entry.get("amount"))
+            from_cash = entry.get("creditAccount") == "cash"
+            to_cash = entry.get("debitAccount") == "cash"
+            if from_cash or to_cash:
+                relevant = True
+                if amount is None or amount < 0:
+                    invalid = True
+                else:
+                    entry_delta += amount * (int(to_cash) - int(from_cash))
+        if relevant:
+            entry_count += 1
+            delta += entry_delta
+
+    movements = confirmed_movements
+    # A separate confirmed-movement store may duplicate journal entries or
+    # contain legitimately unposted entries. Do not guess which.
+    extra_count = len(movements) if isinstance(movements, (dict, list)) else 0
+    reliable = opening is not None and not invalid and extra_count == 0
+    known = round((opening or 0) + delta, 2) if opening is not None and not invalid else None
+    return {
+        "month": month,
+        "openingUsd": opening,
+        "journalCashChangeUsd": round(delta, 2),
+        "journalCashEntries": entry_count,
+        "unreviewedMovementCount": extra_count,
+        "bookProjectedCashUsd": known if reliable else None,
+        "knownJournalSubtotalUsd": known,
+        "completeForJournalOnly": reliable,
+        "independentlyMatchedToBank": False,
+        "canDeduplicateFromHome": False,
+        "source": "bank-opening-plus-posted-journal",
+    }
+
+
 def equipment_trade_review(journal, month):
     """Read the journal's trade-in math; never sell/remove the asset again."""
     trades = []
@@ -201,7 +265,7 @@ def equipment_trade_review(journal, month):
 def home_reconciliation_preview(
     assets, wallets, wallet_cache, provider_feed, portfolio_setting,
     legacy_crypto_cache, financial_monthly, journal, month, user_id,
-    now=None
+    now=None, bank_openings=None, confirmed_movements=None
 ):
     now = now or datetime.now(timezone.utc)
     personal = personal_assets_home_basis(assets)
@@ -226,6 +290,16 @@ def home_reconciliation_preview(
     )
     transfer = lulo_withdrawal_review(journal, financial_monthly, month)
     equipment_trades = equipment_trade_review(journal, month)
+    cash_projection = projected_business_cash(
+        month, bank_openings, journal, confirmed_movements
+    )
+    max_overlap = (
+        round(min(max(0, personal["categories"]["cash"]),
+                  max(0, cash_projection["bookProjectedCashUsd"])), 2)
+        if cash_projection["bookProjectedCashUsd"] is not None and
+        "cash" not in personal["unknownAssetCategories"]
+        else None
+    )
     flags = []
     if not source_matches:
         flags.append("project-feed-summary-mismatch-or-absent")
@@ -239,6 +313,10 @@ def home_reconciliation_preview(
         flags.append("equipment-trade-journal-imbalance")
     if equipment_trades:
         flags.append("traded-equipment-register-disposal-requires-review")
+    if max_overlap is not None and max_overlap > 0:
+        flags.append("possible-business-cash-overlap-unverified")
+    if not cash_projection["completeForJournalOnly"]:
+        flags.append("business-bank-book-projection-incomplete")
     flags.append("financials-business-ledger-not-yet-backend-reconciled")
     return {
         "sourceOfCalculation": "backend-read-only-reconciliation",
@@ -261,6 +339,9 @@ def home_reconciliation_preview(
         "bankCashDeduplication": "unverified",
         "luloTransfer": transfer,
         "equipmentTrades": equipment_trades,
+        "businessCashProjection": cash_projection,
+        "possibleBankCashOverlapMaximumUsd": max_overlap,
+        "bankCashOverlapVerified": False,
         "flags": flags,
         "financialRecordsMutated": False,
     }
