@@ -384,6 +384,42 @@ def trial_balance(accounts, ledger):
     }
 
 
+def balance_sheet_totals(rows):
+    """Backend-owned totals of the same unfiltered rows shown in Financials.
+
+    An unverified opening/closing value remains None, never fabricated zero.
+    This read-only projection is separate from the provider account balances.
+    """
+    rows = [r for r in entries_list(rows) if isinstance(r, dict)]
+    assets = [r for r in rows if r.get("category") != "liabilities"]
+    debts = [r for r in rows if r.get("category") == "liabilities"]
+
+    def subtotal(source, field):
+        if any(row.get(field) is None for row in source):
+            return None
+        return cents(sum(number(row.get(field)) for row in source))
+
+    assets_start = subtotal(assets, "start")
+    assets_end = subtotal(assets, "end")
+    debts_start = subtotal(debts, "start")
+    debts_end = subtotal(debts, "end")
+    net_start = None if assets_start is None or debts_start is None else cents(
+        assets_start - debts_start)
+    net_end = None if assets_end is None or debts_end is None else cents(
+        assets_end - debts_end)
+    net_change = None if net_start is None or net_end is None else cents(
+        net_end - net_start)
+    return {
+        "sourceOfCalculation": "backend-financial-statement-totals-v1",
+        "assetsStart": assets_start, "assetsEnd": assets_end,
+        "debtStart": debts_start, "debtEnd": debts_end,
+        "netStart": net_start, "netEnd": net_end, "netChange": net_change,
+        "missingAssetCount": sum(row.get("end") is None for row in assets),
+        "knownAssetsSubtotal": cents(sum(number(row.get("end"))
+                                         for row in assets if row.get("end") is not None)),
+    }
+
+
 def evaluate_statement(data):
     """Read-only calculation of a complete supplied ledger. No persistence."""
     ledger = entries_list(data.get("entries"))
@@ -416,6 +452,18 @@ def evaluate_statement(data):
         ],
         "statementRows": statement_rows,
         "business": sum_business_rows(statement_rows),
+        "statementTotals": balance_sheet_totals(statement_rows),
+        "displayTotals": balance_sheet_totals(
+            data.get("displayRows") if isinstance(data.get("displayRows"), list)
+            else statement_rows),
+        "cashMovements": {
+            "cashIn": cents(sum(max(0, row["delta"]) for rows in
+                            classify_cash_flows(ledger)["sections"].values()
+                            for row in rows)),
+            "cashOut": cents(sum(max(0, -row["delta"]) for rows in
+                             classify_cash_flows(ledger)["sections"].values()
+                             for row in rows)),
+        },
     }
 
 
