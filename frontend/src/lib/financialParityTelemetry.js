@@ -20,18 +20,18 @@ function revisionToken(signature) {
 }
 
 export function reportFinancialParity(
-  area, month, matched, source, signature,
+  area, month, matched, source, signature, reason = null,
 ) {
   if (!/^[a-z-]{3,50}$/.test(String(area)) ||
       !/^\d{4}-(0[1-9]|1[0-2])$/.test(String(month)) ||
       typeof signature !== "string" || source == null) return;
   const fingerprint = revisionToken(signature);
   const status = matched ? "matched" : "mismatched";
-  const key = [area, month, source, status, fingerprint].join(":");
+  const key = [area, month, source, status, fingerprint, reason || ""].join(":");
   if (sent.has(key)) return;
   if (sent.size > 300) sent.clear();
   sent.add(key);
   api.post("/api/project-tracking/financial-core/parity-observation", {
-    area, month, source, status, fingerprint,
+    area, month, source, status, fingerprint, reason,
   }).catch(() => { sent.delete(key); });
 }
