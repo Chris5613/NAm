@@ -4,6 +4,7 @@ import {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 
 import {
@@ -196,6 +197,7 @@ const importAllLocalStorage = (
 ========================================================= */
 
 export default function Dashboard() {
+  const fetchSequence = useRef(0);
   const [
     assets,
     setAssets,
@@ -382,6 +384,8 @@ export default function Dashboard() {
   const fetchData =
     useCallback(
       async () => {
+        const requestId = ++fetchSequence.current;
+        const isCurrent = () => fetchSequence.current === requestId;
         try {
           const storedAssets =
             storage.getAssets?.() ||
@@ -481,6 +485,7 @@ export default function Dashboard() {
           } catch {
             // Signed-in backend unavailable: don't erase Home financials.
           }
+          if (!isCurrent()) return;
           setFinancialAssets(businessAssets);
 
           let trends = null;
@@ -506,6 +511,7 @@ export default function Dashboard() {
             // Older backend, or unverified net-worth parity: display only.
             // Never generate browser-side financial history writes.
           }
+          if (!isCurrent()) return;
           const fallbackTrends = trends || readOnlyNetWorthTrends(calculatedNetWorth);
           const categoryChanges = fallbackTrends.categoryChanges;
           const monthlyHistory = fallbackTrends.monthlyHistory;
@@ -558,17 +564,12 @@ export default function Dashboard() {
         } catch (
           error
         ) {
-          console.error(
-            error
-          );
-
-          toast.error(
-            "Failed to load data"
-          );
+          if (isCurrent()) {
+            console.error(error);
+            toast.error("Failed to load data");
+          }
         } finally {
-          setLoading(
-            false
-          );
+          if (isCurrent()) setLoading(false);
         }
       },
 
