@@ -1,18 +1,18 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, X, Cpu, CalendarDays, Zap } from "lucide-react";
+import { Plus, Pencil, Trash2, X, CalendarDays, Zap } from "lucide-react";
 import { api } from "@/lib/apiClient";
 import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { sharedPaybackSources } from "@/lib/hardwarePaybackReporting";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
-import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
-import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
-import { mergeManualIncome } from "@/lib/manualIncomeHistory";
+
+
+
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome, INACTIVE_PROJECTS_KEY, getKryptexOpeningBalanceUsd, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject, saveKryptexTracker } from "@/lib/yieldFarmingAccounting";
+import { formatCurrency, getCurrentMonthKey, getTodayKey, INACTIVE_PROJECTS_KEY, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
 const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
