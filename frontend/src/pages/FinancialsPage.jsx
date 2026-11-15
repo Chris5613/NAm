@@ -4,42 +4,27 @@ import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins
 import { remoteStorage, subscribe, refreshSetting } from "@/lib/serverStore";
 import { preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
 import { useBackendFinancialLiveBalances } from "@/hooks/useBackendFinancialLiveBalances";
-import {
-  readUnetworkPhones, readPhoneInventory, makePhoneAsset, phoneJournal, phoneAssetRows,
-  UNETWORK_PHONES_KEY,
-} from "@/lib/unetworkPhonesAccounting";
+import { readUnetworkPhones, readPhoneInventory, makePhoneAsset, phoneJournal, UNETWORK_PHONES_KEY } from "@/lib/unetworkPhonesAccounting";
 import { api } from "@/lib/apiClient";
-import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+
 import { useBackendFinancialCore } from "@/hooks/useBackendFinancialCore";
 import { useBackendAutoIncomeJournal } from "@/hooks/useBackendAutoIncomeJournal";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
 import { useBackendAutomaticExpenses } from "@/hooks/useBackendAutomaticExpenses";
 import { useBackendTrialBalance } from "@/hooks/useBackendTrialBalance";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
-import { mergeManualIncome } from "@/lib/manualIncomeHistory";
-import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
+
+
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildAutoIncomeJournal, visibleLedgerEntries } from "@/lib/financialAutoJournal";
+import { visibleLedgerEntries } from "@/lib/financialAutoJournal";
 import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
-import {
-  balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName,
-  cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow,
-} from "@/lib/financialAccountNames";
-import {
-  buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
-  deriveCashOpening, derivePayableOpening,
-  moneyRound, valueOrNull,
-} from "@/lib/financialAccounting";
-import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
+import { balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName, cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow } from "@/lib/financialAccountNames";
+import { unmatchedEquipmentPurchases, deriveCashOpening, derivePayableOpening, moneyRound, valueOrNull } from "@/lib/financialAccounting";
+import { hasFreeMiningPower } from "@/lib/powerOutOfPocket";
 import { journalLines, validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
 import { openingPhoneDepreciationEntry } from "@/lib/phoneOpeningDepreciation";
 
-import {
- formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome, buildProjectIncome,
- loadMonthlyBackfills, loadMonthlySnapshots, loadLoopscaleHistory,
- loadKryptexTracker, loadRollerCoinTracker, getRollerCoinTrackerStats,
- loadSaladTracker, loadUnetworkTracker, readObject, PROJECT_QUICK_CACHE_KEY,
-} from "@/lib/yieldFarmingAccounting";
+import { formatCurrency, getCurrentMonthKey, getTodayKey, loadMonthlyBackfills, loadMonthlySnapshots, loadLoopscaleHistory, loadKryptexTracker, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, readObject, PROJECT_QUICK_CACHE_KEY } from "@/lib/yieldFarmingAccounting";
 
 const RECORDS_KEY = "monthly_business_changes_v1";
 const JOURNAL_KEY = "financials_journal_v1";
