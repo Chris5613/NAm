@@ -1416,12 +1416,11 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const yesterdayAmountForDashboard = yesterdayForDashboard
     ? Number(yesterdayForDashboard.value) || 0
     : null;
+  // The plotted point is persisted so automated parity checks catch regressions.
+  const chartToday = monthlyChartData.find(day => day.key === todayKey)?.value ?? null;
   useEffect(() => {
     const month = todayKey.slice(0, 7);
     const current = readObject(PASSIVE_MONTHLY_INCOME_KEY);
-    // Persist the actual point drawn at today's date separately from the
-    // right-hand earnings card. The integrity watcher can detect regressions.
-    const chartToday = monthlyChartData.find(day => day.key === todayKey)?.value ?? null;
     const next = {
       month, amount: thisMonthEarned, day: todayKey,
       today: todayEarnings, chartToday,
@@ -1442,7 +1441,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       ...next, updatedAt: new Date().toISOString(),
     });
   }, [
-    todayKey, thisMonthEarned, todayEarnings, monthlyChartData,
+    todayKey, thisMonthEarned, todayEarnings, chartToday,
     yesterdayKeyForDashboard, yesterdayAmountForDashboard,
     onMonthlyEarningsChange,
   ]);
