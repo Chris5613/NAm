@@ -83,6 +83,22 @@ def validate_item(item: dict, old: dict | None, now: datetime) -> dict | None:
         return prior or None
     if balance == 0 and synced_at is None and number(prior.get("balanceUsd")) not in (None, 0):
         return prior
+    # Identical source timestamps carry no new provider observation. Ignore
+    # changed amounts from stale tabs, while still accepting deliberate
+    # inactive/active metadata edits and repricing verified RollerCoin TRX.
+    if prior_synced_at and synced_at == prior_synced_at:
+        prior_balance = number(prior.get("balanceUsd"))
+        if prior_balance is not None and abs(balance - prior_balance) > 0.00000001:
+            prev_trx = number(prior.get("balanceTrx"))
+            next_trx = number(item.get("balanceTrx"))
+            next_price = number(item.get("trxUsdPrice"))
+            price_only = (
+                project_id == "rollercoin-project" and
+                prev_trx is not None and next_trx is not None and
+                abs(prev_trx - next_trx) < 0.00000001 and
+                next_price is not None and next_price > 0
+            )
+            balance = round(next_trx * next_price, 8) if price_only else prior_balance
     normalized = {
         "id": project_id,
         "name": str(item.get("name") or project_id)[:128],
@@ -359,6 +375,9 @@ async def read_kryptex_aggregate(
 async def receive_latest(payload: dict, user: User = Depends(current_user),
                          db: Session = Depends(get_db)) -> dict:
     now = datetime.now(timezone.utc)
+    # Serialize concurrent browser tabs. Read the freshest persisted feed
+    # under an account lock before merging independent source readings.
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     old = setting(db, user.id, LATEST_KEY)
     old = old if isinstance(old, dict) else {}
     previous = {str(p.get("id")): p for p in old.get("projects", [])
@@ -370,7 +389,7 @@ async def receive_latest(payload: dict, user: User = Depends(current_user),
     for item in incoming[:100]:
         if not isinstance(item, dict):
             continue
-        current = validate_item(item, previous.get(str(item.get("id"))), now)
+        current = validate_item(item, projects.get(str(item.get("id"))), now)
         if current:
             projects[current["id"]] = current
     # Re-evaluate all preserved rows, even when their next source reading has
@@ -384,9 +403,22 @@ async def receive_latest(payload: dict, user: User = Depends(current_user),
         "lastCheckedAt": now.isoformat(), "staleProjects": stale,
         "lastGoodFeedAt": now.isoformat(),
     })
+    computed = portfolio_summary(list(projects.values()))
+    if computed["complete"]:
+        # One authoritative writer of the saved Project Income summary; no
+        # browser page can replace the provider sum with a local estimate.
+        value = {
+            "portfolioBalance": computed["totalUsd"],
+            "activePortfolioBalance": computed["activeTotalUsd"],
+            "activePositions": sum(1 for p in projects.values() if not p.get("inactive")),
+            "projectCount": computed["projectCount"],
+            "source": "backend-project-feed",
+            "updatedAt": now.isoformat(),
+        }
+        save_setting(db, user.id, "project_income_portfolio_summary_v1", value)
     db.commit()
     return {"status": "ok", "staleProjects": stale,
-            "portfolio": portfolio_summary(list(projects.values())),
+            "portfolio": computed,
             "receivedAt": now.isoformat()}
 
 
