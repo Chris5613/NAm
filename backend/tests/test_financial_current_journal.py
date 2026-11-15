@@ -110,14 +110,14 @@ class CurrentFinancialJournalTests(unittest.TestCase):
         first = current_financial_ledger(data)
         adjustments = [row for row in first["entries"]
                        if row["id"] == "opening-iphone-depreciation:2026-09"]
-        self.assertLessEqual(len(adjustments), 1)
-        if adjustments:
-            data["closedMonths"] = {"2026-09": {
-                "entries": copy.deepcopy(first["entries"])}}
-            second = current_financial_ledger(data)
-            self.assertEqual(sum(row["id"] ==
-                "opening-iphone-depreciation:2026-09"
-                for row in second["entries"]), 1)
+        self.assertEqual(len(adjustments), 1)
+        self.assertEqual(adjustments[0]["lines"][0]["debit"], 4.0)
+        data["closedMonths"] = {"2026-09": {
+            "entries": copy.deepcopy(first["entries"])}}
+        second = current_financial_ledger(data)
+        self.assertEqual(sum(row["id"] ==
+            "opening-iphone-depreciation:2026-09"
+            for row in second["entries"]), 1)
 
     def test_missing_rows_and_invalid_month_fail_closed(self):
         data = fixture()
