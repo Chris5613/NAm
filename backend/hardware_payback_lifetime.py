@@ -7,7 +7,7 @@ Old browser checkpoint baselines are evidence for audit, not USD revenue.
 """
 from collections import defaultdict
 from datetime import date, timedelta
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_CEILING
 
 from .earnings_dashboard import provider_entries
 from .hardware_credit_audit import normalize_source, sources_for
@@ -53,6 +53,57 @@ def safe_day(raw):
         return d
     except (TypeError, ValueError):
         return None
+
+
+def forecast_payback_date(today, remaining, selected, day_sources, recovered):
+    """Indicative ETA from seven completed days of recorded source revenue.
+
+    This is not a verified payoff commitment. Use a constant seven-day
+    denominator, excluding today's incomplete earnings. Require at least
+    three days with recorded revenue and no more than ten years to payoff.
+    Missing provider-days lower confidence rather than becoming an
+    invented zero-revenue observation.
+    """
+    if remaining <= 0:
+        return {"estimatedPaybackDate": today.isoformat(),
+                "estimatedDaysRemaining": 0, "estimatedDailyCreditUsd": 0.0,
+                "forecastBasis": "already-recovered", "forecastPartial": False}
+    lookback = [(today - timedelta(days=offset)).isoformat()
+                for offset in range(1, 8)]
+    total = Decimal("0")
+    observed_days = set()
+    source_coverage = {}
+    provisional = False
+    for source in selected:
+        count = 0
+        for day in lookback:
+            entry = day_sources(day).get(source)
+            if entry is None:
+                provisional = True
+                continue
+            count += 1
+            observed_days.add(day)
+            total += entry["usd"]
+            if not entry["trusted"]:
+                provisional = True
+        source_coverage[source] = count
+    if len(observed_days) < 3 or total <= 0:
+        return {"estimatedPaybackDate": None, "estimatedDaysRemaining": None,
+                "estimatedDailyCreditUsd": None, "forecastBasis": "insufficient-history",
+                "forecastPartial": True}
+    daily = total / Decimal("7")
+    days = int((remaining / daily).to_integral_value(rounding=ROUND_CEILING))
+    if days > 3650:
+        return {"estimatedPaybackDate": None, "estimatedDaysRemaining": None,
+                "estimatedDailyCreditUsd": numeric(daily),
+                "forecastBasis": "beyond-ten-year-window", "forecastPartial": True}
+    return {"estimatedPaybackDate": (today + timedelta(days=days)).isoformat(),
+            "estimatedDaysRemaining": days,
+            "estimatedDailyCreditUsd": numeric(daily),
+            "forecastBasis": "trailing-seven-completed-days",
+            "forecastPartial": provisional,
+            "forecastObservedDays": len(observed_days),
+            "forecastProviderCoverage": source_coverage}
 
 
 def build_lifetime_hardware_payback(devices, records, trackers, today_key):
@@ -187,7 +238,10 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key):
             warnings.append("checkpoint-baseline-understates-pre-start-rewards:" + identity)
 
         complete = not missing and not unknown
+        forecast = forecast_payback_date(
+            now_day, max(cost-observed, Decimal("0")), selected, day_sources, observed)
         results.append({
+            **forecast,
             "id": identity, "name": str(device.get("name") or "")[:128],
             "sources": selected, "startDay": start.isoformat(),
             "cashCostUsd": numeric(cost),
