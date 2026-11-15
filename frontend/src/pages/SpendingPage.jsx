@@ -19,7 +19,6 @@ import {
   daysInMonth,
   emptyTransaction,
   humanDate,
-  isExpense,
   isIncome,
   money,
   monthKeyOf,
@@ -114,10 +113,12 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
   // Passive Income months are themselves verified backend income history.
   const [serverAnalytics, setServerAnalytics] = useState(null);
   const [analyticsError, setAnalyticsError] = useState("");
+  const [analyticsPending, setAnalyticsPending] = useState(true);
   const passiveIncomeSignature = JSON.stringify(passiveIncomeMonths);
   useEffect(() => {
     let cancelled = false;
     setAnalyticsError("");
+    setAnalyticsPending(true);
     api.post("/api/spending/analytics/preview", {
       selectedMonth, range, today, elapsedDays,
       passiveMonths: JSON.parse(passiveIncomeSignature),
@@ -136,8 +137,12 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
         throw new Error("The server returned an incomplete spending calculation.");
       }
       setServerAnalytics(result);
+      setAnalyticsPending(false);
     }).catch(error => {
-      if (!cancelled) setAnalyticsError(error?.message || "Spending summary unavailable.");
+      if (!cancelled) {
+        setAnalyticsPending(false);
+        setAnalyticsError(error?.message || "Spending summary unavailable.");
+      }
     });
     return () => { cancelled = true; };
   }, [selectedMonth, range, today, elapsedDays,
@@ -145,9 +150,8 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
 
   const analytics = serverAnalytics?.month === selectedMonth &&
     serverAnalytics?.range === range ? serverAnalytics : null;
+  const verifiedMoney = value => analytics ? money(value) : "—";
   const totalSpent = analytics?.totalSpent ?? 0;
-  const bankIncome = analytics?.bankIncome ?? 0;
-  const passiveIncome = analytics?.passiveIncome ?? 0;
   const totalIncome = analytics?.totalIncome ?? 0;
   const netCashFlow = analytics?.netCashFlow ?? 0;
   const yearTotal = analytics?.yearTotal ?? 0;
@@ -569,6 +573,14 @@ const unhideTransaction = async (id) => {
           <a href="#spending-budget" title="Budget settings" aria-label="Budget settings" className="flex h-9 w-9 items-center justify-center rounded-full bg-[#2a2b2e] text-white hover:bg-[#3b3c40]"><Settings2 className="h-5 w-5"/></a>
         </div>
       </header>
+      {analyticsPending && <p role="status" className="text-xs text-muted-foreground">
+        Updating spending analytics from the backend…
+      </p>}
+      {analyticsError && <p role="alert" className="text-xs text-amber-300">
+        Backend spending analytics unavailable: {analyticsError}.
+        {analytics ? " Last verified backend totals are shown." :
+          " No unverified browser totals are substituted."}
+      </p>}
       <div className="grid w-full min-w-0 items-start gap-[13px] xl:grid-cols-[minmax(0,2.2fr)_minmax(300px,0.95fr)]">
         <div className="min-w-0 space-y-3">
           <section id="spending-overview" className="overflow-hidden rounded-[14px] border border-[#222428] bg-[#111214]">
@@ -583,7 +595,7 @@ const unhideTransaction = async (id) => {
             <div className="px-4 pb-3 pt-3">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div>
-                  <p className="text-[25px] font-semibold leading-none tracking-tight tabular-nums">{money(totalSpent)}</p>
+                  <p className="text-[25px] font-semibold leading-none tracking-tight tabular-nums">{verifiedMoney(totalSpent)}</p>
                   <p className="mt-2 text-[11px] text-muted-foreground">{range === "ytd" ? `${selectedYear} cumulative spending` : monthLabel(selectedMonth)}</p>
                   {range === "month" && previousMonthToDate > 0 && (
                     <p className={`mt-1 text-[11px] ${monthDelta <= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(Math.abs(monthDelta))} {monthDelta <= 0 ? "less" : "more"} than last month{isCurrentMonth ? " to date" : ""}</p>
@@ -645,10 +657,10 @@ const unhideTransaction = async (id) => {
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Reports</h2><span className="text-[11px] text-muted-foreground">{selectedYear} spending by month</span>
             </div>
             <div className="grid grid-cols-2 gap-3 px-4 py-3 sm:grid-cols-4">
-              <div><p className="text-[10px] text-muted-foreground">Income</p><p className="mt-1 text-lg font-semibold tabular-nums text-emerald-400">{money(totalIncome)}</p></div>
-              <div><p className="text-[10px] text-muted-foreground">Expenses</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(totalSpent)}</p></div>
-              <div><p className="text-[10px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-lg font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{money(netCashFlow)}</p></div>
-              <div><p className="text-[10px] text-muted-foreground">Yearly spend</p><p className="mt-1 text-lg font-semibold tabular-nums">{money(yearTotal)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Income</p><p className="mt-1 text-lg font-semibold tabular-nums text-emerald-400">{verifiedMoney(totalIncome)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Expenses</p><p className="mt-1 text-lg font-semibold tabular-nums">{verifiedMoney(totalSpent)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Net cash flow</p><p className={`mt-1 text-lg font-semibold tabular-nums ${netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>{verifiedMoney(netCashFlow)}</p></div>
+              <div><p className="text-[10px] text-muted-foreground">Yearly spend</p><p className="mt-1 text-lg font-semibold tabular-nums">{verifiedMoney(yearTotal)}</p></div>
             </div>
             <div className="grid grid-cols-6 gap-1.5 border-t border-border/35 px-4 py-3 sm:grid-cols-12">
               {monthTiles.map(month => {
@@ -675,7 +687,7 @@ const unhideTransaction = async (id) => {
                       {categoryBreakdown.map((entry,index) => <Cell key={entry.category} fill={CATEGORY_COLORS[index % CATEGORY_COLORS.length]}/>)}
                     </Pie><Tooltip contentStyle={{ background: "#17191d", border: "1px solid #30343b", borderRadius: 9, fontSize: 11 }} formatter={value => money(value)}/></PieChart>
                   </ResponsiveContainer>
-                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><p className="text-xl font-semibold tabular-nums">{money(totalSpent)}</p><p className="mt-0.5 text-[10px] text-muted-foreground">Total expenses</p></div>
+                  <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"><p className="text-xl font-semibold tabular-nums">{verifiedMoney(totalSpent)}</p><p className="mt-0.5 text-[10px] text-muted-foreground">Total expenses</p></div>
                 </div>
                 <div className="mt-2 divide-y divide-[#25272b] overflow-hidden rounded-[12px] border border-[#26282d] px-2.5">
                   {categoryBreakdown.map((entry,index) => <button key={entry.category} type="button" onClick={() => openCategoryTransactions(entry.category)} className="flex w-full items-center gap-2 rounded-md py-2 text-left transition-colors hover:bg-[#202227]">
@@ -683,7 +695,7 @@ const unhideTransaction = async (id) => {
                     <span className="min-w-0 flex-1 truncate text-[12px]">{entry.category}</span><span className="shrink-0 text-[12px] font-medium tabular-nums">{money(entry.amount)}</span><span className="w-10 shrink-0 text-right text-[10px] text-muted-foreground">{Math.round(entry.share)}%</span>
                   </button>)}
                 </div>
-              </> : <p className="py-12 text-center text-xs text-muted-foreground">No spending in this period yet.</p>}
+              </> : <p className="py-12 text-center text-xs text-muted-foreground">{analytics ? "No spending in this period yet." : "Awaiting verified category totals."}</p>}
             </div>
           </section>
 
@@ -692,7 +704,7 @@ const unhideTransaction = async (id) => {
               <h2 className="text-[10px] font-semibold uppercase tracking-[0.17em] text-muted-foreground">Monthly budget</h2><span className="text-[10px] text-muted-foreground">{monthLabel(selectedMonth)}</span>
             </div>
             <div className="px-4 py-3">
-              <p className="text-[20px] font-semibold tabular-nums">{money(totalSpent)} <span className="text-[12px] font-normal text-muted-foreground">of {budget > 0 ? money(budget) : "no budget set"}</span></p>
+              <p className="text-[20px] font-semibold tabular-nums">{verifiedMoney(totalSpent)} <span className="text-[12px] font-normal text-muted-foreground">of {budget > 0 ? money(budget) : "no budget set"}</span></p>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#27292e]"><div className={`h-full rounded-full ${budget > 0 && totalSpent > budget ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${budget > 0 ? Math.min(100, totalSpent / budget * 100) : 0}%` }}/></div>
               <div className="mt-2 flex justify-between text-[11px] text-muted-foreground"><span>{budget > 0 ? `${money(Math.max(0,budget-totalSpent))} remaining` : "Set a budget to track progress"}</span><span>{budget > 0 ? `${Math.round(totalSpent/budget*100)}%` : "—"}</span></div>
               <div className="mt-3 flex gap-2"><Input aria-label="Monthly budget" className="h-9 min-w-0 text-xs" type="number" min="0" placeholder="Budget amount" value={budgetInput} onChange={event => setBudgetInput(event.target.value)}/><Button size="sm" variant="outline" className="h-9 shrink-0 text-xs" onClick={saveBudget}>Save</Button></div>
