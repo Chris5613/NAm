@@ -23,6 +23,7 @@ from ..earnings_dashboard import (
 )
 from ..hardware_credit_audit import hardware_credit_audit
 from ..hardware_payback_lifetime import build_lifetime_hardware_payback
+from ..hardware_checkpoint_preview import preview_hardware_edit, HardwareEditConflict
 from ..project_freshness import is_project_stale
 from ..project_feed_sources import PROVIDER_TRACKERS, from_tracker
 from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
@@ -687,6 +688,35 @@ async def hardware_payback_source_audit(
     month_income = await earnings_dashboard(month, user, db)
     devices = setting(db, user.id, "hardware_payback_devices_v1")
     return hardware_credit_audit(month, devices, month_income)
+
+
+@router.post("/hardware-payback/checkpoint-preview")
+async def hardware_checkpoint_preview(
+    payload: dict, response: Response,
+    user: User = Depends(current_user), db: Session = Depends(get_db),
+) -> dict:
+    """Validate hardware edits without writing device or accounting records.
+
+    The complete prior register must match authenticated saved settings.
+    Existing checkpoints are immutable during ordinary edits; provider source
+    changes fail closed pending segmented historical attribution.
+    """
+    if len(str(payload)) > 850_000:
+        raise HTTPException(status_code=413, detail="Hardware edit too large")
+    now = datetime.now(timezone.utc)
+    today = now.astimezone(ZoneInfo("America/Los_Angeles")).date().isoformat()
+    saved = setting(db, user.id, "hardware_payback_devices_v1") or []
+    try:
+        result = preview_hardware_edit(
+            saved, payload.get("expectedDevices"), payload.get("proposedDevices"),
+            today, now.isoformat(),
+        )
+    except HardwareEditConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    response.headers["Cache-Control"] = "private, no-store"
+    return result
 
 
 @router.get("/hardware-payback-lifetime")
