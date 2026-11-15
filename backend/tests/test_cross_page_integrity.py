@@ -119,6 +119,23 @@ class CrossPageIntegrityTests(unittest.TestCase):
         self.assertEqual(found["crypto-portfolio"]["status"], "error")
         self.assertEqual(found["booked-month:2026-11"]["status"], "pass")
 
+    def test_historical_income_lock_without_financial_close_is_visible_warning(self):
+        saved, trackers, income = fixture()
+        saved["yield_monthly_snapshots_v1"]["2026-10"] = {
+            "monthKey": "2026-10", "total": 2, "locked": True,
+            "platforms": [{"platform": "Kryptex", "amount": 2}],
+        }
+        saved["monthly_business_changes_v1"]["2026-10"] = {
+            "locked": True, "items": [{"name": "Kryptex", "end": 25}],
+        }
+        income.append({"monthKey": "2026-10", "projectTotal": 2,
+                       "total": 2, "sources": {"Kryptex": 2}})
+        report = run(saved, trackers, income)
+        self.assertEqual(checks(report)["booked-month:2026-10"]["status"], "pass")
+        self.assertEqual(checks(report)["unsealed-financial-ledger:2026-10"]
+                         ["status"], "warning")
+        self.assertTrue(saved["monthly_business_changes_v1"]["2026-10"]["locked"])
+
     def test_passive_history_missing_booked_month_fails_closed(self):
         saved, trackers, _ = fixture()
         result = run(saved, trackers, [])
