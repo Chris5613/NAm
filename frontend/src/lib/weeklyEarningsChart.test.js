@@ -33,3 +33,16 @@ test("new Lulo UTC day can be live even when it is tomorrow in Pacific time", ()
   expect(luloDay.live).toBe(true);
   expect(luloDay.value).toBe(0.4);
 });
+
+
+test("weekly chart shares the current day's reconciled sources", () => {
+  const day = "2026-11-14";
+  const totals = { Kryptex: 3.43481163, Loopscale: 1.37571413, Unetwork: 0.620796, RollerCoin: 0.37592862, Salad: 0.00046496 };
+  const chart = buildWeeklyEarningsChart({
+    todayKey: day,
+    luloUtcDay: day,
+    sourceTotalsForDay: date => date === day ? totals : {},
+    earningsClock: Date.parse("2026-11-15T03:10:00Z"),
+  });
+  expect(chart.weekDays.find(row => row.key === day).value).toBeCloseTo(5.80771534, 8);
+});

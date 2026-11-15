@@ -19,6 +19,8 @@ function sumSources(sources) {
 export function buildMonthlyDailyEarningsChart({
   todayKey,
   sourceTotalsForDay,
+  todaySources = null,
+  todayTotal = null,
 }) {
   const monthKey = String(todayKey || "").slice(0, 7);
   const [year, month] = monthKey.split("-").map(Number);
@@ -33,7 +35,16 @@ export function buildMonthlyDailyEarningsChart({
     const future = key > todayKey;
     // Keep the same per-day source breakdown used to draw the point.
     // The current-month project popup must not use a separate snapshot total.
-    const sources = future ? {} : sourceTotalsForDay(key);
+    // Today's point comes from the SAME reconciled per-provider high-water
+    // as the Today Earnings panel. Historical days use their dated ledger.
+    const sources = future ? {} : key === todayKey && todaySources &&
+      typeof todaySources === "object" && !Array.isArray(todaySources)
+      ? { ...todaySources } : sourceTotalsForDay(key);
+    const sourceTotal = Math.max(0, sumSources(sources));
+    const recordedToday = key === todayKey && todayTotal != null &&
+      Number.isFinite(Number(todayTotal)) ? Math.max(0, Number(todayTotal)) : null;
+    const displayValue = recordedToday == null ? sourceTotal :
+      Math.max(sourceTotal, recordedToday);
     return {
       key,
       day: String(dayNumber),
@@ -43,7 +54,10 @@ export function buildMonthlyDailyEarningsChart({
         timeZone: "UTC",
       }).format(new Date(`${key}T12:00:00Z`)),
       sources,
-      value: future ? null : Math.max(0, sumSources(sources)),
+      value: future ? null : displayValue,
+      // A previously displayed daily high-water may lead current provider
+      // details. Surface that gap instead of inventing a provider credit.
+      unattributedUsd: future ? 0 : Math.max(0, displayValue - sourceTotal),
       future,
     };
   });
