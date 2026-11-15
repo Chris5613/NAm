@@ -24,3 +24,14 @@ test("invalid backend observations are rejected",()=>{
   expect(validatePowerPreview({...sample,latest:{...sample.latest,totalWatts:-4}})).toBeNull();
   expect(validatePowerPreview({...sample,latest:{...sample.latest,observedAt:"invalid"}})).toBeNull();
 });
+
+
+test("cached profitability is sanitized and never trusts a browser estimate",()=>{
+  const valid={usdPerDay:4.27,machineCount:2,
+    source:"backend-kryptex-machine-aggregate",observedAt:null,secret:"do-not-cache"};
+  const allowed=validatePowerPreview({...sample,kryptexDailyRunRate:valid});
+  expect(allowed.kryptexDailyRunRate.usdPerDay).toBe(4.27);
+  expect(allowed.kryptexDailyRunRate.secret).toBeUndefined();
+  expect(validatePowerPreview({...sample,kryptexDailyRunRate:{
+    ...valid,source:"browser"}}).kryptexDailyRunRate).toBeNull();
+});
