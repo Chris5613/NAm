@@ -28,7 +28,10 @@ def _platforms(raw):
     result = {}
     if not isinstance(raw, dict):
         return result
-    for item in raw.get("platforms", []):
+    entries = raw.get("platforms")
+    if not isinstance(entries, list):
+        return result
+    for item in entries:
         if not isinstance(item, dict):
             continue
         name = item.get("platform")
