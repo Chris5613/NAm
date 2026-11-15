@@ -8,6 +8,27 @@ from .income_history_core import historical_income, legacy_months
 from .monthly_snapshot_guard import guard_monthly_snapshots
 
 
+def project_history_rows(projects, relational_by_project):
+    """Prefer relational rows when present, else preserve embedded legacy rows.
+
+    Both formats are mirrors of the same project accounting history and must
+    not be added together. This is a read-only compatibility projection.
+    """
+    rows = []
+    for project in projects:
+        embedded_data = getattr(project, "data", None)
+        info = embedded_data if isinstance(embedded_data, dict) else {}
+        relational = relational_by_project.get(project.id, [])
+        embedded = info.get("transactions")
+        history = relational if relational else (
+            embedded if isinstance(embedded, list) else [])
+        rows.append({
+            **info, "id": project.id, "name": project.name,
+            "earned": project.earned, "transactions": history,
+        })
+    return rows
+
+
 def source_income_history(snapshots, payouts, projects, manual, current_month,
                           current_provider_months=None, confirmed_legacy=None):
     # The scheduler reconciles every five minutes. During that interval
