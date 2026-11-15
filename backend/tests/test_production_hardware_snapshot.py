@@ -1,6 +1,6 @@
-"""Frozen November 15 production-read hardware evidence regression.
+"""Frozen completed-day production-read hardware evidence regression.
 
-As-of 2026-11-15, no production writes or later live prices are used.
+As-of the end of 2026-11-14, no production writes or prices are used.
 This snapshot captures confirmed Kryptex daily USD records and two Salad
 receipts, one user-attested and one supported by lifetime snapshots.
 Equipment ledger cost basis (which includes trade-in consideration) remains
@@ -26,7 +26,6 @@ KRYPTEX = {
     "2026-11-12": 2.9390032170445006,
     "2026-11-13": 3.288413716235,
     "2026-11-14": 4.44678473,
-    "2026-11-15": 1.23877217,
 }
 
 
@@ -77,25 +76,25 @@ class ProductionHardwareSnapshotTests(unittest.TestCase):
         devices, daily, trackers = evidence()
         before = copy.deepcopy((devices, daily, trackers))
         total_daily = round(sum(KRYPTEX.values()), 8)
-        self.assertAlmostEqual(total_daily, 43.22127862)
+        self.assertAlmostEqual(total_daily, 41.99000223)
         output = build_lifetime_hardware_payback(
-            devices, daily, trackers, "2026-11-15",
-            current_kryptex_daily=5.346465274751038)
+            devices, daily, trackers, "2026-11-14"
         rows = {r["id"]: r for r in output["devices"]}
         self.assertTrue(output["mathReconciles"])
         self.assertAlmostEqual(output["sumDeviceCashCostUsd"], 1750)
         self.assertAlmostEqual(rows["hardware-2080"]["observedCreditUsd"],
-                               43.22127862)
+                               41.99000223
         self.assertTrue(rows["hardware-2080"]["complete"])
         self.assertAlmostEqual(rows["hardware-2080"]["paidMiningPowerUsd"], 0)
         self.assertAlmostEqual(rows["hardware-5080"]["observedCreditUsd"],
-                               9.00181499)
-        self.assertAlmostEqual(output["repeatedDeviceCreditsUsd"], 8.97397062)
-        self.assertFalse(rows["hardware-5080"]["complete"])
-        self.assertIsNone(rows["hardware-5080"]["verifiedRecoveryUsd"])
-        self.assertEqual(rows["hardware-5080"]["missingSourceDayCount"], 1)
+                               7.76304282
+        self.assertAlmostEqual(output["repeatedDeviceCreditsUsd"], 7.73519845)
+        self.assertTrue(rows["hardware-5080"]["complete"])
+        self.assertAlmostEqual(rows["hardware-5080"]["verifiedRecoveryUsd"],
+                               7.76304282)
+        self.assertEqual(rows["hardware-5080"]["missingSourceDayCount"], 0)
         self.assertAlmostEqual(rows["hardware-5080"]["verifiedRewardSubtotalUsd"],
-                               9.00181499)
+                               7.76304282
         self.assertAlmostEqual(rows["hardware-5080"]["provisionalRewardSubtotalUsd"],
                                0)
         self.assertFalse(output["financialLedgerMutated"])
