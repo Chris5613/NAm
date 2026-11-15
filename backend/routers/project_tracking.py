@@ -29,7 +29,8 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
-from ..financial_historical_ledger import historical_trial_balance
+from ..financial_historical_ledger import (historical_trial_balance, persisted_historical_trial_inputs,
+                                           HISTORICAL_SOURCE_KEYS)
 from ..home_business_snapshot import home_business_snapshot
 from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
 from ..persisted_income_snapshot import source_income_history, project_history_rows
@@ -778,12 +779,28 @@ async def financial_closed_month(
 @router.post("/financial-core/historical-trial-balance")
 async def evaluate_financial_historical_trial_balance(
     payload: dict, user: User = Depends(current_user),
+    db: Session = Depends(get_db),
 ) -> dict:
-    """Read-only historical ledger reconstruction and trial balance."""
-    if len(str(payload)) > 1_750_000:
-        raise HTTPException(status_code=413, detail="Historical ledger input too large")
+    """Read-only historical trial balance from authenticated server records.
+
+    Only the currently displayed unposted entries and account labels come
+    from the browser. Previous periods, locked closes, source income,
+    equipment and approved transfers always come from durable server state.
+    """
+    if len(str(payload)) > 700_000:
+        raise HTTPException(status_code=413, detail="Current journal preview too large")
+    now = datetime.now(timezone.utc).astimezone(ZoneInfo("America/Los_Angeles"))
+    rows = db.scalars(select(Setting).where(
+        Setting.user_id == user.id,
+        Setting.key.in_(list(HISTORICAL_SOURCE_KEYS.values())),
+    )).all()
+    saved = {row.key: row.value for row in rows}
+    history = await source_owned_income_history(user=user, db=db)
+    projection = persisted_historical_trial_inputs(
+        payload, saved, history.get("months"),
+        now.strftime("%Y-%m"), now.strftime("%Y-%m-%d"))
     try:
-        return historical_trial_balance(payload)
+        return historical_trial_balance(projection)
     except (ValueError, TypeError, AttributeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
