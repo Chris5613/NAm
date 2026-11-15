@@ -46,6 +46,9 @@ export async function requestFinancialCache(key, request, validate, options = {}
   const ownGeneration = generation;
   const promise = Promise.resolve().then(request).then(value => {
     if (!validate(value)) throw new Error("Invalid backend Financials response");
+    if (ownGeneration !== generation) {
+      throw new Error("Financial cache invalidated during request");
+    }
     if (ownGeneration === generation) {
       entries.delete(key);
       entries.set(key, { savedAt: Date.now(), value });
