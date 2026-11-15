@@ -127,6 +127,24 @@ class CrossPageIntegrityTests(unittest.TestCase):
         self.assertEqual(check["status"], "pass")
         self.assertEqual(check["reconciliation"]["status"], "matched")
 
+    def test_subcent_income_gap_remains_visible_with_eight_decimal_precision(self):
+        saved, trackers, income = fixture()
+        saved["yield_monthly_snapshots_v1"]["2026-11"]["total"] = 1.0045
+        saved["yield_monthly_snapshots_v1"]["2026-11"]["platforms"] = [
+            {"platform": "Kryptex", "amount": 1.0045}]
+        income[0]["projectTotal"] = 1.0045
+        income[0]["total"] = 1.0045
+        income[0]["sources"] = {"Kryptex": 1.0045}
+        result = run(saved, trackers, income)
+        gap = checks(result)["provider-precision-gaps"]
+        self.assertEqual(gap["status"], "info")
+        self.assertEqual(gap["differences"][0]["provider"], "Kryptex")
+        self.assertAlmostEqual(gap["differences"][0]["differenceUsd"], -0.0045)
+        self.assertEqual(checks(result)["provider-month-reconciliation"]
+                         ["status"], "pass")
+        self.assertEqual(saved["yield_monthly_snapshots_v1"]["2026-11"]
+                         ["total"], 1.0045)
+
     def test_snapshot_source_difference_is_an_error_not_adjusted(self):
         saved, trackers, income = fixture()
         saved["yield_monthly_snapshots_v1"]["2026-11"]["total"] = 12
