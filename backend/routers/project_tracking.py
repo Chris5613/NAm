@@ -357,6 +357,7 @@ async def project_integration_audit(
         "daily_net_worth_baseline_pst",
         "daily_category_baseline_pst",
         "monthly_net_worth_history_v2",
+        "financial_core_parity_v1",
         "hardware_payback_devices_v1",
         "yield_project_latest_balance_feed_v1",
         "project_income_portfolio_summary_v1",
