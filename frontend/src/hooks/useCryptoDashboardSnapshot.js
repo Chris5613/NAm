@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/apiClient";
 import { useAuth } from "@/lib/AuthContext";
 import {
@@ -24,10 +24,28 @@ function requestSnapshot(userId) {
   return request;
 }
 
+/**
+ * Warm the session display cache in parallel with backend settings hydration.
+ * Never save a response after logout or an account switch.
+ */
+export async function prefetchCryptoDashboardSnapshot(userId, isCurrent = () => true) {
+  if (userId == null) return null;
+  const existing = readCryptoDashboardCache(userId);
+  if (existing && Date.now() - existing.cachedAt < 30000) return existing;
+  const fresh = await requestSnapshot(userId);
+  if (!isCurrent()) return null;
+  return writeCryptoDashboardCache(userId, fresh);
+}
+
 /** Instant session preview, then revalidate the BACKEND source in background. */
 export function useCryptoDashboardSnapshot() {
   const { user } = useAuth();
   const userId = user?.id;
+  const activeUserId = useRef(userId);
+  useEffect(() => {
+    activeUserId.current = userId;
+    return () => { activeUserId.current = null; };
+  }, [userId]);
   const [state, setState] = useState(() => {
     const saved = readCryptoDashboardCache(userId);
     return { userId, data: saved?.data || null, cachedAt: saved?.cachedAt || 0,
@@ -39,12 +57,15 @@ export function useCryptoDashboardSnapshot() {
     setState(previous => ({ ...previous, loading: true }));
     try {
       const snapshot = await requestSnapshot(userId);
+      if (String(activeUserId.current) !== String(userId)) return;
       const saved = writeCryptoDashboardCache(userId, snapshot);
+      const fromCache = Boolean(saved?.data &&
+        Date.parse(saved.data.receivedAt) > Date.parse(snapshot.receivedAt));
       setState(previous => {
         if (String(previous.userId) !== String(userId)) return previous;
         return {
           userId, data: saved?.data || snapshot, cachedAt: saved?.cachedAt || Date.now(),
-          isCached: false, loading: false, error: null,
+          isCached: fromCache, loading: false, error: null,
         };
       });
     } catch {
