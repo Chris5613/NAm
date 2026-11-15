@@ -90,6 +90,48 @@ class HardwarePaybackLifetimeTests(unittest.TestCase):
         self.assertIn("duplicate-device-id:2080",result["reviewFlags"])
         self.assertTrue(result["mathReconciles"])
 
+    def test_estimated_payback_from_seven_completed_days_and_not_today(self):
+        devices, history, trackers = input_rows()
+        devices = [devices[0]]
+        # Seven completed, confirmed reward days are the forecast basis.
+        for day in range(8, 15):
+            key = f"2026-11-{day:02d}"
+            trackers["Kryptex"]["kryptexConfirmedDays"][key] = True
+            trackers["Kryptex"]["kryptexMiningDaily"][key] = 5.0
+        trackers["Kryptex"]["kryptexConfirmedDays"]["2026-11-15"] = True
+        trackers["Kryptex"]["kryptexMiningDaily"]["2026-11-15"] = 300.0
+        result = build_lifetime_hardware_payback(
+            devices, history, trackers, "2026-11-15")
+        row = result["devices"][0]
+        self.assertEqual(row["forecastBasis"], "trailing-seven-completed-days")
+        self.assertEqual(row["estimatedDailyCreditUsd"], 5.0)
+        self.assertEqual(row["estimatedDaysRemaining"],
+                         __import__("math").ceil(row["observedRemainingUsd"] / 5))
+        self.assertIsNotNone(row["estimatedPaybackDate"])
+        self.assertFalse(row["forecastPartial"])
+
+    def test_partial_provider_history_is_labeled_provisional(self):
+        devices, history, trackers = input_rows()
+        for day in range(8, 15):
+            key = f"2026-11-{day:02d}"
+            trackers["Kryptex"]["kryptexConfirmedDays"][key] = True
+            trackers["Kryptex"]["kryptexMiningDaily"][key] = 3.0
+        row = next(r for r in build_lifetime_hardware_payback(
+            devices, history, trackers, "2026-11-15")["devices"]
+            if r["id"] == "5080")
+        self.assertTrue(row["forecastPartial"])
+        self.assertIsNotNone(row["estimatedPaybackDate"])
+        self.assertEqual(row["forecastProviderCoverage"]["Kryptex"], 7)
+        self.assertEqual(row["forecastProviderCoverage"]["Salad"], 2)
+
+    def test_missing_recent_history_does_not_make_up_payback_date(self):
+        devices, history, trackers = input_rows()
+        result = build_lifetime_hardware_payback(
+            [devices[0]], history, trackers, "2026-11-14")
+        row = result["devices"][0]
+        self.assertIsNone(row["estimatedPaybackDate"])
+        self.assertEqual(row["forecastBasis"], "insufficient-history")
+
     def test_daily_earnings_not_affected_by_market_quote_repricing(self):
         devices,history,trackers=input_rows()
         first=build_lifetime_hardware_payback(devices,history,trackers,"2026-11-14")
