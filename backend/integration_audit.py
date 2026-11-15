@@ -7,6 +7,8 @@ profitability) to match. Never mutates settings or journal entries.
 from datetime import datetime, timezone
 from math import isfinite
 
+from .project_accounting import portfolio_summary
+
 
 def safe_number(value):
     if value is None or isinstance(value, bool):
@@ -140,6 +142,50 @@ def audit_integration_settings(values, now=None):
         devices=len(devices), duplicateOrMissingIds=bad_ids,
         invalidCostIds=bad_costs)
 
+    # Audit the same backend-owned source feeding the fast Crypto Dashboard.
+    # This invariant is about current holdings, not earned mining income.
+    feed = as_object(values.get("yield_project_latest_balance_feed_v1"))
+    source_rows = feed.get("projects")
+    source_rows = source_rows if isinstance(source_rows, list) else []
+    saved_summary = as_object(values.get("project_income_portfolio_summary_v1"))
+    if feed.get("receivedAt") and source_rows:
+        expected = portfolio_summary(source_rows)
+        total = safe_number(saved_summary.get("portfolioBalance"))
+        active = safe_number(saved_summary.get("activePortfolioBalance"))
+        valid_owner = saved_summary.get("source") == "backend-project-feed"
+        if not valid_owner:
+            add("crypto_portfolio_authority", "warning",
+                "Project portfolio has not yet been published by the backend-only feed.",
+                source=saved_summary.get("source"))
+        elif (total is None or active is None or
+              abs(total - expected["totalUsd"]) > 0.02 or
+              abs(active - expected["activeTotalUsd"]) > 0.02):
+            add("crypto_portfolio_authority", "error",
+                "Backend project summary and unique validated provider feed differ.",
+                summaryUsd=total, feedUsd=expected["totalUsd"],
+                summaryActiveUsd=active, feedActiveUsd=expected["activeTotalUsd"])
+        else:
+            add("crypto_portfolio_authority", "pass",
+                "Backend project total and active-only value reconcile with provider feed.",
+                totalUsd=round(total, 8), activeUsd=round(active, 8),
+                providerCount=expected["projectCount"])
+        provider_ids = {
+            "kryptex-project", "salad-project",
+            "unetwork-project", "rollercoin-project",
+        }
+        latest = {str(row.get("id")): row for row in source_rows
+                  if isinstance(row, dict) and row.get("id")}
+        not_server_owned = [
+            id for id in sorted(provider_ids & latest.keys())
+            if latest[id].get("balanceSource") != "backend-provider-tracker"
+        ]
+        add("crypto_provider_authority",
+            "warning" if not_server_owned else "pass",
+            "Some provider balances still lack backend-tracker provenance."
+            if not_server_owned else
+            "All present extension-provider holdings use backend tracker values.",
+            unverifiedProviders=not_server_owned)
+
     published = as_object(values.get("passive_income_monthly_chart_total_v1"))
     published_month = str(published.get("month") or "")
     published_amount = safe_number(published.get("amount"))
@@ -147,8 +193,8 @@ def audit_integration_settings(values, now=None):
         # Daily chart and month-end provider snapshots can differ legitimately:
         # do not assert they are interchangeable or silently reconcile them.
         add("monthly_chart_source", "info",
-            "Passive Income's current-month figure is a sum of dated sources, "
-            "not necessarily the separate provider snapshot's accounting total.",
+            "Legacy browser-published chart cache (deprecated after backend "
+            "earnings-dashboard cutover). Do not use for canonical totals.",
             month=published_month, publishedDailyUsd=round(published_amount, 8))
 
     recovery = as_object(values.get("kryptex_recovery_verified_2026_11_01_06_v1"))
