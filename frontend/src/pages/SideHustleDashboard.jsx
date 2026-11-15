@@ -23,7 +23,6 @@ import { formatCurrency, getCurrentMonthKey, getKryptexStats, getRollerCoinTrack
 const panel = "rounded-2xl border border-[#242b33] bg-[#0d1014] shadow-[0_12px_36px_rgba(0,0,0,0.16)]";
 const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
 const HARDWARE_KEY = "hardware_payback_devices_v1";
-const TOD_EFFECTIVE_AT = new Date("2026-12-10T00:00:00-08:00");
 const POWER_DEFAULTS = {
   offPeakRate: 0.0893,
   midPeakRate: 0.1670,
@@ -37,23 +36,6 @@ const GPU_META = {
 
 const money = value => formatCurrency(Number(value) || 0);
 const percent = value => `${Math.max(0, Math.min(999, Number(value) || 0)).toFixed(0)}%`;
-
-function pacificParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles", weekday: "short", hour: "2-digit", hour12: false,
-  }).formatToParts(date);
-  return Object.fromEntries(parts.map(part => [part.type, part.value]));
-}
-
-function currentRate(settings, date = new Date()) {
-  if (date < TOD_EFFECTIVE_AT) return { rate: Number(settings.basicRate) || 0, label: "Basic" };
-  const parts = pacificParts(date);
-  if (["Sat", "Sun"].includes(parts.weekday)) return { rate: Number(settings.offPeakRate) || 0, label: "Off-peak" };
-  const hour = Number(parts.hour) % 24;
-  if (hour >= 17 && hour < 21) return { rate: Number(settings.peakRate) || 0, label: "Peak" };
-  if (hour >= 21 || hour < 7) return { rate: Number(settings.offPeakRate) || 0, label: "Off-peak" };
-  return { rate: Number(settings.midPeakRate) || 0, label: "Mid-peak" };
-}
 
 function readHardware() {
   try {
@@ -323,9 +305,6 @@ export default function SideHustleDashboard() {
       const br = b.spent > 0 ? b.earned / b.spent : 0;
       return br - ar;
     });
-  const projectSpent = configuredProjects.reduce((sum, row) => sum + row.spent, 0);
-  const projectEarned = configuredProjects.reduce((sum, row) => sum + row.earned, 0);
-  const projectProgress = projectSpent > 0 ? projectEarned / projectSpent * 100 : 0;
 
   const latest = power?.latest || null;
   const totalWatts = Number(latest?.totalWatts) || 0;
