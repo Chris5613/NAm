@@ -58,7 +58,9 @@ export default function ProjectBreakEvenPage() {
       window.clearInterval(poll);
     };
   }, [revision]);
-  const calculatedProjects = serverProjects?.rows || [];
+  const calculatedProjects = useMemo(
+    () => serverProjects?.rows || [], [serverProjects],
+  );
   useEffect(() => {
     if (!selectedId) return undefined;
     closeButtonRef.current?.focus();
