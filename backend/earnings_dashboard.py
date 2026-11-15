@@ -116,8 +116,7 @@ def build_backend_earnings_dashboard(month, today_key, records, trackers, now=No
             "key": day,
             "day": str(int(day[-2:])),
             "date": day,
-            "label": date.fromisoformat(day).strftime("%b %-d") if False else
-                     date.fromisoformat(day).strftime("%b ") + str(int(day[-2:])),
+            "label": date.fromisoformat(day).strftime("%b ") + str(int(day[-2:])),
             "value": computed["value"] if recorded else None,
             "future": day > today_key,
             **computed,

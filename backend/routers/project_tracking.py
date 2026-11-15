@@ -547,7 +547,7 @@ async def earnings_dashboard(
     """
     import calendar
     from datetime import date, timedelta
-    if not re.fullmatch(r"\\d{4}-\\d{2}", month):
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
         raise HTTPException(status_code=422, detail="Invalid month.")
     try:
         year, month_number = map(int, month.split("-"))
