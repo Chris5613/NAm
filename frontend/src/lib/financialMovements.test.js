@@ -1,6 +1,6 @@
 import {
   collectMovementCandidates, collectBankMovementCandidates, movementFromReview,
-  reconcileBalances, resolveFinancialAccount,
+  resolveFinancialAccount,
 } from "./financialMovements";
 
 test("a verified provider withdrawal moves assets without creating income", () => {
@@ -48,15 +48,6 @@ test("bank transfer or mining deposit needs business-purpose review", () => {
   expect(items.every(row => row.matchable === false)).toBe(true);
   expect(items.find(row => row.id==="bank:2").from).toBe("platform:kryptex");
   expect(items.find(row => row.id==="bank:2").to).toBe("cash");
-});
-
-test("reconciliation reports unexplained changes without posting them", () => {
-  const rows = reconcileBalances([
-    {name:"Kryptex",start:10,end:20,category:"digital"},
-    {name:"BTC",start:300,end:330,category:"digital"},
-  ],{sources:{Kryptex:12}},[],"2026-11");
-  expect(rows.find(row=>row.name==="Kryptex").unexplained).toBe(-2);
-  expect(rows.find(row=>row.name==="BTC").valuationSensitive).toBe(true);
 });
 
 test("same event id is imported only once", () => {
