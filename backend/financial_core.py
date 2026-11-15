@@ -65,34 +65,6 @@ def activity(entries, account):
     ))
 
 
-def trial_balance(entries, accounts):
-    """Read-only double-entry trial balance; no postings or account creation."""
-    listed = entries_list(accounts)
-    if len(listed) > 500 or len(entries_list(entries)) > 20000:
-        raise ValueError("Trial balance input too large.")
-    rows = []
-    for source in listed:
-        if not isinstance(source, dict):
-            continue
-        account = source.get("id")
-        if not isinstance(account, str) or not account:
-            continue
-        balance = activity(entries, account)
-        if balance == 0:
-            continue
-        rows.append({
-            **source,
-            "debit": max(0, balance),
-            "credit": max(0, -balance),
-        })
-    return {
-        "sourceOfCalculation": "backend-financial-core",
-        "rows": rows,
-        "debitTotal": cents(sum(x["debit"] for x in rows)),
-        "creditTotal": cents(sum(x["credit"] for x in rows)),
-    }
-
-
 def compute_profit(entries, saved_expenses):
     balances = lambda name: activity(entries, name)
     revenue = cents(-balances("revenue") - balances("dividendRevenue"))
