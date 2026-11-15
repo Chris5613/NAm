@@ -13,8 +13,7 @@ const colors = {
 };
 const money = value => formatCurrency(Number(value) || 0);
 const percent = value => `${Math.round(value)}%`;
-const isRecovered = row =>
-  row.spent > 0 ? row.earned >= row.spent : row.id === "salad-project" && row.earned > 0;
+const isRecovered = row => row.recovered === true;
 
 export default function ProjectBreakEvenPage() {
   const [serverProjects, setServerProjects] = useState(null);
@@ -131,7 +130,7 @@ export default function ProjectBreakEvenPage() {
   }
 
   function projectRow(row, index) {
-    const ratio = row.spent > 0 ? Math.max(0, row.earned) / row.spent * 100 : 0;
+    const ratio = row.recoveredPct;
     const color = colors[row.name] || "#38bdf8";
     const noCostSalad = row.id === "salad-project" && !row.spent && row.earned > 0;
     return <button key={row.id} type="button" onClick={event => selectProject(row.id, event)}
@@ -145,7 +144,7 @@ export default function ProjectBreakEvenPage() {
         <ChevronRight className="h-5 w-5 shrink-0 text-[#91a4b8]" />
       </div>
       <p className="mt-3 text-sm tabular-nums text-[#91a4b8]">{row.spent ? `${money(row.earned)} earned of ${money(row.spent)} spent` : `${money(row.earned)} recorded earnings`}</p>
-      {row.spent > 0 && !isRecovered(row) && <p className="mt-1 text-sm font-semibold tabular-nums text-[#fbbf24]">{money(Math.max(0, row.spent - row.earned))} left to earn</p>}
+      {row.spent > 0 && !isRecovered(row) && <p className="mt-1 text-sm font-semibold tabular-nums text-[#fbbf24]">{money(row.remaining)} left to earn</p>}
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full transition-[width]" style={{ width: `${noCostSalad ? 100 : Math.min(100, ratio)}%`, backgroundColor: color }} /></div>
     </button>;
   }
@@ -210,8 +209,8 @@ export default function ProjectBreakEvenPage() {
           <div><h2 id="break-even-dialog-title" className="text-2xl font-semibold">{selected.name}</h2><p className="mt-1 text-sm text-[#91a4b8]">Earnings-only recovery</p></div>
           <button ref={closeButtonRef} type="button" onClick={closeProject} aria-label="Close project details" className="rounded-lg p-1.5 text-[#91a4b8] hover:bg-white/10 hover:text-white"><X className="h-5 w-5" /></button>
         </div>
-        <strong className="mt-6 block text-5xl tracking-tight">{isRecovered(selected) ? "Recovered" : selected.spent ? percent(Math.max(0, selected.earned) / selected.spent * 100) : "—"}</strong>
-        <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full" style={{ width: `${selected.spent ? Math.min(100, Math.max(0, selected.earned) / selected.spent * 100) : selected.id === "salad-project" && selected.earned > 0 ? 100 : 0}%`, backgroundColor: colors[selected.name] || "#38bdf8" }} /></div>
+        <strong className="mt-6 block text-5xl tracking-tight">{isRecovered(selected) ? "Recovered" : selected.spent ? percent(selected.recoveredPct) : "—"}</strong>
+        <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#273647]"><div className="h-full rounded-full" style={{ width: `${selected.spent ? Math.min(100, selected.recoveredPct) : selected.id === "salad-project" && selected.earned > 0 ? 100 : 0}%`, backgroundColor: colors[selected.name] || "#38bdf8" }} /></div>
         <dl className="mt-5 divide-y divide-[#263342] border-t border-[#263342] text-base">
           <div className="flex justify-between gap-3 py-4"><dt className="text-[#91a4b8]">Total spent</dt><dd className="font-semibold tabular-nums">{selected.spent ? money(selected.spent) : "Not entered"}</dd></div>
           <div className="flex justify-between gap-3 py-4"><dt className="text-[#91a4b8]">Lifetime earned</dt><dd className="font-semibold tabular-nums">{money(selected.earned)}</dd></div>
