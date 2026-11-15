@@ -1,5 +1,4 @@
 import { useRollerCoinExtension } from "../hooks/useRollerCoinExtension";
-import { latestRollerCoinTimestamp } from "@/lib/rollerCoinFreshness";
 import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
@@ -12,8 +11,6 @@ import { buildSourceTotalsForDay } from "../lib/yieldIncomeSources";
 import { buildYearlyEarningsChart } from "../lib/monthlyEarningsChart";
 import { buildDailyEarningsChart } from "../lib/dailyEarningsChart";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { remoteStorage } from "@/lib/serverStore";
-import { stockPayoutTotal } from "@/lib/stockDividendPayouts";
 import { projectsApi } from "@/lib/api";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { useRegisteredYieldWallets } from "@/hooks/useRegisteredYieldWallets";
@@ -41,48 +38,33 @@ import {
   loadProjectExpenses,
   saveProjectExpenses,
   loadProjectLogos,
-  saveProjectLogos,
   loadMonthlyBackfills,
-  saveMonthlyBackfills,
   loadLuloMonthlyBaselines,
-  saveLuloMonthlyBaselines,
   loadMonthlySnapshots,
-  saveMonthlySnapshots,
   loadLoopscaleHistory,
-  saveLoopscaleHistory,
-  saveSaladTracker,
   getSaladTrackerStats,
-  saveUnetworkTracker,
   getUnetworkTrackerStats,
-  saveRollerCoinTracker,
   getRollerCoinTrackerStats,
   loadPositions,
-  savePositions,
   formatCurrency,
-  getCurrentMonthKey,
   getCurrentYear,
   getTodayKey,
   createLuloProjectCard,
   updateLoopscaleHistoryFromSnapshot,
   createLoopscaleProjectCard,
   groupManualPositions,
-  saveKryptexTracker,
   getKryptexStats,
   buildProjectIncome,
   reconcileMonthlySnapshots,
   getEffectiveProjectIncome,
   DAILY_BALANCE_SNAPSHOT_KEY,
-  DAILY_EARNINGS_CHART_OBSERVATIONS_KEY,
   AUTO_RECOVERED_EARNINGS_KEY,
   PROJECT_QUICK_CACHE_KEY,
-  INACTIVE_PROJECTS_KEY,
-  PROJECT_INCOME_PORTFOLIO_SUMMARY_KEY,
   getPrivateAccountingProfile
 } from "@/lib/yieldFarmingAccounting";
 import {
   KryptexProjectCard,
   getProjectProjections,
-  formatCompactSyncAge,
   ProjectCard,
   UnetworkProjectCard,
   SaladProjectCard,
