@@ -3,17 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
-import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
-import { mergeManualIncome } from "@/lib/manualIncomeHistory";
-import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
-import {
-  formatCurrency, getCurrentMonthKey, getTodayKey, getEffectiveProjectIncome,
-  buildProjectIncome, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills,
-  getRollerCoinTrackerStats, groupManualPositions, loadPositions,
-  loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker,
-  PROJECT_QUICK_CACHE_KEY, readObject,
-} from "@/lib/yieldFarmingAccounting";
+
+
+import { formatCurrency, getCurrentMonthKey, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, getRollerCoinTrackerStats, groupManualPositions, loadPositions, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { localStorage as appStorage } from "@/lib/localStorage";
