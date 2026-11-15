@@ -38,6 +38,11 @@ class HardwarePaybackLifetimeTests(unittest.TestCase):
         result=build_lifetime_hardware_payback(devices,history,trackers,"2026-11-14")
         rows={r["id"]:r for r in result["devices"]}
         self.assertAlmostEqual(rows["5080"]["observedCreditUsd"],7.18542071)
+        self.assertAlmostEqual(rows["5080"]["observedRemainingUsd"],1242.81457929)
+        self.assertTrue(0 < rows["5080"]["observedProgressPct"] < 1)
+        self.assertAlmostEqual(result["sumDeviceCashCostUsd"],1750)
+        self.assertAlmostEqual(result["sumObservedRemainingUsd"],
+                               1750-result["sumObservedDeviceCreditsUsd"])
         self.assertAlmostEqual(rows["5080"]["verifiedRewardSubtotalUsd"],7.15757634)
         self.assertAlmostEqual(rows["5080"]["provisionalRewardSubtotalUsd"],.02784437)
         self.assertIsNone(rows["5080"]["verifiedRecoveryUsd"])

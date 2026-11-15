@@ -138,6 +138,7 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key):
                 "id": identity, "name": str(device.get("name") or "")[:128],
                 "sources": selected, "startDay": device.get("earningsStartDay"),
                 "verifiedRecoveryUsd": None, "observedCreditUsd": None,
+                "observedRemainingUsd": None, "observedProgressPct": None,
                 "complete": False, "reasons": reasons,
                 "checkpointBaselineUsd": numeric(checkpoint_baseline) if checkpoint_baseline is not None else None,
                 "checkpointCarriedUsd": numeric(carried) if carried is not None else None,
@@ -191,6 +192,8 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key):
             "sources": selected, "startDay": start.isoformat(),
             "cashCostUsd": numeric(cost),
             "observedCreditUsd": numeric(observed),
+            "observedRemainingUsd": numeric(max(cost-observed, Decimal("0"))),
+            "observedProgressPct": round(float(min(Decimal(100), observed/cost*100)), 4),
             "verifiedRewardSubtotalUsd": numeric(verified),
             "provisionalRewardSubtotalUsd": numeric(provisional),
             "verifiedRecoveryUsd": numeric(observed) if complete else None,
@@ -220,6 +223,16 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key):
         (Decimal(str(row["observedCreditUsd"])) for row in results
          if row.get("observedCreditUsd") is not None), Decimal("0")
     )
+    device_costs = [decimal_or_none(row.get("cost"))
+                    for row in normalized.values()]
+    cost_sum = (sum(device_costs, Decimal("0"))
+                if device_costs and all(v is not None and v > 0 for v in device_costs)
+                else None)
+    observed_remainings = [decimal_or_none(row.get("observedRemainingUsd"))
+                           for row in results]
+    remaining_sum = (sum(observed_remainings, Decimal("0"))
+                     if len(observed_remainings) == len(normalized) and
+                     all(v is not None for v in observed_remainings) else None)
     certified = bool(normalized) and not warnings and missing_total == 0 and provisional_total == 0 and all(
         row["complete"] for row in results
     )
@@ -229,6 +242,8 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key):
         "devices": results,
         "observedSelectedSourceRevenueUsd": numeric(unique),
         "sumObservedDeviceCreditsUsd": numeric(assignments),
+        "sumDeviceCashCostUsd": numeric(cost_sum) if cost_sum is not None else None,
+        "sumObservedRemainingUsd": numeric(remaining_sum) if remaining_sum is not None else None,
         "repeatedDeviceCreditsUsd": numeric(repeated),
         "unverifiedDeviceCreditsUsd": numeric(provisional_total),
         "sourceDayMissingCount": missing_total,

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, X, Cpu, CalendarDays, Zap } from "lucide-react";
 import { api } from "@/lib/apiClient";
+import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
-import { sharedPaybackSources, fullSourceDailyPaybackCredit } from "@/lib/hardwarePaybackReporting";
+import { sharedPaybackSources } from "@/lib/hardwarePaybackReporting";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
-import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome, shiftMonth } from "@/lib/incomeHistory";
+import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
@@ -85,55 +86,6 @@ function readHistory() {
   ].filter(Boolean);
   return { legacyProjects, activeProjectNames, luloProjects: quickProjects.filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {} };
 }
-const estimatedDailyForDevice = (device, months, currentMonth, kryptexTracker) => {
-  const dayOfMonth = Number(new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles", day: "numeric",
-  }).format(new Date()));
-  const current = months.find(item => item.monthKey === currentMonth);
-  // The actual payback cards credit each selected source in full, even when
-  // two devices share it. Estimates must follow that same rule, rather than
-  // silently splitting Kryptex by purchase cost.
-  const incomePerDay = fullSourceDailyPaybackCredit(deviceSources(device), source =>
-    source === "Kryptex"
-      ? Math.max(0, Number(kryptexTracker?.profitabilityUsdDay) || 0)
-      : monthSourceAmount(current, source, kryptexTracker) / Math.max(1, dayOfMonth)
-  );
-  return Math.max(0,incomePerDay - outOfPocketMiningPowerCost(Number(device.power) || 0,currentMonth)/30);
-};
-const recoveryDateLabel = date => new Intl.DateTimeFormat("en-US", {
-  timeZone: "America/Los_Angeles", month: "short", day: "numeric", year: "numeric",
-}).format(date);
-function buildTimeline(devices, months, currentMonth, kryptexTracker) {
-  if (!devices.length) return { points: [], cost: 0, earned: 0, remaining: 0, halfway: null, breakEven: null, pace: 0 };
-  const cost = devices.reduce((sum, d) => sum + Number(d.cost || 0), 0);
-  const start = devices.map(d => d.startMonth).sort()[0];
-  const day = Number(new Intl.DateTimeFormat("en-US", { day: "numeric", timeZone: "America/Los_Angeles" }).format(new Date()));
-  const days = new Date(Number(currentMonth.slice(0, 4)), Number(currentMonth.slice(5, 7)), 0).getDate();
-  const points = [{ month: `${start}-start`, label: "Purchase", actual: 0, forecast: null }]; let cumulative = 0;
-  for (let month = start, count = 0; month <= currentMonth && count < 240; month = shiftMonth(month, 1), count++) {
-    const fraction = month === currentMonth ? day / days : 1;
-    const row = months.find(item => item.monthKey === month);
-    const activeSources = new Set(devices.filter(device => month >= device.startMonth).flatMap(deviceSources));
-    const income = Array.from(activeSources).reduce((sum, source) => sum + monthSourceAmount(row, source, kryptexTracker), 0);
-    cumulative = Math.max(0, cumulative + income - devices.reduce((sum, d) => month >= d.startMonth ? sum + outOfPocketMiningPowerCost(Number(d.power) || 0, month) * fraction : sum, 0));
-    points.push({ month, label: label(month), actual: Math.round(cumulative * 100) / 100, forecast: null });
-  }
-  const earned = cumulative;
-  const closed = points.slice(0, -1).slice(-3);
-  const pace = closed.length ? closed.reduce((sum, row) => { const i = points.indexOf(row); return sum + row.actual - (i ? points[i - 1].actual : 0); }, 0) / closed.length : 0;
-  const halfway = points.find(p => p.actual >= cost / 2)?.month || null;
-  let breakEven = points.find(p => p.actual >= cost)?.month || null;
-  if (points.length && pace > 0 && !breakEven) {
-    points[points.length - 1].forecast = points[points.length - 1].actual;
-    for (let i = 1; i <= 36; i++) {
-      const month = shiftMonth(currentMonth, i);
-      const forecast = Math.round((earned + pace * i) * 100) / 100;
-      points.push({ month, label: label(month), actual: null, forecast });
-      if (forecast >= cost) { breakEven = month; break; }
-    }
-  }
-  return { points, cost, earned, remaining: Math.max(0, cost - earned), halfway, breakEven, pace };
-}
 // Fractional Pacific calendar month, used to prorate power after a checkpoint.
 function monthPosition(time) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
@@ -145,7 +97,7 @@ function monthPosition(time) {
     (parts.day - 1 + (parts.hour + parts.minute / 60 + parts.second / 3600) / 24) / days;
 }
 
-function deviceEarnings(devices, months, month, now, legacyStats, kryptexTracker) {
+function deviceEarnings(devices, months, month, now, kryptexTracker) {
   return Object.fromEntries(devices.map(device => {
     const sources=deviceSources(device);
     if(!device.checkpoint || !sources.length) return [device.id,0];
@@ -188,6 +140,7 @@ export default function HardwarePaybackPage() {
   const [photoLoading, setPhotoLoading] = useState(false);
   const [historyReady, setHistoryReady] = useState(false);
   const [clock, setClock] = useState(Date.now());
+  const {data: backendRecovery, error: backendRecoveryError} = useBackendHardwarePayback();
   useEffect(() => subscribe(() => { setDevices(readDevices()); setHistory(current => ({ ...readHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills })); }), []);
   useEffect(() => {
     // The canonical Kryptex endpoint reconciles chart rewards, satoshi
@@ -246,18 +199,23 @@ export default function HardwarePaybackPage() {
     setDevices(migrated);
   }, [historyReady, devices, months, currentMonth, history.kryptex]);
   const sourceOptions = useMemo(() => sourceOptionsFor(history, months), [history, months]);
-  const stats = useMemo(() => buildTimeline(devices, months, currentMonth, history.kryptex), [devices, months, currentMonth, history.kryptex]);
-  const earnings = deviceEarnings(devices, months, currentMonth, Date.now(), stats, history.kryptex);
   // Per-device credits intentionally use full selected source earnings.
   // When multiple devices share Kryptex (or another provider), summing these
   // credits is NOT distinct business revenue. Preserve the user's chosen
   // payback method, but label the rollup accurately.
   const sharedSources = sharedPaybackSources(devices, deviceSources);
-  const totalEarned = Object.values(earnings).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
-  const left = devices.reduce((sum, device) => sum + Math.max(0, device.cost - earnings[device.id]), 0);
+  // Do not reuse the old browser checkpoint calculations for DISPLAY.
+  // The legacy earnings helper above only supports compatibility when
+  // an older device is edited; it does not determine visible recovery.
+  const paybackRows = useMemo(() => new Map(
+    (backendRecovery?.devices || []).map(row => [String(row.id), row])
+  ), [backendRecovery]);
+  const totalEarned = backendRecovery?.sumObservedDeviceCreditsUsd ?? null;
+  const left = backendRecovery?.sumObservedRemainingUsd ?? null;
+  const totalCost = backendRecovery?.sumDeviceCashCostUsd ?? null;
   function persist(next) {
     const time=Date.now();
-    const carried=deviceEarnings(devices,months,currentMonth,time,stats,history.kryptex);
+    const carried=deviceEarnings(devices,months,currentMonth,time,history.kryptex);
     const currentRow=months.find(row=>row.monthKey===currentMonth);
     const updated=next.map(device=>{
       const sources=deviceSources(device);
@@ -299,17 +257,17 @@ export default function HardwarePaybackPage() {
   const remove = id => { const next = devices.filter(row => row.id !== id); persist(next); };
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="hardware-payback-page">
     <header className="flex flex-wrap items-center justify-between gap-3 px-1"><h1 className="text-[32px] font-semibold tracking-tight">Hardware Payback</h1><button type="button" onClick={() => { setError(""); setDraft({ name: "", cost: "", power: "", startMonth: currentMonth, source: "", sources: [], earningsStartDay:currentDay }); }} className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"><Plus className="h-4 w-4"/>Add hardware</button></header>
-    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[["Hardware cost", stats.cost], ["Sum of device payback credits", totalEarned], ["Left to recover", left]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length ? money(value) : "—"}</strong></section>)}</div>
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[["Hardware cash cost", totalCost], ["Backend-observed device credits", totalEarned], ["Observed remaining to recover", left]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length && value != null ? money(value) : "—"}</strong></section>)}</div>
+    {backendRecoveryError && <p role="status" className="px-1 text-xs text-amber-300">{backendRecoveryError}. No local checkpoint amount is substituted.</p>}
+    {backendRecovery && !backendRecovery.complete && <p role="note" className="px-1 text-xs leading-relaxed text-amber-300">Backend source audit incomplete: observed recovery may contain provisional provider receipts or missing days. The amounts below are source-dated observations, not verified cash income.</p>}
     {sharedSources.length > 0 && <p role="note" className="px-1 text-xs leading-relaxed text-[#91a4b8]">Shared source{sharedSources.length === 1 ? "" : "s"} ({sharedSources.join(", ")}) appear{sharedSources.length === 1 ? "s" : ""} on multiple devices. The credit total above counts each device's payback separately, so it is not unique mining income. Use Passive Income for the unduplicated earnings total.</p>}
-    {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{left <= 0 ? "Recovered" : stats.pace > 0 ? `Estimated break-even: ${label(shiftMonth(currentMonth, Math.min(1200, Math.ceil(left / stats.pace))))}` : "No positive earnings pace yet"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => {
-          const progress = Math.max(0, Math.min(1, earnings[d.id] / d.cost));
-          const remaining = Math.max(0, d.cost - earnings[d.id]);
-          const estimatedDaily = estimatedDailyForDevice(d, months, currentMonth, history.kryptex);
-          const estimatedRecoveryDate = remaining <= 0
-            ? null
-            : estimatedDaily > 0
-              ? new Date(Date.now() + Math.ceil(remaining / estimatedDaily) * 86400000)
-              : null;
+    {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{left != null && left <= 0 && backendRecovery?.complete ? "Recovered" : "Forecast paused until backend source history is reconciled"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => {
+          const evidence = paybackRows.get(String(d.id));
+          const observed = evidence?.observedCreditUsd ?? null;
+          const remaining = evidence?.observedRemainingUsd ?? null;
+          const progress = evidence?.observedProgressPct != null
+            ? Math.max(0, Math.min(1, evidence.observedProgressPct / 100)) : null;
+          const provisional = evidence && !evidence.complete;
           return (
           <article key={d.id} role="button" tabIndex={0}
             aria-label={`Edit ${d.name} hardware and income source`}
@@ -330,12 +288,13 @@ export default function HardwarePaybackPage() {
               <span aria-hidden="true" className="rounded-lg border border-[#344657] p-2 text-[#aabac8]"><Pencil size={15}/></span>
             </div>
             <dl className="my-5 grid grid-cols-1 gap-4 text-sm">
-              <div><dt>Cost</dt><dd className="font-semibold">{money(d.cost)}</dd></div>
-              <div><dt>Allocated recovery</dt><dd className="font-semibold text-emerald-300">{money(d.cost * progress)}</dd></div>
-              <div><dt>Left</dt><dd className="font-semibold">{money(remaining)}</dd></div>
-              <div><dt>Estimated recovered</dt><dd className="font-semibold">{remaining <= 0 ? "Recovered" : estimatedRecoveryDate ? recoveryDateLabel(estimatedRecoveryDate) : "No positive pace yet"}</dd></div>
+              <div><dt>Hardware cash cost</dt><dd className="font-semibold">{evidence?.cashCostUsd != null ? money(evidence.cashCostUsd) : "—"}</dd></div>
+              <div><dt>Backend observed recovery</dt><dd className="font-semibold text-emerald-300">{observed == null ? "—" : money(observed)}{provisional && <span className="ml-1 text-[10px] text-amber-300">(provisional)</span>}</dd></div>
+              <div><dt>Observed remaining</dt><dd className="font-semibold">{remaining == null ? "—" : money(remaining)}</dd></div>
+              <div><dt>Estimated recovered</dt><dd className="font-semibold">{remaining != null && remaining <= 0 && evidence?.complete ? "Recovered" : "Forecast not verified"}</dd></div>
             </dl>
-            <div className="mb-4 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-[#253447]"><div className="h-full bg-emerald-400" style={{width: `${progress * 100}%`}}/></div><span>{progress === 1 ? "Recovered" : Math.round(progress * 100) + "%"}</span></div>
+            <div className="mb-4 flex items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-[#253447]"><div className="h-full bg-emerald-400" style={{width: `${(progress ?? 0) * 100}%`}}/></div><span>{progress == null ? "—" : progress === 1 ? "100%" : Math.round(progress * 100) + "%"}</span></div>
+            {evidence?.checkpointBaselineUnderstatesPriorRewards && <p role="alert" className="mb-3 text-xs text-amber-300">The saved checkpoint predates recovered source history. Backend credits start on {evidence.startDay}; older rewards are excluded.</p>}
             <div className="flex flex-col items-start gap-2 border-t border-[#304252] pt-3 text-sm text-[#b1c2d0]">
               <span className={`inline-flex items-center gap-2 ${d.source ? "" : "text-amber-300"}`}>{deviceSources(d).join(", ") || "Income source not selected"}</span>
               <span className="inline-flex items-center gap-2"><CalendarDays size={15}/>{label(d.startMonth)}</span>
@@ -355,6 +314,6 @@ finally{setPhotoLoading(false);e.target.value="";}}}
 className="block w-full text-xs text-[#aab9c6] file:mr-2 file:rounded-md file:border-0 file:bg-[#243a4e] file:px-2 file:py-1.5 file:text-white"/>
 {draft.photo && <button type="button" className="text-xs text-rose-300 hover:underline" onClick={()=>setDraft(current=>({...current,photo:""}))}>Remove photo</button>}
 <p className="text-[11px] text-[#91a4b8]">Optional JPG, PNG or WebP. RTX 5080 has a default illustration.</p>
-</div></div></div><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><fieldset className="space-y-2"><legend className="text-sm">Income sources (select multiple)</legend><div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#3c5267] bg-[#111b25] p-2">{Array.from(new Set([...sourceOptions,...deviceSources(draft)])).map(source=><label key={source} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"><input type="checkbox" checked={deviceSources(draft).includes(source)} onChange={event=>{ const current=deviceSources(draft); const sources=event.target.checked ? [...current,source] : current.filter(item=>item!==source); setDraft({...draft,sources,source:sources[0] || ""}); }} className="h-4 w-4 accent-emerald-400"/>{source}</label>)}</div></fieldset><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Earnings start date<input type="date" max={currentDay} value={draft.earningsStartDay || ""} onChange={e => setDraft({ ...draft, earningsStartDay: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/><span className="mt-1 block text-xs text-[#91a4b8]">Counts earnings from the selected Pacific date. Leave blank to use checkpoint tracking.</span></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" disabled={!historyReady} onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" disabled={!historyReady || photoLoading} className="disabled:opacity-50 flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">{historyReady ? "Save" : "Loading earnings…"}</button></div></form></div>}
+</div></div></div><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><fieldset className="space-y-2"><legend className="text-sm">Income sources (select multiple)</legend><div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#3c5267] bg-[#111b25] p-2">{Array.from(new Set([...sourceOptions,...deviceSources(draft)])).map(source=><label key={source} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"><input type="checkbox" checked={deviceSources(draft).includes(source)} onChange={event=>{ const current=deviceSources(draft); const sources=event.target.checked ? [...current,source] : current.filter(item=>item!==source); setDraft({...draft,sources,source:sources[0] || ""}); }} className="h-4 w-4 accent-emerald-400"/>{source}</label>)}</div></fieldset><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Earnings start date<input type="date" max={currentDay} value={draft.earningsStartDay || ""} onChange={e => setDraft({ ...draft, earningsStartDay: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/><span className="mt-1 block text-xs text-[#91a4b8]">Backend recovery uses this Pacific start date for every selected source. Changing income sources may require a separate historical checkpoint review. A blank start date cannot be certified.</span></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" disabled={!historyReady} onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" disabled={!historyReady || photoLoading} className="disabled:opacity-50 flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">{historyReady ? "Save" : "Loading earnings…"}</button></div></form></div>}
   </div>;
 }

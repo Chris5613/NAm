@@ -18,6 +18,7 @@ import { backendCryptoProviderIncomeRows } from "@/lib/cryptoDashboardIncomeRows
 import { useAuth } from "@/lib/AuthContext";
 import { readCryptoDashboardPowerCache, writeCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
 import { extractBackendKryptexRunRate, projectedDailyMiningNet } from "@/lib/backendKryptexRunRate";
+import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
 import { PASSIVE_MONTHLY_INCOME_KEY } from "@/lib/monthlyEarningsChart";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
@@ -628,6 +629,7 @@ export default function SideHustleDashboard() {
   const currentMonthKey = getCurrentMonthKey();
   const { data: backendEarnings, isCached: earningsCached, error: earningsError } = useBackendEarningsDashboard(currentMonthKey);
   const { data: backendPortfolio, isCached: portfolioCached, error: portfolioError } = useCryptoDashboardSnapshot();
+  const { data: backendHardware, error: backendHardwareError } = useBackendHardwarePayback();
   const { data: backendBitcoin, isCached: bitcoinCached, error: bitcoinError } = useBackendBitcoinValuation();
   const serverTodaySources = backendEarnings?.todaySources
     ? { date: backendEarnings.todayKey, sources: backendEarnings.todaySources } : null;
@@ -677,16 +679,17 @@ export default function SideHustleDashboard() {
   const deviceRows = Array.isArray(latest?.devices) ? latest.devices : [];
   const deviceUsage = powerMonth?.devices || {};
 
-  const hardwareCost = hardware.reduce((sum, row) => sum + (Number(row.cost) || 0), 0);
   // Use the same provider observations for Top Projects and Hardware Payback.
   const kryptexTracker = recordedHistory.kryptex;
   const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock, recordedMonths, {
     salad:recordedHistory.salad,unetwork:recordedHistory.unetwork,
     rollercoin:recordedHistory.rollercoin,serverDaily:serverTodaySources,
   });
-  const hardwareRecovered = Object.values(hardwareEarnings)
-    .reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
-  const hardwareProgress = hardwareCost > 0 ? hardwareRecovered / hardwareCost * 100 : 0;
+  // The old checkpoint earnings helper above is retained for compatibility
+  // when editing legacy devices. Hardware recovery DISPLAY is backend-only.
+  const backendHardwareRows = new Map(
+    (backendHardware?.devices || []).map(device => [String(device.id), device])
+  );
 
   // The server-owned provider feed, not a browser portfolio calculation.
   const totalProjectBalance = backendPortfolio?.totalUsd ?? null;
@@ -879,6 +882,9 @@ export default function SideHustleDashboard() {
           </button>
         </div>
 
+        {(backendHardwareError || (backendHardware && !backendHardware.complete)) && (
+          <p role="note" className="mt-2 text-[10px] text-amber-300">Backend payback {backendHardwareError ? "unavailable" : "contains provisional or missing provider days"}; no local checkpoint amount is substituted.</p>
+        )}
         <div className="mt-3 space-y-2">
           {hardware.slice(0, 4).map(row => {
             const name = String(row.name || "");
@@ -890,18 +896,11 @@ export default function SideHustleDashboard() {
                 : null;
 
             const selectedSources=hardwareSources(row);
-            const sourceProjects=income.projects.filter(project=>
-              selectedSources.some(source=>canonicalSourceName(project?.name).toLowerCase()===source.toLowerCase())
-            );
-
-            const cost = Math.max(0, Number(row.cost) || 0);
-            const recovered = Math.max(0, Number(hardwareEarnings[row.id]) || 0);
-            const progress = cost > 0 ? recovered / cost * 100 : 0;
-            const monthlyPowerCost = Math.max(0, Number(row.power) || 0);
-            const grossMonthlyIncome = sourceProjects.reduce((sum,project)=>sum+Math.max(0,Number(project.daily)||0),0)*30.4375;
-            const estMonthlyIncome = Math.max(0, grossMonthlyIncome - monthlyPowerCost);
-            const remaining = Math.max(0, cost - recovered);
-            const paybackMonths = remaining <= 0 ? 0 : estMonthlyIncome > 0 ? remaining / estMonthlyIncome : null;
+            const verified=backendHardwareRows.get(String(row.id));
+            const cost=verified?.cashCostUsd ?? null;
+            const recovered=verified?.observedCreditUsd ?? null;
+            const progress=verified?.observedProgressPct ?? null;
+            const remaining=verified?.observedRemainingUsd ?? null;
 
             return <div
               key={row.id} role="button" tabIndex={0}
@@ -922,21 +921,21 @@ export default function SideHustleDashboard() {
                   {row.earningsStartDay && <p className="mt-1 text-[10px] text-sky-300">Earnings since {row.earningsStartDay}</p>}
                 </div>
                 <span className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-emerald-400">
-                  {cost > 0 ? percent(progress) : "—"}
+                  {cost != null && progress != null ? percent(progress) : "—"}
                 </span>
               </div>
               <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[#25313c] pt-3">
                 <div className="min-w-0">
-                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-amber-400 sm:text-[13px]">{money(cost)}</strong>
+                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-amber-400 sm:text-[13px]">{cost == null ? "—" : money(cost)}</strong>
                   <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Amount Spent</p>
                 </div>
                 <div className="min-w-0">
-                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{money(recovered)}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Earned So Far</p>
+                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{recovered == null ? "—" : money(recovered)}</strong>
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Backend observed{verified && !verified.complete ? " · provisional" : ""}</p>
                 </div>
                 <div className="min-w-0 text-right">
-                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{paybackMonths === 0 ? "Recovered" : paybackMonths != null ? `~${paybackMonths.toFixed(1)} mo` : "—"}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Payback</p>
+                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{remaining != null && remaining <= 0 && verified?.complete ? "Recovered" : "—"}</strong>
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Verified forecast</p>
                 </div>
               </div>
             </div>;
