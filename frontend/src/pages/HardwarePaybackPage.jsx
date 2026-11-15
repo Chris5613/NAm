@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, X, Cpu, CalendarDays, Zap } from "lucide-react";
 import { api } from "@/lib/apiClient";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
-import { sharedPaybackSources } from "@/lib/hardwarePaybackReporting";
+import { sharedPaybackSources, fullSourceDailyPaybackCredit } from "@/lib/hardwarePaybackReporting";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
@@ -30,13 +30,6 @@ const deviceSources = device => Array.from(new Set(
   (Array.isArray(device?.sources) ? device.sources : [device?.source])
     .map(canonicalSourceName).filter(Boolean)
 ));
-const sourceAllocations = devices => {
-  const totals = {};
-  for (const device of devices) for (const source of deviceSources(device)) {
-    totals[source] = (totals[source] || 0) + Math.max(0, Number(device.cost) || 0);
-  }
-  return totals;
-};
 const allocatedSourceIncome = (device, devices, monthRow, tracker) =>
   deviceSources(device).reduce((sum,source)=>
     sum + monthSourceAmount(monthRow,source,tracker),0);
@@ -92,19 +85,19 @@ function readHistory() {
   ].filter(Boolean);
   return { legacyProjects, activeProjectNames, luloProjects: quickProjects.filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {} };
 }
-const estimatedDailyForDevice = (device, devices, months, currentMonth, kryptexTracker) => {
+const estimatedDailyForDevice = (device, months, currentMonth, kryptexTracker) => {
   const dayOfMonth = Number(new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles", day: "numeric",
   }).format(new Date()));
-  const totals = sourceAllocations(devices);
   const current = months.find(item => item.monthKey === currentMonth);
-  const incomePerDay = deviceSources(device).reduce((sum, source) => {
-    const share = (Number(device.cost) || 0) / (totals[source] || 1);
-    const daily = source === "Kryptex"
+  // The actual payback cards credit each selected source in full, even when
+  // two devices share it. Estimates must follow that same rule, rather than
+  // silently splitting Kryptex by purchase cost.
+  const incomePerDay = fullSourceDailyPaybackCredit(deviceSources(device), source =>
+    source === "Kryptex"
       ? Math.max(0, Number(kryptexTracker?.profitabilityUsdDay) || 0)
-      : monthSourceAmount(current,source,kryptexTracker) / Math.max(1,dayOfMonth);
-    return sum + daily * share;
-  },0);
+      : monthSourceAmount(current, source, kryptexTracker) / Math.max(1, dayOfMonth)
+  );
   return Math.max(0,incomePerDay - outOfPocketMiningPowerCost(Number(device.power) || 0,currentMonth)/30);
 };
 const recoveryDateLabel = date => new Intl.DateTimeFormat("en-US", {
@@ -311,7 +304,7 @@ export default function HardwarePaybackPage() {
     {devices.length > 0 && <section className={`${panel} p-5`}><div className="flex flex-wrap items-center justify-between gap-2"><h2 className="text-lg font-semibold">Your hardware</h2><span className="text-sm text-[#91a4b8]">{left <= 0 ? "Recovered" : stats.pace > 0 ? `Estimated break-even: ${label(shiftMonth(currentMonth, Math.min(1200, Math.ceil(left / stats.pace))))}` : "No positive earnings pace yet"}</span></div><div className="mt-4 grid grid-cols-1 gap-3">{devices.map((d, index) => {
           const progress = Math.max(0, Math.min(1, earnings[d.id] / d.cost));
           const remaining = Math.max(0, d.cost - earnings[d.id]);
-          const estimatedDaily = estimatedDailyForDevice(d, devices, months, currentMonth, history.kryptex);
+          const estimatedDaily = estimatedDailyForDevice(d, months, currentMonth, history.kryptex);
           const estimatedRecoveryDate = remaining <= 0
             ? null
             : estimatedDaily > 0
