@@ -644,10 +644,23 @@ export default function SideHustleDashboard() {
   const receivePassiveMonthlyIncome=useCallback(next=>{
     if(!next || !/^\d{4}-\d{2}$/.test(String(next.month)) ||
        !Number.isFinite(Number(next.amount))) return;
-    setPublishedPassiveMonth(previous=>
-      previous?.month===next.month &&
-      Math.abs(Number(previous.amount)-Number(next.amount))<0.000001
-        ? previous : {month:next.month,amount:Number(next.amount)});
+    const normalized = {
+      month: next.month,
+      amount: Number(next.amount),
+      day: next.day,
+      today: Number.isFinite(Number(next.today)) ? Number(next.today) : null,
+      yesterdayDay: next.yesterdayDay,
+      yesterday: next.yesterday == null ? null : Number(next.yesterday),
+    };
+    setPublishedPassiveMonth(previous =>
+      previous?.month === normalized.month &&
+      previous?.day === normalized.day &&
+      Math.abs(Number(previous.amount) - normalized.amount) < 0.000001 &&
+      previous?.today === normalized.today &&
+      previous?.yesterdayDay === normalized.yesterdayDay &&
+      previous?.yesterday === normalized.yesterday
+        ? previous : normalized
+    );
   },[]);
 
   const currentMonthKey = getCurrentMonthKey();
@@ -661,13 +674,21 @@ export default function SideHustleDashboard() {
   const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
   const todayKey = pacificDayKey(clock);
   const localTodayIncome = Number(dailyRows.find(row => row.date === todayKey)?.income) || 0;
-  const passiveIncomeToday = Number.isFinite(Number(serverTodayIncome))
-    ? Math.max(0, Number(serverTodayIncome))
-    : Math.max(0, localTodayIncome);
+  const passiveIncomeToday = publishedPassiveMonth?.day === todayKey &&
+    publishedPassiveMonth?.today != null &&
+    Number.isFinite(Number(publishedPassiveMonth.today))
+      ? Math.max(0, Number(publishedPassiveMonth.today))
+      : Number.isFinite(Number(serverTodayIncome))
+        ? Math.max(0, Number(serverTodayIncome))
+        : Math.max(0, localTodayIncome);
   const yesterdayDate = new Date(new Date(`${todayKey}T12:00:00Z`).getTime() - 86400000);
   const yesterdayKey = yesterdayDate.toISOString().slice(0, 10);
-  const yesterdayIncome = Math.max(0, Number(dailyRows.find(row => row.date === yesterdayKey)?.income) || 0);
-  const todayVsYesterday = yesterdayIncome > 0
+  const yesterdayIncome = publishedPassiveMonth?.yesterdayDay === yesterdayKey &&
+    publishedPassiveMonth.yesterday != null &&
+    Number.isFinite(Number(publishedPassiveMonth.yesterday))
+      ? Math.max(0, Number(publishedPassiveMonth.yesterday))
+      : null;
+  const todayVsYesterday = yesterdayIncome !== null && yesterdayIncome > 0
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
     : null;
   const previousMonth = recentMonths.length > 1 ? recentMonths[recentMonths.length - 2] : null;
