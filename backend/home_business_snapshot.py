@@ -28,13 +28,18 @@ def current_live_assets(settings, bitcoin_usd):
             continue
         name = str(row.get("name") or "").strip().lower()
         amount = maybe_number(row.get("balanceUsd"))
-        if name in ("kryptex", "salad", "unetwork", "rollercoin", "loopscale",
-                    "lulo") and amount is not None:
+        # Preserve all saved project holdings, including new providers.
+        # Known dedicated trackers below override the general feed only when
+        # they contain usable observations. Do not infer income from balances.
+        if name and len(name) <= 100 and amount is not None and amount >= 0:
             latest[name] = amount
     quick = obj(settings.get("yield_project_quick_cache_v1"))
     loop = maybe_number(obj(quick.get("loopscaleSnapshot")).get("positionValueUsd"))
     if loop is not None:
         latest["loopscale"] = loop
+    ratex = maybe_number(obj(quick.get("ratexSnapshot")).get("currentValueUsd"))
+    if ratex is not None and ratex >= 0:
+        latest["ratex"] = ratex
     for name, key in (
         ("salad", "project_income_salad_tracker_v1"),
         ("unetwork", "project_income_unetwork_tracker_v1"),
