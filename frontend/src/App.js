@@ -11,7 +11,6 @@ import HomePage from "@/pages/Dashboard";
 import InvestmentOverview from "@/pages/InvestmentOverview";
 import CloudPage from "@/pages/CloudPage";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
-import IncomeHistoryPage from "@/pages/IncomeHistoryPage";
 import ProjectBreakEvenPage from "@/pages/ProjectBreakEvenPage";
 import HardwarePaybackPage from "@/pages/HardwarePaybackPage";
 import MiningPowerPage from "@/pages/MiningPowerPage";
@@ -115,7 +114,7 @@ function App() {
               <Route path="/crypto-dashboard" element={<SideHustleDashboard />} />
               <Route path="/side-hustle-dashboard" element={<Navigate to="/crypto-dashboard" replace />} />
               <Route path="/financials" element={<FinancialsPage />} />
-              <Route path="/income-history" element={<IncomeHistoryPage />} />
+              <Route path="/income-history" element={<Navigate to="/crypto-dashboard" replace />} />
               <Route path="/project-break-even" element={<ProjectBreakEvenPage />} />
               <Route path="/hardware-payback" element={<HardwarePaybackPage />} />
               <Route path="/mining-power" element={<MiningPowerPage />} />
