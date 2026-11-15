@@ -36,34 +36,3 @@ export function useBackendFinancialCore(month, entries, rows, devices, savedExpe
   return result?.signature === signature ? result : { loading: true };
 }
 
-export function financialReportMatches(frontend, backend) {
-  if (!frontend || !backend) return false;
-  return ["revenue", "disposalGain", "operating", "fees", "depreciation",
-    "expenses", "profit"].every(key =>
-      Number.isFinite(Number(frontend[key])) &&
-      Math.abs(Number(frontend[key]) - Number(backend[key])) < 0.005
-    ) && frontend.unitemizedExpenseOverlap === backend.unitemizedExpenseOverlap;
-}
-
-export function financialFlowsMatch(frontend, backend) {
-  if (!frontend || !backend) return false;
-  return ["operating", "investing", "financing", "transfers"].every(key =>
-    Math.abs(Number(frontend.totals?.[key] ?? 0) -
-      Number(backend.totals?.[key] ?? 0)) < 0.005
-  );
-}
-
-export function statementRowsMatch(local, remote) {
-  if (!Array.isArray(local) || !Array.isArray(remote) ||
-      local.length !== remote.length) return false;
-  return local.every((row, i) => {
-    const candidate = remote[i];
-    if (row.id !== candidate?.id || row.category !== candidate.category)
-      return false;
-    return ["start", "end", "journalChange", "unreconciledCash"].every(key => {
-      const a = row[key], b = candidate[key];
-      if (a == null || b == null) return a == b;
-      return Math.abs(Number(a) - Number(b)) < .005;
-    });
-  });
-}
