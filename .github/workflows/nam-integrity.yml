@@ -8,6 +8,56 @@ on:
   workflow_dispatch:
 
 jobs:
+  lulo-freeze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify inactive Lulo code was not changed
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            BASE=$(git merge-base "$PR_BASE_SHA" HEAD)
+          elif [ -n "$BEFORE_SHA" ] && ! echo "$BEFORE_SHA" | grep -Eq '^0+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Frontend unit and integration tests
+        run: CI=true npm test -- --watch=false --runInBand
+      - name: Frontend production build
+        run: npm run build
+
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install backend dependencies
+        run: pip install -r backend/requirements.txt
+      - name: Backend unit and integration tests
+        run: python -m unittest discover -s backend/tests -p 'test_*.py'
+; then
+            BASE="$BEFORE_SHA"
+          else
+            BASE="HEAD^"
+          fi
+          python tools/lulo_freeze_guard.py --base "$BASE"
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
