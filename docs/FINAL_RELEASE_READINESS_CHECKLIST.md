@@ -11,6 +11,20 @@ reset journal snapshots, or make fake zero balances. All Lulo-specific code and
 records remain frozen under `docs/LULO_INACTIVE_FREEZE.md` until the user
 explicitly authorizes changes to them.
 
+## Owner acceptance decision — 2026-11-15
+
+**Salad historical receipt amounts: ACCEPTED / COMPLETE FOR THE OWNER'S
+RELEASE CHECKLIST.** The owner explicitly confirmed "mark salad as complete
+i know its correct" on November 15. This closes the discretionary
+*acceptance* task for existing Salad receipt figures. This decision **does
+not** purport to turn legacy dated records into independently verified
+provider evidence, approve invented days, change RTX 5080 earning start,
+replace immutable provider/source tags, credit additional device revenue,
+or permit booking a missing/unobserved day's earnings. The read-only
+integrity audit must keep showing actual provenance and current-day gaps.
+A future objectively detected amount discrepancy remains actionable even
+though the historic acceptance task was marked complete.
+
 ## 1. Salad dated income evidence
 
 - [x] The saved **2026-11-13** Salad receipt of **$0.02737941** is
@@ -28,16 +42,19 @@ explicitly authorizes changes to them.
   `backend/salad_device_day_coverage.py` exposes the coverage in
   `/api/project-tracking/cross-page-integrity` and dedicated tests.
   This does **not** certify older unassociated Salad income history.
-- [ ] Provider-grade daily evidence **before November 13**: available saved
-  lifetime snapshots begin too late to prove those prior daily increments.
-  Do not synthesize exact earlier earnings from month-level balances.
-- [ ] The current/incomplete Pacific day cannot be certified before a complete
-  closing observation is available. Monitor further snapshots after day-end.
+- [x] **Owner accepted** legacy Salad daily receipt amounts before
+  November 13 as accurate for the release checklist. Independently
+  provider-verifiable snapshots begin later, so the original record
+  provenance stays labeled **legacy / user-accepted**, not provider-verified.
+  Do not synthesize earlier daily earnings or change booked totals.
+- [x] Ongoing Salad day-end verification is an operational monitoring
+  requirement, not a remaining *one-time release checklist blocker*.
+  The incomplete Pacific day remains explicitly unverified until closing
+  evidence exists; daily integrity monitoring continues.
 
-**Status:** Device-eligible completed-day RTX 5080 recovery through
-November 14 has sufficient evidence, checked automatically by the backend;
-pre-November-13 **general Salad income history**, and any future completed
-day lacking closeout evidence, remain separate unresolved limitations.
+**Status:** **COMPLETE — owner-accepted Salad receipt history.**
+Independent provider-proof limits and future unfinished days remain
+clearly identified in the audit; no data/provenance/revenue was altered.
 
 ## 2. Hardware Payback calculation and cash basis
 
@@ -182,10 +199,12 @@ checked over time, not declared permanently finished from one good run.
   `hardware-credit` stays `WARNING`; the latter remains conservative and
   must not be falsified to green. The signed-in UI and clipboard report
   expose both kinds of missing evidence.
-- [ ] Daily earning receipts from historical Loopscale and other providers
-  remain legacy/provisional (the backend audit reported Loopscale
-  Nov 1–4, 6–15; Salad Nov 1–3, 9 and 12). Preserve original values and
-  provenance until independent provider evidence is available.
+- [x] Owner accepted historical Salad receipt amounts; their retained
+  provisional evidence class is deliberately unchanged. Historical
+  Loopscale and other non-Salad daily receipts remain separately
+  legacy/provisional (the backend audit reported Loopscale Nov 1–4,
+  6–15). Preserve original values and provenance unless independent
+  provider evidence is available.
   Inactive Lulo audit exceptions are informational historical evidence
   only; **Lulo-specific source code and data must remain frozen**.
 - [ ] September/October formal Financials closes remain blocked by
@@ -195,9 +214,11 @@ checked over time, not declared permanently finished from one good run.
 
 **The code migration and automated source-level checks are suitable for
 continued operation. Full unconditional historical accounting certification
-is NOT yet supported.** Remaining blockers are the missing pre-November-13
-Salad dated observations; historic September/October bank openings and
-estimated asset valuations; and ongoing device/dated-reward evidence.
+is NOT yet supported.** Salad historical amounts have been expressly
+accepted by the owner, with provenance kept accurate. The remaining
+one-time certification blockers are September/October verified bank openings
+and estimated historical asset valuations; current and future dated provider
+evidence remains an ongoing operational monitoring issue.
 The owner has now completed the production signed-in audit clickthrough.
 
 Never mark a blocked box complete merely to reach six of six.
