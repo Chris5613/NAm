@@ -311,6 +311,8 @@ async def net_worth_reconciliation(
         "networth_crypto_cache",
         "monthly_business_changes_v1",
         "financials_journal_v1",
+        "financials_bank_openings_v1",
+        "financials_confirmed_movements_v1",
     )
     settings_rows = db.scalars(select(Setting).where(
         Setting.user_id == uid, Setting.key.in_(keys)
@@ -328,6 +330,8 @@ async def net_worth_reconciliation(
         settings.get("monthly_business_changes_v1"),
         settings.get("financials_journal_v1"),
         month, uid, now,
+        bank_openings=settings.get("financials_bank_openings_v1"),
+        confirmed_movements=settings.get("financials_confirmed_movements_v1"),
     )
 
 

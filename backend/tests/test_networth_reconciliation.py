@@ -110,6 +110,40 @@ class NetWorthReconciliationTests(unittest.TestCase):
         self.assertFalse(trades[0]["equipmentRegisterDisposalIndependentlyVerified"])
         self.assertEqual(repr(journal), original)
 
+    def test_monthly_cash_book_projection_not_claimed_as_bank_evidence(self):
+        from backend.networth_reconciliation import projected_business_cash
+        journal = [
+            {"date":"2026-11-01","lines":[
+                {"account":"cash","debit":2488.14,"credit":0},
+                {"account":"luloCash","debit":0,"credit":2488.14}]},
+            {"date":"2026-11-05","amount":500,
+             "debitAccount":"equipment","creditAccount":"equity"},
+            {"date":"2026-11-13","lines":[
+                {"account":"equipment","debit":1950,"credit":0},
+                {"account":"cash","debit":0,"credit":1250},
+                {"account":"equipment:hardware:rtx5070","debit":0,"credit":491.67},
+                {"account":"gainDisposal","debit":0,"credit":208.33}]},
+        ]
+        original=repr(journal)
+        result=projected_business_cash("2026-11",{"2026-11":0},journal)
+        self.assertAlmostEqual(result["journalCashChangeUsd"],1238.14)
+        self.assertAlmostEqual(result["bookProjectedCashUsd"],1238.14)
+        self.assertEqual(result["journalCashEntries"],2)
+        self.assertFalse(result["independentlyMatchedToBank"])
+        self.assertFalse(result["canDeduplicateFromHome"])
+        self.assertEqual(repr(journal),original)
+
+    def test_unverified_bank_opening_or_unposted_movements_remain_unknown(self):
+        from backend.networth_reconciliation import projected_business_cash
+        journal=[{"date":"2026-11-01","debitAccount":"cash","amount":100}]
+        self.assertIsNone(projected_business_cash(
+            "2026-11",{},journal)["bookProjectedCashUsd"])
+        result=projected_business_cash("2026-11",{"2026-11":0},
+            journal,confirmed_movements={"review": {"date":"2026-11-03"}})
+        self.assertIsNone(result["bookProjectedCashUsd"])
+        self.assertEqual(result["knownJournalSubtotalUsd"],100)
+        self.assertFalse(result["completeForJournalOnly"])
+
     def test_missing_personal_valuation_flags_unknown(self):
         result=personal_assets_home_basis([asset("cash")])
         self.assertFalse(result["fullyValued"])
