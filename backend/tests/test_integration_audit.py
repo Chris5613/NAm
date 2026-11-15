@@ -162,6 +162,50 @@ class IntegrationAuditTests(unittest.TestCase):
         self.assertAlmostEqual(flagged["maxPriceGapUsd"], 16311)
         self.assertNotIn("earnedUsd", flagged)
 
+    def test_all_extension_providers_are_checked_for_monthly_snapshot_regression(self):
+        values = {
+            "project_income_kryptex_tracker_v1": {
+                "monthlyEarnings": {"2026-11": 40.0}},
+            "project_income_salad_tracker_v1": {
+                "monthlyEarnings": {"2026-11": 4.0}},
+            "project_income_rollercoin_tracker_v2": {
+                "walletDaily": {"2026-11-12": {"usd": 7.0}}},
+            "project_income_unetwork_tracker_v1": {
+                "daily": {"2026-11-12": {"usd": 10.0}}},
+            "yield_monthly_snapshots_v1": {
+                "2026-11": {
+                    "locked": False,
+                    "total": 53.0,
+                    "platforms": [
+                        {"platform": "Kryptex", "amount": 40.0},
+                        {"platform": "Salad", "amount": 2.0},
+                        {"platform": "RollerCoin", "amount": 5.0},
+                        {"platform": "Unetwork", "amount": 6.0},
+                    ],
+                },
+            },
+        }
+        result = audit_integration_settings(values, self.now)
+        checks = {row["code"]: row for row in result["checks"]}
+        flagged = checks["extension_provider_snapshot_2026-11"]
+        self.assertEqual(flagged["status"], "error")
+        self.assertEqual({row["provider"] for row in flagged["mismatches"]},
+                         {"Salad", "RollerCoin", "Unetwork"})
+        self.assertNotIn("Kryptex",
+                         {row["provider"] for row in flagged["mismatches"]})
+        corrected = values["yield_monthly_snapshots_v1"]["2026-11"]
+        corrected["total"] = 61.0
+        corrected["platforms"] = [
+            {"platform": "Kryptex", "amount": 40.0},
+            {"platform": "Salad", "amount": 4.0},
+            {"platform": "RollerCoin", "amount": 7.0},
+            {"platform": "Unetwork", "amount": 10.0},
+        ]
+        checks = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        self.assertEqual(checks["extension_provider_snapshot_2026-11"]["status"],
+                         "pass")
+
     def test_locked_snapshot_keeps_historical_kryptex_total(self):
         result = audit_integration_settings({
             "project_income_kryptex_tracker_v1": {
