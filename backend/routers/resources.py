@@ -19,6 +19,7 @@ from ..project_writes import plan_project_changes, ProjectConflict
 from ..server_owned_settings import is_server_owned_setting
 from ..kryptex_setting_guard import merge_legacy_kryptex_setting
 from ..monthly_snapshot_guard import guard_monthly_snapshots
+from ..journal_guard import guard_journal_write
 from ..legacy_income_reconciliation import confirmed_november_sources
 from ..provider_monthly_income import monthly_provider_income
 from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_profile
@@ -277,7 +278,8 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
     if not all(field in payload for field in ("before", "after")):
         raise HTTPException(422, "Expected before and after values.")
     if key in ("project_income_kryptex_tracker_v1",
-               "yield_monthly_snapshots_v1"):
+               "yield_monthly_snapshots_v1", "financials_journal_v1",
+               "financials_month_closes_v1"):
         # Snapshot reconciliation also reads the Kryptex provider tracker.
         # Share its account row lock so a fresh mining reward is never
         # partially observed during this accounting projection.
@@ -289,6 +291,16 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
     if current != payload["before"] and current != payload["after"]:
         raise HTTPException(409, "Setting changed in another session. No changes were applied.")
     after = payload["after"]
+    if key == "financials_journal_v1":
+        closes_row = db.scalar(select(Setting).where(
+            Setting.user_id == user.id,
+            Setting.key == "financials_month_closes_v1",
+        ))
+        closes = closes_row.value if closes_row else {}
+        try:
+            after = guard_journal_write(current, after, closes)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
     if key == "project_income_kryptex_tracker_v1":
         after = merge_legacy_kryptex_setting(current, after)
     elif key == "yield_monthly_snapshots_v1":
