@@ -1,5 +1,6 @@
 import {
   buildMonthlyDailyEarningsChart,
+  sumMonthlyChartSources,
   buildMonthlyEarningsChart,
   buildYearlyEarningsChart,
 } from "./monthlyEarningsChart";
@@ -77,4 +78,22 @@ test("historical yearly chart shows all twelve months for 2025", () => {
   expect(result).toHaveLength(12);
   expect(result[0]).toMatchObject({ monthKey: "2025-01", value: 4, future: false });
   expect(result[11]).toMatchObject({ monthKey: "2025-12", value: 9, future: false });
+});
+
+test("current-month project breakdown adds up to exact daily chart earnings", () => {
+  const chart = buildMonthlyDailyEarningsChart({
+    todayKey: "2026-11-14",
+    sourceTotalsForDay: day => {
+      if (day === "2026-11-04") return { Kryptex: 2.79, Loopscale: 1.21 };
+      if (day === "2026-11-14") return { Kryptex: 1.5, RollerCoin: 0.5 };
+      return {};
+    },
+  });
+  const sources = sumMonthlyChartSources(chart);
+  const chartTotal = chart.reduce((sum, day) => sum + (day.value || 0), 0);
+  expect(sources).toEqual({ Kryptex: 4.29, Loopscale: 1.21, RollerCoin: 0.5 });
+  expect(Object.values(sources).reduce((sum, value) => sum + value, 0))
+    .toBeCloseTo(chartTotal, 8);
+  expect(chart[14].future).toBe(true);
+  expect(chart[14].sources).toEqual({});
 });
