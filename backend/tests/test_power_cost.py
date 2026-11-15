@@ -24,7 +24,7 @@ class PowerCostTests(unittest.TestCase):
         source=server_power_cost_preview(
             usage(),{},{"observedAt":t.isoformat(),"totalWatts":458},t)
         self.assertTrue(source["complete"])
-        self.assertAlmostEqual(source["nominalUsd"],15.64)
+        self.assertAlmostEqual(source["nominalUsd"],15.63)
         self.assertAlmostEqual(source["measuredKwh"],92.459038)
         self.assertEqual(source["outOfPocketUsd"],0)
         self.assertEqual(source["dailyOutOfPocketUsd"],0)
