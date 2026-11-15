@@ -1,0 +1,65 @@
+# NAm cross-system integrity audit
+
+**Inspection date:** 2026-11-14 (Pacific; UTC changes over to Nov 15 during the audit)
+
+**Scope:** React frontend, shared server-backed store and settings API, FastAPI project tracking and mining reconciliation, Render PostgreSQL, Passive Income, Crypto Dashboard, Financials, Hardware Payback, and deployment state.
+
+**Status:** Targeted integrity defects corrected. The reviewed live database invariants passed at the recorded inspection. **This is not certification that every possible user path or external provider is error-free.** A browser-authenticated, full click-through E2E run was not available to this audit.
+
+## Cross-system source map
+
+| Data | Primary record | Consumers | Expected relationship |
+|---|---|---|---|
+| Kryptex mined income | `project_income_kryptex_tracker_v1.kryptexMiningDaily` and `kryptexConfirmedDays` | Passive Income, backend provider-monthly-income, Financials snapshots, Hardware Payback | Confirmed dated rewards sum to tracker monthly income; BTC balance changes are NOT earnings |
+| Kryptex BTC reward evidence | `kryptexMiningSatsDaily` plus verified Nov 1–6 recovery metadata | Kryptex audit/reconciliation | Pending BTC earnings without valid USD conversion flagged, never written as a false zero |
+| Current-month Passive Income chart | `buildMonthlyDailyEarningsChart`, `sourceTotalsForDay` | Passive Income current month; Crypto Dashboard income card | The exact same daily chart total is published to the Dashboard; current-month popup uses the same per-day sources |
+| Today's earnings | `buildTodayEarningsDisplay` in Passive Income | Passive Income and Crypto Dashboard | Both cards consume same calculation; old balance-based daily server totals are a fallback only until the Passive page computes |
+| Provider monthly snapshots | `yield_monthly_snapshots_v1`, `getEffectiveProjectIncome` | Financials accruals, historical provider data, yearly archive | Snapshot total equals sum of recorded platform rows; NOT necessarily equal to dated current-month chart due to source/day conventions |
+| Financial journal | `financials_journal_v1` plus dynamic `buildAutoIncomeJournal` | Balance Sheet, P&L, Cash Flow, Home business valuation | Compound entries must balance; manual transfers and mark-to-market account balances must not be counted as mining income |
+| Hardware cost/returns | `hardware_payback_devices_v1`, dated recorded providers | Hardware Payback, equipment register | Distinct device IDs; cash-only payback cost may differ from acquisition/book value after a trade-in |
+| Server-backed settings | PostgreSQL `settings` table via `serverStore` | All frontend views | Backend changes refresh into the client without overwriting in-progress local saves |
+
+## Verified live PostgreSQL checks (point in time)
+
+- The `yield_monthly_snapshots_v1` totals **exactly** equaled the sum of platform rows for **September ($330.062266)**, **October ($202.769111)**, and **November ($73.715186)**. These are snapshot totals, not the separate chart's month-to-date number.
+- Kryptex confirmed daily income sum for November was **$40.522361** versus tracker monthly **$40.52236113**, an expected rounding difference below $0.01.
+- The two manually posted compound journal entries were balanced: Lulo withdrawal **$2,488.14 debit/credit** and RTX 5080 acquisition/trade **$1,950 debit/credit**. Three additional legacy simple entries have symmetric debit/credit accounts by construction; this does NOT verify every automatically generated journal line.
+- Hardware register: **2** registered devices, **2** distinct IDs, no invalid/nonpositive purchase costs.
+- In the earlier detailed comparison, Kryptex November 7–14 had eight confirmed dated earnings rows, none missing, each at least as high as its historical server observation.
+- Render backend/frontend were connected to the same `Chris5613/NAm` repo `main`. Successful Render frontend build/deployment was observed for commit `c20cb1c`, and earlier backend deployments were live. No error-level backend logs appeared in the queried time windows. **GitHub Actions test outcomes were not verified here.**
+
+## Confirmed integration defects and changes
+
+1. **Stale frontend provider cache:** `serverStore` originally hydrated once at sign-in, but provider settings written directly by backend extensions were not refreshed into all screens. Added safe refresh of backend-owned keys on focus/visibility and periodically **only while authenticated**. Dirty local edits and late responses from prior accounts are protected.
+2. **Separate Dashboard daily/monthly formulas:** The Dashboard's current-month amount was already changed to the Passive Income chart value. The Dashboard's **Income Today** was still based on a separate legacy server daily total. Now the Passive Income component publishes both daily and monthly reconciled values; the Dashboard consumes them.
+3. **Monthly chart vs by-project popup:** Previously used daily sources vs monthly provider snapshots respectively, causing false visual mismatches after backfills. Current-month breakdown now sums the **same dated provider rows** used by the monthly chart. Older, locked month snapshots retain their accounting meaning.
+4. **Historical BTC repricing risk:** Kryptex saves confirmed daily earnings monotonically, and preserves satoshi evidence independently. Previously recovered Nov 1–6 BTC rewards remain protected from partial rolling-hourly chart readings.
+5. **Missing shared diagnostics:** Added read-only authenticated `GET /api/project-tracking/integration-audit` checking Kryptex daily-vs-monthly reconciliation, missing BTC-to-USD conversion, unlocked Kryptex snapshot parity, snapshot row totals, compound journal balance, hardware identifiers and costs. An informational item explicitly distinguishes the Passive Income daily chart total from snapshot accounting totals.
+6. **Automated regression coverage:** Added tests for storage refresh safety, chart-vs-popup reconciliation, audit mismatches, and Kryptex reward preservation. Added `.github/workflows/nam-integrity.yml` to run backend Python tests and frontend Jest tests plus a production build after future pushes. **Workflow execution/result still requires verification.**
+
+## Important distinctions / outstanding verification
+
+- **Legacy daily-income server records cannot be treated as mining rewards:** Older Kryptex records can contain USD account balance movements driven by BTC prices. Do not combine those numbers with the confirmed mining ledger.
+- **Passive Income and Financials are not identical ledgers.** Current-month daily earnings can differ from a provider monthly snapshot due to source availability, Lulo UTC/Pacific day cutoffs, historical backfills, and accounting cutoffs. Shared values should match *within* each presentation path. Automatically overwriting the Financials journal with the chart total would risk changing recognized revenue or fabricating receivables; this audit deliberately did not do so.
+- **Cash overlap:** The Home net-worth display includes a prior mitigation for business Cash / Bank also appearing in a personal account. Whether the personal cash is actually the same funds requires transaction-level evidence; the audit did not mutate the bank opening or the Lulo withdrawal.
+- **Equipment:** RTX 5080's `$1,250` cash outlay can differ from the `$1,950` accounting entry because of the RTX 5070 trade-in. Preserve both definitions; do not create a second GPU from the journal.
+- **Limitations:** No authenticated end-to-end UI navigation or cross-device browser session was executed; no exhaustive audit of external provider APIs, all screen interactions, all historical accounting months, or third-party wallet balances. The new API reports logic/data invariants, not real-world asset ownership. Test presence is not proof of passing test execution.
+
+## Primary audit references
+
+- `frontend/src/lib/serverStore.js`
+- `frontend/src/App.js`
+- `frontend/src/pages/SideHustleDashboard.jsx`
+- `frontend/src/pages/YieldFarmingPage.jsx`
+- `frontend/src/pages/FinancialsPage.jsx`
+- `frontend/src/pages/HardwarePaybackPage.jsx`
+- `frontend/src/lib/monthlyEarningsChart.js`
+- `frontend/src/lib/earningsDisplay.js`
+- `frontend/src/lib/financialAssetsSnapshot.js`
+- `frontend/src/lib/financialAccounting.js`
+- `frontend/src/lib/financialAutoJournal.js`
+- `backend/routers/project_tracking.py`
+- `backend/integration_audit.py`
+- `backend/kryptex_earnings_audit.py`
+- `backend/tests/test_integration_audit.py`
+- `frontend/src/lib/serverStore.test.js`
