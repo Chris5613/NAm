@@ -177,6 +177,63 @@ class HardwarePaybackLifetimeTests(unittest.TestCase):
         self.assertIsNone(row["estimatedPaybackDate"])
         self.assertEqual(row["forecastBasis"], "insufficient-history")
 
+    def test_source_switch_never_reassigns_old_kryptex_to_new_provider(self):
+        devices, history, trackers = input_rows()
+        devices[1]["sources"] = ["Salad"]
+        devices[1]["source"] = "Salad"
+        devices[1]["sourceSegments"] = [
+            {"startDay": "2026-11-13", "endDay": "2026-11-14",
+             "sources": ["kryptex", "salad"]},
+            {"startDay": "2026-11-15", "sources": ["salad"]},
+        ]
+        history["2026-11-15"] = {"sources": {"Kryptex": 99.0, "Salad": 1.0}}
+        trackers["Kryptex"]["kryptexConfirmedDays"]["2026-11-15"] = True
+        trackers["Kryptex"]["kryptexMiningDaily"]["2026-11-15"] = 99.0
+        before = copy.deepcopy((devices, history, trackers))
+        result = build_lifetime_hardware_payback(
+            devices, history, trackers, "2026-11-15")
+        row = next(item for item in result["devices"] if item["id"] == "5080")
+        self.assertTrue(row["datedSourceSegmentsApplied"])
+        self.assertEqual(row["sourceSwitchEffectiveDay"], "2026-11-15")
+        self.assertAlmostEqual(row["observedCreditUsd"], 8.18542071)
+        self.assertAlmostEqual(result["repeatedDeviceCreditsUsd"], 7.15757634)
+        self.assertFalse(row["checkpointAppliedToRevenue"])
+        self.assertTrue(result["mathReconciles"])
+        self.assertEqual((devices, history, trackers), before)
+
+    def test_future_source_switch_preserves_current_day_credit(self):
+        devices, history, trackers = input_rows()
+        original = build_lifetime_hardware_payback(
+            devices, history, trackers, "2026-11-14")
+        devices[1]["sources"] = ["Salad"]
+        devices[1]["sourceSegments"] = [
+            {"startDay": "2026-11-13", "endDay": "2026-11-14",
+             "sources": ["kryptex", "salad"]},
+            {"startDay": "2026-11-15", "sources": ["salad"]},
+        ]
+        switched = build_lifetime_hardware_payback(
+            devices, history, trackers, "2026-11-14")
+        original_row = next(row for row in original["devices"] if row["id"] == "5080")
+        switched_row = next(row for row in switched["devices"] if row["id"] == "5080")
+        self.assertAlmostEqual(original_row["observedCreditUsd"],
+                               switched_row["observedCreditUsd"])
+        self.assertTrue(switched_row["datedSourceSegmentsApplied"])
+
+    def test_overlapping_or_forged_source_periods_fail_closed(self):
+        devices, history, trackers = input_rows()
+        devices[1]["sources"] = ["Salad"]
+        devices[1]["sourceSegments"] = [
+            {"startDay": "2026-11-13", "endDay": "2026-11-15",
+             "sources": ["kryptex", "salad"]},
+            {"startDay": "2026-11-15", "sources": ["salad"]},
+        ]
+        result = build_lifetime_hardware_payback(
+            devices, history, trackers, "2026-11-15")
+        row = next(item for item in result["devices"] if item["id"] == "5080")
+        self.assertFalse(row["complete"])
+        self.assertIsNone(row["observedCreditUsd"])
+        self.assertIn("invalid-dated-source-assignments", row["reasons"])
+
     def test_daily_earnings_not_affected_by_market_quote_repricing(self):
         devices,history,trackers=input_rows()
         first=build_lifetime_hardware_payback(devices,history,trackers,"2026-11-14")
