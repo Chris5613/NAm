@@ -14,6 +14,7 @@ import { useBackendFinancialCore } from "@/hooks/useBackendFinancialCore";
 import { useBackendAutoIncomeJournal } from "@/hooks/useBackendAutoIncomeJournal";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
 import { useBackendAutomaticExpenses } from "@/hooks/useBackendAutomaticExpenses";
+import { useBackendTrialBalance } from "@/hooks/useBackendTrialBalance";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
@@ -551,12 +552,10 @@ export default function FinancialsPage() {
     }
     return all;
   },[month,entries,closedMonths,journal,incomeMonths,hardwareDevices,businessPhones,records,confirmedMovements]);
-  const trial = availableAccounts.map(account=>{
-    const activity = journalAccountActivity(cumulativeEntries,account.id);
-    return {...account,debit:Math.max(0,activity),credit:Math.max(0,-activity)};
-  }).filter(account=>account.debit||account.credit);
-  const trialDebit = moneyRound(trial.reduce((sum,row)=>sum+row.debit,0));
-  const trialCredit = moneyRound(trial.reduce((sum,row)=>sum+row.credit,0));
+  const trialState = useBackendTrialBalance(cumulativeEntries,availableAccounts);
+  const trial = trialState.result?.rows || [];
+  const trialDebit = trialState.result?.debitTotal ?? 0;
+  const trialCredit = trialState.result?.creditTotal ?? 0;
   const cashFlow = serverFinancial?.cashFlow || {
     sections: { operating: [], investing: [], financing: [], transfers: [] },
     totals: { operating: 0, investing: 0, financing: 0, transfers: 0 },
@@ -786,11 +785,13 @@ export default function FinancialsPage() {
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
   if (!serverFinancial || !backendSyncedIncomeJournal ||
-      !automaticExpensesState.entries) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
+      !automaticExpensesState.entries || !trialState.result) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <h1 className="text-2xl font-semibold">Financials</h1>
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
       {backendBalanceRows.error
         ? "Backend asset rows unavailable. Saved equipment, journal records, and balances were not changed."
+        : trialState.error
+        ? "Backend trial balance unavailable. Saved ledger entries remain unchanged."
         : automaticExpensesState.error
         ? "Backend depreciation or electricity journal unavailable. Saved records were not changed."
         : serverFinancialState?.error
