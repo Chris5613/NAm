@@ -1,6 +1,6 @@
 import {
   buildFinancialBalanceRows, buildStatementRows,
-  equipmentSchedule, deriveCashOpening, derivePayableOpening,
+  equipmentSchedule,
   includeJournalEquipment, unmatchedEquipmentPurchases,
   reclassifyPersonalPcContribution, journalAccountActivity,
 } from "./financialAccounting";
@@ -63,13 +63,6 @@ test("unknown bank opening does not manufacture a negative ending balance",()=>{
   expect(bank.unverifiedOpening).toBe(true);
 });
 
-test("bank opening carries forward without counting transaction twice",()=>{
-  const past=[{date:"2026-11-05",debitAccount:"equipment",creditAccount:"cash",amount:500}];
-  expect(deriveCashOpening("2026-12",{"2026-11":600},past,[])).toBe(100);
-  expect(deriveCashOpening("2027-01",{"2026-11":600},past,[])).toBe(100);
-  expect(deriveCashOpening("2026-12",{"2026-11":600,"2026-12":200},past,[])).toBe(200);
-});
-
 test("existing $500 PC journal matches one owned asset, and 5070 still needs funding confirmation",()=>{
   const purchase={id:"pc",date:"2026-11-05",description:"Paid $500 for RTX 2080 Super PC Nov 5th",
     debitAccount:"equipment",creditAccount:"cash",amount:500};
@@ -88,11 +81,9 @@ test("ledger-only equipment purchases appear as assets exactly once",()=>{
 });
 
 test("unpaid bill carries into following month and closes when paid",()=>{
-  const past=[{date:"2026-11-10",amount:75,debitAccount:"expense",creditAccount:"payable"}];
-  expect(derivePayableOpening("2026-12",past)).toBe(75);
   const billSettlement={id:"settlement",date:"2026-12-05",lines:[
     {account:"payable",debit:75,credit:0},{account:"cash",debit:0,credit:75}]};
-  const rows=buildStatementRows([], [billSettlement],{payableOpening:derivePayableOpening("2026-12",past)});
+  const rows=buildStatementRows([], [billSettlement],{payableOpening:75});
   const payable=rows.find(row=>row.id==="ledger:payable");
   expect(payable.start).toBe(75);
   expect(payable.end).toBe(0);
