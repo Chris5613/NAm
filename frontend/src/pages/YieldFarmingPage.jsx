@@ -5,6 +5,7 @@ import { useSaladExtension } from "../hooks/useSaladExtension";
 import { buildSelectedEarningsBreakdown } from "../lib/earningsDisplay";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
+import { backendYieldIncomeRows } from "@/lib/backendYieldIncomeRows";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
 import { useDailyEarningsHighWater } from "../hooks/useDailyEarningsHighWater";
@@ -928,13 +929,9 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const sourceIncomeMonths = useBackendIncomeHistory({
     currentMonth: getTodayKey().slice(0, 7),
   });
-  const projectIncome = useMemo(() => sourceIncomeMonths.map(row => ({
-    monthKey: row.monthKey,
-    total: row.total,
-    platforms: Object.entries(row.sources || {}).map(([platform, amount]) => ({
-      platform, amount,
-    })),
-  })), [sourceIncomeMonths]);
+  const projectIncome = useMemo(
+    () => backendYieldIncomeRows(sourceIncomeMonths), [sourceIncomeMonths]
+  );
 
   // Version 2 records earnings changes by project rather than storing a
   // single unexplained sum. The original v1 ledger is retained untouched.
