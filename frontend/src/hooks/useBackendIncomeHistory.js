@@ -7,7 +7,8 @@ import { useFinancialFastQuery } from "@/hooks/useFinancialFastQuery";
 export function useBackendIncomeHistory(payload) {
   const month = payload?.currentMonth;
   const result = useFinancialFastQuery({
-    path: "/api/project-tracking/financial-core/source-income-history",
+    // A month-specific GET key prevents reusing a previous month's history.
+    path: "/api/project-tracking/financial-core/source-income-history?viewMonth=" + encodeURIComponent(month || ""),
     maxAgeMs: 12000, intervalMs: 60000,
     enabled: Boolean(month),
     validator: data => data?.sourceOfCalculation ===
