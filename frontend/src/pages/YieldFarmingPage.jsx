@@ -1511,13 +1511,12 @@ const summary =
         (Number(unetworkStats?.currentBalance) || 0) +
         (Number(kryptexStats?.currentBalanceUsd) || 0);
 
-      // Transition safely to the authoritative backend sum. During sync
-      // lag or a validation disagreement, preserve the currently displayed
-      // local balance instead of suddenly showing an old server result.
-      const serverMatches = serverPortfolio?.projectCount === sortedProgramCards.length &&
-        Number.isFinite(Number(serverPortfolio?.totalUsd)) &&
-        Math.abs(Number(serverPortfolio.totalUsd) - localPortfolioBalance) < 0.01;
-      const portfolioBalance = serverMatches
+      // The server-validated per-provider feed owns the portfolio total.
+      // Local calculations are temporary only until that feed is available.
+      // Never silently prefer a competing local total because it differs.
+      const serverAvailable = serverPortfolio?.projectCount === sortedProgramCards.length &&
+        Number.isFinite(Number(serverPortfolio?.totalUsd));
+      const portfolioBalance = serverAvailable
         ? Number(serverPortfolio.totalUsd) : localPortfolioBalance;
 
       /*

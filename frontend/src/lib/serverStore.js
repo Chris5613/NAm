@@ -45,6 +45,11 @@ const liveSettingKeys = [
   "yield_project_quick_cache_v1",
   "yield_inactive_project_ids_v1",
   "project_income_portfolio_summary_v1",
+  "project_crypto_portfolio_v1",
+  "networth_crypto_cache",
+  "crypto_wallet_balance_cache",
+  "crypto_defi_cache",
+  "manual_defi_positions",
 ];
 const activeSettingWrites = new Set();
 let liveRefreshPromise = null;

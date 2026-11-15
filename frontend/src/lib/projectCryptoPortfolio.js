@@ -14,7 +14,11 @@ import {
 import {
   getLoopscaleOnycSnapshot,
 } from "./loopscaleYieldSync";
-import { getRollerCoinHistoricalTrx } from "./yieldFarmingAccounting";
+import { getRollerCoinTrackerStats, getUnetworkTrackerStats } from "./yieldFarmingAccounting";
+import {
+  canonicalProjectBitcoinTotal, currentProjectBalance,
+  currentRollerCoinBalance, uniqueProjectSources,
+} from "./cryptoPortfolioRules";
 
 const PORTFOLIO_CACHE_KEY =
   "project_crypto_portfolio_v1";
@@ -27,6 +31,8 @@ const SALAD_TRACKER_KEY =
 
 const ROLLERCOIN_TRACKER_KEY =
   "project_income_rollercoin_tracker_v2";
+const KRYPTEX_TRACKER_KEY = "project_income_kryptex_tracker_v1";
+const UNETWORK_TRACKER_KEY = "project_income_unetwork_tracker_v1";
 
 const AUTO_SYNC_INTERVAL_MS =
   5 * 60 * 1000;
@@ -92,34 +98,6 @@ function transactionAmount(
       );
     },
     0
-  );
-}
-
-function projectBalance(project) {
-  const liveBalance = [
-    project?.lulo_total_balance_usd,
-    project?.totalBalance,
-    project?.currentBalance,
-    project?.current_balance,
-    project?.balance,
-    project?.value,
-  ].find(
-    (value) =>
-      Number.isFinite(
-        Number(value)
-      ) &&
-      Number(value) >= 0
-  );
-
-  if (
-    liveBalance !== undefined
-  ) {
-    return number(liveBalance);
-  }
-
-  return Math.max(
-    0,
-    number(project?.invested)
   );
 }
 
@@ -280,7 +258,7 @@ function toProjectEntry(
   index
 ) {
   const balance =
-    projectBalance(project);
+    currentProjectBalance(project);
 
   const apy =
     projectApy(project);
@@ -473,6 +451,42 @@ function buildBitcoin(
   };
 }
 
+function createKryptexEntry() {
+  const tracker = storage.get(KRYPTEX_TRACKER_KEY);
+  if (!tracker || !tracker.lastSyncedAt ||
+      tracker.currentBalance == null ||
+      !Number.isFinite(Number(tracker.currentBalance))) return null;
+  const balance = Math.max(0, Number(tracker.currentBalance));
+  return {
+    id: "kryptex-live", platform: "Kryptex", logo: "", live: true,
+    balance, apy: 0, earned: number(tracker.lifetimeEarnedUsd),
+    lifetimeUsd: number(tracker.lifetimeEarnedUsd),
+    monthUsd: number(tracker.monthlyEarnings?.[getMonthKey()]),
+    estimatedMonthlyUsd: number(tracker.profitabilityUsdDay) * 30.4375,
+    lastSyncedAt: tracker.lastSyncedAt,
+    assets: [{ id: "kryptex-account", asset: "Kryptex account balance",
+      strategy: "Mining", balance, quantity: null, price: null, apy: 0 }],
+  };
+}
+
+function createUnetworkEntry() {
+  const tracker = storage.get(UNETWORK_TRACKER_KEY);
+  if (!tracker || !tracker.lastSyncedAt ||
+      tracker.currentBalance == null ||
+      !Number.isFinite(Number(tracker.currentBalance))) return null;
+  const balance = Math.max(0, Number(tracker.currentBalance));
+  const stats = getUnetworkTrackerStats(tracker);
+  return {
+    id: "unetwork-live", platform: "Unetwork", logo: "", live: true,
+    balance, apy: 0, earned: number(stats.lifetimeUsd),
+    lifetimeUsd: number(stats.lifetimeUsd),
+    monthUsd: number(stats.monthUsd), estimatedMonthlyUsd: number(stats.estimatedMonthlyUsd),
+    lastSyncedAt: tracker.lastSyncedAt,
+    assets: [{ id: "unetwork-account", asset: "Unetwork account balance",
+      strategy: "Compute", balance, quantity: null, price: null, apy: 0 }],
+  };
+}
+
 function createSaladEntry() {
   const tracker = storage.get(
     SALAD_TRACKER_KEY
@@ -546,109 +560,21 @@ function getRollerCoinTracker() {
     : null;
 }
 
-function getRollerCoinTrxBalance(
-  tracker
-) {
-  if (!tracker) {
-    return 0;
-  }
-
-  const daily =
-    tracker.daily &&
-    typeof tracker.daily ===
-      "object"
-      ? tracker.daily
-      : {};
-
-  const trackedTrx =
-    Object.values(daily).reduce(
-      (sum, entry) => {
-        if (
-          typeof entry === "number"
-        ) {
-          return sum;
-        }
-
-        return (
-          sum +
-          number(
-            entry?.trx ??
-            entry?.sol
-          )
-        );
-      },
-      0
-    );
-
-  return (
-    trackedTrx +
-    getRollerCoinHistoricalTrx()
-  );
-}
-
-function createRollerCoinEntry(
-  livePrice = 0
-) {
-  const tracker =
-    getRollerCoinTracker();
-
-  if (!tracker) {
-    return null;
-  }
-
-  const trxBalance =
-    getRollerCoinTrxBalance(
-      tracker
-    );
-
-  const trxPrice =
-    number(livePrice) > 0
-      ? number(livePrice)
-      : number(
-          tracker.lastTrxPrice ??
-          tracker.lastSolPrice
-        );
-
-  const balance =
-    trxBalance * trxPrice;
-
-  if (!(trxBalance > 0)) {
-    return null;
-  }
-
+function createRollerCoinEntry(livePrice = 0) {
+  const tracker = getRollerCoinTracker();
+  const current = currentRollerCoinBalance(tracker, livePrice);
+  if (!current) return null;
+  const { trx: trxBalance, price: trxPrice, balanceUsd: balance } = current;
+  const stats = getRollerCoinTrackerStats(tracker);
   return {
-    id: "rollercoin-live",
-    platform: "RollerCoin",
-    logo: "",
-    live: true,
-
-    balance,
-    apy: 0,
-    earned: balance,
-    lifetimeUsd: balance,
-    monthUsd: 0,
-    estimatedMonthlyUsd: 0,
-
-    lastSyncedAt:
-      tracker.lastSyncedAt ||
-      null,
-
-    assets: [
-      {
-        id:
-          "rollercoin-trx-balance",
-
-        asset: "TRX",
-
-        strategy:
-          "RollerCoin Balance",
-
-        balance,
-        quantity: trxBalance,
-        price: trxPrice,
-        apy: 0,
-      },
-    ],
+    id: "rollercoin-live", platform: "RollerCoin", logo: "", live: true,
+    balance, apy: 0,
+    earned: number(stats.lifetimeUsd), lifetimeUsd: number(stats.lifetimeUsd),
+    monthUsd: number(stats.monthUsd), estimatedMonthlyUsd: 0,
+    lastSyncedAt: tracker.balanceSyncedAt || tracker.lastSyncedAt || null,
+    assets: [{ id: "rollercoin-trx-balance", asset: "TRX",
+      strategy: "RollerCoin current wallet", balance,
+      quantity: trxBalance, price: trxPrice, apy: 0 }],
   };
 }
 
@@ -746,43 +672,10 @@ function createPortfolio(
   errors = [],
   externalEntries = []
 ) {
-  const externalNames =
-    new Set(
-      externalEntries.map(
-        (entry) =>
-          String(
-            entry?.platform || ""
-          )
-            .trim()
-            .toLowerCase()
-      )
-    );
-
-  const excludedProjects =
-    new Set([
-      "kryptex",
-      "rollercoin",
-      "salad",
-    ]);
-
-const projectEntries = (
-  Array.isArray(projects)
-    ? projects
-    : []
-)
-  .filter((project) => {
-    if (
-      project?.inactive === true ||
-      project?.is_inactive === true
-    ) {
-      return false;
-    }
-
-    return true;
-  })
-  .map(
-    toProjectEntry
-  );
+  // One valuation per provider. Canonical tracker entries supersede legacy
+  // projects; invested amounts and old earnings are never current balances.
+  const projectEntries = uniqueProjectSources(projects, externalEntries)
+    .map(toProjectEntry);
 
   projectEntries.push(
     ...externalEntries
@@ -875,18 +768,17 @@ function savePortfolio(
     portfolio
   );
 
+  const savedCache = storage.getCryptoCache() || {};
+  const total = canonicalProjectBitcoinTotal(
+    storage.get("project_income_portfolio_summary_v1"), portfolio.bitcoin.value
+  );
+  // A legacy portfolio is not permitted to replace the canonical project
+  // balance; this cache also carries distinct wallet-view information.
   storage.setCryptoCache({
-    ...storage.getCryptoCache(),
-
-    total:
-      portfolio.summary
-        .cryptoTotal,
-
-    projectPortfolio:
-      portfolio,
-
-    updated_at:
-      portfolio.updatedAt,
+    ...savedCache,
+    ...(total == null ? {} : { total }),
+    projectPortfolio: portfolio,
+    updated_at: portfolio.updatedAt,
   });
 
   if (
@@ -933,6 +825,8 @@ export function getStoredProjectCryptoPortfolio() {
     ...getSavedLiveEntries(),
     createSaladEntry(),
     createRollerCoinEntry(),
+    createKryptexEntry(),
+    createUnetworkEntry(),
   ].filter(Boolean);
 
   return createPortfolio(
@@ -1117,10 +1011,9 @@ export async function refreshProjectCryptoPortfolio() {
     const externalEntries = [
       loopscaleEntry,
       createSaladEntry(),
-
-      createRollerCoinEntry(
-        liveTrxPrice
-      ),
+      createKryptexEntry(),
+      createUnetworkEntry(),
+      createRollerCoinEntry(liveTrxPrice),
     ].filter(Boolean);
 
     return savePortfolio(
