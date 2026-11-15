@@ -164,7 +164,21 @@ def normalize_lulo(wallet: str, api: dict[str, Any],
     if v1_total <= 0:
         total = max(0, regular) + max(0, protected) + max(0, custom_balance)
     if not (total > 0):
-        raise LuloSourceError("zero_or_unrecognized_balance")
+        # An explicit zero is a different incident from an API response that
+        # no longer has any recognized balance fields. Neither may silently
+        # overwrite a previously confirmed holding without a validated
+        # withdrawal/source reconciliation.
+        balance_fields = (
+            "totalUsdValue", "totalValue", "usdValue",
+            "lusdUsdBalance", "regularUsdBalance", "regularBalanceUsd",
+            "pusdUsdBalance", "protectedUsdBalance", "protectedBalanceUsd",
+        )
+        custom_fields = ("totalValue", "totalUsdValue", "usdValue")
+        recognized = any(key in account for key in balance_fields) or any(
+            key in custom for key in custom_fields)
+        raise LuloSourceError(
+            "reported_zero_balance" if recognized else
+            "unrecognized_balance_fields")
     regular_apy = finite_first((pools.get("regular") or {}).get("apy")) * 100
     protected_apy = finite_first((pools.get("protected") or {}).get("apy")) * 100
     usds_apy = finite_first(custom.get("realtimeAPY"), custom.get("apy"))
