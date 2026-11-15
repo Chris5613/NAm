@@ -1,6 +1,6 @@
 import {
  validateBackendHardwarePayback,readBackendHardwarePaybackCache,
- writeBackendHardwarePaybackCache,HARDWARE_PREVIEW_TTL
+ writeBackendHardwarePaybackCache,clearBackendHardwarePaybackCache,HARDWARE_PREVIEW_TTL
 } from "./backendHardwarePaybackCache";
 
 const day="2026-11-14";
@@ -50,4 +50,22 @@ test("partition by authenticated account and Pacific day; expire preview",()=>{
  expect(readBackendHardwarePaybackCache(2,day,s,now+100)).toBeNull();
  expect(readBackendHardwarePaybackCache(1,"2026-11-15",s,now+100)).toBeNull();
  expect(readBackendHardwarePaybackCache(1,day,s,now+HARDWARE_PREVIEW_TTL+1)).toBeNull();
+});
+
+
+test("logout clears cached device credits from every date without affecting other users",()=>{
+ const s=storage();
+ // Support standard Storage enumeration used by logout.
+ const data=new Map();
+ const browserStore={
+   getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v),
+   removeItem:k=>data.delete(k),key:i=>[...data.keys()][i]||null,
+   get length(){return data.size;}
+ };
+ const now=Date.parse("2026-11-15T05:30:00Z");
+ writeBackendHardwarePaybackCache(1,day,report(),browserStore,now);
+ writeBackendHardwarePaybackCache(2,day,report(),browserStore,now);
+ clearBackendHardwarePaybackCache(1,browserStore);
+ expect(readBackendHardwarePaybackCache(1,day,browserStore,now)).toBeNull();
+ expect(readBackendHardwarePaybackCache(2,day,browserStore,now)).not.toBeNull();
 });

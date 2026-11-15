@@ -82,3 +82,17 @@ export function writeBackendHardwarePaybackCache(userId, day, raw, store, now=Da
   try {s.setItem(k,JSON.stringify({data,cachedAt:now}));}catch{}
   return {data,cachedAt:now};
 }
+
+// Logout must discard every date's cached financial preview for this account.
+export function clearBackendHardwarePaybackCache(userId,store) {
+  if(userId==null)return;
+  const s=storeFor(store),prefix="nam:hardware-payback:backend:v1:"+
+    encodeURIComponent(String(userId))+":";
+  if(!s)return;
+  try {
+    for(let index=s.length-1;index>=0;index--) {
+      const k=s.key(index);
+      if(k && k.startsWith(prefix))s.removeItem(k);
+    }
+  } catch { /* optional display cache */ }
+}
