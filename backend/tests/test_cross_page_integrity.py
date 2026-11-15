@@ -94,6 +94,9 @@ class CrossPageIntegrityTests(unittest.TestCase):
         report = run(saved, trackers, income)
         found = checks(report)
         self.assertEqual(found["inactive-portfolio-holdings"]["status"], "info")
+        self.assertEqual(found["inactive-lulo-valuation"]["status"], "warning")
+        self.assertEqual(found["inactive-lulo-valuation"]["historicalPortfolioLuloUsd"], 1500)
+        self.assertEqual(found["inactive-lulo-valuation"]["currentBusinessLuloUsd"], 0)
         self.assertEqual(found["crypto-portfolio"]["allProjectsUsd"], 1525)
         self.assertEqual(found["crypto-portfolio"]["activeProjectsUsd"], 25)
         self.assertEqual(report["bookedProviderLifetimeUsd"], 10)
@@ -138,6 +141,7 @@ class CrossPageIntegrityTests(unittest.TestCase):
         report = run(saved, trackers, income, bitcoin=None)
         found = checks(report)
         self.assertFalse(found["home-financials"]["bitcoinQuoteIncluded"])
+        self.assertEqual(found["btc-valuation-coverage"]["status"], "warning")
         self.assertEqual(found["home-financials"]["status"], "pass")
 
 
