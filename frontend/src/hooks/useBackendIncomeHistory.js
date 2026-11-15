@@ -45,7 +45,7 @@ export function useBackendIncomeHistory(payload, localMonths) {
       "income-history", payload.currentMonth, matchedPersisted,
       "backend-persisted", signature,
       matchedPersisted ? null : incomeHistoryMismatchReason(localMonths, persistedMonths));
-  }, [signature, payload.currentMonth, persistedMonths, matchedPersisted]);
+  }, [signature, payload.currentMonth, persistedMonths, matchedPersisted, localMonths]);
   return matchedPersisted ? persistedMonths :
     matchedProjection ? serverMonths : localMonths;
 }
