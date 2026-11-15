@@ -5,9 +5,11 @@ accounting concepts (mark-to-market balances, realized income, and projected
 profitability) to match. Never mutates settings or journal entries.
 """
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from math import isfinite
 
 from .project_accounting import portfolio_summary
+from .provider_monthly_income import monthly_provider_income
 
 
 def safe_number(value):
@@ -111,6 +113,50 @@ def audit_integration_settings(values, now=None):
                     trackerUsd=round(canonical, 8),
                     snapshotUsd=round(snapshot_kryptex, 8),
                     differenceUsd=round(delta, 8))
+
+    # Independent provider trackers, rather than a partially hydrated browser,
+    # determine current-month earned income. The earlier audit checked only
+    # Kryptex; the other extension providers could silently regress together.
+    current_month = now.astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    current_snapshot = as_object(snapshots.get(current_month))
+    if current_snapshot.get("platforms") and not current_snapshot.get("locked"):
+        provider_keys = {
+            "kryptex": "project_income_kryptex_tracker_v1",
+            "salad": "project_income_salad_tracker_v1",
+            "rollercoin": "project_income_rollercoin_tracker_v2",
+            "unetwork": "project_income_unetwork_tracker_v1",
+        }
+        canonical = monthly_provider_income(
+            {name: values.get(key) for name, key in provider_keys.items()},
+            current_month,
+        )
+        expected = next((row for row in canonical
+                         if row.get("monthKey") == current_month), None)
+        if expected:
+            observed = {
+                str(p.get("platform")): safe_number(p.get("amount"))
+                for p in current_snapshot.get("platforms", [])
+                if isinstance(p, dict)
+            }
+            mismatches = []
+            for item in expected.get("platforms", []):
+                name = str(item.get("platform") or "")
+                actual = observed.get(name)
+                authoritative = safe_number(item.get("amount"))
+                if authoritative is not None and (
+                    actual is None or abs(actual - authoritative) > 0.02
+                ):
+                    mismatches.append({
+                        "provider": name,
+                        "snapshotUsd": actual,
+                        "trackerUsd": round(authoritative, 6),
+                    })
+            add("extension_provider_snapshot_" + current_month,
+                "error" if mismatches else "pass",
+                "Current unlocked monthly snapshot differs from dated provider trackers."
+                if mismatches else
+                "Current unlocked monthly extension providers match backend trackers.",
+                mismatches=mismatches)
 
     journal = values.get("financials_journal_v1")
     entries = journal if isinstance(journal, list) else []
