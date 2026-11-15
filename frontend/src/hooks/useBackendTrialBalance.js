@@ -13,10 +13,12 @@ export function useBackendTrialBalance(entries, accounts) {
     api.post("/api/project-tracking/financial-core/trial-balance",
       JSON.parse(signature)).then(data => {
       if (!active) return;
-      const valid = data?.sourceOfCalculation === "backend-financial-core" &&
+      const valid = data?.sourceOfCalculation === "backend-trial-balance" &&
         Array.isArray(data.rows) &&
-        Number.isFinite(data.debitTotal) &&
-        Number.isFinite(data.creditTotal);
+        Number.isFinite(data.debitsUsd) &&
+        Number.isFinite(data.creditsUsd) &&
+        Number.isFinite(data.differenceUsd) &&
+        typeof data.balanced === "boolean";
       setState(valid ? { signature, result: data } :
         { signature, error: true });
     }).catch(() => { if (active) setState({ signature, error: true }); });
