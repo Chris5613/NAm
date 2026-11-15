@@ -102,7 +102,7 @@ def guard_journal_write(current, proposed, closes, business_months=None):
 
     def protected(month):
         return (isinstance(locked.get(month), dict) or
-                bool((business.get(month) or {}).get("locked"))
+                bool((business.get(month) or {}).get("locked")))
     for entry in proposed:
         if not isinstance(entry, dict):
             raise ValueError("Invalid journal record.")
@@ -113,7 +113,7 @@ def guard_journal_write(current, proposed, closes, business_months=None):
         previous = history.get(ident)
         if (protected(entry["date"][:7]) or
                 (isinstance(previous, dict) and
-                 protected(str(previous.get("date") or "")[:7])):
+                 protected(str(previous.get("date") or "")[:7]))):
             raise ValueError("Cannot modify a closed accounting month.")
     # Deleting a previously posted entry in a closed month also counts as
     # editing the locked month, even if that row is absent from the payload.
