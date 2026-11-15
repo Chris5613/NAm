@@ -9,6 +9,7 @@ import calendar
 from datetime import date, datetime, timedelta, timezone
 from math import isfinite
 from zoneinfo import ZoneInfo
+from .salad_dated_evidence import verified_salad_day
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 TRACKERS = {
@@ -69,9 +70,17 @@ def provider_entries(day, server_record, trackers):
     elif roller_api.get("usd") is not None:
         overwrite("RollerCoin", roller_api["usd"], "dated-rollercoin-reward")
 
-    salad_daily = mapping(mapping(trackers.get("Salad")).get("daily"))
+    salad_tracker = mapping(trackers.get("Salad"))
+    salad_daily = mapping(salad_tracker.get("daily"))
     if day in salad_daily:
         overwrite("Salad", salad_daily[day], "dated-salad-reward")
+    else:
+        # A provider lifetime snapshot is dated evidence only when it has
+        # independently anchored observations across a completed Pacific day.
+        # The incomplete first observed day must remain provisional.
+        dated_salad = verified_salad_day(salad_tracker, day)
+        if dated_salad is not None:
+            overwrite("Salad", dated_salad, "dated-salad-lifetime-delta")
 
     provisional = sorted(
         name for name, source in provenance.items()
