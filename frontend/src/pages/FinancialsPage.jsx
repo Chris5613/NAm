@@ -14,6 +14,7 @@ import { useBackendFinancialCore, financialReportMatches, financialFlowsMatch, s
 import { useBackendAutoIncomeJournal, autoIncomeMatches } from "@/hooks/useBackendAutoIncomeJournal";
 import { useBackendPhoneAssets } from "@/hooks/useBackendPhoneAssets";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
+import { useBackendAutomaticExpenses } from "@/hooks/useBackendAutomaticExpenses";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
@@ -417,10 +418,7 @@ export default function FinancialsPage() {
     .reduce((sum,row)=>sum+Number(row.depreciation||0),0));
   const manualDepreciation = moneyRound(ledgerEntries.reduce((sum,entry)=>sum+journalActivity(entry,"depreciation"),0));
   const autoDepreciation = Math.max(0,moneyRound(scheduledDepreciation-manualDepreciation));
-  const generatedEntries = [
-    ...(month === LEGACY_LEDGER_CUTOFF ? [openingPhoneDepreciationEntry(businessPhones)].filter(Boolean) : []),
-    ...(month < LEGACY_LEDGER_CUTOFF ? [] : syncedIncomeJournal.entries),
-    ...syncedMovementEntries,
+  const localAutomaticExpenses = [
     ...(month >= LEGACY_LEDGER_CUTOFF && autoDepreciation > 0 ? [{
       id: "auto-depreciation:" + month, date: month + "-28",
       description: "Monthly equipment depreciation",
@@ -433,6 +431,14 @@ export default function FinancialsPage() {
       lines: [line("electric",autoPower,0),line("payable",0,autoPower)],
       automatic:true,estimated:true,
     }] : []),
+  ];
+  const automaticExpenses = useBackendAutomaticExpenses(
+    month, baseRows, ledgerEntries, autoPower, localAutomaticExpenses);
+  const generatedEntries = [
+    ...(month === LEGACY_LEDGER_CUTOFF ? [openingPhoneDepreciationEntry(businessPhones)].filter(Boolean) : []),
+    ...(month < LEGACY_LEDGER_CUTOFF ? [] : syncedIncomeJournal.entries),
+    ...syncedMovementEntries,
+    ...automaticExpenses,
   ];
   const entries = month < LEGACY_LEDGER_CUTOFF
     ? preSeptemberLedgerEntries(closeSnapshot?.entries || manualEntries, month, businessPhones)
