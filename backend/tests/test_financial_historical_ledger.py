@@ -79,11 +79,10 @@ class HistoricalLedgerCutoverTests(unittest.TestCase):
         manual = [{"id": "manual", "date": "2026-10-22",
                    "debitAccount": "cash", "creditAccount": "luloCash",
                    "amount": 100}]
-        # A legacy manual account ID may use a resolved account alias. The
-        # server never infers a second cash deposit from a balance change.
+        # The same confirmed transfer has already been posted manually.
+        # Do not credit cash twice when comparing resolved account IDs.
         results = movement_entries(moves, "2026-10", set(), manual)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["lines"][0]["account"], "cash")
+        self.assertEqual(results, [])
 
     def test_source_inputs_not_changed_by_backend_trial(self):
         original = copy.deepcopy(self.data)
