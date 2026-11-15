@@ -3,6 +3,7 @@ import unittest
 
 from backend.financial_core import (
     auto_income_journal, build_statement_rows, project_break_even,
+    project_automatic_expenses,
 )
 from backend.income_history_core import (
     reconcile_lulo_months, historical_income, legacy_months,
@@ -36,6 +37,46 @@ class BackendAccountingMigrationTests(unittest.TestCase):
         }, [], "2026-11", "2026-11-14")
         self.assertFalse(result["entries"])
         self.assertEqual(result["pendingReviewTotal"], 3)
+
+    def test_backend_auto_expenses_do_not_double_book_manual_depreciation(self):
+        rows = [
+            {"category": "equipment", "depreciation": 8.33},
+            {"category": "equipment", "depreciation": 32.5},
+        ]
+        manual = [{
+            "id": "manual-dep", "date": "2026-11-15",
+            "lines": [
+                {"account": "depreciation", "debit": 8.33, "credit": 0},
+                {"account": "accDep", "debit": 0, "credit": 8.33},
+            ],
+        }]
+        result = project_automatic_expenses("2026-11", rows, manual, 0)
+        self.assertAlmostEqual(result["scheduledDepreciationUsd"], 40.83)
+        self.assertAlmostEqual(result["manualDepreciationUsd"], 8.33)
+        self.assertAlmostEqual(result["autoDepreciationUsd"], 32.5)
+        self.assertEqual(len(result["entries"]), 1)
+        self.assertEqual(result["entries"][0]["id"], "auto-depreciation:2026-11")
+        self.assertEqual(result["entries"][0]["lines"][0]["debit"], 32.5)
+
+    def test_backend_auto_expenses_separate_nominal_power_and_paid_cash(self):
+        result = project_automatic_expenses(
+            "2026-11", [], [], 0
+        )
+        self.assertEqual(result["entries"], [])
+        self.assertEqual(result["powerEstimateUsd"], 0)
+        metered = project_automatic_expenses("2026-11", [], [], 3.42)
+        self.assertEqual(len(metered["entries"]), 1)
+        power = metered["entries"][0]
+        self.assertTrue(power["estimated"])
+        self.assertEqual(power["lines"][0]["account"], "electric")
+        self.assertEqual(power["lines"][1]["account"], "payable")
+        self.assertFalse(any(line["account"] == "cash" for line in power["lines"]))
+
+    def test_backend_auto_expenses_ignore_past_preledger_month(self):
+        result = project_automatic_expenses(
+            "2026-08", [{"category": "equipment", "depreciation": 8}], [], 2)
+        self.assertEqual(result["entries"], [])
+        self.assertEqual(result["autoDepreciationUsd"], 0)
 
     def test_statement_cash_unknown_remains_null_even_with_journal_activity(self):
         rows = build_statement_rows([], [{
