@@ -62,6 +62,12 @@ def merge_legacy_kryptex_setting(current, proposed):
     merged_sats = _merge_high_water(
         old_sats, proposed.get("kryptexMiningSatsDaily")
     )
+    # Backend-owned credited counters mark which observed sats have already
+    # contributed to the USD ledger; stale legacy clients cannot reset them.
+    credited = dict(current.get("kryptexIncomeCreditedSatsDaily") or {})
+    for day, amount in old_sats.items():
+        if day not in credited and previous_confirmed.get(day) and (_nonnegative(previous_usd.get(day)) or 0) > 0:
+            credited[day] = amount
     daily = dict(previous_usd)
     for day, raw in new_usd.items():
         if not confirmed.get(day):
@@ -70,13 +76,20 @@ def merge_legacy_kryptex_setting(current, proposed):
         if value is None:
             continue
         prior_usd = _nonnegative(daily.get(day)) or 0
+        prior_credited = credited.get(day)
         daily[day] = recognize_mined_satoshi_increment(
-            prior_usd, old_sats.get(day), merged_sats.get(day), value
+            prior_usd, prior_credited, merged_sats.get(day), value
         )
+        if value > 0 and (_nonnegative(merged_sats.get(day)) or 0) > 0:
+            credited[day] = max(
+                _nonnegative(prior_credited) or 0,
+                _nonnegative(merged_sats[day]) or 0,
+            )
 
     result["kryptexMiningDaily"] = daily
     result["kryptexConfirmedDays"] = confirmed
     result["kryptexMiningSatsDaily"] = merged_sats
+    result["kryptexIncomeCreditedSatsDaily"] = credited
 
     monthly = {
         **(current.get("monthlyEarnings") or {}),
@@ -101,12 +114,13 @@ def merge_legacy_kryptex_setting(current, proposed):
         max(base_lifetime + max(0, after-before), incoming_lifetime), 8
     )
 
-    pending = set(current.get("kryptexPendingEarningsDays") or [])
-    pending.update(proposed.get("kryptexPendingEarningsDays") or [])
     result["kryptexPendingEarningsDays"] = sorted(
-        day for day in pending if isinstance(day, str) and
-        (_nonnegative(result["kryptexMiningSatsDaily"].get(day)) or 0) > 0 and
-        not (confirmed.get(day) and (_nonnegative(daily.get(day)) or 0) > 0)
+        day for day, amount in merged_sats.items()
+        if isinstance(day, str) and (_nonnegative(amount) or 0) > 0
+        and (
+            not (confirmed.get(day) and (_nonnegative(daily.get(day)) or 0) > 0)
+            or (_nonnegative(amount) or 0) > (_nonnegative(credited.get(day)) or 0) + 0.000001
+        )
     )
 
     previous_chart_sync = str(current.get("kryptexLastChartSyncAt") or "")
