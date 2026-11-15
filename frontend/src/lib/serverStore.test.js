@@ -6,6 +6,7 @@ import {
   resetStore,
   setStoreErrorHandler,
   refreshCollection,
+  refreshLiveSettings,
   isHydrated,
 } from "./serverStore";
 
@@ -328,4 +329,42 @@ test("refresh preserves current-tab asset edits after a non-conflict save failur
   expect(
     JSON.parse(remoteStorage.getItem("networth_assets"))[0].name
   ).toBe("Mine");
+});
+
+test("provider setting synced on backend updates without reloading or local writes", async () => {
+  const key = "project_income_kryptex_tracker_v1";
+  settingsApi.get.mockImplementation(async name =>
+    name === key ? { monthlyEarnings: { "2026-11": 41.2 } } : null
+  );
+  await refreshLiveSettings();
+  expect(JSON.parse(remoteStorage.getItem(key))).toEqual({
+    monthlyEarnings: { "2026-11": 41.2 },
+  });
+  expect(settingsApi.patch).not.toHaveBeenCalled();
+});
+
+test("backend refresh never overwrites unsaved local provider edits", async () => {
+  const key = "project_income_kryptex_tracker_v1";
+  settingsApi.all.mockResolvedValue({ [key]: { monthlyEarnings: { "2026-11": 40 } } });
+  await hydrate();
+  remoteStorage.setItem(key, JSON.stringify({ monthlyEarnings: { "2026-11": 42 } }));
+  settingsApi.get.mockImplementation(async name =>
+    name === key ? { monthlyEarnings: { "2026-11": 39 } } : null
+  );
+  await refreshLiveSettings();
+  expect(JSON.parse(remoteStorage.getItem(key)).monthlyEarnings["2026-11"]).toBe(42);
+});
+
+test("late provider refresh cannot leak data into a signed-out account", async () => {
+  const key = "project_income_kryptex_tracker_v1";
+  let finish;
+  settingsApi.get.mockImplementation(name =>
+    name === key ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(null)
+  );
+  const pending = refreshLiveSettings();
+  while (!finish) await Promise.resolve();
+  resetStore();
+  finish({ monthlyEarnings: { "2026-11": 9999 } });
+  await pending;
+  expect(remoteStorage.getItem(key)).toBeNull();
 });
