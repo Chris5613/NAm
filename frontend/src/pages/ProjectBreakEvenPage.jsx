@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronRight, X } from "lucide-react";
 import { subscribe } from "@/lib/serverStore";
+import { api } from "@/lib/apiClient";
 import {
   formatCurrency, getKryptexStats, getPaybackStats, getRollerCoinTrackerStats,
   getSaladTrackerStats, getUnetworkTrackerStats, groupManualPositions,
@@ -42,6 +43,7 @@ function readProjects() {
 
 export default function ProjectBreakEvenPage() {
   const [data, setData] = useState(readProjects);
+  const [serverProjects, setServerProjects] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -49,6 +51,24 @@ export default function ProjectBreakEvenPage() {
   const dialogRef = useRef(null);
   const triggerRef = useRef(null);
   useEffect(() => subscribe(() => setData(readProjects())), []);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => api.get("/api/project-tracking/project-break-even")
+      .then(result => {
+        if (active && result?.sourceOfCalculation === "backend-project-break-even" &&
+            Array.isArray(result.rows)) setServerProjects(result);
+      }).catch(() => { if (active) setServerProjects(null); });
+    refresh();
+    const timer = window.setInterval(refresh, 90000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [data]);
+  const serverPaybackMatches = serverProjects?.rows?.length === data.rows.length &&
+    data.rows.every(local => {
+      const remote = serverProjects.rows.find(row => row.id === local.id);
+      return remote && ["earned", "daily", "spent"].every(field =>
+        Math.abs(Number(local[field] || 0) - Number(remote[field] || 0)) < 0.005);
+    });
+  const calculatedProjects = serverPaybackMatches ? serverProjects.rows : data.rows;
   useEffect(() => {
     if (!selectedId) return undefined;
     closeButtonRef.current?.focus();
@@ -75,10 +95,10 @@ export default function ProjectBreakEvenPage() {
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [selectedId]);
 
-  const ranked = useMemo(() => [...data.rows].sort((a, b) => {
+  const ranked = useMemo(() => [...calculatedProjects].sort((a, b) => {
     if (!a.spent || !b.spent) return Number(Boolean(b.spent)) - Number(Boolean(a.spent));
     return b.earned / b.spent - a.earned / a.spent;
-  }), [data.rows]);
+  }), [calculatedProjects]);
   const inProgress = ranked.filter(row => !isRecovered(row));
   const recoveredProjects = ranked.filter(isRecovered);
   const selected = ranked.find(row => row.id === selectedId) || null;
