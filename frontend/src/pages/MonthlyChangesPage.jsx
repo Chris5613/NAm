@@ -4,12 +4,10 @@ import { CalendarDays, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X } from
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
 
-import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 
 
-import { formatCurrency, getCurrentMonthKey, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, getRollerCoinTrackerStats, groupManualPositions, loadPositions, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
+import { formatCurrency, getCurrentMonthKey, loadKryptexTracker, getRollerCoinTrackerStats, groupManualPositions, loadPositions, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
-import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
 import { localStorage as appStorage } from "@/lib/localStorage";
 
 const KEY = "monthly_business_changes_v1";
@@ -21,21 +19,6 @@ const BTC_CLOSE_USD = Object.freeze({
   "2026-10-31": 77434.75,
 });
 // Track each existing investment/project individually; Bitcoin holdings have their own row.
-function readIncomeSources() {
-  let legacyProjects = [];
-  try {
-    const stored = JSON.parse(remoteStorage.getItem("networth_projects") || "[]");
-    if (Array.isArray(stored)) legacyProjects = stored;
-  } catch { /* Other income history remains available. */ }
-  const quick = readObject(PROJECT_QUICK_CACHE_KEY);
-  return {
-    luloProjects: (quick.projects || []).filter(p => p?.yield_tracking === "lulo_lending"),
-    loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(),
-    rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(),
-    backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(),
-    legacyProjects, payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {},
-  };
-}
 function portfolioBalances() {
   const portfolio = getStoredProjectCryptoPortfolio();
   const balances = new Map();
@@ -167,7 +150,6 @@ export default function MonthlyChangesPage() {
   const [liveBitcoin, setLiveBitcoin] = useState(readHomeBitcoin);
   const [bitcoinAmount, setBitcoinAmount] = useState(readHomeBitcoinAmount);
   const [bitcoinPrice, setBitcoinPrice] = useState(() => Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
-  const [incomeSources, setIncomeSources] = useState(readIncomeSources);
   const [liveProjectBalances, setLiveProjectBalances] = useState(readLiveProjectBalances);
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [editing, setEditing] = useState(null);
@@ -180,26 +162,7 @@ export default function MonthlyChangesPage() {
     setLiveBitcoin(readHomeBitcoin());
     setBitcoinAmount(readHomeBitcoinAmount());
     setBitcoinPrice(Number(getStoredProjectCryptoPortfolio()?.bitcoin?.price) || null);
-    setIncomeSources(current => ({ ...readIncomeSources(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
   }), []);
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const result = await api.get("/api/yield-sources/earnings");
-        if (!active || !result) return;
-        setIncomeSources(current => ({
-          ...current,
-          loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory),
-          manualIncome: result.manualIncomeHistory || current.manualIncome,
-          luloBackfills: result.luloBackfills || current.luloBackfills,
-        }));
-      } catch { /* Existing saved records remain editable offline. */ }
-    };
-    refresh();
-    const interval = window.setInterval(refresh, 90000);
-    return () => { active = false; window.clearInterval(interval); };
-  }, []);
   const monthEarnings = useBackendIncomeHistory({
     currentMonth: getCurrentMonthKey(),
   });
