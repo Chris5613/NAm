@@ -395,22 +395,20 @@ export default function FinancialsPage() {
       .sort((a,b) => balanceDisplayName(a,accountLabels).localeCompare(
         balanceDisplayName(b,accountLabels), undefined, {sensitivity:"base",numeric:true})),
   }));
-  const total = (field,type) => {
-    const relevant = rows.filter(row =>
-      type==="assets" ? row.category!=="liabilities" : row.category==="liabilities");
-    return relevant.some(row=>row[field]===null) ? null :
-      moneyRound(relevant.reduce((sum,row)=>sum+Number(row[field]||0),0));
-  };
-  const assetsStart = total("start","assets");
-  const assetsEnd = total("end","assets");
-  const debtStart = total("start","debts");
-  const debtEnd = total("end","debts");
-  const netStart = assetsStart===null || debtStart===null ? null : moneyRound(assetsStart-debtStart);
-  const netEnd = assetsEnd===null || debtEnd===null ? null : moneyRound(assetsEnd-debtEnd);
-  const netChange = netStart===null || netEnd===null ? null : moneyRound(netEnd-netStart);
-  const missingAssetCount = rows.filter(row=>row.category!=="liabilities" && row.end===null).length;
-  const knownAssetsSubtotal = moneyRound(rows.filter(row=>row.category!=="liabilities" && row.end!==null)
-    .reduce((sum,row)=>sum+Number(row.end||0),0));
+  // A single backend statement projection supplies all Balance Sheet sums,
+  // including immutable archived closing rows; never recalculate them here.
+  const balanceTotals = serverFinancial?.displayTotals?.sourceOfCalculation ===
+    "backend-financial-statement-totals-v1" ?
+    serverFinancial.displayTotals : null;
+  const assetsStart = balanceTotals?.assetsStart ?? null;
+  const assetsEnd = balanceTotals?.assetsEnd ?? null;
+  const debtStart = balanceTotals?.debtStart ?? null;
+  const debtEnd = balanceTotals?.debtEnd ?? null;
+  const netStart = balanceTotals?.netStart ?? null;
+  const netEnd = balanceTotals?.netEnd ?? null;
+  const netChange = balanceTotals?.netChange ?? null;
+  const missingAssetCount = balanceTotals?.missingAssetCount ?? 0;
+  const knownAssetsSubtotal = balanceTotals?.knownAssetsSubtotal ?? 0;
   // Roll forward recorded journal activity from the start of tracking.
   // This includes previous earning accruals and depreciation, but opening
   // external account balances are still not invented.
@@ -427,11 +425,8 @@ export default function FinancialsPage() {
     totals: { operating: 0, investing: 0, financing: 0, transfers: 0 },
     total: 0,
   };
-  const cashEvents = Object.values(cashFlow.sections).flat();
-  const cashIn = moneyRound(cashEvents.filter(entry=>entry.delta>0)
-    .reduce((sum,entry)=>sum+entry.delta,0));
-  const cashOut = moneyRound(-cashEvents.filter(entry=>entry.delta<0)
-    .reduce((sum,entry)=>sum+entry.delta,0));
+  const cashIn = serverFinancial?.cashMovements?.cashIn ?? 0;
+  const cashOut = serverFinancial?.cashMovements?.cashOut ?? 0;
   const openPhoneEditor = () => {
     setPhoneError("");
     setPhoneDraft({inventoryId:"",name:"",purchaseDate:"",
