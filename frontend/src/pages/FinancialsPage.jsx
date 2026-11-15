@@ -18,6 +18,7 @@ import { resolveFinancialAccount } from "@/lib/financialMovements";
 import { balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName, cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow } from "@/lib/financialAccountNames";
 import { unmatchedEquipmentPurchases, moneyRound, valueOrNull } from "@/lib/financialAccounting";
 import { hasFreeMiningPower } from "@/lib/powerOutOfPocket";
+import { isFinancialMonthProtected } from "@/lib/financialMonthWriteGuard";
 import { validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
 
 import { formatCurrency, getCurrentMonthKey, getTodayKey } from "@/lib/yieldFarmingAccounting";
@@ -256,6 +257,7 @@ export default function FinancialsPage() {
     return () => { active=false; window.clearInterval(timer); };
   }, [month]);
   const closeSnapshot = closedMonths[month] || null;
+  const protectedMonth = key => isFinancialMonthProtected(key, closedMonths, records);
   // The backend owns balance rows, business phone PPE, hardware trades,
   // journal equipment and depreciation. Never substitute browser arithmetic.
   const backendBalanceRows = useBackendFinancialBalanceRows({
@@ -452,9 +454,9 @@ export default function FinancialsPage() {
     event.preventDefault();
     const original = editingEntryId ? journal.find(entry=>entry.id===editingEntryId) : null;
     if(editingEntryId && !original) {setError("This entry could not be found. Close and reopen the editor.");return;}
-    if((original && closedMonths[String(original.date).slice(0,7)]) ||
-       closedMonths[String(draft.date).slice(0,7)]) {
-      setError("This reporting month is closed. Reopen it from General Ledger before editing."); return;
+    if((original && protectedMonth(String(original.date).slice(0,7))) ||
+       protectedMonth(String(draft.date).slice(0,7))) {
+      setError("This month is locked in Monthly Changes or closed in Financials. Unlock the applicable month before editing."); return;
     }
     if(!draft.description.trim() || !validLedgerDate(draft.date)) {
       setError("Enter a valid date and description."); return;
@@ -485,8 +487,8 @@ export default function FinancialsPage() {
   };
   const confirmQuickEntry = () => {
     if (!quickEntry) return;
-    if (closedMonths[String(quickEntry.date).slice(0, 7)]) {
-      setQuickError("This reporting month is closed. Reopen it before posting.");
+    if (protectedMonth(String(quickEntry.date).slice(0, 7))) {
+      setQuickError("This month is locked or closed. Unlock it before posting.");
       return;
     }
     if (!quickEntry.description.trim() || !validLedgerDate(quickEntry.date) ||
@@ -524,7 +526,7 @@ export default function FinancialsPage() {
   };
   const deleteEntry = id => {
     const original = journal.find(entry => entry.id === id);
-    if (original && closedMonths[String(original.date).slice(0, 7)]) {
+    if (original && protectedMonth(String(original.date).slice(0, 7))) {
       setTab("ledger");
       return;
     }
@@ -830,7 +832,7 @@ export default function FinancialsPage() {
         <thead><tr className="border-b border-[#314454] text-left text-xs text-[#9db0c1]"><th className="pb-3">Date / Description</th><th className="pb-3">Account</th><th className="pb-3 text-right">Debit</th><th className="pb-3 text-right">Credit</th><th/></tr></thead>
         <tbody>{displayedLedgerEntries.map((entry, entryIndex) => <Fragment key={entry.id}>
           {entry.lines.map((item, index) => <tr key={index} className="border-b border-[#20303d]">
-            <td className="py-2 align-top">{index===0 ? <>{!entry.automatic && journal.some(item=>item.id===entry.id) && !closedMonths[String(entry.date).slice(0,7)] ? (
+            <td className="py-2 align-top">{index===0 ? <>{!entry.automatic && journal.some(item=>item.id===entry.id) && !protectedMonth(String(entry.date).slice(0,7)) ? (
               <button type="button" onClick={()=>editEntry(entry)} title="Edit journal entry"
                 className="text-left hover:text-sky-300 hover:underline focus-visible:rounded focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-400">
                 {transactionTitle(entry)}
@@ -840,7 +842,7 @@ export default function FinancialsPage() {
             <td className="py-2 text-[#c3d2df]">{ledgerAccountName(entry,item)}</td>
             <td className="py-2 text-right tabular-nums">{item.debit ? money(item.debit) : "—"}</td>
             <td className="py-2 text-right tabular-nums">{item.credit ? money(item.credit) : "—"}</td>
-            <td className="py-2 text-right">{index===0 && !entry.automatic && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
+            <td className="py-2 text-right">{index===0 && !entry.automatic && !protectedMonth(String(entry.date).slice(0,7)) && <button aria-label={"Delete "+entry.description} onClick={() => deleteEntry(entry.id)} className="text-[#9dafc0] hover:text-rose-400"><Trash2 size={15}/></button>}</td>
           </tr>)}
           {entryIndex < displayedLedgerEntries.length - 1 && <tr aria-hidden="true" className="h-10 border-y border-[#2b3d4d] bg-[#101923]/60">
             <td className="h-10">&nbsp;</td>
