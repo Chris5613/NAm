@@ -32,6 +32,7 @@ from ..provider_monthly_income import monthly_provider_income
 from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
 from ..persisted_income_snapshot import source_income_history
+from ..financial_parity import record_parity_observation, parity_summary
 from ..manual_income_history import manual_income_for_user
 from ..financial_balance_rows import financial_balance_rows, with_journal_equipment
 from ..monthly_snapshot_guard import guard_monthly_snapshots
@@ -825,6 +826,48 @@ async def evaluate_phone_equipment(
         raise HTTPException(status_code=422, detail="Invalid phone asset register")
     return {"sourceOfCalculation": "backend-financial-core", "month": month,
             "rows": phone_asset_rows(phones, month)}
+
+
+@router.post("/financial-core/parity-observation")
+async def record_financial_migration_parity(
+    payload: dict, user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Telemetry only: no balances, transactions or ledger changes."""
+    if len(str(payload)) > 1000:
+        raise HTTPException(status_code=413, detail="Parity payload too large")
+    try:
+        db.scalar(select(User).where(User.id == user.id).with_for_update())
+        key = "financial_core_parity_v1"
+        row = db.scalar(select(Setting).where(
+            Setting.user_id == user.id, Setting.key == key
+        ))
+        original = row.value if row else None
+        revised = record_parity_observation(
+            original, payload.get("area"), payload.get("month"),
+            payload.get("status"), payload.get("source"),
+            payload.get("fingerprint"),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if revised != original:
+        if row:
+            row.value = revised
+        else:
+            db.add(Setting(user_id=user.id, key=key, value=revised))
+        db.commit()
+    return {"recorded": True, "area": payload.get("area"),
+            "status": payload.get("status")}
+
+
+@router.get("/financial-core/parity")
+async def get_financial_migration_parity(
+    user: User = Depends(current_user), db: Session = Depends(get_db),
+) -> dict:
+    """Read-only diagnostics for remaining browser calculation fallbacks."""
+    saved = setting(db, user.id, "financial_core_parity_v1")
+    return {"sourceOfCalculation": "backend-financial-parity",
+            **parity_summary(saved)}
 
 
 @router.get("/financial-core/source-income-history")
