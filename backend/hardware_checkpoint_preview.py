@@ -54,6 +54,9 @@ def preview_hardware_edit(saved, expected, proposed, today_key, timestamp):
             raise ValueError("Invalid or duplicate device ID")
         seen.add(identity)
         original = current.get(identity)
+        if original is not None and device == original:
+            new.append(deepcopy(original))
+            continue
         selected = sources_for(device)
         if not selected:
             raise ValueError("Choose at least one income source")
@@ -88,9 +91,10 @@ def preview_hardware_edit(saved, expected, proposed, today_key, timestamp):
                 "allocationMode": "backend-start-day-v1",
                 **({"ledger": "kryptex-confirmed-v2"} if "kryptex" in selected else {}),
             }
-        device["sources"] = [source.title() if source not in ("unetwork", "rollercoin")
-                             else ("Unetwork" if source == "unetwork" else "RollerCoin")
-                             for source in selected]
+        names = {"kryptex": "Kryptex", "salad": "Salad",
+                 "rollercoin": "RollerCoin", "unetwork": "Unetwork",
+                 "loopscale": "Loopscale", "lulo": "Lulo"}
+        device["sources"] = [names.get(source, source) for source in selected]
         device["source"] = device["sources"][0]
         new.append(device)
     return {
