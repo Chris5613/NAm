@@ -82,6 +82,15 @@ A read-only SQL recheck after these fixes found the exact restored satoshi rewar
 - Home's display adjustment subtracts the lesser of business cash and total personal cash to avoid an assumed overlap. It does not currently prove the two accounts hold the same transferred funds by matching a bank-transaction ID. Keep this as a **manual reconciliation item**, not a reason to delete a cash balance.
 - These checks queried only dates and amounts, not bank credentials. No changes were made to journal entries, business cash, personal accounts, or spending transactions.
 
+## BTC-price repricing and delayed-conversion reconciliation
+
+- **Additional risk found:** A USD high-water mark can still rise when BTC rises even if the mined satoshi count does not. The old rule prevented downward repricing but did not distinguish price appreciation from new mining.
+- The backend now recognizes incremental mining income from **the increase in daily satoshis**, valued using the incoming chart's implied USD per satoshi. It retains prior recognized USD instead of repricing all already credited satoshis. No earned satoshis are created from a balance-only market change. The historical Nov 1–6 recovery retains its original, auditable price basis.
+- **Delayed conversion case:** Incoming `daily_sats` may precede its corresponding `daily_usd`. The tracker now keeps `kryptexMiningSatsDaily` (observed) separate from `kryptexIncomeCreditedSatsDaily` (already recognized as USD). The latter is initialized from historic confirmed observations for compatibility. If new sats arrive without USD, the day is marked in `kryptexPendingEarningsDays` and in the read-only audit until a USD conversion arrives. Subsequent USD recognition credits the remaining sats without doubling previously recognized income.
+- Legacy generic-settings writes apply the same incremental-recognition rule and cannot erase the credited-sats baseline. Regression tests exercise a pure price rise, sats increase with a doubled BTC price, sats arriving before USD, and stale browser settings with pending sats.
+- **Approximation:** The implied BTC/USD rate from a chart observation is not a verified timestamped exchange fill price for every newly mined satoshi. Precise historical USD recognition would require timestamps and priced reward lots that the source chart does not expose. This logic prevents BTC balance mark-to-market changes from driving recorded income as if all old mining happened at today's price.
+- **Live recheck:** November confirmed Kryptex daily sum **$40.641553513** reconciled with monthly **$40.64155351**, pending conversions **0**, November 1 reward evidence **452 sats** retained. November provider snapshot total **$74.479955** reconciled with its platform rows **$74.479955**. `kryptexIncomeCreditedSatsDaily` was present in the live DB. This is a point-in-time check.
+
 ## Important distinctions / outstanding verification
 
 - **Legacy daily-income server records cannot be treated as mining rewards:** Older Kryptex records can contain USD account balance movements driven by BTC prices. Do not combine those numbers with the confirmed mining ledger.
