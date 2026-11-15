@@ -3,7 +3,7 @@ import unittest
 
 from backend.financial_core import (
     auto_income_journal, build_statement_rows, project_break_even,
-    project_automatic_expenses,
+    project_automatic_expenses, split_revenue,
 )
 from backend.income_history_core import (
     reconcile_lulo_months, historical_income, legacy_months,
@@ -30,6 +30,17 @@ class BackendAccountingMigrationTests(unittest.TestCase):
         self.assertEqual(per_provider["Synced Kryptex income"], 4)
         self.assertEqual(per_provider["Synced Salad income"], 3)
         self.assertFalse(result["pendingReview"])
+
+    def test_encoded_journal_source_matches_browser_revenue_classification(self):
+        journal = [{
+            "id": "synced-income:2026-11:roller%20coin",
+            "date": "2026-11-15",
+            "lines": [{"account": "platform:rollercoin", "debit": 4},
+                      {"account": "revenue", "credit": 4}],
+        }]
+        result = split_revenue(journal)
+        self.assertEqual(result["mining"], 4)
+        self.assertEqual(result["unclassified"], 0)
 
     def test_unknown_source_cannot_generate_fabricated_receivable(self):
         result = auto_income_journal("2026-11", {
