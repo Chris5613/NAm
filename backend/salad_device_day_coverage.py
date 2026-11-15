@@ -7,7 +7,7 @@ cannot be prematurely certified or treated as missing historical income.
 """
 from datetime import date, timedelta
 from .earnings_dashboard import provider_entries
-from .hardware_source_segments import normalize_source
+from .hardware_source_segments import (\n    normalize_source, checked_segments, sources_on_day, InvalidSourceSegments,\n)
 from .financial_historical_ledger import mapping, sequence
 
 
@@ -20,14 +20,22 @@ def salad_device_day_coverage(devices, daily_records, trackers, today_key):
         if not isinstance(device, dict):
             continue
         sources = sequence(device.get("sources"))
-        # Dated hardware source segments can change which provider counts on
-        # each day. A future source switch must not reassign past rewards.
-        segments = sequence(device.get("sourceSegments"))
+        # Use the same validated historical source periods as Hardware Payback.
+        # Invalid source timelines must fail closed, not silently reassign
+        # earlier earnings to the current GPU configuration.
+        try:
+            segments = checked_segments(device)
+        except InvalidSourceSegments:
+            device_reports.append({
+                "id": device.get("id"), "status": "invalid-source-segments",
+                "verifiedDays": [], "provisionalDays": [], "missingDays": [],
+                "incompleteDays": [], "reason": "Invalid hardware source timeline",
+            })
+            continue
         names = {normalize_source(source) for source in sources}
-        for segment in segments:
-            if isinstance(segment, dict):
-                names.update(normalize_source(x)
-                             for x in sequence(segment.get("sources")))
+        if segments:
+            for segment in segments:
+                names.update(segment["sources"])
         if "salad" not in names:
             continue
         start_raw = device.get("earningsStartDay")
@@ -53,12 +61,11 @@ def salad_device_day_coverage(devices, daily_records, trackers, today_key):
             day_key = day.isoformat()
             # Choose saved segment active on this day; do not use a later
             # device source change to rewrite historical provider attribution.
-            matching = [segment for segment in segments
-                        if isinstance(segment, dict) and
-                        str(segment.get("startDay") or "") <= day_key and
-                        (not segment.get("endDay") or
-                         day_key <= str(segment.get("endDay")))]
-            selected = (matching[-1].get("sources", []) if matching else sources)
+            selected = sources_on_day(segments, day_key, sources)
+            if selected is None:
+                missing.append(day_key)
+                day += timedelta(days=1)
+                continue
             if "salad" not in {normalize_source(x) for x in sequence(selected)}:
                 day += timedelta(days=1)
                 continue
