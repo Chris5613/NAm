@@ -19,6 +19,7 @@ from ..models import Setting, User
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
+from ..integration_audit import audit_integration_settings
 from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
 
 router = APIRouter(prefix="/api/project-tracking", tags=["project tracking"])
@@ -299,6 +300,25 @@ async def receive_kryptex_machine(
     save_setting(db, user.id, KRYPTEX_TRACKER_KEY, tracker)
     db.commit()
     return {**aggregate, "tracker": tracker}
+
+
+@router.get("/integration-audit")
+async def project_integration_audit(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Authenticated, read-only snapshot of cross-page/provider invariants."""
+    keys = (
+        "project_income_kryptex_tracker_v1",
+        "yield_monthly_snapshots_v1",
+        "financials_journal_v1",
+        "hardware_payback_devices_v1",
+        "passive_income_monthly_chart_total_v1",
+        "kryptex_recovery_verified_2026_11_01_06_v1",
+    )
+    rows = db.scalars(
+        select(Setting).where(Setting.user_id == user.id, Setting.key.in_(keys))
+    ).all()
+    return audit_integration_settings({row.key: row.value for row in rows})
 
 
 @router.get("/kryptex/earnings-audit")
