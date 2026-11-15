@@ -1,3 +1,4 @@
+import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, X, Cpu, CalendarDays, Zap } from "lucide-react";
 import { api } from "@/lib/apiClient";
@@ -172,10 +173,17 @@ export default function HardwarePaybackPage() {
   const trackers = useMemo(() => ({ salad: history.salad, rollercoin: history.rollercoin, unetwork: history.unetwork, kryptex: history.kryptex }), [history.salad, history.rollercoin, history.unetwork, history.kryptex]);
   const localMonths = useMemo(() => buildProjectIncome(history.luloProjects, history.loopscale, history.salad, history.backfills, history.rollercoin, history.unetwork, history.kryptex), [history]);
   const liveMonths = useBackendMonthlyIncome(trackers, localMonths);
-  const months = useMemo(() => {
+  const localIncomeHistory = useMemo(() => {
     const projects = reconcileLuloIncome(getEffectiveProjectIncome(liveMonths, history.snapshots), history.backfills, history.luloBackfills, currentMonth, history.luloProjects, currentDay);
     return mergeManualIncome(buildIncomeHistory(projects, history.payouts, currentMonth, legacyProjectIncome(history.legacyProjects)), history.manualIncome?.monthly || {}, currentMonth);
   }, [liveMonths, history, currentMonth, currentDay]);
+  const months = useBackendIncomeHistory({
+    months: getEffectiveProjectIncome(liveMonths, history.snapshots),
+    localBackfills: history.backfills, backendBackfills: history.luloBackfills,
+    luloProjects: history.luloProjects, currentMonth, currentDay,
+    payouts: history.payouts, legacyProjects: history.legacyProjects,
+    manualMonths: history.manualIncome?.monthly || {},
+  }, localIncomeHistory);
   useEffect(() => {
     if (!historyReady) return;
     const legacyKryptex = devices.filter(device =>
