@@ -102,6 +102,31 @@ class CrossPageIntegrityTests(unittest.TestCase):
         self.assertEqual(report["bookedProviderLifetimeUsd"], 10)
         self.assertEqual(found["home-financials"]["status"], "pass")
 
+    def test_booked_provider_vs_dated_income_difference_is_visible(self):
+        saved, trackers, income = fixture()
+        before = deepcopy((saved, trackers, income))
+        result = run(saved, trackers, income)
+        review = checks(result)["provider-month-reconciliation"]
+        self.assertEqual(review["status"], "warning")
+        details = review["reconciliation"]
+        self.assertEqual(details["bookedTotalUsd"], 10)
+        self.assertEqual(details["datedTotalUsd"], 1)
+        self.assertAlmostEqual(details["differenceUsd"], -9)
+        self.assertEqual((saved, trackers, income), before)
+
+    def test_identical_booked_and_confirmed_day_sums_reconcile(self):
+        saved, trackers, income = fixture()
+        saved["yield_monthly_snapshots_v1"]["2026-11"]["total"] = 1
+        saved["yield_monthly_snapshots_v1"]["2026-11"]["platforms"] = [
+            {"platform": "Kryptex", "amount": 1}]
+        income[0]["projectTotal"] = 1
+        income[0]["total"] = 1
+        income[0]["sources"] = {"Kryptex": 1}
+        result = run(saved, trackers, income)
+        check = checks(result)["provider-month-reconciliation"]
+        self.assertEqual(check["status"], "pass")
+        self.assertEqual(check["reconciliation"]["status"], "matched")
+
     def test_snapshot_source_difference_is_an_error_not_adjusted(self):
         saved, trackers, income = fixture()
         saved["yield_monthly_snapshots_v1"]["2026-11"]["total"] = 12
