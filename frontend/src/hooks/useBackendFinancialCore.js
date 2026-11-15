@@ -13,6 +13,12 @@ export function useBackendFinancialCore(month, entries, rows, devices, savedExpe
   const [result, setResult] = useState(null);
   useEffect(() => {
     let active = true;
+    // Do not calculate a partial financial statement before the backend
+    // balance-rows response has supplied the complete registered assets.
+    if (!Array.isArray(rows)) {
+      setResult({ signature, loading: true });
+      return () => { active = false; };
+    }
     let payload;
     try { payload = JSON.parse(signature); }
     catch {
@@ -32,7 +38,7 @@ export function useBackendFinancialCore(month, entries, rows, devices, savedExpe
         if (active) setResult({ signature, error: true });
       });
     return () => { active = false; };
-  }, [signature, month]);
+  }, [signature, month, rows]);
   return result?.signature === signature ? result : { loading: true };
 }
 
