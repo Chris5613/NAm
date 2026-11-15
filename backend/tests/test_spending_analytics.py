@@ -32,9 +32,10 @@ class SpendingAnalyticsTests(unittest.TestCase):
         self.assertEqual(r["previousMonthToDate"], 20)
         self.assertEqual(r["monthDelta"], 20)
         self.assertEqual(r["monthTiles"][10]["total"], -40)
+        # Existing browser category display sorts by signed amount descending.
         self.assertEqual(r["categoryBreakdown"], [
-            {"category": "Groceries", "amount": -30, "share": -75},
             {"category": "Dining", "amount": -10, "share": -25},
+            {"category": "Groceries", "amount": -30, "share": -75},
         ])
         self.assertEqual(r["chartData"][3], {
             "label": "4", "spent": 40, "income": 100,
