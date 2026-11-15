@@ -326,6 +326,7 @@ export async function flushKey(key) {
 export async function hydrate() {
   // A sign-out or newer hydration invalidates any earlier async response.
   const generation = ++storeGeneration;
+  liveRefreshPromise = null;
 
   pendingTimers.forEach((timer) => clearTimeout(timer));
   pendingTimers.clear();
@@ -362,6 +363,7 @@ export async function hydrate() {
 
 export function resetStore() {
   storeGeneration += 1;
+  liveRefreshPromise = null;
   savedProjects = [];
   savedValues.clear();
   cache.clear();
@@ -423,8 +425,11 @@ export async function refreshLiveSettings() {
       applyServerValue(key, next);
     }
   };
-  liveRefreshPromise = refresh().finally(() => { liveRefreshPromise = null; });
-  return liveRefreshPromise;
+  const requestPromise = refresh().finally(() => {
+    if (liveRefreshPromise === requestPromise) liveRefreshPromise = null;
+  });
+  liveRefreshPromise = requestPromise;
+  return requestPromise;
 }
 
 /** Mirrors the Web Storage API so existing synchronous call sites work. */
