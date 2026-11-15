@@ -520,7 +520,11 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
         latest.salad();
         latest.unetwork();
         latest.kryptex();
-        await quickRefreshRef.current();
+        // Full sync already fetches and applies project data. Do not let a
+        // quick project fetch race its response and overwrite newer values.
+        if (!syncRunningRef.current) {
+          await quickRefreshRef.current();
+        }
       } finally {
         quickRunningRef.current = false;
       }
