@@ -163,6 +163,34 @@ no false zero warnings or historical corrections were inserted.
 **Status:** Operating controls deployed; continuing health must always be
 checked over time, not declared permanently finished from one good run.
 
+## November 15, 2026 production audit follow-up (23:10–23:11 UTC)
+
+- [x] User-supplied authenticated reports at
+  **2026-11-15T23:10:46.855853+00:00** and
+  **2026-11-15T23:11:01.309622+00:00** were identical in result:
+  **no error checks** and no change to the recurring documented warnings.
+  Every booked income month, Passive Income, portfolio, Home/Financials,
+  General Ledger, Salad completed-day coverage and monthly provider sources
+  were `PASS`.
+- [x] The hardware review was narrowed to a missing **Nov 15 current-day**
+  Salad observation and a pre-start historical checkpoint baseline warning;
+  there were **no missing RTX 2080 source days** and no provisional device
+  credits in this audit. Checkpoint amounts never post business revenue.
+- [x] Added a separate read-only `hardware-completed-day-coverage` check to
+  distinguish missing **completed** device days from an unfinished Pacific
+  day. Its verified result may be `PASS` while the original lifetime
+  `hardware-credit` stays `WARNING`; the latter remains conservative and
+  must not be falsified to green. The signed-in UI and clipboard report
+  expose both kinds of missing evidence.
+- [ ] Daily earning receipts from historical Loopscale and other providers
+  remain legacy/provisional (the backend audit reported Loopscale
+  Nov 1–4, 6–15; Salad Nov 1–3, 9 and 12). Preserve original values and
+  provenance until independent provider evidence is available.
+  Inactive Lulo audit exceptions are informational historical evidence
+  only; **Lulo-specific source code and data must remain frozen**.
+- [ ] September/October formal Financials closes remain blocked by
+  independently verified opening cash and asset estimates.
+
 ## Overall release decision
 
 **The code migration and automated source-level checks are suitable for
