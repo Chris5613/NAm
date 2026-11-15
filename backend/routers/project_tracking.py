@@ -911,6 +911,29 @@ async def source_owned_income_history(
             "amount": entry.amount,
         })
     project_rows = project_history_rows(projects, per_project)
+    # Use durable tracker and daily ledger observations, never current
+    # wallet balances. This endpoint must not depend on another handler's
+    # local variables (trackers/dates/current Pacific day).
+    trackers = {
+        name: setting(db, user.id, key) or {}
+        for name, key in {
+            "salad": "project_income_salad_tracker_v1",
+            "unetwork": "project_income_unetwork_tracker_v1",
+            "kryptex": "project_income_kryptex_tracker_v1",
+            "rollercoin": "project_income_rollercoin_tracker_v2",
+        }.items()
+    }
+    prefix = "yield_server_daily_income_" + month + "-"
+    dated = {
+        row.key.removeprefix("yield_server_daily_income_"): row.value
+        for row in db.scalars(select(Setting).where(
+            Setting.user_id == user.id,
+            Setting.key.like(prefix + "%"),
+        )).all()
+        if isinstance(row.value, dict)
+    }
+    day = datetime.now(timezone.utc).astimezone(
+        ZoneInfo("America/Los_Angeles")).date().isoformat()
     result = source_income_history(
         snapshots, dividends, project_rows,
         manual_income_for_user(user.id), month,
