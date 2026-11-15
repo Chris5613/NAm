@@ -1,3 +1,4 @@
+import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
@@ -280,7 +281,7 @@ export default function MonthlyChangesPage() {
     incomeSources.backfills, incomeSources.rollercoin, incomeSources.unetwork, incomeSources.kryptex,
   ), [incomeSources]);
   const backendMonths = useBackendMonthlyIncome(trackers, localMonths);
-  const monthEarnings = useMemo(() => {
+  const localMonthEarnings = useMemo(() => {
     const effective = reconcileLuloIncome(
       getEffectiveProjectIncome(backendMonths, incomeSources.snapshots),
       incomeSources.backfills, incomeSources.luloBackfills, getCurrentMonthKey(),
@@ -290,6 +291,15 @@ export default function MonthlyChangesPage() {
       legacyProjectIncome(incomeSources.legacyProjects));
     return mergeManualIncome(recorded, incomeSources.manualIncome?.monthly || {}, getCurrentMonthKey());
   }, [backendMonths, incomeSources]);
+  const monthEarnings = useBackendIncomeHistory({
+    months: getEffectiveProjectIncome(backendMonths, incomeSources.snapshots),
+    localBackfills: incomeSources.backfills,
+    backendBackfills: incomeSources.luloBackfills,
+    luloProjects: incomeSources.luloProjects,
+    currentMonth: getCurrentMonthKey(), currentDay: getTodayKey(),
+    payouts: incomeSources.payouts, legacyProjects: incomeSources.legacyProjects,
+    manualMonths: incomeSources.manualIncome?.monthly || {},
+  }, localMonthEarnings);
 
   useEffect(() => {
     const refresh = () => {
