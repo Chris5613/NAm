@@ -206,34 +206,9 @@ export default function MonthlyChangesPage() {
     const interval = window.setInterval(refresh, 90000);
     return () => { active = false; window.clearInterval(interval); };
   }, []);
-  const trackers = useMemo(() => ({
-    salad: incomeSources.salad, rollercoin: incomeSources.rollercoin,
-    unetwork: incomeSources.unetwork, kryptex: incomeSources.kryptex,
-  }), [incomeSources.salad, incomeSources.rollercoin, incomeSources.unetwork, incomeSources.kryptex]);
-  const localMonths = useMemo(() => buildProjectIncome(
-    incomeSources.luloProjects, incomeSources.loopscale, incomeSources.salad,
-    incomeSources.backfills, incomeSources.rollercoin, incomeSources.unetwork, incomeSources.kryptex,
-  ), [incomeSources]);
-  const backendMonths = useBackendMonthlyIncome(trackers, localMonths);
-  const localMonthEarnings = useMemo(() => {
-    const effective = reconcileLuloIncome(
-      getEffectiveProjectIncome(backendMonths, incomeSources.snapshots),
-      incomeSources.backfills, incomeSources.luloBackfills, getCurrentMonthKey(),
-      incomeSources.luloProjects, getTodayKey(),
-    );
-    const recorded = buildIncomeHistory(effective, incomeSources.payouts, getCurrentMonthKey(),
-      legacyProjectIncome(incomeSources.legacyProjects));
-    return mergeManualIncome(recorded, incomeSources.manualIncome?.monthly || {}, getCurrentMonthKey());
-  }, [backendMonths, incomeSources]);
   const monthEarnings = useBackendIncomeHistory({
-    months: getEffectiveProjectIncome(backendMonths, incomeSources.snapshots),
-    localBackfills: incomeSources.backfills,
-    backendBackfills: incomeSources.luloBackfills,
-    luloProjects: incomeSources.luloProjects,
-    currentMonth: getCurrentMonthKey(), currentDay: getTodayKey(),
-    payouts: incomeSources.payouts, legacyProjects: incomeSources.legacyProjects,
-    manualMonths: incomeSources.manualIncome?.monthly || {},
-  }, localMonthEarnings);
+    currentMonth: getCurrentMonthKey(),
+  });
 
   useEffect(() => {
     const refresh = () => {
