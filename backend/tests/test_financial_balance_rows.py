@@ -7,6 +7,46 @@ from backend.financial_core import phone_asset_rows
 
 
 class FinancialBalanceRowsTests(unittest.TestCase):
+    def test_rate_x_is_excluded_from_current_balance_sheet_even_if_live_zero(self):
+        records = {"2026-11": {"items": [{"name": "Rate X", "end": 600},
+                                            {"name": "Kryptex", "end": 20}]}}
+        live = {"ratex": 0, "kryptex": 42}
+        rows = financial_balance_rows("2026-11", records, live, [],
+                                      "2026-11")
+        self.assertNotIn("ratex", {row["name"].lower().replace(" ", "")
+                                   for row in rows})
+        self.assertEqual(next(row for row in rows if row["name"] == "Kryptex")["end"], 42)
+
+    def test_rate_x_is_not_added_as_a_live_project_asset_when_positive(self):
+        rows = financial_balance_rows("2026-11", {}, {
+            "ratex": 750, "salad": 2.5,
+        }, [], "2026-11")
+        self.assertNotIn("project:ratex", [row["id"] for row in rows])
+        self.assertEqual(next(row["end"] for row in rows
+                              if row["id"] == "project:salad"), 2.5)
+
+    def test_rate_x_extra_balance_sheet_alias_excluded_without_mutating_saved(self):
+        import copy
+        records = {"2026-11": {"balanceSheetItems": [
+            {"id": "rate-x-asset", "name": "Rate X", "end": 600},
+            {"id": "regular-asset", "name": "Business Asset", "end": 10},
+        ]}}
+        frozen = copy.deepcopy(records)
+        rows = financial_balance_rows("2026-11", records, {}, [], "2026-11")
+        self.assertNotIn("rate-x-asset", [row["id"] for row in rows])
+        self.assertIn("regular-asset", [row["id"] for row in rows])
+        self.assertEqual(records, frozen)
+
+    def test_locked_historical_rate_x_is_preserved_without_rewriting_it(self):
+        records = {"2026-10": {"locked": True, "items": [
+            {"name": "Rate X", "end": 600},
+        ]}}
+        rows = financial_balance_rows("2026-10", records,
+                                      {"ratex": 0}, [], "2026-11")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["name"], "Rate X")
+        self.assertEqual(rows[0]["end"], 600)
+
     def test_two_independently_registered_gpus_are_never_merged(self):
         devices = [
             {"id": "gpu-1", "name": "RTX 5080 GPU", "cost": 1950,
