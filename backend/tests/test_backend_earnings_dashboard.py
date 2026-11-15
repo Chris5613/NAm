@@ -63,6 +63,33 @@ class BackendEarningsDashboardTests(unittest.TestCase):
         self.assertNotIn("Unetwork", row["provisionalSources"])
         self.assertNotIn("RollerCoin", row["provisionalSources"])
 
+    def test_corrected_confirmed_reward_does_not_make_month_unverified(self):
+        day = "2026-11-14"
+        rows = {day: {"sources": {"Kryptex": 10.0}}}
+        trackers = {"Kryptex": {
+            "kryptexConfirmedDays": {day: True},
+            "kryptexMiningDaily": {day: 3.0},
+        }}
+        result = build_backend_earnings_dashboard("2026-11", day, rows, trackers)
+        self.assertTrue(result["fullyVerified"])
+        self.assertEqual(result["reviewDays"][0]["corrections"]["Kryptex"], -7.0)
+        self.assertEqual(result["reviewDays"][0]["sources"], [])
+        self.assertEqual(result["monthTotalUsd"], 3.0)
+
+    def test_unreconciled_legacy_income_remains_explicit_and_unverified(self):
+        day = "2026-11-14"
+        rows = {day: {"sources": {"Loopscale": 2.5, "Lulo": 0,
+                                 "Kryptex": 5.0}}}
+        trackers = {"Kryptex": {
+            "kryptexConfirmedDays": {day: True},
+            "kryptexMiningDaily": {day: 3.0},
+        }}
+        result = build_backend_earnings_dashboard("2026-11", day, rows, trackers)
+        self.assertFalse(result["fullyVerified"])
+        self.assertEqual(result["reviewDays"][0]["sources"], ["Loopscale"])
+        self.assertEqual(result["monthTotalUsd"], 5.5)
+        self.assertEqual(result["days"][13]["provisionalSources"], ["Loopscale"])
+
     def test_bad_numeric_does_not_become_fake_credit(self):
         row = provider_entries("2026-11-14", {"sources": {"Kryptex": float("nan"),
                                   "Salad": -2, "Loopscale": 1.1}}, {})
