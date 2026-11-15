@@ -8,7 +8,7 @@ export function extractBackendKryptexRunRate(response) {
   const raw = response?.status?.profitability_usd_day;
   if (typeof count !== "number" || !Number.isFinite(count) || count < 1 ||
       typeof raw !== "number" || !Number.isFinite(raw) || raw < 0) return null;
-  const synced = response?.status?.last_updated || response?.status?.last_synced_at || null;
+  const synced = response?.received_at || response?.machines?.[0]?.last_seen_at || null;
   return {
     usdPerDay: raw,
     machineCount: Math.floor(count),
