@@ -65,3 +65,30 @@ test("monthly day breakdown uses recorded sources for that day", () => {
   ]);
   expect(result.total).toBe(2);
 });
+
+test("current month popup uses chart daily sources rather than stale monthly snapshots", () => {
+  const result = buildSelectedEarningsBreakdown({
+    selection: { range: "yearly", key: "2026-11" },
+    earningsChartRange: "yearly",
+    projectIncome: [{
+      monthKey: "2026-11",
+      platforms: [{ platform: "Kryptex", amount: 40.4 }],
+    }],
+    currentMonthSources: {
+      Kryptex: 43.19,
+      Loopscale: 12.67,
+      Unetwork: 9.16,
+      RollerCoin: 7.02,
+      Lulo: 4.58,
+      Salad: 4.24,
+    },
+    stockPayouts: {},
+    todayKey: "2026-11-14",
+    luloUtcDay: "2026-11-14",
+    hasLuloProjects: false,
+    sourceTotalsForDay: () => ({}),
+  });
+  expect(result.total).toBeCloseTo(80.86);
+  expect(result.entries.find(row => row.name === "Kryptex").amount).toBe(43.19);
+  expect(result.note).toMatch(/daily earnings/);
+});
