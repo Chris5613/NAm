@@ -7,7 +7,7 @@ import {
   readUnetworkPhones, readPhoneInventory, makePhoneAsset, phoneJournal, phoneAssetRows,
   UNETWORK_PHONES_KEY,
 } from "@/lib/unetworkPhonesAccounting";
-import { api, settingsApi } from "@/lib/apiClient";
+import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
@@ -39,32 +39,12 @@ import {
 const RECORDS_KEY = "monthly_business_changes_v1";
 const JOURNAL_KEY = "financials_journal_v1";
 const HARDWARE_KEY = "hardware_payback_devices_v1";
-const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
 const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
 const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const BANK_OPENINGS_KEY = "financials_bank_openings_v1";
 const FINANCIAL_LABELS_KEY = "financials_account_labels_v1";
 const LEGACY_LEDGER_CLEANUP_KEY = "financials_pre_september_2026_cleanup_v1";
-const DEFAULT_POWER_SETTINGS = { basicRate: 0.1691, offPeakRate: 0.0893, midPeakRate: 0.1670, peakRate: 0.4313 };
-function readHardwareRegister() {
-  const rows = readJson(HARDWARE_KEY, []);
-  return Array.isArray(rows) ? rows.filter(row => Number(row?.cost) > 0 && /^\d{4}-\d{2}$/.test(String(row.startMonth))) : [];
-}
-function estimatePowerCost(usage, settings) {
-  if (!usage || !/^\d{4}-\d{2}$/.test(String(usage.month))) return null;
-  const kwh = Number(usage.totalKwh ?? usage.kwh);
-  if (!Number.isFinite(kwh) || kwh < 0) return null;
-  const basic = Number(settings?.basicRate ?? DEFAULT_POWER_SETTINGS.basicRate);
-  if (usage.month < "2026-12") return rounded(kwh * basic);
-  const rates = { basic, offPeak: Number(settings?.offPeakRate ?? DEFAULT_POWER_SETTINGS.offPeakRate),
-    midPeak: Number(settings?.midPeakRate ?? DEFAULT_POWER_SETTINGS.midPeakRate),
-    peak: Number(settings?.peakRate ?? DEFAULT_POWER_SETTINGS.peakRate) };
-  const tiers = usage.tiers || {};
-  const totalTierKwh = Object.keys(rates).reduce((sum, key) => sum + (Number(tiers[key]) || 0), 0);
-  if (totalTierKwh <= 0) return null;
-  return rounded(Object.keys(rates).reduce((sum, key) => sum + (Number(tiers[key]) || 0) * rates[key], 0));
-}
 const card = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const field = "w-full rounded-lg border border-[#3c5267] bg-[#101923] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400";
 const categories = [
@@ -358,29 +338,32 @@ export default function FinancialsPage() {
   }, [cryptoBackendMonths, cryptoIncome]);
   useEffect(() => {
     let active = true;
+    // Backend tariff calculations are display-only; never publish locally
+    // computed financials_power_estimates_v1 or a phantom utility payable.
     const refreshPower = async () => {
       try {
-        const [status, settings] = await Promise.all([
-          api.get("/api/power/status"),
-          settingsApi.get(POWER_SETTINGS_KEY).catch(() => DEFAULT_POWER_SETTINGS),
-        ]);
-        if (!active) return;
-        const usage = status?.currentMonth;
-        const value = estimatePowerCost(usage, settings || DEFAULT_POWER_SETTINGS);
-        if (usage?.month && value !== null && usage.month <= getCurrentMonthKey()) {
-          const updated = { ...readJson(POWER_ESTIMATE_KEY, {}), [usage.month]: {
-            cost: value, kwh: Number(usage.totalKwh ?? usage.kwh) || 0,
-            updatedAt: new Date().toISOString(), estimated: true,
-          } };
-          remoteStorage.setItem(POWER_ESTIMATE_KEY, JSON.stringify(updated));
-          setPowerEstimates(updated);
-        }
-      } catch { /* Keep last available electricity estimate. */ }
+        const result = await api.get("/api/power/month-cost/" + month);
+        if (!active || result?.sourceOfCalculation !== "backend-power-meter-tariffs" ||
+            result.month !== month) return;
+        setPowerEstimates(previous => ({...previous, [month]: {
+          cost: result.complete ? result.nominalUsd : null,
+          outOfPocketUsd: result.complete ? result.outOfPocketUsd : null,
+          kwh: result.measuredKwh ?? null,
+          updatedAt: result.calculatedAt,
+          estimated: true,
+          source: result.sourceOfCalculation,
+        }}));
+      } catch {
+        if (active) setPowerEstimates(previous => ({...previous, [month]: {
+          cost:null, outOfPocketUsd:null, kwh:null,
+          source:"backend-unavailable", estimated:true,
+        }}));
+      }
     };
     refreshPower();
     const timer = window.setInterval(refreshPower, 90000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, []);
+    return () => { active=false; window.clearInterval(timer); };
+  }, [month]);
   const closeSnapshot = closedMonths[month] || null;
   // Captured/observed balances must be kept separate from income journal
   // movements or mining revenue would be added to assets twice.
@@ -423,12 +406,13 @@ export default function FinancialsPage() {
     month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey(),
   ), [month, syncedRevenue, ledgerEntries]);
   const electricityCovered = hasFreeMiningPower(month);
-  const estimatedPower = valueOrNull(powerEstimates[month]?.cost);
+  const estimatedPower = powerEstimates[month]?.source === "backend-power-meter-tariffs"
+    ? valueOrNull(powerEstimates[month]?.outOfPocketUsd) : null;
   const hasActualPower = ledgerEntries.some(entry => journalActivity(entry,"electric")>0);
   // No automatic electricity expense is generated while power is supplied free.
   const autoPower = closeSnapshot ? closeSnapshot.autoPower :
     electricityCovered || hasActualPower || (savedExpenses !== null && savedExpenses > 0) ||
-      estimatedPower === null ? 0 : outOfPocketMiningPowerCost(estimatedPower, month);
+      estimatedPower === null ? 0 : estimatedPower;
   const manualEntries = ledgerEntries.map(entry=>({...entry,lines:journalLines(entry)}));
   const scheduledDepreciation = moneyRound(baseRows.filter(row=>row.category==="equipment")
     .reduce((sum,row)=>sum+Number(row.depreciation||0),0));
