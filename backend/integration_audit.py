@@ -207,6 +207,68 @@ def audit_integration_settings(values, now=None):
             failingProviders=categories,
             checkedAt=upstream.get("checkedAt"))
 
+    # Financial bookkeeping must not rely on whichever tab opens first.
+    # The backend seals completed months and maintains Home trend baselines.
+    business_months = as_object(values.get("monthly_business_changes_v1"))
+    provider_months = as_object(values.get("yield_monthly_snapshots_v1"))
+    pacific_month = now.astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    unsealed = []
+    revenue_drift = []
+    for month, row in business_months.items():
+        if not isinstance(month, str) or month >= pacific_month or not (
+                isinstance(row, dict) and
+                isinstance(row.get("items"), list) and row["items"]):
+            continue
+        if not row.get("locked"):
+            unsealed.append(month)
+            continue
+        saved_revenue = safe_number(row.get("revenueSnapshot"))
+        authority = as_object(provider_months.get(month))
+        provider_revenue = safe_number(authority.get("total"))
+        if (saved_revenue is not None and authority.get("locked") and
+                provider_revenue is not None and
+                abs(saved_revenue - provider_revenue) > 0.02):
+            revenue_drift.append({
+                "month": month, "businessUsd": round(saved_revenue, 6),
+                "providerUsd": round(provider_revenue, 6),
+            })
+    if business_months:
+        add("financial_business_month_integrity",
+            "warning" if unsealed or revenue_drift else "pass",
+            "Completed financial months are not all sealed or differ from "
+            "their recorded provider snapshot."
+            if unsealed or revenue_drift else
+            "Completed financial months remain sealed with matching income references.",
+            unsealedMonths=unsealed, historicalRevenueDifferences=revenue_drift)
+
+    nw_history = values.get("monthly_net_worth_history_v2")
+    if isinstance(nw_history, list):
+        months = [str(row.get("monthKey")) for row in nw_history
+                  if isinstance(row, dict) and row.get("monthKey")]
+        duplicate = sorted({month for month in months if months.count(month) > 1})
+        invalid_months = [month for month in months
+                          if len(month) != 7 or month[4] != "-"
+                          or not (month[:4] + month[5:]).isdigit()
+                          or not 1 <= int(month[5:]) <= 12]
+        add("networth_monthly_history_integrity",
+            "error" if duplicate or invalid_months else "pass",
+            "Saved net-worth history has duplicate or invalid month keys."
+            if duplicate or invalid_months else
+            "Net-worth monthly history has unique, valid month records.",
+            duplicateMonths=duplicate, invalidMonthKeys=invalid_months,
+            recordedMonths=len(months))
+    daily_baseline = as_object(values.get("daily_net_worth_baseline_pst"))
+    category_baseline = as_object(values.get("daily_category_baseline_pst"))
+    if daily_baseline and category_baseline:
+        dates_match = daily_baseline.get("dateKey") == category_baseline.get("dateKey")
+        add("networth_daily_baseline_integrity",
+            "warning" if not dates_match else "pass",
+            "Daily category and overall net-worth baselines were written for different days."
+            if not dates_match else
+            "Daily net-worth and category baselines share one Pacific calendar day.",
+            dailyDate=daily_baseline.get("dateKey"),
+            categoryDate=category_baseline.get("dateKey"))
+
     journal = values.get("financials_journal_v1")
     entries = journal if isinstance(journal, list) else []
     invalid = []
