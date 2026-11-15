@@ -103,11 +103,23 @@ export default function ProjectBreakEvenPage() {
   const recoveredProjects = ranked.filter(isRecovered);
   const selected = ranked.find(row => row.id === selectedId) || null;
   const configured = ranked.filter(row => row.spent > 0);
-  const totalSpent = configured.reduce((sum, row) => sum + row.spent, 0);
-  const totalEarned = configured.reduce((sum, row) => sum + Math.max(0, Number(row.earned) || 0), 0);
-  const recovered = configured.filter(row => row.earned >= row.spent).length;
-  const overall = totalSpent > 0 ? totalEarned / totalSpent * 100 : 0;
-  const selectedStats = selected && getPaybackStats(selected.earned, selected.daily, selected.spent);
+  const computedSpent = configured.reduce((sum, row) => sum + row.spent, 0);
+  const computedEarned = configured.reduce((sum, row) => sum + Math.max(0, Number(row.earned) || 0), 0);
+  const computedRecovered = configured.filter(row => row.earned >= row.spent).length;
+  const paybackTotalsMatch = serverPaybackMatches &&
+    Math.abs(Number(serverProjects.totalSpent) - computedSpent) < .005 &&
+    Math.abs(Number(serverProjects.totalEarned) - computedEarned) < .005 &&
+    serverProjects.recoveredCount === computedRecovered;
+  const totalSpent = paybackTotalsMatch ? serverProjects.totalSpent : computedSpent;
+  const totalEarned = paybackTotalsMatch ? serverProjects.totalEarned : computedEarned;
+  const recovered = paybackTotalsMatch ? serverProjects.recoveredCount : computedRecovered;
+  const overall = paybackTotalsMatch ? serverProjects.overallPercent
+    : totalSpent > 0 ? totalEarned / totalSpent * 100 : 0;
+  const selectedStats = selected && (serverPaybackMatches
+    ? { configured: selected.configured, spent: selected.spent, earned: selected.earned,
+        pnl: selected.pnl, remaining: selected.remaining,
+        daysToProfit: selected.daysToProfit }
+    : getPaybackStats(selected.earned, selected.daily, selected.spent));
 
   function startEdit() {
     setDraft(selected?.spent > 0 ? String(selected.spent) : "");
