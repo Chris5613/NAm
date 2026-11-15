@@ -24,6 +24,19 @@ class FinancialParityTests(unittest.TestCase):
         self.assertEqual(base["lastByArea"]["balance-rows:2026-11:backend-projection"]["status"],
                          "matched")
 
+    def test_amount_free_mismatch_reason_is_saved_and_validated(self):
+        first = record_parity_observation(
+            {}, "income-history", "2026-11", "mismatched",
+            "backend-persisted", "aabbccdd",
+            reason="source-difference")
+        evidence = parity_summary(first)["checks"][0]
+        self.assertEqual(evidence["reason"], "source-difference")
+        self.assertNotIn("amount", str(evidence))
+        with self.assertRaises(ValueError):
+            record_parity_observation(
+                {}, "income-history", "2026-11", "mismatched",
+                "backend-persisted", "aabbccdd", reason="$500 secret")
+
     def test_invalid_status_and_sensitive_raw_data_are_rejected(self):
         for area, month, status, source, fingerprint in (
             ("arbitrary", "2026-11", "matched", "backend-projection", "aabbccdd"),
