@@ -402,26 +402,9 @@ export default function FinancialsPage() {
     electricityCovered || hasActualPower || (savedExpenses !== null && savedExpenses > 0) ||
       estimatedPower === null ? 0 : estimatedPower;
   const manualEntries = ledgerEntries.map(entry=>({...entry,lines:journalLines(entry)}));
-  const scheduledDepreciation = moneyRound(baseRows.filter(row=>row.category==="equipment")
-    .reduce((sum,row)=>sum+Number(row.depreciation||0),0));
-  const manualDepreciation = moneyRound(ledgerEntries.reduce((sum,entry)=>sum+journalActivity(entry,"depreciation"),0));
-  const autoDepreciation = Math.max(0,moneyRound(scheduledDepreciation-manualDepreciation));
-  const localAutomaticExpenses = [
-    ...(month >= LEGACY_LEDGER_CUTOFF && autoDepreciation > 0 ? [{
-      id: "auto-depreciation:" + month, date: month + "-28",
-      description: "Monthly equipment depreciation",
-      lines: [line("depreciation", autoDepreciation, 0), line("accDep", 0, autoDepreciation)],
-      automatic: true,
-    }] : []),
-    ...(month >= LEGACY_LEDGER_CUTOFF && autoPower > 0 ? [{
-      id: "auto-power-estimate:" + month, date: month + "-28",
-      description: "Estimated mining electricity — not a confirmed payment",
-      lines: [line("electric",autoPower,0),line("payable",0,autoPower)],
-      automatic:true,estimated:true,
-    }] : []),
-  ];
-  const automaticExpenses = useBackendAutomaticExpenses(
-    month, baseRows, ledgerEntries, autoPower, localAutomaticExpenses);
+  const automaticExpensesState = useBackendAutomaticExpenses(
+    month, backendBalanceRows.rows || null, ledgerEntries, autoPower);
+  const automaticExpenses = automaticExpensesState.entries || [];
   const generatedEntries = [
     ...(month === LEGACY_LEDGER_CUTOFF ? [openingPhoneDepreciationEntry(businessPhones)].filter(Boolean) : []),
     ...(month < LEGACY_LEDGER_CUTOFF ? [] : syncedIncomeJournal.entries),
@@ -802,11 +785,14 @@ export default function FinancialsPage() {
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
-  if (!serverFinancial || !backendSyncedIncomeJournal) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
+  if (!serverFinancial || !backendSyncedIncomeJournal ||
+      !automaticExpensesState.entries) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <h1 className="text-2xl font-semibold">Financials</h1>
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
       {backendBalanceRows.error
         ? "Backend asset rows unavailable. Saved equipment, journal records, and balances were not changed."
+        : automaticExpensesState.error
+        ? "Backend depreciation or electricity journal unavailable. Saved records were not changed."
         : serverFinancialState?.error
         ? "Backend financial statements unavailable. Saved journal entries, month closes, and account balances were not changed."
         : "Loading backend financial statements…"}
