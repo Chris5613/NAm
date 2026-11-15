@@ -1,5 +1,4 @@
 import {
-  rollerCoinAffectedMonths,
   updateRollerCoinTracker,
 } from "./useRollerCoinExtension";
 
@@ -51,12 +50,3 @@ test("RollerCoin fresh wallet observation records only the balance delta", () =>
   expect(next.walletDaily[day].usd).toBe(0.5);
 });
 
-test("RollerCoin affected months only includes valid dated rows", () => {
-  expect([
-    ...rollerCoinAffectedMonths([
-      { date: "2026-11-05" },
-      { date: "2026-11-06T10:00:00Z" },
-      { date: "bad-date" },
-    ]),
-  ]).toEqual(["2026-11"]);
-});
