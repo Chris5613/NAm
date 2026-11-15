@@ -8,6 +8,7 @@ import { api } from "@/lib/apiClient";
 export function useBackendIncomeHistory(payload, localMonths) {
   const signature = useMemo(() => JSON.stringify(payload), [payload]);
   const [result, setResult] = useState(null);
+  const [persisted, setPersisted] = useState(null);
   useEffect(() => {
     let active = true;
     api.post("/api/project-tracking/financial-core/income-history",
@@ -19,9 +20,25 @@ export function useBackendIncomeHistory(payload, localMonths) {
       }).catch(() => { if (active) setResult(null); });
     return () => { active = false; };
   }, [signature, payload.currentMonth]);
+  // Unlike the legacy POST preview, this GET derives its input entirely
+  // from the saved backend provider ledger, projects, dividends and account
+  // configuration. Prefer it when it reconciles source-by-source.
+  useEffect(() => {
+    let active = true;
+    api.get("/api/project-tracking/financial-core/source-income-history")
+      .then(data => {
+        if (active && data?.sourceOfCalculation === "backend-persisted-income-history" &&
+            data.currentMonth === payload.currentMonth && Array.isArray(data.months))
+          setPersisted({ signature, data });
+      }).catch(() => { if (active) setPersisted(null); });
+    return () => { active = false; };
+  }, [signature, payload.currentMonth]);
+
+  const persistedMonths = persisted?.signature === signature
+    ? persisted.data.months : null;
+  if (incomeHistoryMatches(localMonths, persistedMonths)) return persistedMonths;
   const serverMonths = result?.signature === signature ? result.data.months : null;
-  if (!incomeHistoryMatches(localMonths, serverMonths)) return localMonths;
-  return serverMonths;
+  return incomeHistoryMatches(localMonths, serverMonths) ? serverMonths : localMonths;
 }
 
 export function incomeHistoryMatches(local, remote) {
