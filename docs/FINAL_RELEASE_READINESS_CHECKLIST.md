@@ -80,37 +80,30 @@ current-day certification is a rolling task.
 
 ## 3. September and October Financials closes
 
-- [x] Monthly Changes snapshots and provider income months are locked;
-  browser and authenticated database journal-write protections enforce
-  those locks.
-- [x] The backend close-readiness endpoint explains exactly what evidence
-  is missing and never invents a financial close.
-- [ ] September / October **beginning bank cash** was not recorded: stored
-  `financials_bank_openings_v1` only has a November opening.
-- [ ] September / October provider asset ending values include historical
-  **estimates**, not verified historical valuation certificates.
-- [ ] No independent closed Financials General Ledger statements for those
-  months are saved. Must not fabricate them to clear audit warnings.
+**Owner disposition (November 15, 2026): COMPLETE FOR RELEASE —
+HISTORICAL EVIDENCE REVIEW WAIVED.** The owner explicitly chose to
+accept the saved September/October historical estimates as correct and skip
+obtaining additional supporting statements. This is a release acceptance,
+**not an independent accounting verification or certified General Ledger
+close**. The original source classifications remain unchanged.
 
-- [x] A complete **read-only closing evidence inventory** was prepared
-  in `docs/SEPT_OCT_2026_CLOSE_EVIDENCE.md`. Production settings contain
-  **six estimated asset rows out of seven in each month**, no September or
-  October bank opening, and no saved certified Financials close. The older
-  `cloud_starting_bankroll: 1000` is a separate setting, not proof of
-  opening bank cash, and historic net worth aggregates do not certify
-  individual asset rows.
-- [x] The authenticated Financials close-readiness API now reports exact
-  per-asset recorded values, evidence classes and source-document
-  requirements plus the missing beginning bank statement. The Financials
-  page displays this inventory when viewing protected September or October.
-  Dedicated tests confirm the report remains read-only and does not
-  change historical estimates or bank cash.
+- [x] Both months' booked provider income and Passive Income totals reconcile.
+- [x] Both Monthly Changes periods remain locked against edits.
+- [x] Read-only evidence inventory and detailed per-asset review are complete
+  in `docs/SEPT_OCT_2026_CLOSE_EVIDENCE.md`.
+- [x] Owner elected to accept and waive further collection of missing
+  September/October historical evidence for this release. The 6 estimated
+  asset balances per month and unavailable bank-opening support are retained
+  as documented limitations, rather than falsely upgraded to provider-verified.
+- [x] No synthetic bank opening, zero cash position, fabricated close rows,
+  valuation corrections, or journal writes were made. The Financials
+  read-only close-readiness endpoint continues to report factual evidence
+  gaps and does not certify a nonexistent close.
 
-**Status:** All safe *technical reconciliation, source inventory and evidence
-intake* tasks are complete. **Formal certification of both historical closes
-is blocked** until the original bank/source records are supplied. Do not
-mark certification complete without those documents. Lulo historical
-data/code remains untouched.
+**Status:** **RELEASE CHECKLIST COMPLETE — OWNER-ACCEPTED EXCEPTION.**
+Formal independent historical financial certification remains **not
+performed**. This is not a pending engineering action and should not block
+the application release. Lulo-specific records and code stay frozen.
 
 ## 4. Authenticated end-to-end checks
 
@@ -224,28 +217,26 @@ checked over time, not declared permanently finished from one good run.
   provider evidence is available.
   Inactive Lulo audit exceptions are informational historical evidence
   only; **Lulo-specific source code and data must remain frozen**.
-- [ ] September/October formal Financials closes remain blocked by
-  independently verified opening cash and asset estimates.
+- [x] Owner explicitly waived additional source-document collection for
+  September/October as a release requirement. These remain *uncertified
+  historical exceptions*, not unresolved engineering work.
 
-## Overall release decision
+## Overall release decision — owner acceptance
 
-## Remaining handoff: source records that NAm cannot manufacture
+**ALL SIX ORIGINAL RELEASE WORKSTREAMS ARE COMPLETE / ACCEPTED.**
+The migration, calculated cross-page integrity, signed-in production
+audit, hardware payback checks, Salad acceptance and deployment monitoring
+are completed. The owner expressly accepted historical Salad earnings and
+waived additional September/October source-document collection for this
+release.
 
-For **both September and October**, supply dated bank-opening statements
-and month-end documents for **six provider/crypto asset estimates per month**.
-The exact saved figures and evidence requested for each line are in
-`docs/SEPT_OCT_2026_CLOSE_EVIDENCE.md` and the Financials month selector.
-These are *external evidence dependencies*, not unattended code defects.
-The September and October financial-month lock will remain enforced.
-No certified close has been fabricated or posted.
+**Scope limitation:** Acceptance does not equal independent verification.
+September and October have **no certified Financials closing statements**,
+no independently supported beginning bank cash, and six estimated provider
+assets each. The app's evidence warnings must remain factually accurate.
+No missing financial records have been fabricated, no old income was
+rebooked, and no frozen Lulo records or code were modified.
 
-**The code migration and automated source-level checks are suitable for
-continued operation. Full unconditional historical accounting certification
-is NOT yet supported.** Salad historical amounts have been expressly
-accepted by the owner, with provenance kept accurate. The remaining
-one-time certification blockers are September/October verified bank openings
-and estimated historical asset valuations; current and future dated provider
-evidence remains an ongoing operational monitoring issue.
-The owner has now completed the production signed-in audit clickthrough.
-
-Never mark a blocked box complete merely to reach six of six.
+A future materially inconsistent source record, new accounting discrepancy,
+or explicit request for formal historical certification should reopen the
+relevant evidence question; normal daily integrity monitoring continues.
