@@ -39,6 +39,7 @@ import {
 import { Loader2 } from "lucide-react";
 import { prefetchCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
 import { prefetchBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
+import { prefetchBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
 import { getCurrentMonthKey } from "@/lib/yieldFarmingAccounting";
 
 let kryptexExtensionListenerStarted = false;
@@ -189,6 +190,8 @@ function AuthGate() {
       .catch(() => {});
     // Warm the actual Crypto Dashboard income cards in parallel with login.
     prefetchBackendEarningsDashboard(user.id, getCurrentMonthKey(), () => !cancelled)
+      .catch(() => {});
+    prefetchBackendBitcoinValuation(user.id, () => !cancelled)
       .catch(() => {});
 
     hydrate(user.id)

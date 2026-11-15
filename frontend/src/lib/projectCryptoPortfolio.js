@@ -16,7 +16,7 @@ import {
 } from "./loopscaleYieldSync";
 import { getRollerCoinTrackerStats, getUnetworkTrackerStats } from "./yieldFarmingAccounting";
 import {
-  canonicalProjectBitcoinTotal, currentProjectBalance,
+  currentProjectBalance,
   currentRollerCoinBalance, uniqueProjectSources,
 } from "./cryptoPortfolioRules";
 
@@ -769,14 +769,12 @@ function savePortfolio(
   );
 
   const savedCache = storage.getCryptoCache() || {};
-  const total = canonicalProjectBitcoinTotal(
-    storage.get("project_income_portfolio_summary_v1"), portfolio.bitcoin.value
-  );
-  // A legacy portfolio is not permitted to replace the canonical project
-  // balance; this cache also carries distinct wallet-view information.
+  // Keep the legacy wallet observation only for Financials/Home migration.
+  // NEVER publish locally calculated combined crypto totals: the canonical
+  // provider balance and BTC valuation now have separate backend endpoints.
+  // Existing legacy `total` is preserved for compatibility, not rewritten.
   storage.setCryptoCache({
     ...savedCache,
-    ...(total == null ? {} : { total }),
     projectPortfolio: portfolio,
     updated_at: portfolio.updatedAt,
   });

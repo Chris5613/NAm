@@ -149,6 +149,19 @@ class IntegrationAuditTests(unittest.TestCase):
         self.assertEqual(checks["crypto_portfolio_authority"]["status"],"warning")
         self.assertEqual(checks["crypto_provider_authority"]["status"],"warning")
 
+    def test_divergent_btc_cache_quotes_are_warning_not_mining_income(self):
+        checks = audit_integration_settings({
+            "networth_crypto_cache": {
+                "projectPortfolio": {"bitcoin": {"price": 64869}},
+                "chains": [{"chain": "bitcoin",
+                            "tokens": [{"symbol": "BTC", "price": 81180}]}],
+            },
+        }, self.now)["checks"]
+        flagged = next(c for c in checks if c["code"] == "bitcoin_legacy_quote_drift")
+        self.assertEqual(flagged["status"], "warning")
+        self.assertAlmostEqual(flagged["maxPriceGapUsd"], 16311)
+        self.assertNotIn("earnedUsd", flagged)
+
     def test_locked_snapshot_keeps_historical_kryptex_total(self):
         result = audit_integration_settings({
             "project_income_kryptex_tracker_v1": {
