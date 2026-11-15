@@ -1841,7 +1841,10 @@ const summary =
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-[14px] font-semibold">Earnings {earningsChartRange === "monthly" ? "This Month" : earningsChartRange === "weekly" ? "This Week" : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}</h2>
-              <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400">{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthEarned : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
+              <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400"
+                title={backendEarnings?.fullyVerified === false
+                  ? "Includes legacy receipts awaiting provider reconciliation"
+                  : undefined}>{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthEarned : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-[#303842] bg-[#13181e] p-0.5" aria-label="Earnings chart period">
