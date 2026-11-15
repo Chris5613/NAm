@@ -17,7 +17,7 @@ from .financial_core import (
 )
 from .financial_current_journal import current_financial_ledger
 from .hardware_payback_lifetime import build_lifetime_hardware_payback
-from .earnings_dashboard import build_backend_earnings_dashboard
+from .earnings_dashboard import build_backend_earnings_dashboard, compare_monthly_snapshot
 from .financial_close_readiness import financial_close_readiness
 
 
@@ -246,6 +246,29 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
           dailyProviders=dashboard["monthlySources"],
           fullyVerified=dashboard.get("fullyVerified"),
           reviewDays=len(dashboard.get("reviewDays") or []))
+    # Raw browser-era daily receipts and booked provider month snapshots are
+    # distinct accounting bases. Expose their source-by-source difference
+    # after resolving Kryptex with confirmed dated tracker evidence. Never
+    # overwrite either source to manufacture parity.
+    booked_for_month = snapshots.get(month)
+    if isinstance(booked_for_month, dict):
+        reconciliation = compare_monthly_snapshot(dashboard, booked_for_month)
+        if reconciliation is None:
+            check("provider-month-reconciliation", "warning",
+                  "A complete booked provider breakdown is unavailable")
+        elif reconciliation.get("status") == "invalid-snapshot":
+            check("provider-month-reconciliation", "error",
+                  "Booked income contains invalid or duplicate provider amounts",
+                  reconciliation=reconciliation)
+        else:
+            status = "pass" if reconciliation["status"] == "matched" else "warning"
+            check("provider-month-reconciliation", status,
+                  "Dated provider evidence and booked monthly sources have "
+                  "matching totals" if status == "pass" else
+                  "Provider daily observations differ from booked monthly "
+                  "income or contain provisional legacy receipts; "
+                  "no earnings were rebooked",
+                  reconciliation=reconciliation)
     statuses = [c["status"] for c in checks]
     outcome = ("error" if "error" in statuses else
                "warning" if "warning" in statuses else "pass")
