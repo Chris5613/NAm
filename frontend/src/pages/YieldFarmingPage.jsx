@@ -1398,16 +1398,44 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // Publish the exact value displayed by Passive Income's "This Month"
   // chart so the Crypto Dashboard uses the same figure rather than an
   // independent monthly snapshot calculation.
+  // Send one reconciled daily/monthly earnings snapshot to the parent
+  // Dashboard. Its Income Today and Monthly Income cards must never pull
+  // incompatible totals from the legacy server balance-change ledger.
+  const yesterdayKeyForDashboard = new Date(
+    new Date(todayKey + "T12:00:00Z").getTime() - 86400000
+  ).toISOString().slice(0, 10);
+  const yesterdayForDashboard = monthlyChartData.find(day =>
+    day.key === yesterdayKeyForDashboard
+  );
+  const yesterdayAmountForDashboard = yesterdayForDashboard
+    ? Number(yesterdayForDashboard.value) || 0
+    : null;
   useEffect(() => {
-    const month=todayKey.slice(0,7);
-    onMonthlyEarningsChange?.({month,amount:thisMonthEarned});
-    const current=readObject(PASSIVE_MONTHLY_INCOME_KEY);
-    if(current?.month===month &&
-       Math.abs(Number(current.amount)-thisMonthEarned)<0.000001) return;
-    saveObject(PASSIVE_MONTHLY_INCOME_KEY,{
-      month,amount:thisMonthEarned,updatedAt:new Date().toISOString(),
+    const month = todayKey.slice(0, 7);
+    const current = readObject(PASSIVE_MONTHLY_INCOME_KEY);
+    const next = {
+      month, amount: thisMonthEarned, day: todayKey,
+      today: todayEarnings,
+      yesterdayDay: yesterdayKeyForDashboard,
+      yesterday: yesterdayAmountForDashboard,
+    };
+    onMonthlyEarningsChange?.(next);
+    if (
+      current?.month === month &&
+      current?.day === todayKey &&
+      Math.abs(Number(current.amount) - thisMonthEarned) < 0.000001 &&
+      Math.abs(Number(current.today) - todayEarnings) < 0.000001 &&
+      current?.yesterdayDay === yesterdayKeyForDashboard &&
+      (current.yesterday ?? null) === yesterdayAmountForDashboard
+    ) return;
+    saveObject(PASSIVE_MONTHLY_INCOME_KEY, {
+      ...next, updatedAt: new Date().toISOString(),
     });
-  }, [todayKey,thisMonthEarned,onMonthlyEarningsChange]);
+  }, [
+    todayKey, thisMonthEarned, todayEarnings,
+    yesterdayKeyForDashboard, yesterdayAmountForDashboard,
+    onMonthlyEarningsChange,
+  ]);
 
   const monthlyChartMax = Math.max(
     0.1,
