@@ -269,6 +269,24 @@ def audit_integration_settings(values, now=None):
             dailyDate=daily_baseline.get("dateKey"),
             categoryDate=category_baseline.get("dateKey"))
 
+    parity = as_object(values.get("financial_core_parity_v1"))
+    last = as_object(parity.get("lastByArea"))
+    mismatched = sorted({
+        str(row.get("area"))
+        for row in last.values()
+        if isinstance(row, dict) and row.get("status") == "mismatched"
+        and row.get("month") == now.astimezone(
+            ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    })
+    if last:
+        add("financial_core_migration_parity",
+            "warning" if mismatched else "pass",
+            "Some frontend financial calculations still differ from backend results."
+            if mismatched else
+            "All sampled financial migration paths have matching calculations.",
+            remainingMismatchAreas=mismatched,
+            sampledPaths=len(last), updatedAt=parity.get("updatedAt"))
+
     journal = values.get("financials_journal_v1")
     entries = journal if isinstance(journal, list) else []
     invalid = []
