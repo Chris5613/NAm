@@ -235,6 +235,48 @@ class IntegrationAuditTests(unittest.TestCase):
                   audit_integration_settings(values, self.now)["checks"]}
         self.assertEqual(checks["yield_upstream_source_health"]["status"], "pass")
 
+    def test_financial_month_and_home_history_checks(self):
+        values = {
+            "monthly_business_changes_v1": {
+                "2026-10": {
+                    "locked": True,
+                    "revenueSnapshot": 20.0,
+                    "items": [{"name": "Unetwork", "start": 5, "end": 20}],
+                },
+            },
+            "yield_monthly_snapshots_v1": {
+                "2026-10": {"locked": True, "total": 20.0},
+            },
+            "monthly_net_worth_history_v2": [
+                {"monthKey": "2026-09", "value": 19500},
+                {"monthKey": "2026-10", "value": 21157},
+            ],
+            "daily_net_worth_baseline_pst": {
+                "dateKey": "2026-11-14", "baseline": 21871},
+            "daily_category_baseline_pst": {
+                "dateKey": "2026-11-14",
+                "baseline": {"cash": 100, "crypto": 200}},
+        }
+        checks = {row["code"]: row for row in
+                  audit_integration_settings(values, self.now)["checks"]}
+        for name in ("financial_business_month_integrity",
+                     "networth_monthly_history_integrity",
+                     "networth_daily_baseline_integrity"):
+            self.assertEqual(checks[name]["status"], "pass")
+
+        values["monthly_business_changes_v1"]["2026-10"]["locked"] = False
+        values["monthly_net_worth_history_v2"].append({
+            "monthKey": "2026-10", "value": 0})
+        values["daily_category_baseline_pst"]["dateKey"] = "2026-11-13"
+        flagged = {row["code"]: row for row in
+                   audit_integration_settings(values, self.now)["checks"]}
+        self.assertEqual(flagged["financial_business_month_integrity"]["status"],
+                         "warning")
+        self.assertEqual(flagged["networth_monthly_history_integrity"]["status"],
+                         "error")
+        self.assertEqual(flagged["networth_daily_baseline_integrity"]["status"],
+                         "warning")
+
     def test_locked_snapshot_keeps_historical_kryptex_total(self):
         result = audit_integration_settings({
             "project_income_kryptex_tracker_v1": {
