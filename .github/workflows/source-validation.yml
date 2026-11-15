@@ -63,6 +63,15 @@ jobs:
           DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -m alembic downgrade 20261031_02
           DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -m alembic upgrade head
           DATABASE_URL="$PHASE7_POSTGRES_TEST_URL" python -m alembic current
+      - name: Install authenticated smoke-test transport
+        run: python -m pip install "httpx>=0.27,<0.29"
+      - name: Authenticated Financials and hardware HTTP smoke on disposable Postgres
+        env:
+          NAM_AUTH_SMOKE: "1"
+          DATABASE_URL: ${{ env.PHASE7_POSTGRES_TEST_URL }}
+          SESSION_SECRET: "nam-disposable-ci-session-only-do-not-use-in-production"
+          COOKIE_SECURE: "false"
+        run: python -m unittest backend.tests.test_authenticated_financial_smoke -v
 
 
 
