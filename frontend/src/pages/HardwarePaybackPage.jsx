@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, X, Cpu, CalendarDays, Zap } from "lucide-react";
 import { api } from "@/lib/apiClient";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
+import { sharedPaybackSources } from "@/lib/hardwarePaybackReporting";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
@@ -258,8 +259,7 @@ export default function HardwarePaybackPage() {
   // When multiple devices share Kryptex (or another provider), summing these
   // credits is NOT distinct business revenue. Preserve the user's chosen
   // payback method, but label the rollup accurately.
-  const sharedSources = [...new Set(devices.flatMap(deviceSources))]
-    .filter(source => devices.filter(device => deviceSources(device).includes(source)).length > 1);
+  const sharedSources = sharedPaybackSources(devices, deviceSources);
   const totalEarned = Object.values(earnings).reduce((sum, value) => sum + Math.max(0, Number(value) || 0), 0);
   const left = devices.reduce((sum, device) => sum + Math.max(0, device.cost - earnings[device.id]), 0);
   function persist(next) {
