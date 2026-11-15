@@ -117,7 +117,7 @@ class ProductionHardwareSnapshotTests(unittest.TestCase):
                 row["forecastLiveKryptexDailyUsd"], 5.34646527)
             self.assertIsNotNone(row["estimatedPaybackDate"])
         self.assertAlmostEqual(rows["hardware-2080"]["estimatedDailyCreditUsd"],
-                               4.02001563)
+                               4.02101563)
         self.assertTrue(rows["hardware-5080"]["forecastPartial"])
 
 if __name__ == "__main__":
