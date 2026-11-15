@@ -14,9 +14,7 @@ import usePassiveIncomeHistory from "@/hooks/usePassiveIncomeHistory";
 import {
   CATEGORIES,
   CATEGORY_COLORS,
-  MONTH_LABELS,
   SIMPLEFIN_REQUEST_HOUR_KEY,
-  cumulativeByDay,
   dayKey,
   daysInMonth,
   emptyTransaction,
@@ -111,83 +109,56 @@ const [loadingHiddenTransactions, setLoadingHiddenTransactions] =
     [rangeTransactions, selectedCategory]
   );
 
-  const totalSpent = useMemo(() => rangeTransactions.filter(isExpense).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [rangeTransactions]);
-  const bankIncome = useMemo(() => rangeTransactions.filter(isIncome).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [rangeTransactions]);
-  const passiveIncome = useMemo(() => {
-    if (range === "ytd") {
-      return passiveIncomeMonths
-        .filter((month) => month.monthKey?.startsWith(selectedYear))
-        .reduce((sum, month) => sum + Math.max(0, Number(month.total) || 0), 0);
-    }
-
-    return Math.max(
-      0,
-      Number(
-        passiveIncomeMonths.find(
-          (month) => month.monthKey === selectedMonth
-        )?.total
-      ) || 0
-    );
-  }, [passiveIncomeMonths, range, selectedMonth, selectedYear]);
-  const totalIncome = bankIncome + passiveIncome;
-  const netCashFlow = totalIncome - totalSpent;
-  const yearTotal = useMemo(() => yearTransactions.filter(isExpense).reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0), [yearTransactions]);
-
-  const monthTiles = useMemo(() => {
-    const totals = new Map();
-    transactions
-      .filter((item) => item.date?.startsWith(selectedYear) && item.date <= today && isExpense(item))
-      .forEach((item) => {
-        const key = item.date.slice(0, 7);
-        totals.set(key, (totals.get(key) || 0) + Number(item.amount || 0));
-      });
-    return MONTH_LABELS.map((label, index) => {
-      const key = `${selectedYear}-${String(index + 1).padStart(2, "0")}`;
-      return { key, label, total: totals.get(key) || 0 };
+  // Canonical bank/account rows live in PostgreSQL. The authenticated
+  // backend owns spending totals, category shares and chart aggregation.
+  // Passive Income months are themselves verified backend income history.
+  const [serverAnalytics, setServerAnalytics] = useState(null);
+  const [analyticsError, setAnalyticsError] = useState("");
+  const passiveIncomeSignature = JSON.stringify(passiveIncomeMonths);
+  useEffect(() => {
+    let cancelled = false;
+    setAnalyticsError("");
+    api.post("/api/spending/analytics/preview", {
+      selectedMonth, range, today, elapsedDays,
+      passiveMonths: JSON.parse(passiveIncomeSignature),
+    }).then(result => {
+      if (cancelled) return;
+      if (result?.sourceOfCalculation !== "backend-spending-analytics-v1" ||
+          result.readOnly !== true || result.financialLedgerMutated !== false ||
+          result.month !== selectedMonth || result.range !== range ||
+          !Number.isFinite(result.totalSpent) ||
+          !Number.isFinite(result.totalIncome) ||
+          !Number.isFinite(result.netCashFlow) ||
+          !Number.isFinite(result.yearTotal) ||
+          !Array.isArray(result.monthTiles) ||
+          !Array.isArray(result.chartData) ||
+          !Array.isArray(result.categoryBreakdown)) {
+        throw new Error("The server returned an incomplete spending calculation.");
+      }
+      setServerAnalytics(result);
+    }).catch(error => {
+      if (!cancelled) setAnalyticsError(error?.message || "Spending summary unavailable.");
     });
-  }, [selectedYear, today, transactions]);
+    return () => { cancelled = true; };
+  }, [selectedMonth, range, today, elapsedDays,
+      passiveIncomeSignature, transactions]);
 
-  const chartData = useMemo(() => {
-    if (range === "ytd") {
-      const expenses = new Map(), incomes = new Map();
-      yearTransactions.forEach((item) => {
-        const index = Number(item.date.slice(5, 7)) - 1;
-        const amount = Math.abs(Number(item.amount || 0));
-        if (isIncome(item)) incomes.set(index, (incomes.get(index) || 0) + amount);
-        else if (isExpense(item)) expenses.set(index, (expenses.get(index) || 0) + amount);
-      });
-      const length = selectedYear === String(new Date().getFullYear()) ? new Date().getMonth() + 1 : 12;
-      let spent = 0, income = 0;
-      return Array.from({ length }, (_, index) => {
-        spent += expenses.get(index) || 0;
-        income += incomes.get(index) || 0;
-        return { label: MONTH_LABELS[index], spent, income };
-      });
-    }
-    const current = cumulativeByDay(transactions, selectedMonth, elapsedDays, isExpense);
-    const income = cumulativeByDay(transactions, selectedMonth, elapsedDays, isIncome);
-    const previous = cumulativeByDay(transactions, previousMonth, elapsedDays, isExpense);
-    return current.map((spent, index) => ({ label: String(index + 1), spent, income: income[index], previous: previous[index] }));
-  }, [elapsedDays, previousMonth, range, selectedMonth, selectedYear, transactions, yearTransactions]);
+  const analytics = serverAnalytics?.month === selectedMonth &&
+    serverAnalytics?.range === range ? serverAnalytics : null;
+  const totalSpent = analytics?.totalSpent ?? 0;
+  const bankIncome = analytics?.bankIncome ?? 0;
+  const passiveIncome = analytics?.passiveIncome ?? 0;
+  const totalIncome = analytics?.totalIncome ?? 0;
+  const netCashFlow = analytics?.netCashFlow ?? 0;
+  const yearTotal = analytics?.yearTotal ?? 0;
+  const monthTiles = analytics?.monthTiles || [];
+  const chartData = analytics?.chartData || [];
+  const previousMonthToDate = analytics?.previousMonthToDate ?? 0;
+  const monthDelta = analytics?.monthDelta ?? 0;
+  const categoryBreakdown = analytics?.categoryBreakdown || [];
 
-  // Compares the same number of elapsed days so a partial month is judged fairly.
-  const previousMonthToDate = useMemo(() => {
-    const previous = cumulativeByDay(transactions, previousMonth, elapsedDays);
-    return previous[previous.length - 1] || 0;
-  }, [elapsedDays, previousMonth, transactions]);
-  const monthDelta = totalSpent - previousMonthToDate;
-
-  const categoryBreakdown = useMemo(() => {
-    const totals = new Map();
-    rangeTransactions.filter(isExpense).forEach((item) => {
-      const category = item.category || "Other";
-      totals.set(category, (totals.get(category) || 0) + Number(item.amount || 0));
-    });
-    return [...totals.entries()]
-      .map(([category, amount]) => ({ category, amount, share: totalSpent ? (amount / totalSpent) * 100 : 0 }))
-      .sort((first, second) => second.amount - first.amount);
-  }, [rangeTransactions, totalSpent]);
-
+  // A missing backend response must be visible; zeros while loading are
+  // placeholders rather than re-computed browser accounting.
   const categoryColorMap = useMemo(
     () => Object.fromEntries(categoryBreakdown.map((entry, index) => [entry.category, CATEGORY_COLORS[index % CATEGORY_COLORS.length]])),
     [categoryBreakdown]
