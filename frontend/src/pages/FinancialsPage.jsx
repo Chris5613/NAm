@@ -9,6 +9,7 @@ import {
 } from "@/lib/unetworkPhonesAccounting";
 import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+import { useBackendFinancialCore, financialReportMatches, financialFlowsMatch } from "@/hooks/useBackendFinancialCore";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
@@ -456,7 +457,14 @@ export default function FinancialsPage() {
     (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
   const ledgerVisibleCredit=moneyRound(displayedLedgerEntries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.credit||0),0),0));
-  const report = buildFinancialProfit(entries,savedExpenses);
+  // Compute server-side; keep the proven browser view only when the backend
+  // response is stale or fails strict parity. This is read-only: it never
+  // generates new posted transactions or adjusts a locked month.
+  const serverFinancial = useBackendFinancialCore(
+    month, entries, baseRows, hardwareDevices, savedExpenses);
+  const localReport = buildFinancialProfit(entries,savedExpenses);
+  const report = financialReportMatches(localReport,serverFinancial?.profit)
+    ? serverFinancial.profit : localReport;
   const incomeKnown = Boolean(syncedRevenue) ||
     ledgerEntries.some(entry=>["revenue","dividendRevenue"].some(account=>journalActivity(entry,account)<0));
   const pnlRevenue = closeSnapshot ? closeSnapshot.revenue : incomeKnown ? report.revenue : null;
@@ -466,7 +474,13 @@ export default function FinancialsPage() {
   // Present the existing combined revenue as separately posted income streams.
   // Any frozen historical total not explained by the posted lines is shown
   // explicitly rather than being assigned to mining or dividends incorrectly.
-  const revenueSources = splitFinancialRevenue(entries);
+  const localRevenueSources = splitFinancialRevenue(entries);
+  const serverRevenueSources = serverFinancial?.revenueSources;
+  const revenueSources = serverRevenueSources &&
+    ["mining","yield","dividends","unclassified"].every(key =>
+      Math.abs(Number(localRevenueSources[key] || 0) -
+        Number(serverRevenueSources[key] || 0)) < 0.005)
+    ? serverRevenueSources : localRevenueSources;
   const {mining:miningIncome,yield:yieldIncome,dividends:dividendIncome} = revenueSources;
   // Keep unidentified manual revenue separate instead of attributing it
   // to mining or yield without evidence.
@@ -573,7 +587,9 @@ export default function FinancialsPage() {
   }).filter(account=>account.debit||account.credit);
   const trialDebit = moneyRound(trial.reduce((sum,row)=>sum+row.debit,0));
   const trialCredit = moneyRound(trial.reduce((sum,row)=>sum+row.credit,0));
-  const cashFlow = classifyCashFlows(entries);
+  const localCashFlow = classifyCashFlows(entries);
+  const cashFlow = financialFlowsMatch(localCashFlow, serverFinancial?.cashFlow)
+    ? serverFinancial.cashFlow : localCashFlow;
   const cashEvents = Object.values(cashFlow.sections).flat();
   const cashIn = moneyRound(cashEvents.filter(entry=>entry.delta>0)
     .reduce((sum,entry)=>sum+entry.delta,0));
