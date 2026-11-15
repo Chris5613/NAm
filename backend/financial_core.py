@@ -9,7 +9,7 @@ from datetime import date
 from decimal import Decimal, ROUND_HALF_UP
 from math import isfinite
 import re
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 
 
 def number(raw, fallback=0.0):
@@ -97,7 +97,7 @@ def split_revenue(entries):
             continue
         descriptor = str(entry.get("id") or "")
         if descriptor.startswith("synced-income:"):
-            source = descriptor.split(":", 2)[-1].lower()
+            source = unquote(descriptor.split(":", 2)[-1]).lower()
         else:
             source = str(entry.get("description") or "").lower()
         category = ("yield" if re.search(r"lulo|loopscale|yield|lending|interest", source)
