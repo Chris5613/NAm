@@ -18,6 +18,7 @@ from ..db import get_db
 from ..models import Setting, User, Wallet
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
 from ..earnings_dashboard import build_backend_earnings_dashboard, TRACKERS as DASHBOARD_TRACKERS
+from ..hardware_credit_audit import hardware_credit_audit
 from ..project_freshness import is_project_stale
 from ..project_feed_sources import PROVIDER_TRACKERS, from_tracker
 from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
@@ -620,6 +621,20 @@ async def earnings_dashboard(
     trackers = {name: setting(db, user.id, key) or {}
                 for name, key in DASHBOARD_TRACKERS.items()}
     return build_backend_earnings_dashboard(month, today.isoformat(), daily, trackers)
+
+
+@router.get("/hardware-credit-audit/{month}")
+async def hardware_payback_source_audit(
+    month: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Read-only distinction between per-GPU credits and provider revenue.
+
+    Reuse exactly the backend earnings projection used by Crypto Dashboard,
+    rather than accepting local checkpoints or browser source totals.
+    """
+    month_income = await earnings_dashboard(month, user, db)
+    devices = setting(db, user.id, "hardware_payback_devices_v1")
+    return hardware_credit_audit(month, devices, month_income)
 
 
 @router.get("/provider-stats")
