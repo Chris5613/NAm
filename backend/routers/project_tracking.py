@@ -29,7 +29,7 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
-from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
+from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses, trial_balance
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
 from ..persisted_income_snapshot import source_income_history, project_history_rows
 from ..financial_parity import record_parity_observation, parity_summary
@@ -760,6 +760,19 @@ async def financial_closed_month(
         "statementBusiness": sum_business_rows(closed["rows"]),
         "calculatedAt": datetime.now(timezone.utc).isoformat(),
     }
+
+
+@router.post("/financial-core/trial-balance")
+async def evaluate_financial_trial_balance(
+    payload: dict, user: User = Depends(current_user),
+) -> dict:
+    """Server-only cumulative debit/credit ledger projection."""
+    if len(str(payload)) > 1_250_000:
+        raise HTTPException(status_code=413, detail="Trial balance input too large")
+    try:
+        return trial_balance(payload.get("entries"), payload.get("accounts"))
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/financial-core/evaluate")
