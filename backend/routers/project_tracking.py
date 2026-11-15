@@ -29,7 +29,7 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
-from ..financial_core import evaluate_statement, calculate_net_worth
+from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
 from ..lifetime_income import lifetime_earned_from_snapshots
@@ -737,6 +737,25 @@ async def evaluate_financial_core(
         return evaluate_statement(payload)
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/financial-core/auto-journal")
+async def project_automatic_income_journal(
+    payload: dict, user: User = Depends(current_user),
+) -> dict:
+    """Compute non-posting accruals on the server; never touch the journal."""
+    if len(str(payload)) > 300_000:
+        raise HTTPException(status_code=413, detail="Income history input too large")
+    month = payload.get("month")
+    current_month = payload.get("currentMonth") or current_keys()[1]
+    if not isinstance(month, str) or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(status_code=422, detail="Invalid accounting month")
+    result = auto_income_journal(
+        month, payload.get("incomeMonth"), payload.get("manualJournal"),
+        current_month, payload.get("todayKey"),
+    )
+    return {"sourceOfCalculation": "backend-financial-core",
+            "month": month, **result}
 
 
 @router.post("/financial-core/net-worth")
