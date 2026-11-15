@@ -364,3 +364,71 @@ def auto_income_journal(month, income_month, manual_journal,
         "pendingReviewTotal": cents(sum(x["amount"] for x in review)),
         "unexplainedManualRevenue": max(0, cents(manual_total - synced)),
     }
+
+
+def project_break_even(positions, stats, saved_payback):
+    """Backend payback analysis from recorded provider earnings, not balances.
+
+    Portfolio balances never become earned income. User-entered totalSpent is
+    kept exactly as saved and a zero-cost project has no fabricated recovery.
+    """
+    from math import ceil
+    group = {}
+    for row in entries_list(positions):
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("platform") or "Other").strip() or "Other"
+        key = name.lower()
+        g = group.setdefault(key, {"id": "manual-project-" + key,
+                                   "name": name, "earned": 0.,
+                                   "balance": 0., "daily": 0.})
+        earned, balance, apy = (number(row.get("earned")),
+                                number(row.get("balance")),
+                                number(row.get("apy")))
+        g["earned"] += earned
+        g["balance"] += balance
+        g["daily"] += balance * apy / 100 / 365
+    result = [{"id": g["id"], "name": g["name"], "earned": g["earned"],
+               "daily": g["daily"]} for g in group.values()]
+    providers = (
+        ("salad-project", "Salad", "salad", "lifetimeUsd", "estimatedDailyUsd"),
+        ("rollercoin-project", "RollerCoin", "rollercoin", "lifetimeUsd", "todayUsd"),
+        ("unetwork-project", "Unetwork", "unetwork", "lifetimeUsd", "estimatedDailyUsd"),
+        ("kryptex-project", "Kryptex", "kryptex", "lifetimeUsd", "dailyUsd"),
+    )
+    for pid, name, key, earned_key, daily_key in providers:
+        provider = stats.get(key) if isinstance(stats.get(key), dict) else {}
+        result.append({"id": pid, "name": name, "earned": number(provider.get(earned_key)),
+                       "daily": max(0, number(provider.get(daily_key)))})
+    payback = saved_payback if isinstance(saved_payback, dict) else {}
+    rows = []
+    for row in result:
+        configured = payback.get(row["id"]) or {}
+        spent = max(0, number(configured.get("totalSpent")))
+        earned = row["earned"]
+        remaining = max(0, spent - earned)
+        row.update({
+            "spent": spent,
+            "configured": spent > 0,
+            "pnl": earned - spent if spent > 0 else None,
+            "remaining": remaining if spent > 0 else None,
+            "daysToProfit": (
+                0 if spent > 0 and remaining == 0
+                else ceil(remaining / row["daily"]) if spent > 0 and row["daily"] > 0
+                else None
+            ),
+            "recovered": (earned >= spent if spent > 0
+                          else row["id"] == "salad-project" and earned > 0),
+            "recoveredPct": max(0, earned) / spent * 100 if spent > 0 else 0.,
+        })
+        rows.append(row)
+    valid = [row for row in rows if row["spent"] > 0]
+    total_spent = sum(row["spent"] for row in valid)
+    total_earned = sum(max(0, row["earned"]) for row in valid)
+    return {
+        "sourceOfCalculation": "backend-project-break-even",
+        "rows": rows,
+        "totalSpent": total_spent, "totalEarned": total_earned,
+        "recoveredCount": sum(row["earned"] >= row["spent"] for row in valid),
+        "overallPercent": total_earned / total_spent * 100 if total_spent > 0 else 0.,
+    }
