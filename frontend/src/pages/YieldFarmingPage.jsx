@@ -1353,7 +1353,14 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     .map(([name, amount]) => ({ name, amount: Number(amount) || 0 }))
     .sort((a, b) => b.amount - a.amount);
   const monthlyChartData = backendEarnings?.days || [];
+  // The daily chart is dated receipts; month-end income is the separately
+  // booked provider ledger. Do not silently count provisional Lulo/Loopscale
+  // receipts in the yearly accounting total.
   const thisMonthEarned = backendEarnings?.monthTotalUsd ?? null;
+  const monthAccounting = backendEarnings?.monthAccountingComparison;
+  const thisMonthBooked = monthAccounting?.status !== "invalid-snapshot" &&
+    Number.isFinite(monthAccounting?.bookedTotalUsd)
+      ? monthAccounting.bookedTotalUsd : null;
   const currentMonthSources = backendEarnings?.monthlySources || {};
   const chartSourceTotalsForDay = key =>
     backendEarnings?.days?.find(row => row.key === key)?.sources || {};
@@ -1402,7 +1409,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     earningsChartYear,
     todayKey
   ).map(month => month.monthKey === todayKey.slice(0, 7)
-    ? { ...month, value: thisMonthEarned }
+    ? { ...month, value: thisMonthBooked ?? thisMonthEarned }
     : month);
   const thisYearEarned = yearlyChartData.reduce(
     (sum, month) => sum + (Number(month.value) || 0),
@@ -1840,7 +1847,12 @@ const summary =
         <section className="flex min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-[14px] font-semibold">Earnings {earningsChartRange === "monthly" ? "This Month" : earningsChartRange === "weekly" ? "This Week" : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}</h2>
+              <h2 className="text-[14px] font-semibold">{earningsChartRange === "monthly" &&
+                thisMonthBooked != null && Math.abs(monthAccounting.differenceUsd) > 0.02
+                  ? "Dated Earnings This Month"
+                  : `Earnings ${earningsChartRange === "monthly" ? "This Month"
+                    : earningsChartRange === "weekly" ? "This Week"
+                    : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}`}</h2>
               <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400"
                 title={backendEarnings?.fullyVerified === false
                   ? "Includes legacy receipts awaiting provider reconciliation"
