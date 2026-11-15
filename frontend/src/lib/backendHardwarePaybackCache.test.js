@@ -69,3 +69,23 @@ test("logout clears cached device credits from every date without affecting othe
  expect(readBackendHardwarePaybackCache(1,day,browserStore,now)).toBeNull();
  expect(readBackendHardwarePaybackCache(2,day,browserStore,now)).not.toBeNull();
 });
+
+
+test("preserves backend payback date, rate and provisional flag across cache",()=>{
+ const s=storage(),now=Date.parse("2026-11-15T05:30:00Z");
+ const evidence=report();
+ evidence.devices[0].estimatedPaybackDate="2027-11-20";
+ evidence.devices[0].estimatedDaysRemaining=370;
+ evidence.devices[0].estimatedDailyCreditUsd=3.34;
+ evidence.devices[0].forecastPartial=true;
+ evidence.devices[0].forecastBasis="trailing-seven-completed-days";
+ writeBackendHardwarePaybackCache(1,day,evidence,s,now);
+ const saved=readBackendHardwarePaybackCache(1,day,s,now+100).data.devices[0];
+ expect(saved.estimatedPaybackDate).toBe("2027-11-20");
+ expect(saved.estimatedDaysRemaining).toBe(370);
+ expect(saved.estimatedDailyCreditUsd).toBe(3.34);
+ expect(saved.forecastPartial).toBe(true);
+ const invalid=report();
+ invalid.devices[0].estimatedPaybackDate="invalid-date";
+ expect(validateBackendHardwarePayback(invalid,day).devices[0].estimatedPaybackDate).toBeNull();
+});
