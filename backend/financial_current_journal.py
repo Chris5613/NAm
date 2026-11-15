@@ -33,8 +33,12 @@ def current_financial_ledger(data):
         raise ValueError("Journal too large")
     manual = [entry for entry in manual if isinstance(entry, dict)
               and month_of(entry) == month]
+    # Frozen reporting months use their booked income evidence for diagnostics;
+    # a newly recorded provider observation may not rewrite a closed month.
+    booked_income = snapshot.get("incomeMonth")
+    income_source = booked_income if isinstance(booked_income, dict) else data.get("incomeMonth")
     income = auto_income_journal(
-        month, data.get("incomeMonth"), manual, current_month, today_key)
+        month, income_source, manual, current_month, today_key)
     expenses = {"entries": []}
     if month < CUTOFF:
         frozen = snapshot.get("entries")
