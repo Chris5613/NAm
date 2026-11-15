@@ -218,5 +218,50 @@ class AuthenticatedFinancialSmokeTests(unittest.TestCase):
         self.assertEqual(before, after)
         self.assertEqual(hardware[0]["name"], "RTX 5080 Smoke")
 
+    def test_04_spending_analytics_uses_authentic_user_db_and_no_writes(self):
+        from backend.db import SessionLocal
+        from backend.models import SpendingTransaction
+        from uuid import uuid4
+        from decimal import Decimal
+
+        row_id = str(uuid4())
+        with SessionLocal() as db:
+            row = SpendingTransaction(
+                id=row_id, user_id=self.user_id, merchant="Groceries",
+                amount=Decimal("-29.50"), date="2026-11-14",
+                category="Groceries", pending=False, source="manual",
+            )
+            db.add(row)
+            db.commit()
+        try:
+            result = self.client.post(
+                "/api/spending/analytics/preview",
+                headers=self.headers,
+                json={
+                    "selectedMonth": "2026-11", "range": "month",
+                    "today": "2026-11-15", "elapsedDays": 15,
+                    "passiveMonths": [{"monthKey": "2026-11", "total": 4.25}],
+                },
+            )
+            self.assertEqual(result.status_code, 200, result.text)
+            body = result.json()
+            self.assertEqual(body["sourceOfCalculation"],
+                             "backend-spending-analytics-v1")
+            self.assertEqual(body["totalSpent"], 29.50)
+            self.assertEqual(body["totalIncome"], 4.25)
+            self.assertEqual(body["netCashFlow"], -25.25)
+            self.assertTrue(body["readOnly"])
+            self.assertFalse(body["financialLedgerMutated"])
+            self.assertEqual(body["transactionCount"], 1)
+            with SessionLocal() as db:
+                stored = db.get(SpendingTransaction, row_id)
+                self.assertEqual(stored.amount, Decimal("-29.50"))
+        finally:
+            with SessionLocal() as db:
+                stored = db.get(SpendingTransaction, row_id)
+                if stored is not None:
+                    db.delete(stored)
+                    db.commit()
+
 if __name__ == "__main__":
     unittest.main()
