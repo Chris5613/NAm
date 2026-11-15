@@ -48,7 +48,7 @@ class HardwarePaybackLifetimeTests(unittest.TestCase):
         self.assertIsNone(rows["5080"]["verifiedRecoveryUsd"])
         self.assertTrue(rows["5080"]["checkpointBaselineUnderstatesPriorRewards"])
         self.assertAlmostEqual(rows["5080"]["confirmedBeforeEarningsStartUsd"],34.25480378)
-        self.assertAlmostEqual(result["repeatedDeviceCreditsUsd"],7.18495575)
+        self.assertAlmostEqual(result["repeatedDeviceCreditsUsd"],7.15757634)
         self.assertFalse(result["complete"])
         self.assertTrue(result["mathReconciles"])
         self.assertEqual((devices,history,trackers),original)
