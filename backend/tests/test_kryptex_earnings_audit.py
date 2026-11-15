@@ -113,6 +113,36 @@ class KryptexRewardAuditTests(unittest.TestCase):
         self.assertEqual(result["lifetimeEarnedUsd"], 100.8)
 
 
+    def test_sats_arriving_before_usd_are_credited_when_conversion_arrives(self):
+        original = {
+            "kryptexMiningDaily": {"2026-11-13": 4.0},
+            "kryptexConfirmedDays": {"2026-11-13": True},
+            "kryptexMiningSatsDaily": {"2026-11-13": 5000},
+            "kryptexIncomeCreditedSatsDaily": {"2026-11-13": 5000},
+            "monthlyEarnings": {"2026-11": 4.0},
+            "lifetimeEarnedUsd": 100.0,
+        }
+        first = reconcile_kryptex_rewards(
+            original, {"daily_sats": {"2026-11-13": 5500}}, self.now
+        )
+        self.assertEqual(first["kryptexMiningDaily"]["2026-11-13"], 4.0)
+        self.assertEqual(first["kryptexIncomeCreditedSatsDaily"]["2026-11-13"], 5000)
+        self.assertIn("2026-11-13", first["kryptexPendingEarningsDays"])
+        self.assertEqual(
+            audit_kryptex_days(first, "2026-11-13", "2026-11-13")[0]["status"],
+            "needs-review",
+        )
+
+        second = reconcile_kryptex_rewards(
+            first, {"daily_sats": {"2026-11-13": 5500},
+                    "daily_usd": {"2026-11-13": 8.8}}, self.now
+        )
+        self.assertEqual(second["kryptexMiningDaily"]["2026-11-13"], 4.8)
+        self.assertEqual(second["kryptexIncomeCreditedSatsDaily"]["2026-11-13"], 5500)
+        self.assertEqual(second["kryptexPendingEarningsDays"], [])
+        self.assertEqual(second["lifetimeEarnedUsd"], 100.8)
+
+
 
 if __name__ == "__main__":
     unittest.main()
