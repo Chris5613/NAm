@@ -325,13 +325,6 @@ export function journalAccountActivity(entries, account) {
       ? value + Number(line.debit||0)-Number(line.credit||0) : value,0),0));
 }
 
-export function derivePayableOpening(month, manualJournal = []) {
-  return moneyRound((manualJournal || []).reduce((sum,entry)=>{
-    if(String(entry.date || "").slice(0,7)>=month) return sum;
-    return sum - journalActivity(entry,"payable");
-  },0));
-}
-
 export function buildStatementRows(baseRows, ledgerEntries, opts={}) {
   const rows = (baseRows||[]).map(row=>({...row}));
   const cashDelta = journalAccountActivity(ledgerEntries,"cash");
@@ -395,40 +388,3 @@ export function reclassifyPersonalPcContribution(journal) {
     changed: true, matchCount: 1,
   };
 }
-
-export function deriveCashOpening(month, openings, manualJournal = [], confirmedMovements = []) {
-  const direct = valueOrNull(openings?.[month]);
-  if(direct!==null) return direct;
-  const olderMonths=Object.keys(openings||{})
-    .filter(key=>/^\d{4}-\d{2}$/.test(key) && key < month && valueOrNull(openings[key])!==null)
-    .sort();
-  if(!olderMonths.length) return null;
-  const baseline = olderMonths[olderMonths.length-1];
-  let opening=valueOrNull(openings[baseline]);
-  for(const entry of manualJournal) {
-    const date=String(entry.date||"");
-    if(date.slice(0,7)<baseline || date.slice(0,7)>=month) continue;
-    opening += journalActivity(entry,"cash");
-  }
-  // Previously confirmed transfers count only if they weren't also posted
-  // manually. This avoids double-deducting an old cash withdrawal.
-  for(const movement of confirmedMovements||[]) {
-    const date=String(movement.date||"");
-    if(date.slice(0,7)<baseline || date.slice(0,7)>=month) continue;
-    const feeTypes=["fee","transaction_fee","network_fee"];
-    const isFee=feeTypes.includes(movement.type);
-    const alreadyManual = manualJournal.some(entry=>entry.date===date &&
-      Math.abs((Number(entry.amount)||0)-(Number(movement.amount)||0))<.005 &&
-      entry.creditAccount===movement.from &&
-      entry.debitAccount===(isFee?"fees":movement.to));
-    if(alreadyManual) continue;
-    if(movement.from==="cash") opening -= Number(movement.amount)||0;
-    if(!isFee && movement.to==="cash") opening += Number(movement.amount)||0;
-    if(movement.from==="cash" && !isFee) opening -= Number(movement.feeUsd)||0;
-  }
-  return moneyRound(opening);
-}
-
-// Financial profit, provider revenue classification and cash flow are now
-// computed solely by backend/financial_core.py. Do not reintroduce browser
-// versions that could disagree with the posted backend ledger.
