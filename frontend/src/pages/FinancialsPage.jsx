@@ -1,8 +1,8 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
-import { remoteStorage, subscribe, isHydrated } from "@/lib/serverStore";
-import { pruneLegacyLedger, preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
+import { remoteStorage, subscribe } from "@/lib/serverStore";
+import { preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
 import { financialLiveBalances as liveBalances } from "@/lib/financialAssetsSnapshot";
 import {
   readUnetworkPhones, readPhoneInventory, makePhoneAsset, phoneJournal, phoneAssetRows,
@@ -28,7 +28,7 @@ import {
   buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
   buildStatementRows, buildFinancialProfit, splitFinancialRevenue,
   classifyCashFlows, journalAccountActivity, deriveCashOpening, derivePayableOpening,
-  moneyRound, valueOrNull, reclassifyPersonalPcContribution,
+  moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { journalLines, validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
@@ -49,7 +49,6 @@ const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const BANK_OPENINGS_KEY = "financials_bank_openings_v1";
 const FINANCIAL_LABELS_KEY = "financials_account_labels_v1";
-const LEGACY_LEDGER_CLEANUP_KEY = "financials_pre_september_2026_cleanup_v1";
 const card = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const field = "w-full rounded-lg border border-[#3c5267] bg-[#101923] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400";
 const categories = [
@@ -268,36 +267,6 @@ export default function FinancialsPage() {
       luloBackfills: current.luloBackfills,
     }));
   }), []);
-  useEffect(() => {
-    const cleanup = () => {
-      if (!isHydrated() || remoteStorage.getItem(LEGACY_LEDGER_CLEANUP_KEY)) return;
-      const currentJournal = readJson(JOURNAL_KEY, []);
-      const currentMovements = readJson(CONFIRMED_MOVEMENTS_KEY, {});
-      const currentClosed = readJson(MONTH_CLOSE_KEY, {});
-      const phones = readUnetworkPhones();
-      const cleaned = pruneLegacyLedger(currentJournal, currentMovements, currentClosed, phones);
-      if (cleaned.changedJournal) remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(cleaned.journal));
-      if (cleaned.changedMovements) remoteStorage.setItem(CONFIRMED_MOVEMENTS_KEY, JSON.stringify(cleaned.movements));
-      if (cleaned.changedClosed) remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(cleaned.closedMonths));
-      // Run only once per account. Future months and underlying income records stay untouched.
-      remoteStorage.setItem(LEGACY_LEDGER_CLEANUP_KEY, JSON.stringify({ cutoff: LEGACY_LEDGER_CUTOFF }));
-    };
-    cleanup();
-    return subscribe(cleanup);
-  }, []);
-  useEffect(() => {
-    const correctOwnerFundedPc = () => {
-      const current = readJson(JOURNAL_KEY, []);
-      const result = reclassifyPersonalPcContribution(current);
-      if (!result.changed) return;
-      // Same ID, amount and date: only change the original credit account.
-      remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(result.entries));
-      setJournal(result.entries);
-    };
-    correctOwnerFundedPc();
-    // Also apply after the server store hydrates, if it was initially empty.
-    return subscribe(correctOwnerFundedPc);
-  }, []);
   useEffect(() => {
     const refresh = () => setLive(liveBalances());
     const timer = window.setInterval(refresh, 30000);
