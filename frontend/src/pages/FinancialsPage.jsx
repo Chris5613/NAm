@@ -11,6 +11,8 @@ import { useBackendFinancialCore } from "@/hooks/useBackendFinancialCore";
 import { useBackendCurrentLedger } from "@/hooks/useBackendCurrentLedger";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
 import { useBackendTrialBalance } from "@/hooks/useBackendTrialBalance";
+import { useFinancialFastQuery } from "@/hooks/useFinancialFastQuery";
+import { financialCacheKey, readFinancialCache, requestFinancialCache } from "@/lib/financialFastCache";
 
 
 import { visibleLedgerEntries } from "@/lib/financialAutoJournal";
@@ -198,7 +200,6 @@ export default function FinancialsPage() {
   });
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
-  const [historicalCloseReadiness, setHistoricalCloseReadiness] = useState(null);
   const [accountLabels, setAccountLabels] = useState(() =>
     cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
   const [renaming, setRenaming] = useState(null);
@@ -235,7 +236,23 @@ export default function FinancialsPage() {
     // computed financials_power_estimates_v1 or a phantom utility payable.
     const refreshPower = async () => {
       try {
-        const result = await api.get("/api/power/month-cost/" + month);
+        const path = "/api/power/month-cost/" + month;
+        const cacheKey = financialCacheKey(path);
+        const valid = result => result?.sourceOfCalculation ===
+          "backend-power-meter-tariffs" && result.month === month;
+        const cached = readFinancialCache(cacheKey, 15000);
+        if (active && cached && valid(cached)) {
+          setPowerEstimates(previous => ({...previous, [month]: {
+            cost: cached.complete ? cached.nominalUsd : null,
+            outOfPocketUsd: cached.complete ? cached.outOfPocketUsd : null,
+            kwh: cached.measuredKwh ?? null,
+            updatedAt: cached.calculatedAt,
+            estimated: true,
+            source: cached.sourceOfCalculation,
+          }}));
+        }
+        const result = await requestFinancialCache(
+          cacheKey, () => api.get(path), valid, { force: true });
         if (!active || result?.sourceOfCalculation !== "backend-power-meter-tariffs" ||
             result.month !== month) return;
         setPowerEstimates(previous => ({...previous, [month]: {
@@ -257,26 +274,17 @@ export default function FinancialsPage() {
     const timer = window.setInterval(refreshPower, 90000);
     return () => { active=false; window.clearInterval(timer); };
   }, [month]);
-  useEffect(() => {
-    let active = true;
-    if (month >= getCurrentMonthKey()) {
-      setHistoricalCloseReadiness(null);
-      return () => { active = false; };
-    }
-    setHistoricalCloseReadiness(null);
-    api.get("/api/project-tracking/financial-core/close-readiness/" + month)
-      .then(result => {
-        if (!active) return;
-        const valid = result?.sourceOfCalculation ===
-          "backend-financial-close-readiness-v1" &&
-          result.month === month && result.readOnly === true &&
-          Array.isArray(result.missingEvidence);
-        setHistoricalCloseReadiness(valid ? result : { unavailable: true });
-      }).catch(() => {
-        if (active) setHistoricalCloseReadiness({ unavailable: true });
-      });
-    return () => { active = false; };
-  }, [month]);
+  const closeReadinessState = useFinancialFastQuery({
+    path: "/api/project-tracking/financial-core/close-readiness/" + month,
+    enabled: month < getCurrentMonthKey(), maxAgeMs: 30000,
+    intervalMs: 90000,
+    validator: result => result?.sourceOfCalculation ===
+      "backend-financial-close-readiness-v1" &&
+      result.month === month && result.readOnly === true &&
+      Array.isArray(result.missingEvidence),
+  });
+  const historicalCloseReadiness = closeReadinessState.data ||
+    (closeReadinessState.error ? { unavailable: true } : null);
   const closeSnapshot = closedMonths[month] || null;
   const protectedMonth = key => isFinancialMonthProtected(key, closedMonths, records);
   // The backend owns balance rows, business phone PPE, hardware trades,
