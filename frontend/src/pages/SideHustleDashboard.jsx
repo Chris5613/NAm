@@ -632,7 +632,6 @@ export default function SideHustleDashboard() {
     { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recordedCurrentMonth = recordedMonths.find(row => row.monthKey === currentMonthKey);
   const monthlyIncome = backendEarnings?.monthTotalUsd ?? null;
-  const recentMonths = recordedMonths.slice(-12);
   const todayKey = pacificDayKey(clock);
   const passiveIncomeToday = backendEarnings?.todayKey === todayKey
     ? backendEarnings.todayTotalUsd ?? null : null;
@@ -640,8 +639,6 @@ export default function SideHustleDashboard() {
   const todayVsYesterday = passiveIncomeToday !== null && yesterdayIncome !== null && yesterdayIncome > 0
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
     : null;
-  const previousMonth = recentMonths.length > 1 ? recentMonths[recentMonths.length - 2] : null;
-  const monthChange = monthlyIncome !== null && previousMonth?.total > 0 ? ((monthlyIncome - previousMonth.total) / previousMonth.total * 100) : 0;
 
   const rankedProjects = [...income.projects].sort((a, b) => {
     const ar = a.spent > 0 ? a.earned / a.spent : 0;
@@ -850,7 +847,7 @@ export default function SideHustleDashboard() {
         icon={CalendarDays}
         title="Monthly Income"
         value={monthlyIncome===null ? "—" : money(monthlyIncome)}
-        detail={previousMonth ? `${monthChange >= 0 ? "▲" : "▼"} ${Math.abs(monthChange).toFixed(1)}% vs. last month` : "Current month total"}
+        detail="Backend-recorded current month"
         tone="sky"
       />
       <KpiCard
@@ -1096,7 +1093,7 @@ export default function SideHustleDashboard() {
               <div className="border-b border-r border-[#242d35] pb-5 pr-5">
                 <p className="text-[10px] text-[#83909d]">Passive Income (MTD)</p>
                 <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{monthlyIncome===null ? "—" : money(monthlyIncome)}</strong>
-                <p className="mt-1 text-[9px] text-emerald-400/80">{previousMonth ? `${monthChange >= 0 ? "+" : ""}${monthChange.toFixed(1)}% vs. last month` : "Current month"}</p>
+                <p className="mt-1 text-[9px] text-emerald-400/80">Backend-recorded month to date</p>
               </div>
               <div className="border-b border-[#242d35] pb-5 pl-5">
                 <p className="text-[10px] text-[#83909d]">Mining Energy</p>
