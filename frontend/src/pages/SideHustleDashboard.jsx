@@ -925,7 +925,7 @@ export default function SideHustleDashboard() {
                 </div>
                 <div className="min-w-0">
                   <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{recovered == null ? "—" : money(recovered)}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Backend observed{verified && !verified.complete ? " · provisional" : ""}</p>
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Earned so far</p>
                 </div>
                 <div className="min-w-0 text-right">
                   <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{remaining != null && remaining <= 0 && verified?.complete ? "Recovered" : "—"}</strong>
