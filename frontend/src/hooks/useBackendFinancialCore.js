@@ -12,6 +12,12 @@ export function useBackendFinancialCore(month, entries, rows, devices, savedExpe
     maxAgeMs: 12000, intervalMs: 45000,
     validator: data => data?.sourceOfCalculation === "backend-financial-core" &&
       data.month === month && data.profit && data.revenueSources &&
-      data.cashFlow && Array.isArray(data.statementRows),
+      data.cashFlow && Array.isArray(data.statementRows) &&
+      data.statementTotals?.sourceOfCalculation ===
+        "backend-financial-statement-totals-v1" &&
+      data.displayTotals?.sourceOfCalculation ===
+        "backend-financial-statement-totals-v1" &&
+      Number.isFinite(data.cashMovements?.cashIn) &&
+      Number.isFinite(data.cashMovements?.cashOut),
   });
 }
