@@ -4,6 +4,7 @@ import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
 import { buildSelectedEarningsBreakdown } from "../lib/earningsDisplay";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
+import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
 import { useDailyEarningsHighWater } from "../hooks/useDailyEarningsHighWater";
@@ -21,7 +22,6 @@ import { useYieldPersistence } from "@/hooks/useYieldPersistence";
 import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
 import { useBackendProviderStats } from "@/hooks/useBackendProviderStats";
-import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { currentLuloUtcDaily } from "@/lib/luloUtcDaily";
 import { useLegacyLuloMonthlyAccounting } from "@/hooks/useLegacyLuloMonthlyAccounting";
 import { Card, CardContent } from "@/components/ui/card";
@@ -54,9 +54,6 @@ import {
   createLoopscaleProjectCard,
   groupManualPositions,
   getKryptexStats,
-  buildProjectIncome,
-  reconcileMonthlySnapshots,
-  getEffectiveProjectIncome,
   DAILY_BALANCE_SNAPSHOT_KEY,
   AUTO_RECOVERED_EARNINGS_KEY,
   PROJECT_QUICK_CACHE_KEY,
@@ -925,71 +922,20 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       ]
     );
 
-  const locallyDerivedProjectIncome = useMemo(
-    () => buildProjectIncome(
-      luloProjects,
-      loopscaleHistory,
-      saladTracker,
-      monthlyBackfills,
-      rollerCoinTracker,
-      unetworkTracker,
-      kryptexTracker
-    ),
-    [
-      luloProjects, loopscaleHistory, saladTracker, monthlyBackfills,
-      rollerCoinTracker, unetworkTracker, kryptexTracker,
-    ]
-  );
-  // The backend owns extension-provider monthly accruals once their saved
-  // figures match the latest live readings; Lulo and Loopscale remain on
-  // their existing adapters until their migration can be verified.
-  const liveProjectIncome = useBackendMonthlyIncome(
-    providerTrackers, locallyDerivedProjectIncome
-  );
-
-  useEffect(
-    () => {
-      setMonthlySnapshots(
-        (current) => {
-          const next =
-            reconcileMonthlySnapshots(
-              current,
-              liveProjectIncome
-            );
-
-          if (
-            JSON.stringify(
-              next
-            ) ===
-            JSON.stringify(
-              current
-            )
-          ) {
-            return current;
-          }
-
-          return next;
-        }
-      );
-    },
-    [
-      liveProjectIncome,
-    ]
-  );
-
-  const projectIncome =
-    useMemo(
-      () =>
-        getEffectiveProjectIncome(
-          liveProjectIncome,
-          monthlySnapshots
-        ),
-      [
-        liveProjectIncome,
-        monthlySnapshots,
-      ]
-    );
-
+  // Historical earnings are sourced exclusively from persisted backend
+  // provider snapshots, dated dividends and verified legacy records. Do not
+  // reconstruct monthly earnings from wallet balances or browser trackers.
+  const sourceIncomeMonths = useBackendIncomeHistory({
+    currentMonth: getTodayKey().slice(0, 7),
+  });
+  const projectIncome = useMemo(() => sourceIncomeMonths.map(row => ({
+    monthKey: row.monthKey,
+    total: row.total,
+    platforms: Object.entries(row.sources || {}).map(([platform, amount]) => ({
+      platform, amount,
+    })),
+  })), [sourceIncomeMonths]);
+  const liveProjectIncome = projectIncome;
 
   // Version 2 records earnings changes by project rather than storing a
   // single unexplained sum. The original v1 ledger is retained untouched.
@@ -1343,7 +1289,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     backendEarnings?.days?.find(row => row.key === key)?.sources || {};
   const selectedBreakdown = buildSelectedEarningsBreakdown({
     selection: selectedEarningsPoint, earningsChartRange,
-    projectIncome: chartProjectIncome, stockPayouts, todayKey,
+    projectIncome: chartProjectIncome, stockPayouts: {}, todayKey,
     luloUtcDay: currentLuloUtc.utcDay, hasLuloProjects: luloProjects.length > 0,
     sourceTotalsForDay: chartSourceTotalsForDay, currentMonthSources,
   });
@@ -1382,7 +1328,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
 
   const yearlyChartData = buildYearlyEarningsChart(
     chartProjectIncome,
-    stockPayouts,
+    {},
     earningsChartYear,
     todayKey
   ).map(month => month.monthKey === todayKey.slice(0, 7)
