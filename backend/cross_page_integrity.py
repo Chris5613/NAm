@@ -236,7 +236,15 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
           repeatedDeviceCreditsUsd=hardware.get("repeatedDeviceCreditsUsd"),
           unverifiedDeviceCreditsUsd=hardware.get("unverifiedDeviceCreditsUsd"),
           missingSourceDays=hardware.get("sourceDayMissingCount"),
-          complete=hardware.get("complete"), reviewFlags=hardware.get("reviewFlags"))
+          complete=hardware.get("complete"), reviewFlags=hardware.get("reviewFlags"),
+          deviceEvidence=[{
+              "name": row.get("name"), "startDay": row.get("startDay"),
+              "missingSourceDays": row.get("missingSourceDays") or [],
+              "provisionalSourceDays": row.get("provisionalSourceDays") or [],
+              "checkpointBaselineUnderstatesPriorRewards":
+                  bool(row.get("checkpointBaselineUnderstatesPriorRewards")),
+              "completed": bool(row.get("complete")),
+          } for row in hardware.get("devices", [])])
     salad_coverage = salad_device_day_coverage(
         devices, daily_records, trackers, today_key)
     if salad_coverage["devices"]:
@@ -264,7 +272,12 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
           dailyMonthUsd=dashboard["monthTotalUsd"],
           dailyProviders=dashboard["monthlySources"],
           fullyVerified=dashboard.get("fullyVerified"),
-          reviewDays=len(dashboard.get("reviewDays") or []))
+          reviewDays=len(dashboard.get("reviewDays") or []),
+          reviewEvidence=[{
+              "day": row.get("date"),
+              "provisionalProviders": row.get("sources") or [],
+              "sourceCorrections": row.get("corrections") or {},
+          } for row in (dashboard.get("reviewDays") or [])[:31]])
     # Raw browser-era daily receipts and booked provider month snapshots are
     # distinct accounting bases. Expose their source-by-source difference
     # after resolving Kryptex with confirmed dated tracker evidence. Never
