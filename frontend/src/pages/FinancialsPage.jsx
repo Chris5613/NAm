@@ -8,19 +8,17 @@ import { readUnetworkPhones, readPhoneInventory, makePhoneAsset, phoneJournal, U
 import { api } from "@/lib/apiClient";
 
 import { useBackendFinancialCore } from "@/hooks/useBackendFinancialCore";
-import { useBackendAutoIncomeJournal } from "@/hooks/useBackendAutoIncomeJournal";
+import { useBackendCurrentLedger } from "@/hooks/useBackendCurrentLedger";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
-import { useBackendAutomaticExpenses } from "@/hooks/useBackendAutomaticExpenses";
 import { useBackendTrialBalance } from "@/hooks/useBackendTrialBalance";
 
 
 import { visibleLedgerEntries } from "@/lib/financialAutoJournal";
-import { movementJournal, resolveFinancialAccount } from "@/lib/financialMovements";
+import { resolveFinancialAccount } from "@/lib/financialMovements";
 import { balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName, cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow } from "@/lib/financialAccountNames";
 import { unmatchedEquipmentPurchases, moneyRound, valueOrNull } from "@/lib/financialAccounting";
 import { hasFreeMiningPower } from "@/lib/powerOutOfPocket";
-import { journalLines, validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
-import { openingPhoneDepreciationEntry } from "@/lib/phoneOpeningDepreciation";
+import { validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
 
 import { formatCurrency, getCurrentMonthKey, getTodayKey } from "@/lib/yieldFarmingAccounting";
 
@@ -28,7 +26,6 @@ const RECORDS_KEY = "monthly_business_changes_v1";
 const JOURNAL_KEY = "financials_journal_v1";
 const HARDWARE_KEY = "hardware_payback_devices_v1";
 const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
-const CONFIRMED_MOVEMENTS_KEY = "financials_confirmed_movements_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const FINANCIAL_LABELS_KEY = "financials_account_labels_v1";
 const card = "rounded-2xl border border-[#263342] bg-[#0b1017]";
@@ -199,7 +196,6 @@ export default function FinancialsPage() {
     businessDate:"",businessValue:"",fundingAccount:"equity",
   });
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
-  const [confirmedMovements, setConfirmedMovements] = useState(() => readJson(CONFIRMED_MOVEMENTS_KEY, {}));
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
   const [accountLabels, setAccountLabels] = useState(() =>
     cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
@@ -224,7 +220,6 @@ export default function FinancialsPage() {
     setBusinessPhones(readUnetworkPhones());
     setPhoneInventory(readPhoneInventory());
     setPowerEstimates(readJson(POWER_ESTIMATE_KEY, {}));
-    setConfirmedMovements(readJson(CONFIRMED_MOVEMENTS_KEY, {}));
     setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
     setAccountLabels(cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
   }), []);
@@ -285,24 +280,7 @@ export default function FinancialsPage() {
     closeSnapshot?.manualEntries || journal.filter(entry => String(entry.date).slice(0, 7) === month),
     month, businessPhones
   );
-  // Previously confirmed transfers remain intact, but new transfers are
-  // recorded only when the user explicitly enters them in General Ledger.
-  const matchedMovements = month < LEGACY_LEDGER_CUTOFF ? [] : Object.values(confirmedMovements)
-    .filter(row => String(row?.date || "").startsWith(month));
-  const alreadyPostedIds = new Set(ledgerEntries.filter(entry => entry.movementSourceId)
-    .map(entry => entry.movementSourceId));
-  const syncedMovementEntries = movementJournal(matchedMovements, month, alreadyPostedIds)
-    .filter(entry => !ledgerEntries.some(manual =>
-      manual.date === entry.date &&
-      Math.abs(Number(manual.amount) - Number(entry.lines[0]?.debit)) <= 0.005 &&
-      manual.debitAccount === entry.lines[0]?.account &&
-      manual.creditAccount === entry.lines[1]?.account));
   const unpostedEquipment = unmatchedEquipmentPurchases(baseRows,ledgerEntries,month);
-  const backendSyncedIncomeJournal = useBackendAutoIncomeJournal(
-    month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey());
-  // Never post or display a locally reconstructed provider-income accrual.
-  // The page stays unavailable until the authoritative journal arrives.
-  const syncedIncomeJournal = backendSyncedIncomeJournal || { entries: [] };
   const electricityCovered = hasFreeMiningPower(month);
   const estimatedPower = powerEstimates[month]?.source === "backend-power-meter-tariffs"
     ? valueOrNull(powerEstimates[month]?.outOfPocketUsd) : null;
@@ -311,24 +289,17 @@ export default function FinancialsPage() {
   const autoPower = closeSnapshot ? closeSnapshot.autoPower :
     electricityCovered || hasActualPower || (savedExpenses !== null && savedExpenses > 0) ||
       estimatedPower === null ? 0 : estimatedPower;
-  const manualEntries = ledgerEntries.map(entry=>({...entry,lines:journalLines(entry)}));
-  const automaticExpensesState = useBackendAutomaticExpenses(
-    month, backendBalanceRows.rows || null, ledgerEntries, autoPower);
-  const automaticExpenses = automaticExpensesState.entries || [];
-  const generatedEntries = [
-    ...(month === LEGACY_LEDGER_CUTOFF ? [openingPhoneDepreciationEntry(businessPhones)].filter(Boolean) : []),
-    ...(month < LEGACY_LEDGER_CUTOFF ? [] : syncedIncomeJournal.entries),
-    ...syncedMovementEntries,
-    ...automaticExpenses,
-  ];
-  const entries = month < LEGACY_LEDGER_CUTOFF
-    ? preSeptemberLedgerEntries(closeSnapshot?.entries || manualEntries, month, businessPhones)
-    : (() => {
-        const base = closeSnapshot?.entries || [...manualEntries, ...generatedEntries];
-        const adjustment = month === LEGACY_LEDGER_CUTOFF ? openingPhoneDepreciationEntry(businessPhones) : null;
-        return [...base, ...(adjustment && !base.some(entry => entry.id === adjustment.id) ? [adjustment] : [])]
-          .sort((a,b)=>a.date.localeCompare(b.date));
-      })();
+  // Income accruals, approved transfers, automatic expenses and iPhone
+  // opening adjustment are assembled by one read-only backend projection.
+  const currentLedgerState = useBackendCurrentLedger({
+    month, journalPreview: journal,
+    baseRows: backendBalanceRows.rows || null, autoPower,
+    // Revision hints trigger a fresh source read after journal edits, a
+    // month reopen, or updates to the authenticated income-history hook.
+    closeRevision: closedMonths, incomeRevision: syncedRevenue,
+  });
+  const entries = currentLedgerState.data?.entries || [];
+  const syncedIncomeJournal = currentLedgerState.data?.income || { entries: [] };
   // Filter only visible General Ledger rows. All underlying accruals
   // remain live and all accounting reports use unfiltered entries.
   const displayedLedgerEntries=visibleLedgerEntries(entries,month,getCurrentMonthKey());
@@ -403,10 +374,6 @@ export default function FinancialsPage() {
   const missingAssetCount = rows.filter(row=>row.category!=="liabilities" && row.end===null).length;
   const knownAssetsSubtotal = moneyRound(rows.filter(row=>row.category!=="liabilities" && row.end!==null)
     .reduce((sum,row)=>sum+Number(row.end||0),0));
-  const debitTotal = moneyRound(entries.reduce((sum,entry)=>sum+
-    (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
-  const creditTotal = moneyRound(entries.reduce((sum,entry)=>sum+
-    (entry.lines||[]).reduce((n,part)=>n+Number(part.credit||0),0),0));
   // Roll forward recorded journal activity from the start of tracking.
   // This includes previous earning accruals and depreciation, but opening
   // external account balances are still not invented.
@@ -646,8 +613,8 @@ export default function FinancialsPage() {
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
-  if (!live || !serverFinancial || !backendSyncedIncomeJournal ||
-      !automaticExpensesState.entries || !trialState.result) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
+  if (!live || !serverFinancial || !currentLedgerState.data ||
+      !trialState.result) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <h1 className="text-2xl font-semibold">Financials</h1>
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
       {liveError
@@ -656,8 +623,8 @@ export default function FinancialsPage() {
         ? "Backend asset rows unavailable. Saved equipment, journal records, and balances were not changed."
         : trialState.error
         ? "Backend trial balance unavailable. Saved ledger entries remain unchanged."
-        : automaticExpensesState.error
-        ? "Backend depreciation or electricity journal unavailable. Saved records were not changed."
+        : currentLedgerState.error
+        ? "Backend General Ledger assembly unavailable. Saved journal entries and month closes were not changed."
         : serverFinancialState?.error
         ? "Backend financial statements unavailable. Saved journal entries, month closes, and account balances were not changed."
         : "Loading backend financial statements…"}
