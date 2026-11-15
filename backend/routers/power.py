@@ -14,11 +14,13 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
+from ..power_cost import server_power_cost_preview
 
 router = APIRouter(prefix="/api/power", tags=["power"])
 
 TOKEN_KEY = "power_ingest_token_v1"
 TELEMETRY_KEY = "power_telemetry_v1"
+POWER_SETTINGS_KEY = "mining_power_dashboard_v1"
 MAX_WATTS_PER_DEVICE = 3000.0
 MAX_DEVICES = 8
 HISTORY_LIMIT = 288
@@ -119,13 +121,18 @@ async def create_power_token(user: User = Depends(current_user), db: Session = D
 async def power_status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     token_row = _setting(db, user.id, TOKEN_KEY)
     telemetry = _setting(db, user.id, TELEMETRY_KEY)
+    settings = _setting(db, user.id, POWER_SETTINGS_KEY)
     value = dict(telemetry.value or {}) if telemetry else {}
     now = datetime.now(timezone.utc)
+    month = _current_month_usage(value, now)
+    cost = server_power_cost_preview(month, settings.value if settings else {},
+                                     value.get("latest"), now)
     return {
         "configured": bool(token_row and (token_row.value or {}).get("sha256")),
         "latest": value.get("latest"),
         "history": value.get("history") or [],
-        "currentMonth": _current_month_usage(value, now),
+        "currentMonth": month,
+        "powerCost": cost,
     }
 
 
