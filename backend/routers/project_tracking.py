@@ -17,7 +17,10 @@ from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User, Wallet
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
-from ..earnings_dashboard import build_backend_earnings_dashboard, TRACKERS as DASHBOARD_TRACKERS
+from ..earnings_dashboard import (
+    build_backend_earnings_dashboard, compare_monthly_snapshot,
+    TRACKERS as DASHBOARD_TRACKERS,
+)
 from ..hardware_credit_audit import hardware_credit_audit
 from ..hardware_payback_lifetime import build_lifetime_hardware_payback
 from ..project_freshness import is_project_stale
@@ -621,7 +624,15 @@ async def earnings_dashboard(
     }
     trackers = {name: setting(db, user.id, key) or {}
                 for name, key in DASHBOARD_TRACKERS.items()}
-    return build_backend_earnings_dashboard(month, today.isoformat(), daily, trackers)
+    dashboard = build_backend_earnings_dashboard(
+        month, today.isoformat(), daily, trackers)
+    monthly_snapshots = setting(db, user.id, "yield_monthly_snapshots_v1")
+    if isinstance(monthly_snapshots, dict):
+        comparison = compare_monthly_snapshot(
+            dashboard, monthly_snapshots.get(month))
+        if comparison is not None:
+            dashboard["monthAccountingComparison"] = comparison
+    return dashboard
 
 
 @router.get("/hardware-credit-audit/{month}")
