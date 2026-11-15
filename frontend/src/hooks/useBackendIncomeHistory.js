@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/apiClient";
+import { reportFinancialParity } from "@/lib/financialParityTelemetry";
 
 /**
  * Server-side income history projection. It is non-posting and never replaces
@@ -36,9 +37,16 @@ export function useBackendIncomeHistory(payload, localMonths) {
 
   const persistedMonths = persisted?.signature === signature
     ? persisted.data.months : null;
-  if (incomeHistoryMatches(localMonths, persistedMonths)) return persistedMonths;
   const serverMonths = result?.signature === signature ? result.data.months : null;
-  return incomeHistoryMatches(localMonths, serverMonths) ? serverMonths : localMonths;
+  const matchedPersisted = incomeHistoryMatches(localMonths, persistedMonths);
+  const matchedProjection = incomeHistoryMatches(localMonths, serverMonths);
+  useEffect(() => {
+    if (persistedMonths) reportFinancialParity(
+      "income-history", payload.currentMonth, matchedPersisted,
+      "backend-persisted", signature);
+  }, [signature, payload.currentMonth, persistedMonths, matchedPersisted]);
+  return matchedPersisted ? persistedMonths :
+    matchedProjection ? serverMonths : localMonths;
 }
 
 export function incomeHistoryMatches(local, remote) {
