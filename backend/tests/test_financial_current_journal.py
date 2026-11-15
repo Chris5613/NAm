@@ -99,13 +99,16 @@ class CurrentFinancialJournalTests(unittest.TestCase):
             "id": "frozen-oct", "date": "2026-11-01",
             "debitAccount": "cash", "creditAccount": "equity", "amount": 12,
         }]
-        data["closedMonths"] = {"2026-11": {"entries": frozen}}
+        data["closedMonths"] = {"2026-11": {"entries": frozen,
+            "incomeMonth": {"monthKey": "2026-11", "total": 1,
+                            "sources": {"Kryptex": 1}}}}
         before = copy.deepcopy(data)
         result = current_financial_ledger(data)
         self.assertEqual(len(result["entries"]), 1)
         self.assertEqual(result["entries"][0]["id"], "frozen-oct")
         self.assertEqual(result["entries"][0]["lines"][0]["account"], "cash")
         self.assertTrue(result["frozen"])
+        self.assertEqual(result["income"]["syncedTotal"], 1)
         self.assertEqual(data, before)
 
     def test_legacy_month_displays_only_allowed_may_phone_entry(self):
