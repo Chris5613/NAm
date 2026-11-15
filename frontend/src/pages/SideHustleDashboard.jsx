@@ -8,7 +8,6 @@ import { api, settingsApi } from "@/lib/apiClient";
 import { projectsApi } from "@/lib/api";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { localStorage as appStorage } from "@/lib/localStorage";
-import { getStoredProjectCryptoPortfolio } from "@/lib/projectCryptoPortfolio";
 import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
@@ -684,16 +683,15 @@ export default function SideHustleDashboard() {
 
   // The server-owned provider feed, not a browser portfolio calculation.
   const totalProjectBalance = backendPortfolio?.totalUsd ?? null;
-  // Match the Bitcoin balance used by Home and Monthly Changes.
-  // Project Income's portfolioBalance does not include Bitcoin.
+  // Fast read of the previous BTC quote. Do not rebuild the wallet/token
+  // portfolio on every Crypto Dashboard render. Backend BTC migration pending.
   const homeBitcoin = appStorage.getCryptoCache()?.projectPortfolio?.bitcoin;
-  const portfolioBitcoin = getStoredProjectCryptoPortfolio()?.bitcoin;
-  const bitcoinBalance = Math.max(0, Number(
-    homeBitcoin?.value ?? homeBitcoin?.balance ??
-    portfolioBitcoin?.value ?? portfolioBitcoin?.balance
-  ) || 0);
-  // BTC remains an estimated legacy wallet value pending backend migration.
-  const totalNetWorth = totalProjectBalance == null ? null : totalProjectBalance + bitcoinBalance;
+  const rawBitcoin = homeBitcoin?.value ?? homeBitcoin?.balance;
+  const bitcoinBalance = rawBitcoin == null ? null : Number(rawBitcoin);
+  const validBitcoin = bitcoinBalance !== null &&
+    Number.isFinite(bitcoinBalance) && bitcoinBalance >= 0;
+  const totalNetWorth = totalProjectBalance == null || !validBitcoin
+    ? null : totalProjectBalance + bitcoinBalance;
   // Use the same reconciled per-source monthly totals as Income History.
   // This includes Lulo earnings even when the quick dashboard cache lacks a Lulo row.
   // Match KPI, monthly chart, and Top Projects to the one backend ledger.
