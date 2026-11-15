@@ -277,6 +277,37 @@ class IntegrationAuditTests(unittest.TestCase):
         self.assertEqual(flagged["networth_daily_baseline_integrity"]["status"],
                          "warning")
 
+    def test_mismatched_financial_migration_is_visible_without_amounts(self):
+        status = {
+            "financial_core_parity_v1": {
+                "lastByArea": {
+                    "balance-rows:2026-11:backend-projection": {
+                        "area": "balance-rows", "month": "2026-11",
+                        "source": "backend-projection",
+                        "fingerprint": "aabbccdd", "status": "mismatched",
+                    },
+                    "income-history:2026-11:backend-persisted": {
+                        "area": "income-history", "month": "2026-11",
+                        "source": "backend-persisted",
+                        "fingerprint": "eeffaa11", "status": "matched",
+                    },
+                },
+                "updatedAt": "2026-11-14T22:00:00Z",
+            },
+        }
+        checks = {x["code"]: x for x in
+                  audit_integration_settings(status, self.now)["checks"]}
+        parity = checks["financial_core_migration_parity"]
+        self.assertEqual(parity["status"], "warning")
+        self.assertEqual(parity["remainingMismatchAreas"], ["balance-rows"])
+        self.assertNotIn("fingerprint", str(parity))
+        status["financial_core_parity_v1"]["lastByArea"][
+            "balance-rows:2026-11:backend-projection"]["status"] = "matched"
+        checks = {x["code"]: x for x in
+                  audit_integration_settings(status, self.now)["checks"]}
+        self.assertEqual(checks["financial_core_migration_parity"]["status"],
+                         "pass")
+
     def test_locked_snapshot_keeps_historical_kryptex_total(self):
         result = audit_integration_settings({
             "project_income_kryptex_tracker_v1": {
