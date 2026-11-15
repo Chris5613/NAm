@@ -28,6 +28,31 @@ def _valid_day(value, today):
     return isinstance(value, str) and _DAY_RE.fullmatch(value) and "2026-11-01" <= value <= today
 
 
+def recognize_mined_satoshi_increment(previous_usd, previous_sats, total_sats, latest_total_usd):
+    """Recognize newly mined sats without repricing previously earned sats.
+
+    Kryptex's reported daily USD value is a mark-to-market conversion of
+    *all* sats mined that day, not a sum of USD-denominated reward credits.
+    Once a sats+USD observation is on file, add only the newly mined portion
+    valued at the incoming observation's implied BTC/USD rate.
+    """
+    old_usd = _amount(previous_usd) or 0.0
+    old_sats = _amount(previous_sats) or 0.0
+    current_sats = _amount(total_sats) or 0.0
+    chart_usd = _amount(latest_total_usd)
+    if chart_usd is None or chart_usd <= 0:
+        return old_usd
+    if old_usd <= 0 or old_sats <= 0:
+        # No dated satoshi+USD baseline yet. Preserve any previously
+        # confirmed income; the original total is only recognized once.
+        return max(old_usd, chart_usd)
+    if current_sats <= old_sats:
+        # BTC price appreciation alone is not mining income.
+        return old_usd
+    increment_usd = chart_usd * ((current_sats - old_sats) / current_sats)
+    return round(old_usd + max(0.0, increment_usd), 8)
+
+
 def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
     """Merge chart observations without changing market-value balances.
 
@@ -43,7 +68,8 @@ def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
 
     recorded = dict(tracker.get("kryptexMiningDaily") or {})
     confirmed = dict(tracker.get("kryptexConfirmedDays") or {})
-    observed_sats = dict(tracker.get("kryptexMiningSatsDaily") or {})
+    prior_sats = dict(tracker.get("kryptexMiningSatsDaily") or {})
+    observed_sats = dict(prior_sats)
     before = sum((_amount(v) or 0) for d, v in recorded.items() if confirmed.get(d))
     touched = set()
     for day, raw in list(sats.items())[:400]:
@@ -61,7 +87,9 @@ def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
             # A BTC price or missing conversion cannot confirm zero income.
             continue
         previous = (_amount(recorded.get(day)) or 0) if confirmed.get(day) else 0
-        recorded[day] = max(value, previous)
+        recorded[day] = recognize_mined_satoshi_increment(
+            previous, prior_sats.get(day), observed_sats.get(day), value
+        )
         confirmed[day] = True
         touched.add(day[:7])
 
