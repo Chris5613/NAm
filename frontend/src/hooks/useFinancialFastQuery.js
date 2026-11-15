@@ -37,9 +37,12 @@ export function useFinancialFastQuery({
       return previous.signature === signature && previous.data ?
         { ...previous, refreshing: true } : { signature, loading: true };
     });
+    // Request from the stable serialized key rather than the newly allocated
+    // render-time payload, keeping refresh intervals keyed to exact inputs.
+    const requestPayload = JSON.parse(signature)[1];
     const refresh = () => requestFinancialCache(
       signature,
-      () => payload === undefined ? api.get(path) : api.post(path, payload),
+      () => requestPayload === null ? api.get(path) : api.post(path, requestPayload),
       data => validatorRef.current(data),
       { force: true, maxAgeMs },
     ).then(data => {
