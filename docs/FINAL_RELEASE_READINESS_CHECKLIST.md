@@ -92,8 +92,25 @@ current-day certification is a rolling task.
 - [ ] No independent closed Financials General Ledger statements for those
   months are saved. Must not fabricate them to clear audit warnings.
 
-**Status:** Protected but **uncertified historical exceptions** until actual
-source records are supplied. Lulo historical data/code remains untouched.
+- [x] A complete **read-only closing evidence inventory** was prepared
+  in `docs/SEPT_OCT_2026_CLOSE_EVIDENCE.md`. Production settings contain
+  **six estimated asset rows out of seven in each month**, no September or
+  October bank opening, and no saved certified Financials close. The older
+  `cloud_starting_bankroll: 1000` is a separate setting, not proof of
+  opening bank cash, and historic net worth aggregates do not certify
+  individual asset rows.
+- [x] The authenticated Financials close-readiness API now reports exact
+  per-asset recorded values, evidence classes and source-document
+  requirements plus the missing beginning bank statement. The Financials
+  page displays this inventory when viewing protected September or October.
+  Dedicated tests confirm the report remains read-only and does not
+  change historical estimates or bank cash.
+
+**Status:** All safe *technical reconciliation, source inventory and evidence
+intake* tasks are complete. **Formal certification of both historical closes
+is blocked** until the original bank/source records are supplied. Do not
+mark certification complete without those documents. Lulo historical
+data/code remains untouched.
 
 ## 4. Authenticated end-to-end checks
 
@@ -211,6 +228,16 @@ checked over time, not declared permanently finished from one good run.
   independently verified opening cash and asset estimates.
 
 ## Overall release decision
+
+## Remaining handoff: source records that NAm cannot manufacture
+
+For **both September and October**, supply dated bank-opening statements
+and month-end documents for **six provider/crypto asset estimates per month**.
+The exact saved figures and evidence requested for each line are in
+`docs/SEPT_OCT_2026_CLOSE_EVIDENCE.md` and the Financials month selector.
+These are *external evidence dependencies*, not unattended code defects.
+The September and October financial-month lock will remain enforced.
+No certified close has been fabricated or posted.
 
 **The code migration and automated source-level checks are suitable for
 continued operation. Full unconditional historical accounting certification
