@@ -10,7 +10,7 @@ import {
 } from "@/lib/unetworkPhonesAccounting";
 import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
-import { useBackendFinancialCore, financialReportMatches, financialFlowsMatch, statementRowsMatch } from "@/hooks/useBackendFinancialCore";
+import { useBackendFinancialCore } from "@/hooks/useBackendFinancialCore";
 import { useBackendAutoIncomeJournal, autoIncomeMatches } from "@/hooks/useBackendAutoIncomeJournal";
 import { useBackendPhoneAssets } from "@/hooks/useBackendPhoneAssets";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
@@ -473,12 +473,14 @@ export default function FinancialsPage() {
   const cashOpening = deriveCashOpening(
     month, bankOpenings, journal, Object.values(confirmedMovements));
   const payableOpening = derivePayableOpening(month, journal);
-  const serverFinancial = useBackendFinancialCore(
+  const serverFinancialState = useBackendFinancialCore(
     month, entries, baseRows, hardwareDevices, savedExpenses,
     cashOpening, payableOpening);
-  const localReport = buildFinancialProfit(entries,savedExpenses);
-  const report = financialReportMatches(localReport,serverFinancial?.profit)
-    ? serverFinancial.profit : localReport;
+  const serverFinancial = serverFinancialState?.data;
+  const report = serverFinancial?.profit || {
+    revenue: 0, disposalGain: 0, operating: 0, fees: 0,
+    depreciation: 0, expenses: 0, profit: 0,
+  };
   const incomeKnown = Boolean(syncedRevenue) ||
     ledgerEntries.some(entry=>["revenue","dividendRevenue"].some(account=>journalActivity(entry,account)<0));
   const pnlRevenue = closeSnapshot ? closeSnapshot.revenue : incomeKnown ? report.revenue : null;
@@ -488,13 +490,9 @@ export default function FinancialsPage() {
   // Present the existing combined revenue as separately posted income streams.
   // Any frozen historical total not explained by the posted lines is shown
   // explicitly rather than being assigned to mining or dividends incorrectly.
-  const localRevenueSources = splitFinancialRevenue(entries);
-  const serverRevenueSources = serverFinancial?.revenueSources;
-  const revenueSources = serverRevenueSources &&
-    ["mining","yield","dividends","unclassified"].every(key =>
-      Math.abs(Number(localRevenueSources[key] || 0) -
-        Number(serverRevenueSources[key] || 0)) < 0.005)
-    ? serverRevenueSources : localRevenueSources;
+  const revenueSources = serverFinancial?.revenueSources || {
+    mining: 0, yield: 0, dividends: 0, unclassified: 0,
+  };
   const {mining:miningIncome,yield:yieldIncome,dividends:dividendIncome} = revenueSources;
   // Keep unidentified manual revenue separate instead of attributing it
   // to mining or yield without evidence.
@@ -509,11 +507,7 @@ export default function FinancialsPage() {
 
   // A bank payment really reduces Cash / Bank. If no opening bank balance
   // was provided, display its journal movement without fabricating an ending.
-  const localRows = closeSnapshot?.rows || buildStatementRows(baseRows,entries,
-    {cashOpening,payableOpening});
-  const rows = !closeSnapshot &&
-    statementRowsMatch(localRows, serverFinancial?.statementRows)
-      ? serverFinancial.statementRows : localRows;
+  const rows = closeSnapshot?.rows || serverFinancial?.statementRows || [];
   // Only presentation rows are filtered. Financial totals still use 'rows'.
   // Closed/past reporting months retain their Lulo historical reference.
   const reportingMonth = getCurrentMonthKey();
@@ -603,20 +597,11 @@ export default function FinancialsPage() {
   }).filter(account=>account.debit||account.credit);
   const trialDebit = moneyRound(trial.reduce((sum,row)=>sum+row.debit,0));
   const trialCredit = moneyRound(trial.reduce((sum,row)=>sum+row.credit,0));
-  const localCashFlow = classifyCashFlows(entries);
-  const cashFlow = financialFlowsMatch(localCashFlow, serverFinancial?.cashFlow)
-    ? serverFinancial.cashFlow : localCashFlow;
-  useEffect(() => {
-    if (!serverFinancial) return;
-    reportFinancialParity(
-      "financial-statement", month,
-      financialReportMatches(localReport, serverFinancial.profit) &&
-        financialFlowsMatch(localCashFlow, serverFinancial.cashFlow),
-      "backend-projection",
-      JSON.stringify({ month, entries, cashOpening, payableOpening, savedExpenses })
-    );
-  }, [month, serverFinancial, localReport, localCashFlow,
-      entries, cashOpening, payableOpening, savedExpenses]);
+  const cashFlow = serverFinancial?.cashFlow || {
+    sections: { operating: [], investing: [], financing: [], transfers: [] },
+    totals: { operating: 0, investing: 0, financing: 0, transfers: 0 },
+    total: 0,
+  };
   const cashEvents = Object.values(cashFlow.sections).flat();
   const cashIn = moneyRound(cashEvents.filter(entry=>entry.delta>0)
     .reduce((sum,entry)=>sum+entry.delta,0));
@@ -840,6 +825,14 @@ export default function FinancialsPage() {
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
+  if (!serverFinancial) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
+    <h1 className="text-2xl font-semibold">Financials</h1>
+    <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
+      {serverFinancialState?.error
+        ? "Backend financial statements unavailable. Saved journal entries, month closes, and account balances were not changed."
+        : "Loading backend financial statements…"}
+    </p>
+  </div>;
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <div className="flex min-w-0 items-center gap-3">
       <nav className="flex min-w-0 flex-1 gap-1 overflow-x-auto rounded-2xl border border-[#242b33] bg-[#0d1014] p-2 [scrollbar-width:none]"
