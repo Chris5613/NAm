@@ -66,6 +66,15 @@ A read-only SQL recheck after these fixes found the exact restored satoshi rewar
 - The two inactive-project systems are separate and should not be force-merged without checking user intent.
 - The full Financials versus Home personal/business cash overlap remains subject to transaction-level confirmation; no bank opening or trade-in records were altered.
 
+## Daily monitoring and legacy settings hardening
+
+- **Daily NAm Integrity Watch is scheduled** for approximately 8 AM Pacific beginning November 15, 2026. It checks connected Render deployments/logs, authoritative Kryptex confirmed daily-vs-monthly earnings, preserved November 1–6 satoshi rewards, pending conversions, and month snapshot totals. Notification is conditional on a real discrepancy or an inability to verify critical sources; no records are mutated.
+- **Legacy settings overwrite protection was missing at the backend boundary.** Older clients could use guarded `PATCH /api/settings/project_income_kryptex_tracker_v1` with an outdated whole-object snapshot. The former route checked a before/after CAS but did not preserve the independently server-owned reward evidence if the CAS succeeded.
+- `backend/kryptex_setting_guard.py` now merges legacy writes conservatively: confirmed daily USD and historical satoshi observations are nondecreasing; previously confirmed days can't be unchecked; monthly totals are recomputed from the merged confirmed days; lifetime rewards cannot decrease; partial legacy snapshots cannot remove server-owned metadata; and legacy machine status cannot replace canonical multi-PC telemetry once established.
+- The legacy settings handler obtains the **same user row lock** used by the canonical machine ingestion route, in addition to its existing per-key advisory lock, preventing concurrent upserts from bypassing the merge.
+- `backend/tests/test_kryptex_setting_guard.py` covers old browser overwrites, confirmed day preservation, satoshi high-water history, pending conversion clearing, and protection of modern machine status. Tests committed; **test-run results not yet verified**.
+- This update is a forward-looking safeguard; it does not itself backfill earnings before the verified start date. Manual financial journal entries, bank openings, device cost basis, and income snapshots were not modified.
+
 ## Important distinctions / outstanding verification
 
 - **Legacy daily-income server records cannot be treated as mining rewards:** Older Kryptex records can contain USD account balance movements driven by BTC prices. Do not combine those numbers with the confirmed mining ledger.
