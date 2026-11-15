@@ -3,7 +3,6 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3, Plus, Target, Zap, X } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
-import { projectsApi } from "@/lib/api";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { useBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
 import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
