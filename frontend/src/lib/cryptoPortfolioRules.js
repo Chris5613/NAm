@@ -17,12 +17,18 @@ export function currentProjectBalance(project) {
   return 0; // Unknown valuation must not fall back to invested principal.
 }
 
+// Historical "Unity Network" and current "Unetwork" are the same provider.
+function providerKey(value) {
+  const key = String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+  return key === "unitynetwork" ? "unetwork" : key;
+}
+
 export function uniqueProjectSources(projects, externalEntries) {
   const external = new Set((externalEntries || []).map(entry =>
-    String(entry?.platform || "").trim().toLowerCase()).filter(Boolean));
+    providerKey(entry?.platform)).filter(Boolean));
   return (Array.isArray(projects) ? projects : []).filter(project =>
     !project?.inactive && !project?.is_inactive &&
-    !external.has(String(project?.platform || project?.name || "").trim().toLowerCase()));
+    !external.has(providerKey(project?.platform || project?.name)));
 }
 
 export function currentRollerCoinBalance(tracker, liveTrxPrice = 0) {

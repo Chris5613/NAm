@@ -348,11 +348,11 @@ const defiTotalValue = allDefiPositions.reduce(
   // Home already values Bitcoin through its shared portfolio. Reuse it if
   // this Crypto page doesn't have the same BTC wallet among its own tokens.
   // Never add the shared holding on top of an existing Bitcoin wallet.
-  const hasBitcoinWallet = wallets.some(w =>
-    String(w.chain || "").toLowerCase() === "bitcoin" &&
-    (balances[w.id]?.tokens || []).some(token =>
-      String(token.symbol || "").toUpperCase() === "BTC" && Number(token.usd_value) > 0
-    )
+  // An already represented BTC holding (including a manual BTC token)
+  // must not get the shared Home BTC amount added a second time.
+  const hasBitcoinWallet = allTokensRaw.some(token =>
+    String(token.symbol || "").toUpperCase() === "BTC" &&
+    Number(token.usd_value) > 0
   );
   const sharedBitcoinValue = Number(homeBitcoin?.value ?? homeBitcoin?.balance) || 0;
   const bitcoinFallbackValue = !hasBitcoinWallet && sharedBitcoinValue > 0

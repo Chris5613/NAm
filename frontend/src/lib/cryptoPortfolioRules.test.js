@@ -13,6 +13,7 @@ test("canonical provider replaces duplicate legacy project", () => {
     { name: "RollerCoin", invested: 914.95 },
     { name: "Lulo", lulo_total_balance_usd: 1500.64 },
     { name: "Kryptex", invested: 363.68 },
+    { name: "Unity Network", invested: 0, balance: 44.90 },
   ];
   const external = [
     { platform: "RollerCoin", balance: 18.14 },
