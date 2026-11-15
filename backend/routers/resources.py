@@ -1,6 +1,7 @@
 """Generic CRUD for record collections, plus the key/value settings store."""
 
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Any
 import hashlib
 from math import isfinite
@@ -13,11 +14,12 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..db import get_db
 from ..input_validation import finite_money
-from ..models import NetWorthSnapshot, Setting, User, Project
+from ..models import NetWorthSnapshot, Setting, User, Project, Asset, Wallet
 from ..project_writes import plan_project_changes, ProjectConflict
 from ..server_owned_settings import is_server_owned_setting
 from ..kryptex_setting_guard import merge_legacy_kryptex_setting
 from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_profile
+from ..networth_reconciliation import home_reconciliation_preview
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
@@ -290,6 +292,43 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
             db.add(Setting(user_id=user.id, key=key, value=after))
         db.commit()
     return {"key": key, "value": after}
+
+
+@router.get("/net-worth/reconciliation")
+async def net_worth_reconciliation(
+    user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """Explain the discrepancy without altering Home or nightly history.
+
+    This is a backend audit preview; it is *not* a substitute for Financials'
+    still-client-derived accounting Balance Sheet.
+    """
+    uid = user.id
+    keys = (
+        "yield_project_latest_balance_feed_v1",
+        "project_income_portfolio_summary_v1",
+        "crypto_wallet_balance_cache",
+        "networth_crypto_cache",
+        "monthly_business_changes_v1",
+        "financials_journal_v1",
+    )
+    settings_rows = db.scalars(select(Setting).where(
+        Setting.user_id == uid, Setting.key.in_(keys)
+    )).all()
+    settings = {row.key: row.value for row in settings_rows}
+    now = datetime.now(timezone.utc)
+    month = now.astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    return home_reconciliation_preview(
+        db.scalars(select(Asset).where(Asset.user_id == uid)).all(),
+        db.scalars(select(Wallet).where(Wallet.user_id == uid)).all(),
+        settings.get("crypto_wallet_balance_cache"),
+        settings.get("yield_project_latest_balance_feed_v1"),
+        settings.get("project_income_portfolio_summary_v1"),
+        settings.get("networth_crypto_cache"),
+        settings.get("monthly_business_changes_v1"),
+        settings.get("financials_journal_v1"),
+        month, uid, now,
+    )
 
 
 @router.get("/net-worth/history")
