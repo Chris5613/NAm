@@ -13,6 +13,7 @@ import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { useBackendFinancialCore, financialReportMatches, financialFlowsMatch, statementRowsMatch } from "@/hooks/useBackendFinancialCore";
 import { useBackendAutoIncomeJournal, autoIncomeMatches } from "@/hooks/useBackendAutoIncomeJournal";
 import { useBackendPhoneAssets } from "@/hooks/useBackendPhoneAssets";
+import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
@@ -387,13 +388,17 @@ export default function FinancialsPage() {
   const backendPhoneRows = useBackendPhoneAssets(month,businessPhones,localPhoneRows);
   // Captured/observed balances must be kept separate from income journal
   // movements or mining revenue would be added to assets twice.
-  const baseRows = useMemo(() => includeJournalEquipment(
+  const localBaseRows = useMemo(() => includeJournalEquipment(
     [
       ...buildFinancialBalanceRows(month,records,live,hardwareDevices,getCurrentMonthKey()),
       ...(records[month]?.locked ? [] : backendPhoneRows),
     ],
     journal,month,Boolean(records[month]?.locked),
   ),[month,records,live,hardwareDevices,journal,backendPhoneRows]);
+  const baseRows = useBackendFinancialBalanceRows({
+    month, currentMonth:getCurrentMonthKey(), records, live, hardwareDevices,
+    phones:businessPhones, journal,
+  }, localBaseRows);
   // Each existing fixed asset is selectable as its own ledger subaccount.
   // Keep the generic equipment account for acquisitions not yet in the register.
   const equipmentAccounts = useMemo(() => baseRows
