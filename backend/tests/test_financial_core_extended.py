@@ -200,7 +200,8 @@ class BackendAccountingMigrationTests(unittest.TestCase):
         self.assertEqual(archive["netStart"], 250)
         self.assertEqual(archive["netEnd"], 310)
         self.assertEqual(archive["netChange"], 60)
-        self.assertTrue(result["business"]["incomplete"])
+        self.assertEqual(result["business"]["knownSubtotal"], 0)
+        self.assertNotEqual(result["statementTotals"]["assetsEnd"], 350)
         self.assertEqual(result["cashMovements"], {"cashIn": 0, "cashOut": 0})
 
     def test_break_even_never_treats_portfolio_balance_as_earnings(self):
