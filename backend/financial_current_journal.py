@@ -51,7 +51,10 @@ def current_financial_ledger(data):
         }
     frozen = snapshot.get("entries")
     if isinstance(frozen, list):
-        entries = list(frozen)
+        # Closed snapshots are immutable records. Normalize the returned
+        # read-only view for compound/legacy entry compatibility, but never
+        # rewrite the snapshot itself.
+        entries = [posted(row) for row in frozen if isinstance(row, dict)]
     else:
         rows = data.get("baseRows")
         if not isinstance(rows, list):
