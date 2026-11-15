@@ -22,6 +22,7 @@ TRUSTED_DATED = {
     "dated-rollercoin-wallet",
     "dated-rollercoin-reward",
     "dated-salad-reward",
+    "dated-salad-lifetime-delta",
 }
 
 
