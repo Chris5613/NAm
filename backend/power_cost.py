@@ -113,6 +113,8 @@ def server_power_cost_preview(usage, settings, latest=None, now=None, month_over
         }
     current_tier = rate_for_now(now, rates)
     nominal, reason = usage_nominal_cost(row, rates)
+    if month_override is not None and isinstance(row, dict) and row.get("month") != month_override:
+        nominal, reason = None, "meter-month-mismatch"
     nominal_usd = money(nominal) if nominal is not None else None
     # Even when electricity is supplied free, unknown metering is not a
     # verified $0 cost observation.
@@ -142,6 +144,8 @@ def server_power_cost_preview(usage, settings, latest=None, now=None, month_over
         age = float("inf")
     watts = decimal_nonnegative(observation.get("totalWatts"))
     fresh = 0 <= age <= 90 and watts is not None
+    if month != local.strftime("%Y-%m"):
+        fresh = False
     daily_nominal = (watts / Decimal(1000) * rates[current_tier] * 24) if fresh else None
     daily_paid = (0.0 if free else money(daily_nominal)) if daily_nominal is not None else None
     tracked_seconds = decimal_nonnegative(row.get("trackedSeconds")) if row else None

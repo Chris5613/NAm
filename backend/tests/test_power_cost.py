@@ -48,6 +48,7 @@ class PowerCostTests(unittest.TestCase):
         self.assertIsNone(result["nominalUsd"])
         self.assertIsNone(result["dailyOutOfPocketUsd"])
         self.assertIsNone(result["outOfPocketUsd"])
+        self.assertIsNone(result["outOfPocketUsd"])
         self.assertIsNone(result["measuredKwh"])
 
     def test_dec_tier_mismatch_fails_closed(self):
@@ -60,6 +61,19 @@ class PowerCostTests(unittest.TestCase):
         self.assertEqual(read_rates({})["basic"],read_rates({"basicRate":None})["basic"])
         r=server_power_cost_preview(usage(),{"basicRate":-1},now=now())
         self.assertEqual(r["reason"],"invalid-power-rates")
+
+    def test_historical_month_cannot_use_live_watts(self):
+        t=now("2026-11-14")
+        result=server_power_cost_preview(usage("2026-10"),{},{
+            "observedAt":t.isoformat(),"totalWatts":458},t,month_override="2026-10")
+        self.assertIsNone(result["dailyOutOfPocketUsd"])
+        self.assertFalse(result["isLiveMeter"])
+
+    def test_meter_month_mismatch_rejected(self):
+        result=server_power_cost_preview(usage("2026-11"),{},
+            now=now(),month_override="2026-10")
+        self.assertFalse(result["complete"])
+        self.assertIsNone(result["nominalUsd"])
 
     def test_no_saved_payable_in_power_preview(self):
         r=server_power_cost_preview(usage(),{},now=now())

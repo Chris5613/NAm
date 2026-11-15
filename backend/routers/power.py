@@ -142,7 +142,7 @@ async def power_month_cost(
     month: str, user: User = Depends(current_user), db: Session = Depends(get_db)
 ) -> dict:
     """Read-only monthly tariff cost, never a booked utility expense."""
-    if not re.fullmatch(r"\\d{4}-(0[1-9]|1[0-2])", month):
+    if not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
         raise HTTPException(422, "Invalid calendar month.")
     telemetry = _setting(db, user.id, TELEMETRY_KEY)
     value = telemetry.value if telemetry and isinstance(telemetry.value, dict) else {}
