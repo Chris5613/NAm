@@ -17,6 +17,7 @@ from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
+from ..earnings_dashboard import build_backend_earnings_dashboard, TRACKERS as DASHBOARD_TRACKERS
 from ..project_freshness import is_project_stale
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
@@ -532,6 +533,45 @@ async def read_monthly_daily_earnings(
         "days": days,
         "calculatedAt": datetime.now(timezone.utc).isoformat(),
     }
+
+
+
+@router.get("/earnings-dashboard/{month}")
+async def earnings_dashboard(
+    month: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+) -> dict:
+    """One backend-owned view for all daily/weekly/monthly earnings surfaces.
+
+    Historic display receipts are provisional until independently reconciled
+    to dated provider trackers. They are not changed or overwritten here.
+    """
+    import calendar
+    from datetime import date, timedelta
+    if not re.fullmatch(r"\d{4}-\d{2}", month):
+        raise HTTPException(status_code=422, detail="Invalid month.")
+    try:
+        year, month_number = map(int, month.split("-"))
+        calendar.monthrange(year, month_number)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail="Invalid month.") from exc
+    today = datetime.now(timezone.utc).astimezone(ZoneInfo("America/Los_Angeles")).date()
+    # Include neighboring dates for the current Pacific week's edge.
+    start = date(year, month_number, 1) - timedelta(days=7)
+    end = date(year, month_number, calendar.monthrange(year, month_number)[1]) + timedelta(days=7)
+    prefix = "yield_server_daily_income_"
+    keys = db.scalars(select(Setting).where(
+        Setting.user_id == user.id,
+        Setting.key >= prefix + start.isoformat(),
+        Setting.key <= prefix + end.isoformat(),
+    )).all()
+    daily = {
+        row.key.removeprefix(prefix): row.value
+        for row in keys
+        if row.key.startswith(prefix) and isinstance(row.value, dict)
+    }
+    trackers = {name: setting(db, user.id, key) or {}
+                for name, key in DASHBOARD_TRACKERS.items()}
+    return build_backend_earnings_dashboard(month, today.isoformat(), daily, trackers)
 
 
 @router.get("/provider-stats")
