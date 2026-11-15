@@ -87,6 +87,37 @@ class KryptexSettingGuardTests(unittest.TestCase):
         self.assertEqual(result["kryptexPendingEarningsDays"], [])
         self.assertEqual(result["monthlyEarnings"]["2026-11"], 4.15)
 
+    def test_legacy_payload_cannot_lose_uncredited_sats(self):
+        original = {
+            "kryptexMiningDaily": {"2026-11-13": 4.0},
+            "kryptexConfirmedDays": {"2026-11-13": True},
+            "kryptexMiningSatsDaily": {"2026-11-13": 5500},
+            "kryptexIncomeCreditedSatsDaily": {"2026-11-13": 5000},
+            "kryptexPendingEarningsDays": ["2026-11-13"],
+            "monthlyEarnings": {"2026-11": 4},
+        }
+        old_client = {
+            "kryptexMiningDaily": {"2026-11-13": 4},
+            "kryptexConfirmedDays": {"2026-11-13": True},
+            "kryptexMiningSatsDaily": {"2026-11-13": 5000},
+            "kryptexPendingEarningsDays": [],
+        }
+        preserved = merge_legacy_kryptex_setting(original, old_client)
+        self.assertEqual(preserved["kryptexIncomeCreditedSatsDaily"]["2026-11-13"], 5000)
+        self.assertEqual(preserved["kryptexMiningSatsDaily"]["2026-11-13"], 5500)
+        self.assertEqual(preserved["kryptexPendingEarningsDays"], ["2026-11-13"])
+
+        corrected = merge_legacy_kryptex_setting(
+            preserved,
+            {"kryptexMiningDaily": {"2026-11-13": 8.8},
+             "kryptexConfirmedDays": {"2026-11-13": True},
+             "kryptexMiningSatsDaily": {"2026-11-13": 5500}},
+        )
+        self.assertEqual(corrected["kryptexMiningDaily"]["2026-11-13"], 4.8)
+        self.assertEqual(corrected["kryptexIncomeCreditedSatsDaily"]["2026-11-13"], 5500)
+        self.assertEqual(corrected["kryptexPendingEarningsDays"], [])
+
+
 
 if __name__ == "__main__":
     unittest.main()
