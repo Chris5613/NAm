@@ -1,4 +1,5 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
+import FinancialsIntegrityPanel from "@/components/FinancialsIntegrityPanel";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe, refreshSetting } from "@/lib/serverStore";
@@ -689,6 +690,7 @@ export default function FinancialsPage() {
           className="rounded-lg p-2 text-[#cedbe7] disabled:opacity-30" aria-label="Next month"><ChevronRight size={18}/></button>
       </div>
     </div>
+    <FinancialsIntegrityPanel/>
     {recorded.locked && !closeSnapshot && month < getCurrentMonthKey() && <p
       role="status" className="rounded-xl border border-amber-500/40 px-4 py-3 text-xs text-amber-200">
       This historical month is protected from journal edits by its Monthly Changes lock.
