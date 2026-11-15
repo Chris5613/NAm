@@ -10,6 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from math import isfinite
 from zoneinfo import ZoneInfo
 from .salad_dated_evidence import verified_salad_day
+from .user_confirmed_provider_evidence import user_confirmed_provider_day
 
 PACIFIC = ZoneInfo("America/Los_Angeles")
 TRACKERS = {
@@ -70,11 +71,20 @@ def provider_entries(day, server_record, trackers):
     elif roller_api.get("usd") is not None:
         overwrite("RollerCoin", roller_api["usd"], "dated-rollercoin-reward")
 
+    # A one-day user attestation can certify the exact archived receipt for
+    # device recovery without representing it as independent provider proof.
+    # It never creates revenue or alters the archived daily amount.
+    attestation = user_confirmed_provider_day(
+        day, "Salad", previous.get("Salad"))
+    if attestation is not None:
+        overwrite("Salad", attestation["amountUsd"],
+                  attestation["provenance"])
+
     salad_tracker = mapping(trackers.get("Salad"))
     salad_daily = mapping(salad_tracker.get("daily"))
     if day in salad_daily:
         overwrite("Salad", salad_daily[day], "dated-salad-reward")
-    else:
+    elif attestation is None:
         # A provider lifetime snapshot is dated evidence only when it has
         # independently anchored observations across a completed Pacific day.
         # The incomplete first observed day must remain provisional.
