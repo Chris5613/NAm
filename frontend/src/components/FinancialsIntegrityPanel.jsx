@@ -66,7 +66,23 @@ export default function FinancialsIntegrityPanel() {
         (Array.isArray(check.missingEvidence) && check.missingEvidence.length
           ? " | Missing: " + check.missingEvidence.join("; ") : "") +
         (Array.isArray(check.differingFields) && check.differingFields.length
-          ? " | Different fields: " + check.differingFields.join(", ") : "")
+          ? " | Different fields: " + check.differingFields.join(", ") : "") +
+        (Array.isArray(check.reviewFlags) && check.reviewFlags.length
+          ? " | Hardware flags: " + check.reviewFlags.join("; ") : "") +
+        (Array.isArray(check.deviceEvidence)
+          ? check.deviceEvidence.map(device =>
+            " | Device " + device.name + " missing: " +
+            (device.missingSourceDays || []).map(
+              item => item.day + "/" + item.source).join(", ") +
+            " | Provisional: " +
+            (device.provisionalSourceDays || []).map(
+              item => item.day + "/" + item.source).join(", ")
+          ).join("") : "") +
+        (Array.isArray(check.reviewEvidence) && check.reviewEvidence.length
+          ? " | Review days: " + check.reviewEvidence.map(
+              row => row.day + " (" +
+                (row.provisionalProviders || []).join(", ") + ")"
+            ).join("; ") : "")
       ),
     ];
     try {
@@ -147,6 +163,30 @@ export default function FinancialsIntegrityPanel() {
           {Array.isArray(check.differingFields) && check.differingFields.length > 0 &&
             <p className="mt-1 text-rose-200">
               Differing fields: {check.differingFields.join(", ")}
+            </p>}
+          {Array.isArray(check.reviewFlags) && check.reviewFlags.length > 0 &&
+            <p className="mt-1 text-amber-200">
+              Hardware review flags: {check.reviewFlags.join("; ")}
+            </p>}
+          {Array.isArray(check.deviceEvidence) &&
+            check.deviceEvidence.map((device, i) => <p key={i}
+              className="mt-1 text-[#b7c9d6]">
+              {device.name}: {device.completed ? "Complete" : "Incomplete"}
+              {(device.missingSourceDays || []).length > 0 &&
+                <> · Missing: {device.missingSourceDays.map(
+                  item => item.day + " / " + item.source).join(", ")}</>}
+              {(device.provisionalSourceDays || []).length > 0 &&
+                <> · Provisional: {device.provisionalSourceDays.map(
+                  item => item.day + " / " + item.source).join(", ")}</>}
+              {device.checkpointBaselineUnderstatesPriorRewards &&
+                <> · Prior checkpoint baseline is lower than verified pre-start rewards; checkpoint is not counted as revenue</>}
+            </p>)}
+          {Array.isArray(check.reviewEvidence) && check.reviewEvidence.length > 0 &&
+            <p className="mt-1 text-amber-200">
+              Dates needing source evidence: {check.reviewEvidence.map(
+                item => item.day + " (" +
+                  (item.provisionalProviders || []).join(", ") +
+                  ")").join("; ")}
             </p>}
         </li>)}
       </ul>}
