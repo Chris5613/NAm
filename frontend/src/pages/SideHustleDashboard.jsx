@@ -1,7 +1,7 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3, Plus, Target, Zap, X } from "lucide-react";
+import { CalendarDays, ChartNoAxesCombined, Coins, Cpu, Home, Layers3, Plus, Target, Zap, X } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { useBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
@@ -26,7 +26,6 @@ const panel = "rounded-2xl border border-[#242b33] bg-[#0d1014] shadow-[0_12px_3
 const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
 const HARDWARE_KEY = "hardware_payback_devices_v1";
 const TOD_EFFECTIVE_AT = new Date("2026-12-10T00:00:00-08:00");
-const TOD_EFFECTIVE_MONTH = "2026-12";
 const POWER_DEFAULTS = {
   offPeakRate: 0.0893,
   midPeakRate: 0.1670,
@@ -56,16 +55,6 @@ function currentRate(settings, date = new Date()) {
   if (hour >= 17 && hour < 21) return { rate: Number(settings.peakRate) || 0, label: "Peak" };
   if (hour >= 21 || hour < 7) return { rate: Number(settings.offPeakRate) || 0, label: "Off-peak" };
   return { rate: Number(settings.midPeakRate) || 0, label: "Mid-peak" };
-}
-
-function usageCost(usage, settings, monthKey) {
-  const tiers = usage?.tiers || {};
-  const totalKwh = Number(usage?.totalKwh ?? usage?.kwh) || 0;
-  if (monthKey && monthKey < TOD_EFFECTIVE_MONTH) return totalKwh * (Number(settings.basicRate) || 0);
-  return (Number(tiers.basic) || 0) * (Number(settings.basicRate) || 0)
-    + (Number(tiers.offPeak) || 0) * (Number(settings.offPeakRate) || 0)
-    + (Number(tiers.midPeak) || 0) * (Number(settings.midPeakRate) || 0)
-    + (Number(tiers.peak) || 0) * (Number(settings.peakRate) || 0);
 }
 
 function readHardware() {
@@ -205,13 +194,6 @@ function monthPosition(time) {
   const days = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
   return parts.year * 12 + parts.month - 1 +
     (parts.day - 1 + (parts.hour + parts.minute / 60 + parts.second / 3600) / 24) / days;
-}
-
-function confirmedKryptexIncome(tracker, startDay, endDay) {
-  return Object.entries(tracker?.kryptexMiningDaily || {}).reduce((sum, [day, value]) =>
-    day >= startDay && day <= endDay && tracker?.kryptexConfirmedDays?.[day]
-      ? sum + Math.max(0, Number(value) || 0)
-      : sum, 0);
 }
 
 function confirmedKryptexIncomeByMonth(tracker, startMonth, endMonth) {
@@ -359,19 +341,6 @@ function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClas
   </section>;
 }
 
-function HardwareSummaryCard({ progress, earned, cost }) {
-  return <section className={panel + " min-w-0 px-4 py-3.5"}>
-    <div className="flex items-center gap-2 text-[10px] text-[#9aa7b4]"><Target className="h-4 w-4"/><span>Hardware Payback</span></div>
-    <div className="mt-2 flex items-center gap-3">
-      <strong className="text-[25px] font-semibold tracking-tight text-emerald-400 tabular-nums">{cost ? percent(progress) : "—"}</strong>
-      <div className="min-w-0 flex-1">
-        <div className="h-2 overflow-hidden rounded-full bg-[#283039]"><div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}/></div>
-        <p className="mt-1 text-center text-[9px] text-[#8d98a4]">{cost ? `${money(earned)} / ${money(cost)}` : "No hardware tracked"}</p>
-      </div>
-    </div>
-  </section>;
-}
-
 const PROJECT_TABLE_META = {
   Lulo: { type: "Lending", typeClass: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300", icon: "L", iconClass: "border-rose-500/30 bg-rose-500/10 text-rose-300" },
   Loopscale: { type: "Lending", typeClass: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300", icon: "∞", iconClass: "border-violet-500/30 bg-violet-500/10 text-violet-300" },
@@ -388,13 +357,6 @@ function projectTableMeta(name) {
     icon: String(name || "?").slice(0, 1).toUpperCase(),
     iconClass: "border-slate-500/30 bg-slate-500/10 text-slate-300",
   };
-}
-
-function SectionTitle({ icon: Icon, title, to }) {
-  return <div className="flex items-center justify-between gap-3">
-    <div className="flex items-center gap-2"><Icon className="h-4 w-4 text-[#9fb0c1]"/><h2 className="text-[15px] font-semibold">{title}</h2></div>
-    {to && <Link to={to} className="flex items-center gap-1 text-[10px] font-medium text-emerald-400 hover:text-emerald-300">View all <ChevronRight className="h-3 w-3"/></Link>}
-  </div>;
 }
 
 export default function SideHustleDashboard() {
