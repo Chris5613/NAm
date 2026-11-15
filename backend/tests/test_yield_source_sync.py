@@ -109,7 +109,13 @@ class YieldSourceNormalizationTests(TestCase):
         with self.assertRaises(LuloSourceError) as failure:
             normalize_lulo(LULO_WALLET,
                            {"account": {"totalUsdValue": 0}}, self.now)
-        self.assertEqual(failure.exception.code, "zero_or_unrecognized_balance")
+        self.assertEqual(failure.exception.code, "reported_zero_balance")
+
+    def test_lulo_unknown_account_shape_is_not_recognized_as_zero(self):
+        with self.assertRaises(LuloSourceError) as failure:
+            normalize_lulo(LULO_WALLET,
+                           {"account": {"responseStatus": "ok"}}, self.now)
+        self.assertEqual(failure.exception.code, "unrecognized_balance_fields")
 
     def test_upstream_http_status_is_categorized_without_response_body(self):
         err = HTTPError("https://api.lulo.fi/v1/account.getAccount",
