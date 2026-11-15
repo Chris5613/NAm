@@ -293,36 +293,10 @@ export default function FinancialsPage() {
     const interval = window.setInterval(refresh, 90000);
     return () => { active = false; window.clearInterval(interval); };
   }, []);
-  const cryptoTrackers = useMemo(() => ({
-    salad: cryptoIncome.salad, rollercoin: cryptoIncome.rollercoin,
-    unetwork: cryptoIncome.unetwork, kryptex: cryptoIncome.kryptex,
-  }), [cryptoIncome.salad, cryptoIncome.rollercoin, cryptoIncome.unetwork, cryptoIncome.kryptex]);
-  const cryptoLocalMonths = useMemo(() => buildProjectIncome(
-    cryptoIncome.luloProjects, cryptoIncome.loopscale, cryptoIncome.salad,
-    cryptoIncome.backfills, cryptoIncome.rollercoin, cryptoIncome.unetwork,
-    cryptoIncome.kryptex,
-  ), [cryptoIncome]);
-  const cryptoBackendMonths = useBackendMonthlyIncome(cryptoTrackers, cryptoLocalMonths);
-  const localIncomeMonths = useMemo(() => {
-    const current = getCurrentMonthKey();
-    const reconciled = reconcileLuloIncome(
-      getEffectiveProjectIncome(cryptoBackendMonths, cryptoIncome.snapshots),
-      cryptoIncome.backfills, cryptoIncome.luloBackfills, current,
-      cryptoIncome.luloProjects, getTodayKey(),
-    );
-    const recorded = buildIncomeHistory(
-      reconciled, cryptoIncome.payouts, current, legacyProjectIncome(cryptoIncome.legacyProjects),
-    );
-    return mergeManualIncome(recorded, cryptoIncome.manualIncome?.monthly || {}, current);
-  }, [cryptoBackendMonths, cryptoIncome]);
+  // Server-owned source history is the sole income attribution input.
   const incomeMonths = useBackendIncomeHistory({
-    months: getEffectiveProjectIncome(cryptoBackendMonths, cryptoIncome.snapshots),
-    localBackfills: cryptoIncome.backfills, backendBackfills: cryptoIncome.luloBackfills,
-    luloProjects: cryptoIncome.luloProjects, currentMonth: getCurrentMonthKey(),
-    currentDay: getTodayKey(), payouts: cryptoIncome.payouts,
-    legacyProjects: cryptoIncome.legacyProjects,
-    manualMonths: cryptoIncome.manualIncome?.monthly || {},
-  }, localIncomeMonths);
+    currentMonth: getCurrentMonthKey(),
+  });
   useEffect(() => {
     let active = true;
     // Backend tariff calculations are display-only; never publish locally
