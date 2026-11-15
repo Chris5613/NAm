@@ -22,22 +22,3 @@ export function useBackendAutoIncomeJournal(month, incomeMonth, manualJournal,
   return state?.signature === signature ? state.data : null;
 }
 
-export function autoIncomeMatches(local, remote) {
-  if (!local || !remote) return false;
-  const fields = ["syncedTotal", "manualRevenueTotal",
-    "generatedRevenueTotal", "pendingReviewTotal", "unexplainedManualRevenue"];
-  if (!fields.every(k => {
-    if (local[k] == null || remote[k] == null) return local[k] == remote[k];
-    return Math.abs(Number(local[k]) - Number(remote[k])) < 0.005;
-  })) return false;
-  const comparable = rows => (rows || []).map(row => ({
-    id: row.id, date: row.date, amount: row.amount,
-    lines: (row.lines || []).map(line => ({
-      account: line.account, debit: Number(line.debit || 0),
-      credit: Number(line.credit || 0),
-    })),
-  }));
-  return JSON.stringify(comparable(local.entries)) ===
-    JSON.stringify(comparable(remote.entries)) &&
-    JSON.stringify(local.pendingReview) === JSON.stringify(remote.pendingReview);
-}
