@@ -269,6 +269,19 @@ async def receive_kryptex_machine(
     # Dated satoshi observations are retained even when BTC conversion is
     # missing. Only positive confirmed daily USD rewards count as income.
     # Existing records never decrease when BTC/USD falls.
+    # The extension's rolling hourly chart can later supply only a partial
+    # reading for a historical day. Preserve the six independently verified
+    # full-day satoshi rewards from the prior audited recovery.
+    recovery = setting(db, user.id, "kryptex_recovery_verified_2026_11_01_06_v1")
+    if isinstance(recovery, dict) and isinstance(recovery.get("days"), dict):
+        sats_history = dict(tracker.get("kryptexMiningSatsDaily") or {})
+        for day, row in recovery["days"].items():
+            sats = number(row.get("minedSats")) if isinstance(row, dict) else None
+            if sats is not None and sats >= 0:
+                sats_history[day] = max(
+                    sats, number(sats_history.get(day)) or 0
+                )
+        tracker["kryptexMiningSatsDaily"] = sats_history
     reward_reconciliation = reconcile_kryptex_rewards(tracker, earnings, now)
 
     tracker.update({
