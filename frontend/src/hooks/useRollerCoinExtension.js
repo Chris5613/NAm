@@ -190,7 +190,7 @@ export function updateRollerCoinTracker(
   };
 }
 
-export function useRollerCoinExtension({ setMonthlySnapshots }) {
+export function useRollerCoinExtension() {
   const [rollerCoinTracker, setRollerCoinTracker] =
     useState(loadRollerCoinTracker);
   const [rollerCoinConnected, setRollerCoinConnected] = useState(false);
@@ -226,25 +226,13 @@ export function useRollerCoinExtension({ setMonthlySnapshots }) {
       updateRollerCoinTracker(current, payload)
     );
 
-    const affectedMonths = rollerCoinAffectedMonths(rows);
-    if (affectedMonths.size) {
-      setMonthlySnapshots(current => {
-        const next = { ...current };
-        const currentMonth = getCurrentMonthKey();
-        affectedMonths.forEach(monthKey => {
-          if (monthKey < currentMonth) delete next[monthKey];
-        });
-        return next;
-      });
-    }
-
     setRollerCoinSyncing(false);
     setRollerCoinMessage(
       trxPrice > 0
         ? `Imported ${rows.length} RollerCoin day${rows.length === 1 ? "" : "s"} into Project Income.`
         : `Imported ${rows.length} RollerCoin day${rows.length === 1 ? "" : "s"}, but TRX price could not be loaded.`
     );
-  }, [setMonthlySnapshots]);
+  }, []);
 
   const lastRollerCoinWalletRequestRef = useRef(0);
   const requestRollerCoinLatest = useCallback(() => {
