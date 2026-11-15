@@ -53,6 +53,19 @@ class JournalGuardTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             guard_journal_write([], [self.entry, self.entry], {})
 
+    def test_unknown_account_is_rejected_but_registered_equipment_allowed(self):
+        valid = {**self.entry, "lines": [
+            {"account": "equipment:device:gpu_5080", "debit": 1950, "credit": 0},
+            *self.entry["lines"][1:],
+        ]}
+        self.assertEqual(guard_journal_write([], [valid], {}), [valid])
+        invalid = {**valid, "lines": [
+            {"account": "secret-revenue", "debit": 1950, "credit": 0},
+            *self.entry["lines"][1:],
+        ]}
+        with self.assertRaisesRegex(ValueError, "Unknown journal account"):
+            guard_journal_write([], [invalid], {})
+
     def test_browser_cannot_post_automatic_accrual_as_manual(self):
         with self.assertRaises(ValueError):
             guard_journal_write([], [{**self.entry, "automatic": True}], {})
