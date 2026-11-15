@@ -12,7 +12,6 @@ import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { useBackendFinancialCore } from "@/hooks/useBackendFinancialCore";
 import { useBackendAutoIncomeJournal, autoIncomeMatches } from "@/hooks/useBackendAutoIncomeJournal";
-import { useBackendPhoneAssets } from "@/hooks/useBackendPhoneAssets";
 import { useBackendFinancialBalanceRows } from "@/hooks/useBackendFinancialBalanceRows";
 import { useBackendAutomaticExpenses } from "@/hooks/useBackendAutomaticExpenses";
 import { reportFinancialParity } from "@/lib/financialParityTelemetry";
@@ -353,22 +352,13 @@ export default function FinancialsPage() {
     return () => { active=false; window.clearInterval(timer); };
   }, [month]);
   const closeSnapshot = closedMonths[month] || null;
-  const localPhoneRows = useMemo(() => phoneAssetRows(businessPhones,month),
-    [businessPhones,month]);
-  const backendPhoneRows = useBackendPhoneAssets(month,businessPhones,localPhoneRows);
-  // Captured/observed balances must be kept separate from income journal
-  // movements or mining revenue would be added to assets twice.
-  const localBaseRows = useMemo(() => includeJournalEquipment(
-    [
-      ...buildFinancialBalanceRows(month,records,live,hardwareDevices,getCurrentMonthKey()),
-      ...(records[month]?.locked ? [] : backendPhoneRows),
-    ],
-    journal,month,Boolean(records[month]?.locked),
-  ),[month,records,live,hardwareDevices,journal,backendPhoneRows]);
-  const baseRows = useBackendFinancialBalanceRows({
+  // The backend owns balance rows, business phone PPE, hardware trades,
+  // journal equipment and depreciation. Never substitute browser arithmetic.
+  const backendBalanceRows = useBackendFinancialBalanceRows({
     month, currentMonth:getCurrentMonthKey(), records, live, hardwareDevices,
     phones:businessPhones, journal,
-  }, localBaseRows);
+  });
+  const baseRows = backendBalanceRows.rows || [];
   // Each existing fixed asset is selectable as its own ledger subaccount.
   // Keep the generic equipment account for acquisitions not yet in the register.
   const equipmentAccounts = useMemo(() => baseRows
@@ -473,8 +463,8 @@ export default function FinancialsPage() {
     month, bankOpenings, journal, Object.values(confirmedMovements));
   const payableOpening = derivePayableOpening(month, journal);
   const serverFinancialState = useBackendFinancialCore(
-    month, entries, baseRows, hardwareDevices, savedExpenses,
-    cashOpening, payableOpening);
+    month, entries, backendBalanceRows.rows || null, hardwareDevices,
+    savedExpenses, cashOpening, payableOpening);
   const serverFinancial = serverFinancialState?.data;
   const report = serverFinancial?.profit || {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
@@ -827,7 +817,9 @@ export default function FinancialsPage() {
   if (!serverFinancial) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <h1 className="text-2xl font-semibold">Financials</h1>
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
-      {serverFinancialState?.error
+      {backendBalanceRows.error
+        ? "Backend asset rows unavailable. Saved equipment, journal records, and balances were not changed."
+        : serverFinancialState?.error
         ? "Backend financial statements unavailable. Saved journal entries, month closes, and account balances were not changed."
         : "Loading backend financial statements…"}
     </p>
