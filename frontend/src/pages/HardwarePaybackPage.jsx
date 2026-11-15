@@ -10,9 +10,7 @@ import { outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 
 
 
-import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
-import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { formatCurrency, getCurrentMonthKey, getTodayKey, INACTIVE_PROJECTS_KEY, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
+import { formatCurrency, getCurrentMonthKey, getTodayKey, INACTIVE_PROJECTS_KEY, loadKryptexTracker, loadLoopscaleHistory, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
 const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
@@ -85,7 +83,7 @@ function readHistory() {
     ...legacyProjects.filter(project => !inactive.has(String(project?.id)) && project?.inactive !== true && project?.is_inactive !== true).map(project => project?.name),
     ...quickProjects.filter(project => !inactive.has(String(project?.id)) && project?.inactive !== true && project?.is_inactive !== true).map(project => project?.name),
   ].filter(Boolean);
-  return { legacyProjects, activeProjectNames, luloProjects: quickProjects.filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker(), backfills: loadMonthlyBackfills(), snapshots: loadMonthlySnapshots(), payouts: readObject(STOCK_DIVIDEND_PAYOUTS_KEY), manualIncome: {}, luloBackfills: {} };
+  return { activeProjectNames, luloProjects: quickProjects.filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker() };
 }
 // Fractional Pacific calendar month, used to prorate power after a checkpoint.
 function monthPosition(time) {
@@ -142,7 +140,7 @@ export default function HardwarePaybackPage() {
   const [historyReady, setHistoryReady] = useState(false);
   const [clock, setClock] = useState(Date.now());
   const {data: backendRecovery, error: backendRecoveryError} = useBackendHardwarePayback();
-  useEffect(() => subscribe(() => { setDevices(readDevices()); setHistory(current => ({ ...readHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills })); }), []);
+  useEffect(() => subscribe(() => { setDevices(readDevices()); setHistory(readHistory()); }), []);
   useEffect(() => {
     // The canonical Kryptex endpoint reconciles chart rewards, satoshi
     // evidence, and BTC/USD repricing. Hardware Payback must observe its
@@ -165,7 +163,7 @@ export default function HardwarePaybackPage() {
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 60000); return () => clearInterval(timer); }, []);
   useEffect(() => {
     let active = true;
-    const refresh = async () => { try { const result = await api.get("/api/yield-sources/earnings"); if (active && result) setHistory(current => ({ ...current, loopscale: mergeBackendLoopscaleHistory(current.loopscale, result.loopscaleHistory), manualIncome: result.manualIncomeHistory || current.manualIncome, luloBackfills: result.luloBackfills || current.luloBackfills })); if (active && result) setHistoryReady(true); } catch {} };
+    const refresh = async () => { try { const result = await api.get("/api/yield-sources/earnings"); if (active && result) setHistoryReady(true); } catch {} };
     refresh(); const timer = setInterval(refresh, 90000); return () => { active = false; clearInterval(timer); };
   }, []);
   const currentMonth = useMemo(getCurrentMonthKey, [clock]);
