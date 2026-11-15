@@ -43,8 +43,31 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
       if (!name || name.length > 80 || !validValue(value)) return null;
       sources[name] = value;
     }
+    // Preserve backend reconciliation evidence through the session preview.
+    // Dropping these fields made unverified legacy receipts indistinguishable
+    // from independently confirmed provider income on the dashboard.
+    const provenance = {};
+    const rawProvenance = row.provenance && typeof row.provenance === "object" &&
+      !Array.isArray(row.provenance) ? row.provenance : {};
+    for (const [name, source] of Object.entries(rawProvenance)) {
+      if (Object.hasOwn(sources, name) && typeof source === "string" &&
+          source.length <= 100) provenance[name] = source;
+    }
+    const provisionalSources = Array.isArray(row.provisionalSources)
+      ? [...new Set(row.provisionalSources.filter(name =>
+          typeof name === "string" && Object.hasOwn(sources, name) &&
+          sources[name] > 0))] : [];
+    const correctedSourcesUsd = {};
+    const corrections = row.correctedSourcesUsd &&
+      typeof row.correctedSourcesUsd === "object" &&
+      !Array.isArray(row.correctedSourcesUsd) ? row.correctedSourcesUsd : {};
+    for (const [name, correction] of Object.entries(corrections)) {
+      if (Object.hasOwn(sources, name) && typeof correction === "number" &&
+          Number.isFinite(correction)) correctedSourcesUsd[name] = correction;
+    }
     days.push({ key: row.key, day: row.day, date: row.date, label: row.label,
-      value: row.value, future: row.future === true, sources });
+      value: row.value, future: row.future === true, sources,
+      provenance, provisionalSources, correctedSourcesUsd });
   }
   if (Math.abs(monthSum - data.monthTotalUsd) > 0.02) return null;
   const today = days.find(row => row.key === todayKey);
@@ -66,6 +89,15 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
     weekDays.push({ key: row.key, day: row.day, date: row.date,
       value: row.value, live: row.live === true, future: row.future === true });
   }
+  const reviewDays = days.filter(row => !row.future &&
+    (row.provisionalSources.length || Object.keys(row.correctedSourcesUsd).length))
+    .map(row => ({ date: row.key, sources: row.provisionalSources,
+      corrections: row.correctedSourcesUsd }));
+  // Null indicates an older API response which did not include verification
+  // metadata. Never assume it was fully verified.
+  const fullyVerified = data.fullyVerified === true
+    ? !days.some(row => !row.future && row.provisionalSources.length)
+    : data.fullyVerified === false ? false : null;
   return {
     sourceOfCalculation: "backend-postgres",
     month, todayKey, days, weekDays,
@@ -75,6 +107,7 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
     weeklyTotalUsd: data.weeklyTotalUsd,
     monthlySources: copySources(data.monthlySources),
     todaySources: copySources(data.todaySources),
+    reviewDays, fullyVerified,
     calculatedAt: data.calculatedAt,
   };
 }
