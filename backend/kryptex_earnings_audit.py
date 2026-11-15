@@ -70,6 +70,12 @@ def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
     confirmed = dict(tracker.get("kryptexConfirmedDays") or {})
     prior_sats = dict(tracker.get("kryptexMiningSatsDaily") or {})
     observed_sats = dict(prior_sats)
+    # Observed satoshi rewards may arrive before their USD conversion.
+    # Track the satoshi quantity already credited to income separately.
+    credited_sats = dict(tracker.get("kryptexIncomeCreditedSatsDaily") or {})
+    for day, amount in prior_sats.items():
+        if day not in credited_sats and confirmed.get(day) and (_amount(recorded.get(day)) or 0) > 0:
+            credited_sats[day] = amount
     before = sum((_amount(v) or 0) for d, v in recorded.items() if confirmed.get(d))
     touched = set()
     for day, raw in list(sats.items())[:400]:
@@ -87,10 +93,16 @@ def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
             # A BTC price or missing conversion cannot confirm zero income.
             continue
         previous = (_amount(recorded.get(day)) or 0) if confirmed.get(day) else 0
+        credited_before = credited_sats.get(day)
         recorded[day] = recognize_mined_satoshi_increment(
-            previous, prior_sats.get(day), observed_sats.get(day), value
+            previous, credited_before, observed_sats.get(day), value
         )
         confirmed[day] = True
+        observed_count = _amount(observed_sats.get(day)) or 0
+        if observed_count > 0:
+            credited_sats[day] = max(
+                _amount(credited_before) or 0, observed_count
+            )
         touched.add(day[:7])
 
     monthly = dict(tracker.get("monthlyEarnings") or {})
@@ -106,12 +118,16 @@ def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
     pending = sorted(
         day for day, amount in observed_sats.items()
         if _valid_day(day, today) and (_amount(amount) or 0) > 0
-        and not (confirmed.get(day) and (_amount(recorded.get(day)) or 0) > 0)
+        and (
+            not (confirmed.get(day) and (_amount(recorded.get(day)) or 0) > 0)
+            or (_amount(amount) or 0) > (_amount(credited_sats.get(day)) or 0) + 0.000001
+        )
     )
     result = {
         "kryptexMiningDaily": recorded,
         "kryptexConfirmedDays": confirmed,
         "kryptexMiningSatsDaily": observed_sats,
+        "kryptexIncomeCreditedSatsDaily": credited_sats,
         "kryptexPendingEarningsDays": pending,
         "monthlyEarnings": monthly,
         "kryptexLastChartSyncAt": now.isoformat(),
@@ -130,6 +146,7 @@ def audit_kryptex_days(tracker, start_date, end_date):
     usd = tracker.get("kryptexMiningDaily") or {}
     confirmed = tracker.get("kryptexConfirmedDays") or {}
     sats = tracker.get("kryptexMiningSatsDaily") or {}
+    credited = tracker.get("kryptexIncomeCreditedSatsDaily") or {}
     rows = []
     day = start
     while day <= end:
@@ -137,12 +154,22 @@ def audit_kryptex_days(tracker, start_date, end_date):
         amount = _amount(usd.get(key))
         sat = _amount(sats.get(key))
         valid = bool(confirmed.get(key) and amount is not None and amount > 0)
+        recorded_sats = _amount(credited.get(key))
+        # Legacy confirmed days without an explicit credited-sats field have
+        # already been recognized; migration uses their observed sats as the
+        # initial accounted baseline.
+        if recorded_sats is None and valid:
+            recorded_sats = sat
+        awaiting_conversion = (sat or 0) > (recorded_sats or 0) + 0.000001
         rows.append({
             "date": key,
             "confirmed": valid,
             "incomeUsd": amount if valid else None,
             "observedSats": sat,
-            "status": "confirmed" if valid else "needs-review" if (sat or 0) > 0 else "no-evidence",
+            "creditedSats": recorded_sats,
+            "status": "needs-review" if awaiting_conversion else
+                "confirmed" if valid else "needs-review" if (sat or 0) > 0
+                else "no-evidence",
         })
         day += timedelta(days=1)
     return rows
