@@ -7,7 +7,9 @@ cannot be prematurely certified or treated as missing historical income.
 """
 from datetime import date, timedelta
 from .earnings_dashboard import provider_entries
-from .hardware_source_segments import (\n    normalize_source, checked_segments, sources_on_day, InvalidSourceSegments,\n)
+from .hardware_source_segments import (
+    normalize_source, checked_segments, sources_on_day, InvalidSourceSegments,
+)
 from .financial_historical_ledger import mapping, sequence
 
 
