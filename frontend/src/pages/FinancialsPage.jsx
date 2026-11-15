@@ -10,6 +10,7 @@ import {
 import { api } from "@/lib/apiClient";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { useBackendFinancialCore, financialReportMatches, financialFlowsMatch } from "@/hooks/useBackendFinancialCore";
+import { useBackendAutoIncomeJournal, autoIncomeMatches } from "@/hooks/useBackendAutoIncomeJournal";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
 import { mergeManualIncome } from "@/lib/manualIncomeHistory";
 import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
@@ -408,9 +409,14 @@ export default function FinancialsPage() {
       manual.debitAccount === entry.lines[0]?.account &&
       manual.creditAccount === entry.lines[1]?.account));
   const unpostedEquipment = unmatchedEquipmentPurchases(baseRows,ledgerEntries,month);
-  const syncedIncomeJournal = useMemo(() => buildAutoIncomeJournal(
+  const localSyncedIncomeJournal = useMemo(() => buildAutoIncomeJournal(
     month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey(),
   ), [month, syncedRevenue, ledgerEntries]);
+  const backendSyncedIncomeJournal = useBackendAutoIncomeJournal(
+    month, syncedRevenue, ledgerEntries, getCurrentMonthKey(), getTodayKey());
+  const syncedIncomeJournal = autoIncomeMatches(
+    localSyncedIncomeJournal, backendSyncedIncomeJournal)
+    ? backendSyncedIncomeJournal : localSyncedIncomeJournal;
   const electricityCovered = hasFreeMiningPower(month);
   const estimatedPower = powerEstimates[month]?.source === "backend-power-meter-tariffs"
     ? valueOrNull(powerEstimates[month]?.outOfPocketUsd) : null;
