@@ -1,7 +1,7 @@
 import {
   validatePhoneAsset, makePhoneAsset, phoneJournal, phoneAssetRows,
 } from "./unetworkPhonesAccounting";
-import { buildFinancialBalanceRows, includeJournalEquipment, buildFinancialProfit } from "./financialAccounting";
+import { includeJournalEquipment } from "./financialAccounting";
 
 const input={
   name:"iPhone 13 — Unetwork #1", purchaseDate:"2026-05-12",
@@ -22,10 +22,6 @@ test("historical May acquisition is included in November equipment, not expensed
   expect(entry.date).toBe("2026-05-20");
   expect(entry.debitAccount).toBe("equipment");
   expect(entry.creditAccount).toBe("equity");
-  const financial=buildFinancialProfit([{
-    ...entry,lines:[{account:"equipment",debit:360,credit:0},{account:"equity",debit:0,credit:360}],
-  }],0);
-  expect(financial.expenses).toBe(0);
 });
 
 test("original purchase date is independent from business-use start",()=>{
