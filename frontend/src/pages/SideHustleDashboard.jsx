@@ -895,6 +895,10 @@ export default function SideHustleDashboard() {
             const recovered=verified?.observedCreditUsd ?? null;
             const progress=verified?.observedProgressPct ?? null;
             const remaining=verified?.observedRemainingUsd ?? null;
+            const payoffDay=verified?.estimatedPaybackDate || null;
+            const payoffLabel=payoffDay && /^\\d{4}-\\d{2}-\\d{2}$/.test(payoffDay)
+              ? new Date(payoffDay+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})
+              : remaining != null && remaining <= 0 ? "Recovered" : "—";
 
             return <div
               key={row.id} role="button" tabIndex={0}
@@ -928,8 +932,10 @@ export default function SideHustleDashboard() {
                   <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Earned so far</p>
                 </div>
                 <div className="min-w-0 text-right">
-                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{remaining != null && remaining <= 0 && verified?.complete ? "Recovered" : "—"}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Verified forecast</p>
+                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]" title={verified?.forecastBasis==="trailing-seven-completed-days"
+                    ? `7-day earning rate: ${money(verified.estimatedDailyCreditUsd || 0)}/day · ${verified.estimatedDaysRemaining} days remaining`
+                    : "No reliable estimate available yet"}>{payoffLabel}</strong>
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">{payoffDay && verified?.forecastPartial ? "Est. payback · partial data" : "Estimated payback date"}</p>
                 </div>
               </div>
             </div>;
