@@ -30,6 +30,7 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
+from ..financial_current_journal import current_financial_ledger
 from ..financial_historical_ledger import (historical_trial_balance, persisted_historical_trial_inputs,
                                            HISTORICAL_SOURCE_KEYS)
 from ..home_business_snapshot import home_business_snapshot, financial_statement_openings
@@ -831,6 +832,51 @@ async def evaluate_financial_historical_trial_balance(
         now.strftime("%Y-%m"), now.strftime("%Y-%m-%d"))
     try:
         return historical_trial_balance(projection)
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/financial-core/current-ledger")
+async def evaluate_financial_current_ledger(
+    payload: dict, user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Server-assembled, nonposting current-month General Ledger.
+
+    The current manual journal may be a browser editing preview. Frozen
+    month closes, equipment phone history and approved movements are read
+    directly from authenticated settings; revenue is from source-owned
+    provider history. No financial record is created, saved or changed.
+    """
+    if len(str(payload)) > 1_000_000:
+        raise HTTPException(status_code=413, detail="Ledger preview too large")
+    keys = (
+        "financials_month_closes_v1",
+        "financials_unetwork_business_phones_v1",
+        "financials_confirmed_movements_v1",
+    )
+    stored = db.scalars(select(Setting).where(
+        Setting.user_id == user.id, Setting.key.in_(keys),
+    )).all()
+    source = {row.key: row.value for row in stored}
+    now = datetime.now(timezone.utc).astimezone(ZoneInfo("America/Los_Angeles"))
+    history = await source_owned_income_history(user=user, db=db)
+    source_month = next((
+        row for row in history.get("months", [])
+        if isinstance(row, dict) and row.get("monthKey") == payload.get("month")
+    ), None)
+    projection = {
+        **payload,
+        "currentMonth": now.strftime("%Y-%m"),
+        "todayKey": now.strftime("%Y-%m-%d"),
+        "incomeMonth": source_month,
+        "closedMonths": source.get("financials_month_closes_v1"),
+        "phones": source.get("financials_unetwork_business_phones_v1"),
+        "confirmedMovements": source.get("financials_confirmed_movements_v1"),
+    }
+    try:
+        result = current_financial_ledger(projection)
+        return {**result, "calculatedAt": datetime.now(timezone.utc).isoformat()}
     except (ValueError, TypeError, AttributeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
