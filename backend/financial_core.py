@@ -102,7 +102,7 @@ def split_revenue(entries):
             source = str(entry.get("description") or "").lower()
         category = ("yield" if re.search(r"lulo|loopscale|yield|lending|interest", source)
                     else "mining" if re.search(
-                        r"kryptex|roller\\s*coin|salad|unetwork|unity\\s*network|mining", source)
+                        r"kryptex|roller\s*coin|salad|unetwork|unity\s*network|mining", source)
                     else "unclassified")
         result[category] = cents(result[category] + revenue)
     return result
