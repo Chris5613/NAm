@@ -346,6 +346,12 @@ export default function FinancialsPage() {
     month, entries, backendBalanceRows.rows || null, hardwareDevices,
     savedExpenses);
   const serverFinancial = serverFinancialState?.data;
+  const cachedFinancialWarning = Boolean(
+    (liveError && live) ||
+    (backendBalanceRows.error && backendBalanceRows.rows) ||
+    (currentLedgerState.error && currentLedgerState.data) ||
+    (serverFinancialState.error && serverFinancialState.data)
+  );
   const report = serverFinancial?.profit || {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
     depreciation: 0, expenses: 0, profit: 0,
@@ -691,6 +697,12 @@ export default function FinancialsPage() {
         <> Evidence still needed: {historicalCloseReadiness.missingEvidence.join("; ")}.</>}
       {historicalCloseReadiness?.unavailable &&
         <> The backend close-readiness report is currently unavailable.</>}
+    </p>}
+    {cachedFinancialWarning && <p role="status"
+      className="rounded-xl border border-amber-500/30 px-4 py-3 text-xs text-amber-200">
+      Showing the most recently verified in-session Financials data while
+      the backend refresh is unavailable. These amounts have not been
+      revalidated yet; saved accounting records were not modified.
     </p>}
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
