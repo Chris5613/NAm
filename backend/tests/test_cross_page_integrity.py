@@ -121,6 +121,36 @@ class CrossPageIntegrityTests(unittest.TestCase):
         daily_report = run(saved, trackers, income)
         self.assertIn("reviewEvidence", checks(daily_report)["dated-earnings"])
 
+    def test_missing_current_day_not_labeled_overdue_hardware_income(self):
+        saved, trackers, income = fixture()
+        saved["hardware_payback_devices_v1"][0].update({
+            "sources": ["Salad"], "earningsStartDay": "2026-11-15",
+        })
+        report = run(saved, trackers, income)
+        checks_by_name = checks(report)
+        self.assertEqual(checks_by_name["hardware-credit"]["status"], "warning")
+        day = checks_by_name["hardware-completed-day-coverage"]
+        self.assertEqual(day["status"], "pass")
+        self.assertEqual(day["missingCompletedDays"], [])
+        self.assertEqual(day["missingCurrentDay"], [
+            {"device": "PC", "day": "2026-11-15", "source": "salad"},
+        ])
+        self.assertTrue(day["currentDayExcludedFromCompletedDayCertification"])
+        self.assertFalse(report["financialLedgerMutated"])
+
+    def test_missing_previous_day_remains_warning_not_automatically_cleared(self):
+        saved, trackers, income = fixture()
+        saved["hardware_payback_devices_v1"][0].update({
+            "sources": ["Salad"], "earningsStartDay": "2026-11-14",
+        })
+        report = run(saved, trackers, income)
+        item = checks(report)["hardware-completed-day-coverage"]
+        self.assertEqual(item["status"], "warning")
+        self.assertEqual(item["missingCompletedDays"], [
+            {"device": "PC", "day": "2026-11-14", "source": "salad"},
+        ])
+        self.assertFalse(report["financialLedgerMutated"])
+
     def test_booked_provider_vs_dated_income_difference_is_visible(self):
         saved, trackers, income = fixture()
         before = deepcopy((saved, trackers, income))
