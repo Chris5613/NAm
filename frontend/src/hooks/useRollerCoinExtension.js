@@ -9,15 +9,6 @@ import {
   shouldAcceptRollerCoinBalance,
 } from "@/lib/rollerCoinFreshness";
 
-export function rollerCoinAffectedMonths(rows = []) {
-  const months = new Set();
-  for (const row of Array.isArray(rows) ? rows : []) {
-    const date = String(row?.date || "").slice(0, 10);
-    if (/^\d{4}-\d{2}-\d{2}$/.test(date)) months.add(date.slice(0, 7));
-  }
-  return months;
-}
-
 export function updateRollerCoinTracker(
   current,
   payload,
