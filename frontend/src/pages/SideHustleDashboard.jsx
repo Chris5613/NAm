@@ -1001,7 +1001,7 @@ export default function SideHustleDashboard() {
       </section>
     </div>
 
-    <div className="grid min-w-0 items-stretch gap-3 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+    <div className="grid min-w-0 items-stretch gap-3 xl:grid-cols-2">
       <section className={panel + " min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
