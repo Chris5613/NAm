@@ -73,8 +73,10 @@ def provider_entries(day, server_record, trackers):
     if day in salad_daily:
         overwrite("Salad", salad_daily[day], "dated-salad-reward")
 
-    provisional = sorted(name for name, source in provenance.items()
-                         if source == "legacy-server-receipt")
+    provisional = sorted(
+        name for name, source in provenance.items()
+        if source == "legacy-server-receipt" and sources[name] > 0
+    )
     corrected = {
         name: round(sources[name] - (safe(previous.get(name)) or 0), 8)
         for name, source in provenance.items()
@@ -174,7 +176,10 @@ def build_backend_earnings_dashboard(month, today_key, records, trackers, now=No
         "days": days,
         "weekDays": week_days,
         "reviewDays": review_days,
-        "fullyVerified": not bool(review_days),
+        # A corrected legacy observation is resolved evidence, not an
+        # outstanding verification failure. Only unreconciled receipts keep
+        # the monthly view provisional.
+        "fullyVerified": not any(row["sources"] for row in review_days),
         "calculatedAt": (now or datetime.now(timezone.utc)).isoformat(),
         "sourceOfCalculation": "backend-postgres",
     }
