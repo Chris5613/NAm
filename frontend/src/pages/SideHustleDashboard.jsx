@@ -1,6 +1,5 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { CalendarDays, ChartNoAxesCombined, Coins, Cpu, Home, Layers3, Plus, Target, Zap, X } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
