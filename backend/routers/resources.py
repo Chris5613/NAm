@@ -24,6 +24,8 @@ from ..legacy_income_reconciliation import confirmed_november_sources
 from ..provider_monthly_income import monthly_provider_income
 from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_profile
 from ..networth_reconciliation import home_reconciliation_preview
+from ..financial_core import calculate_net_worth, finite_number as accounting_number
+from ..networth_trends import networth_trends
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
@@ -345,6 +347,73 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
             db.add(Setting(user_id=user.id, key=key, value=after))
         db.commit()
     return {"key": key, "value": after}
+
+
+@router.post("/net-worth/home-trends")
+async def persist_home_trends(
+    payload: dict[str, Any], user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Atomically maintain daily and current-month Home trend observations.
+
+    The combined net worth is recalculated by the backend first. A legacy
+    client that disagrees with this calculation cannot rewrite the baseline
+    or the monthly chart. Locked historical month values are carried forward.
+    """
+    if len(str(payload)) > 300_000:
+        raise HTTPException(413, "Home net-worth input too large")
+    assets = payload.get("assets")
+    business = payload.get("business")
+    if not isinstance(assets, list) or len(assets) > 2000:
+        raise HTTPException(422, "Invalid personal asset register")
+    if not isinstance(business, dict):
+        raise HTTPException(422, "Missing business net-worth calculation")
+    calculated = calculate_net_worth(
+        assets, business, payload.get("cryptoTotal")
+    )
+    expected = accounting_number(payload.get("expectedNetWorth"))
+    categories = payload.get("expectedBreakdown")
+    if expected is None or not isinstance(categories, dict):
+        raise HTTPException(422, "Missing comparison with Home's current net worth")
+    if abs(expected - calculated["total_net_worth"]) > 0.005:
+        raise HTTPException(409, "Net-worth parity not established; no history saved")
+    for name, amount in calculated["breakdown"].items():
+        client_value = accounting_number(categories.get(name))
+        if client_value is None or abs(client_value - amount) > 0.005:
+            raise HTTPException(409, "Category parity not established; no history saved")
+
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    keys = ("daily_category_baseline_pst", "daily_net_worth_baseline_pst",
+            "monthly_net_worth_history_v2")
+    for key in keys:
+        lock_setting_key(db, user.id, key)
+    existing = db.scalars(select(Setting).where(
+        Setting.user_id == user.id, Setting.key.in_(keys)
+    )).all()
+    by_key = {entry.key: entry for entry in existing}
+    today = datetime.now(timezone.utc).astimezone(
+        ZoneInfo("America/Los_Angeles")).date().isoformat()
+    try:
+        result, changed = networth_trends(
+            calculated["total_net_worth"], calculated["breakdown"], today,
+            by_key["daily_net_worth_baseline_pst"].value
+            if "daily_net_worth_baseline_pst" in by_key else None,
+            by_key["daily_category_baseline_pst"].value
+            if "daily_category_baseline_pst" in by_key else None,
+            by_key["monthly_net_worth_history_v2"].value
+            if "monthly_net_worth_history_v2" in by_key else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    for key, value in changed.items():
+        row = by_key.get(key)
+        if row is not None:
+            if row.value != value:
+                row.value = value
+        else:
+            db.add(Setting(user_id=user.id, key=key, value=value))
+    db.commit()
+    return {**result, "netWorth": calculated}
 
 
 @router.get("/net-worth/reconciliation")
