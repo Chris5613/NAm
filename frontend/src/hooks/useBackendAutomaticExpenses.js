@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/apiClient";
-import { reportFinancialParity } from "@/lib/financialParityTelemetry";
 
 /**
- * Pure, nonposting server projection of depreciation and estimated power.
- * The prior local calculation is a read-only parity fallback.
+ * The authenticated backend owns monthly equipment depreciation and
+ * estimated electricity accruals. No browser estimation, double-posting,
+ * or implicit zero balance is allowed when the backend is unavailable.
  */
 export function useBackendAutomaticExpenses(
-  month, baseRows, manualEntries, autoPower, localEntries,
+  month, baseRows, manualEntries, autoPower,
 ) {
   const signature = useMemo(() => JSON.stringify({
     month, baseRows, manualEntries, autoPower,
@@ -15,41 +15,26 @@ export function useBackendAutomaticExpenses(
   const [state, setState] = useState(null);
   useEffect(() => {
     let active = true;
+    if (!Array.isArray(baseRows)) {
+      setState({ signature, loading: true });
+      return () => { active = false; };
+    }
+    setState(previous => previous?.signature === signature
+      ? previous : { signature, loading: true });
     api.post("/api/project-tracking/financial-core/auto-expenses",
       JSON.parse(signature))
-      .then(response => {
-        if (active && response?.sourceOfCalculation === "backend-financial-core" &&
-            response.month === month && Array.isArray(response.entries))
-          setState({ signature, response });
-      }).catch(() => { if (active) setState(null); });
+      .then(data => {
+        if (!active) return;
+        const valid = data?.sourceOfCalculation === "backend-financial-core" &&
+          data.month === month && Array.isArray(data.entries) &&
+          data.entries.every(entry => entry.automatic === true &&
+            Array.isArray(entry.lines));
+        setState(valid ? { signature, entries: data.entries } :
+          { signature, error: true });
+      }).catch(() => {
+        if (active) setState({ signature, error: true });
+      });
     return () => { active = false; };
-  }, [signature, month]);
-  const response = state?.signature === signature ? state.response : null;
-  const reconciled = automaticExpenseEntriesMatch(localEntries, response?.entries);
-  useEffect(() => {
-    if (response) reportFinancialParity(
-      "automatic-expenses", month, reconciled,
-      "backend-projection", signature);
-  }, [response, month, reconciled, signature]);
-  return reconciled ? response.entries : localEntries;
-}
-
-export function automaticExpenseEntriesMatch(local, remote) {
-  if (!Array.isArray(local) || !Array.isArray(remote) ||
-      local.length !== remote.length) return false;
-  return local.every((entry, index) => {
-    const candidate = remote[index];
-    if (!candidate || entry.id !== candidate.id ||
-        entry.date !== candidate.date ||
-        entry.description !== candidate.description ||
-        entry.automatic !== candidate.automatic ||
-        Boolean(entry.estimated) !== Boolean(candidate.estimated)) return false;
-    if (entry.lines.length !== candidate.lines?.length) return false;
-    return entry.lines.every((line, lineIndex) => {
-      const target = candidate.lines[lineIndex];
-      return target?.account === line.account &&
-        Math.abs(Number(line.debit) - Number(target.debit)) < .005 &&
-        Math.abs(Number(line.credit) - Number(target.credit)) < .005;
-    });
-  });
+  }, [signature, month, baseRows]);
+  return state?.signature === signature ? state : { loading: true };
 }
