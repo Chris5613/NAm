@@ -31,7 +31,7 @@ from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
 from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
-from ..persisted_income_snapshot import source_income_history
+from ..persisted_income_snapshot import source_income_history, project_history_rows
 from ..financial_parity import record_parity_observation, parity_summary
 from ..manual_income_history import manual_income_for_user
 from ..financial_balance_rows import financial_balance_rows, with_journal_equipment
@@ -897,45 +897,7 @@ async def source_owned_income_history(
             "date": entry.occurred_at, "type": entry.type,
             "amount": entry.amount,
         })
-    # Legacy projects keep their dated earnings inside Project.data. Newer
-    # installations may use the relational ProjectTransaction table. Do not
-    # replace a populated embedded journal with an empty table result: doing
-    # so hides historical Clore AI/Unity Network income in the server view.
-    project_rows = []
-    for project in projects:
-        info = project.data if isinstance(project.data, dict) else {}
-        relational = per_project.get(project.id, [])
-        embedded = info.get("transactions")
-        history = relational if relational else (
-            embedded if isinstance(embedded, list) else [])
-        project_rows.append({
-            **info, "id": project.id, "name": project.name,
-            "earned": project.earned, "transactions": history,
-        })
-    # The provider snapshot can lag the extension's durable tracker by up to
-    # the scheduler interval. Compute today's snapshot projection in memory,
-    # using exactly the same sources as the background reconciler.
-    keys = {
-        "salad": "project_income_salad_tracker_v1",
-        "rollercoin": "project_income_rollercoin_tracker_v2",
-        "unetwork": "project_income_unetwork_tracker_v1",
-        "kryptex": "project_income_kryptex_tracker_v1",
-    }
-    tracker_rows = db.scalars(select(Setting).where(
-        Setting.user_id == user.id, Setting.key.in_(tuple(keys.values()))
-    )).all()
-    stored = {entry.key: entry.value for entry in tracker_rows}
-    trackers = {provider: stored.get(key) or {} for provider, key in keys.items()}
-    date_prefix = "yield_server_daily_income_" + month + "-"
-    dates = db.scalars(select(Setting).where(
-        Setting.user_id == user.id,
-        Setting.key >= date_prefix + "01",
-        Setting.key <= date_prefix + "31",
-    )).all()
-    dated = {entry.key.removeprefix("yield_server_daily_income_"):
-             entry.value for entry in dates if entry.key.startswith(date_prefix)}
-    day = datetime.now(timezone.utc).astimezone(
-        ZoneInfo("America/Los_Angeles")).date().isoformat()
+    project_rows = project_history_rows(projects, per_project)
     result = source_income_history(
         snapshots, dividends, project_rows,
         manual_income_for_user(user.id), month,
