@@ -43,6 +43,7 @@ from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
 from ..lifetime_income import lifetime_earned_from_snapshots
 from ..integration_audit import audit_integration_settings
+from ..cross_page_integrity import cross_page_integrity
 from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
 
 router = APIRouter(prefix="/api/project-tracking", tags=["project tracking"])
@@ -373,6 +374,84 @@ async def project_integration_audit(
         select(Setting).where(Setting.user_id == user.id, Setting.key.in_(keys))
     ).all()
     return audit_integration_settings({row.key: row.value for row in rows})
+
+
+@router.get("/cross-page-integrity")
+async def read_cross_page_integrity(
+    response: Response, user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Full read-only integrity report from the same persisted page sources.
+
+    Never adjusts earned income, historical closes, wallets, journal entries
+    or device checkpoints. Inactive portfolios and repeated device credits
+    are reported separately from genuine source mismatches.
+    """
+    now = datetime.now(timezone.utc)
+    pacific = now.astimezone(ZoneInfo("America/Los_Angeles"))
+    month, day = pacific.strftime("%Y-%m"), pacific.strftime("%Y-%m-%d")
+    keys = (
+        "yield_monthly_snapshots_v1",
+        "yield_project_latest_balance_feed_v1",
+        "project_income_portfolio_summary_v1",
+        "monthly_business_changes_v1",
+        "financials_journal_v1",
+        "financials_month_closes_v1",
+        "financials_bank_openings_v1",
+        "financials_confirmed_movements_v1",
+        "financials_power_estimates_v1",
+        "financials_unetwork_business_phones_v1",
+        "hardware_payback_devices_v1",
+        "yield_project_quick_cache_v1",
+        "project_income_salad_tracker_v1",
+        "project_income_unetwork_tracker_v1",
+        "project_income_kryptex_tracker_v1",
+        "project_income_rollercoin_tracker_v2",
+    )
+    stored = db.scalars(select(Setting).where(
+        Setting.user_id == user.id, Setting.key.in_(keys)
+    )).all()
+    values = {row.key: row.value for row in stored}
+    dates = []
+    from datetime import date
+    for row in values.get("hardware_payback_devices_v1") or []:
+        if not isinstance(row, dict):
+            continue
+        try:
+            start = date.fromisoformat(str(row.get("earningsStartDay") or ""))
+            if start <= pacific.date() and (pacific.date() - start).days <= 1096:
+                dates.append(start)
+        except (TypeError, ValueError):
+            continue
+    earliest = min(dates) if dates else pacific.date()
+    prefix = "yield_server_daily_income_"
+    daily_rows = db.scalars(select(Setting).where(
+        Setting.user_id == user.id,
+        Setting.key >= prefix + earliest.isoformat(),
+        Setting.key <= prefix + day,
+    )).all()
+    daily = {
+        row.key.removeprefix(prefix): row.value
+        for row in daily_rows if isinstance(row.value, dict)
+    }
+    source_months = await source_owned_income_history(user=user, db=db)
+    trackers = {name: values.get(key) or {}
+                for name, key in DASHBOARD_TRACKERS.items()}
+    live_kryptex = _kryptex_aggregate(
+        setting(db, user.id, KRYPTEX_MACHINES_KEY), now)
+    current_daily = (
+        live_kryptex["status"]["profitability_usd_day"]
+        if live_kryptex["machine_count"] > 0 else None
+    )
+    valuation = await bitcoin_valuation(response, user, db)
+    bitcoin_usd = (valuation.get("bitcoin") or {}).get("valueUsd")
+    report = cross_page_integrity(
+        values, month, day, bitcoin_usd,
+        source_months.get("months"), daily, trackers,
+        current_kryptex_daily=current_daily,
+    )
+    response.headers["Cache-Control"] = "private, no-store"
+    return {**report, "calculatedAt": now.isoformat()}
 
 
 @router.get("/kryptex/earnings-audit")
