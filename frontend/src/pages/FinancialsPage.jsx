@@ -28,8 +28,7 @@ import {
 } from "@/lib/financialAccountNames";
 import {
   buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
-  buildStatementRows, buildFinancialProfit, splitFinancialRevenue,
-  classifyCashFlows, journalAccountActivity, deriveCashOpening, derivePayableOpening,
+  journalAccountActivity, deriveCashOpening, derivePayableOpening,
   moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
