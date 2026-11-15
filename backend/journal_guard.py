@@ -9,6 +9,26 @@ from decimal import Decimal, InvalidOperation
 from collections import Counter
 
 
+ALLOWED_ACCOUNTS = frozenset((
+    "cash", "luloCash", "brokerage", "crypto", "platform",
+    "platform:kryptex", "platform:rollercoin", "platform:salad",
+    "platform:unetwork", "defi", "equipment", "accDep", "payable",
+    "equity", "revenue", "dividendRevenue", "gainDisposal", "electric",
+    "expense", "depreciation", "fees",
+))
+
+
+def valid_account(raw):
+    if not isinstance(raw, str) or not raw or len(raw) > 160:
+        return False
+    if raw in ALLOWED_ACCOUNTS:
+        return True
+    # Registered equipment subaccounts use the exact prefix created by
+    # Financials. Reject arbitrary unknown accounts that could hide credits.
+    return (raw.startswith("equipment:") and 10 < len(raw) <= 160 and
+            all(ch.isalnum() or ch in ":-_." for ch in raw[10:]))
+
+
 def money(raw):
     if raw is None or isinstance(raw, bool):
         raise ValueError("Invalid journal amount.")
@@ -46,8 +66,8 @@ def check_entry(entry):
             if not isinstance(line, dict):
                 raise ValueError("Invalid journal line.")
             account = line.get("account")
-            if not isinstance(account, str) or not account.strip() or len(account) > 160:
-                raise ValueError("Invalid journal account.")
+            if not valid_account(account):
+                raise ValueError("Unknown journal account.")
             debit = money(line.get("debit", 0))
             credit = money(line.get("credit", 0))
             if (debit > 0) == (credit > 0):
@@ -59,8 +79,7 @@ def check_entry(entry):
         return
     debit = entry.get("debitAccount")
     credit = entry.get("creditAccount")
-    if (not isinstance(debit, str) or not isinstance(credit, str) or
-            not debit.strip() or not credit.strip() or debit == credit):
+    if not valid_account(debit) or not valid_account(credit) or debit == credit:
         raise ValueError("Invalid legacy journal accounts.")
     if money(entry.get("amount")) <= 0:
         raise ValueError("Journal entry must have a positive amount.")
