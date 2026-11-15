@@ -852,7 +852,9 @@ export default function SideHustleDashboard() {
         icon={CalendarDays}
         title="Monthly Income"
         value={monthlyIncome===null ? "—" : money(monthlyIncome)}
-        detail="Backend-recorded current month"
+        detail={backendEarnings?.fullyVerified === false
+          ? "Includes legacy receipts awaiting provider reconciliation"
+          : "Backend-recorded current month"}
         tone="sky"
       />
       <KpiCard
@@ -1049,7 +1051,9 @@ export default function SideHustleDashboard() {
               <div className="border-b border-r border-[#242d35] pb-5 pr-5">
                 <p className="text-[10px] text-[#83909d]">Passive Income (MTD)</p>
                 <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{monthlyIncome===null ? "—" : money(monthlyIncome)}</strong>
-                <p className="mt-1 text-[9px] text-emerald-400/80">Backend-recorded month to date</p>
+                <p className="mt-1 text-[9px] text-emerald-400/80">{backendEarnings?.fullyVerified === false
+                  ? "Includes unverified historical receipts"
+                  : "Backend-recorded month to date"}</p>
               </div>
               <div className="border-b border-[#242d35] pb-5 pl-5">
                 <p className="text-[10px] text-[#83909d]">Mining Energy</p>
