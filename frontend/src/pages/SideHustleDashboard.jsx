@@ -1,17 +1,14 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import {
-  CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3,
-  Plus, Target, TrendingUp, Zap, X,
-} from "lucide-react";
+import { CalendarDays, ChartNoAxesCombined, ChevronRight, Coins, Cpu, Home, Layers3, Plus, Target, Zap, X } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { projectsApi } from "@/lib/api";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { useBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
 import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
-import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
+
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { useCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
@@ -20,36 +17,13 @@ import { useAuth } from "@/lib/AuthContext";
 import { readCryptoDashboardPowerCache, writeCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
 import { extractBackendKryptexRunRate, projectedDailyMiningNet } from "@/lib/backendKryptexRunRate";
 import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
-import { PASSIVE_MONTHLY_INCOME_KEY } from "@/lib/monthlyEarningsChart";
-import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
+
+
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
-import { mergeManualIncome } from "@/lib/manualIncomeHistory";
+
 import { STOCK_DIVIDEND_PAYOUTS_KEY } from "@/lib/stockDividendPayouts";
-import { buildIncomeHistory, legacyProjectIncome, reconcileLuloIncome } from "@/lib/incomeHistory";
-import {
-  buildProjectIncome,
-  formatCurrency,
-  getCurrentMonthKey,
-  getEffectiveProjectIncome,
-  getTodayKey,
-  getKryptexStats,
-  getRollerCoinTrackerStats,
-  getSaladTrackerStats,
-  getUnetworkTrackerStats,
-  groupManualPositions,
-  loadKryptexTracker,
-  loadLoopscaleHistory,
-  loadMonthlyBackfills,
-  loadMonthlySnapshots,
-  loadPositions,
-  loadProjectPayback,
-  saveProjectPayback,
-  loadRollerCoinTracker,
-  loadSaladTracker,
-  loadUnetworkTracker,
-  PROJECT_QUICK_CACHE_KEY,
-  readObject,
-} from "@/lib/yieldFarmingAccounting";
+
+import { buildProjectIncome, formatCurrency, getCurrentMonthKey, getKryptexStats, getRollerCoinTrackerStats, getSaladTrackerStats, getUnetworkTrackerStats, groupManualPositions, loadKryptexTracker, loadLoopscaleHistory, loadMonthlyBackfills, loadMonthlySnapshots, loadPositions, loadProjectPayback, saveProjectPayback, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 
 const panel = "rounded-2xl border border-[#242b33] bg-[#0d1014] shadow-[0_12px_36px_rgba(0,0,0,0.16)]";
 const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
