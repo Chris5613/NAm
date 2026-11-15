@@ -4,6 +4,7 @@ import unittest
 from backend.financial_core import (
     auto_income_journal, build_statement_rows, project_break_even,
     project_automatic_expenses, split_revenue, trial_balance,
+    balance_sheet_totals, evaluate_statement,
 )
 from backend.income_history_core import (
     reconcile_lulo_months, historical_income, legacy_months,
@@ -162,6 +163,45 @@ class BackendAccountingMigrationTests(unittest.TestCase):
         self.assertEqual(result[0]["sources"]["Kryptex"], 10)
         self.assertEqual(result[0]["sources"]["Other"], 3)
         self.assertEqual(result[0]["sources"]["Stocks"], 2.5)
+
+    def test_backend_balance_sheet_totals_preserve_missing_value_flags(self):
+        rows = [
+            {"name": "Equipment", "category": "equipment",
+             "start": 500, "end": 480},
+            {"name": "Cash", "category": "cash",
+             "start": None, "end": None},
+            {"name": "Accounts payable", "category": "liabilities",
+             "start": 10, "end": 12},
+        ]
+        data = balance_sheet_totals(rows)
+        self.assertEqual(data["sourceOfCalculation"],
+                         "backend-financial-statement-totals-v1")
+        self.assertIsNone(data["assetsStart"])
+        self.assertIsNone(data["assetsEnd"])
+        self.assertIsNone(data["netEnd"])
+        self.assertEqual(data["missingAssetCount"], 1)
+        self.assertEqual(data["knownAssetsSubtotal"], 480)
+        self.assertEqual(data["debtStart"], 10)
+        self.assertEqual(data["debtEnd"], 12)
+
+    def test_backend_archived_display_totals_stay_separate_from_current_ledger(self):
+        result = evaluate_statement({
+            "month": "2026-11", "entries": [], "rows": [],
+            "displayRows": [
+                {"id": "cash", "name": "Cash", "category": "cash",
+                 "start": 300, "end": 350},
+                {"id": "payable", "name": "Debt", "category": "liabilities",
+                 "start": 50, "end": 40},
+            ],
+        })
+        archive = result["displayTotals"]
+        self.assertEqual(archive["assetsEnd"], 350)
+        self.assertEqual(archive["debtEnd"], 40)
+        self.assertEqual(archive["netStart"], 250)
+        self.assertEqual(archive["netEnd"], 310)
+        self.assertEqual(archive["netChange"], 60)
+        self.assertTrue(result["business"]["incomplete"])
+        self.assertEqual(result["cashMovements"], {"cashIn": 0, "cashOut": 0})
 
     def test_break_even_never_treats_portfolio_balance_as_earnings(self):
         stats = {
