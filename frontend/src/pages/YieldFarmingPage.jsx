@@ -3,14 +3,14 @@ import { latestRollerCoinTimestamp } from "@/lib/rollerCoinFreshness";
 import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
-import { buildSelectedEarningsBreakdown, buildTodayEarningsDisplay } from "../lib/earningsDisplay";
+import { buildSelectedEarningsBreakdown } from "../lib/earningsDisplay";
 import { reconcileLuloIncome } from "../lib/incomeHistory";
-import { buildWeeklyEarningsChart } from "../lib/weeklyEarningsChart";
+import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
 import { useDailyEarningsHighWater } from "../hooks/useDailyEarningsHighWater";
 import { buildSourceTotalsForDay } from "../lib/yieldIncomeSources";
-import { buildMonthlyDailyEarningsChart, buildYearlyEarningsChart, sumMonthlyChartSources, PASSIVE_MONTHLY_INCOME_KEY } from "../lib/monthlyEarningsChart";
+import { buildYearlyEarningsChart } from "../lib/monthlyEarningsChart";
 import { buildDailyEarningsChart } from "../lib/dailyEarningsChart";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { remoteStorage } from "@/lib/serverStore";
@@ -1327,124 +1327,45 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     mergeHighWaterSources,
   } = useDailyEarningsHighWater(todayKey, observedDailySourceTotals);
 
-  const serverDailyIncome =
-    useServerDailyIncome(todayKey, dailySourceTotals, mergeHighWaterSources);
-
-  const serverSources = serverDailyIncome?.date === todayKey
-    ? (serverDailyIncome?.sources || {})
-    : {};
-  const previouslyDisplayedTodayMax = (Array.isArray(
-    readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)?.[todayKey]
-  ) ? readObject(DAILY_EARNINGS_CHART_OBSERVATIONS_KEY)[todayKey] : [])
-    .reduce(
-      (highest, point) => Math.max(highest, Number(point?.value) || 0),
-      0
-    );
-  const {
-    displayDailySourceTotals,
-    todayBreakdown,
-    rawTodayEarnings,
-    todayEarnings,
-  } = buildTodayEarningsDisplay({
-    dailySourceTotals,
-    serverSources,
-    previouslyDisplayedTodayMax,
-    serverTotalUsd:
-      serverDailyIncome?.date === todayKey
-        ? serverDailyIncome?.totalUsd
-        : null,
-  });
-
-  // Charts and the daily panel MUST consume the same confirmed per-source
-  // high-water for today's Pacific day. Previously they recalculated from
-  // local extension snapshots while the panel used fresher server observations.
-  const chartSourceTotalsForDay = key => key === todayKey
-    ? displayDailySourceTotals : sourceTotalsForDay(key);
-  const monthlyChartData = buildMonthlyDailyEarningsChart({
-    todayKey,
-    sourceTotalsForDay: chartSourceTotalsForDay,
-    todaySources: displayDailySourceTotals,
-    todayTotal: todayEarnings,
-  });
-  const thisMonthEarned = monthlyChartData.reduce(
-    (sum, day) => sum + (Number(day.value) || 0), 0
-  );
-  const currentMonthSources = sumMonthlyChartSources(monthlyChartData);
-
+  // Legacy extension observations are ingested for recovery only; all
+  // financial values displayed on this page come from the backend ledger.
+  useServerDailyIncome(todayKey, dailySourceTotals, mergeHighWaterSources);
+  const { data: backendEarnings, error: backendEarningsError } =
+    useBackendEarningsDashboard(todayKey.slice(0, 7));
+  const hasServerToday = backendEarnings?.todayKey === todayKey;
+  const todayEarnings = hasServerToday ? backendEarnings.todayTotalUsd : null;
+  const displayDailySourceTotals = hasServerToday ? (backendEarnings.todaySources || {}) : {};
+  const todayBreakdown = Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
+    .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
+    .map(([name, amount]) => ({ name, amount: Number(amount) || 0 }))
+    .sort((a, b) => b.amount - a.amount);
+  const monthlyChartData = backendEarnings?.days || [];
+  const thisMonthEarned = backendEarnings?.monthTotalUsd ?? null;
+  const currentMonthSources = backendEarnings?.monthlySources || {};
+  const chartSourceTotalsForDay = key =>
+    backendEarnings?.days?.find(row => row.key === key)?.sources || {};
   const selectedBreakdown = buildSelectedEarningsBreakdown({
-    selection: selectedEarningsPoint,
-    earningsChartRange,
-    projectIncome: chartProjectIncome,
-    stockPayouts,
-    todayKey,
-    luloUtcDay: currentLuloUtc.utcDay,
-    hasLuloProjects: luloProjects.length > 0,
-    sourceTotalsForDay: chartSourceTotalsForDay,
-    currentMonthSources,
+    selection: selectedEarningsPoint, earningsChartRange,
+    projectIncome: chartProjectIncome, stockPayouts, todayKey,
+    luloUtcDay: currentLuloUtc.utcDay, hasLuloProjects: luloProjects.length > 0,
+    sourceTotalsForDay: chartSourceTotalsForDay, currentMonthSources,
   });
 
   const dailyEarningsObservations =
     useDailyEarningsObservations(todayEarnings, earningsClock, todayKey);
 
-  const {
-    weekDays,
-    weekEarnings,
-    observedWeekMaximum,
-    currentHour,
-  } = buildWeeklyEarningsChart({
-    todayKey,
-    luloUtcDay: currentLuloUtc.utcDay,
-    sourceTotalsForDay: chartSourceTotalsForDay,
-    earningsClock,
-  });
+  const weekDays = backendEarnings?.weekDays || [];
+  const weekEarnings = backendEarnings?.weeklyTotalUsd ?? null;
+  const observedWeekMaximum = Math.max(1, ...weekDays.map(day => Number(day.value) || 0));
+  const timeParts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(earningsClock));
+  const timePart = type => Number(timeParts.find(part => part.type === type)?.value || 0);
+  const currentHour = timePart("hour") + timePart("minute") / 60;
 
   const { dailyChartData, dailyChartMax, dailyChartMin, dailyChartEnd, dailyChartTicks } =
-    buildDailyEarningsChart(dailyEarningsObservations, todayKey, currentHour, todayEarnings);
-
-  // Publish the exact value displayed by Passive Income's "This Month"
-  // chart so the Crypto Dashboard uses the same figure rather than an
-  // independent monthly snapshot calculation.
-  // Send one reconciled daily/monthly earnings snapshot to the parent
-  // Dashboard. Its Income Today and Monthly Income cards must never pull
-  // incompatible totals from the legacy server balance-change ledger.
-  const yesterdayKeyForDashboard = new Date(
-    new Date(todayKey + "T12:00:00Z").getTime() - 86400000
-  ).toISOString().slice(0, 10);
-  const yesterdayForDashboard = monthlyChartData.find(day =>
-    day.key === yesterdayKeyForDashboard
-  );
-  const yesterdayAmountForDashboard = yesterdayForDashboard
-    ? Number(yesterdayForDashboard.value) || 0
-    : null;
-  // The plotted point is persisted so automated parity checks catch regressions.
-  const chartToday = monthlyChartData.find(day => day.key === todayKey)?.value ?? null;
-  useEffect(() => {
-    const month = todayKey.slice(0, 7);
-    const current = readObject(PASSIVE_MONTHLY_INCOME_KEY);
-    const next = {
-      month, amount: thisMonthEarned, day: todayKey,
-      today: todayEarnings, chartToday,
-      yesterdayDay: yesterdayKeyForDashboard,
-      yesterday: yesterdayAmountForDashboard,
-    };
-    onMonthlyEarningsChange?.(next);
-    if (
-      current?.month === month &&
-      current?.day === todayKey &&
-      Math.abs(Number(current.amount) - thisMonthEarned) < 0.000001 &&
-      Math.abs(Number(current.today) - todayEarnings) < 0.000001 &&
-      current?.chartToday === chartToday &&
-      current?.yesterdayDay === yesterdayKeyForDashboard &&
-      (current.yesterday ?? null) === yesterdayAmountForDashboard
-    ) return;
-    saveObject(PASSIVE_MONTHLY_INCOME_KEY, {
-      ...next, updatedAt: new Date().toISOString(),
-    });
-  }, [
-    todayKey, thisMonthEarned, todayEarnings, chartToday,
-    yesterdayKeyForDashboard, yesterdayAmountForDashboard,
-    onMonthlyEarningsChange,
-  ]);
+    buildDailyEarningsChart(dailyEarningsObservations, todayKey, currentHour, todayEarnings ?? 0);
 
   const monthlyChartMax = Math.max(
     0.1,
@@ -1965,7 +1886,7 @@ const summary =
             </Dialog>
           </div>
         )}
-        <span className="text-[11px] text-muted-foreground">{weekDays[0].date} – {weekDays[6].date} · Pacific Time</span>
+        <span className="text-[11px] text-muted-foreground">{weekDays[0]?.date || "—"} – {weekDays[6]?.date || "—"} · Pacific Time</span>
         </div>
       </header>
       <div className="grid items-stretch gap-2.5 lg:min-h-[clamp(350px,calc(100dvh-465px),640px)] lg:grid-cols-[minmax(0,1.8fr)_minmax(300px,1fr)]">
@@ -1973,7 +1894,7 @@ const summary =
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 className="text-[14px] font-semibold">Earnings {earningsChartRange === "monthly" ? "This Month" : earningsChartRange === "weekly" ? "This Week" : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}</h2>
-              <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400">{formatCurrency(earningsChartRange === "monthly" ? thisMonthEarned : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
+              <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400">{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthEarned : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-[#303842] bg-[#13181e] p-0.5" aria-label="Earnings chart period">
@@ -2112,6 +2033,7 @@ const summary =
         </section>
         <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
           <h2 className="text-[14px] font-semibold">Today's Earnings</h2>
+          {backendEarningsError && <p className="mt-1 text-[11px] text-amber-400">{backendEarningsError} — saved backend totals shown if available</p>}
 
           <div className="mt-3 flex flex-1 flex-col px-1">
             {todayBreakdown.length ? (
@@ -2132,7 +2054,7 @@ const summary =
 
                 <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs">
                   <span className="font-medium">Total</span>
-                  <span className="font-semibold tabular-nums">{formatCurrency(todayEarnings)}</span>
+                  <span className="font-semibold tabular-nums">{todayEarnings == null ? "—" : formatCurrency(todayEarnings)}</span>
                 </div>
               </div>
             ) : (
@@ -2194,7 +2116,7 @@ if (
 ) {
   return (
     <KryptexProjectCard
-      todayUsd={Number(dailySourceTotals["Kryptex"]) || 0}
+      todayUsd={Number(displayDailySourceTotals["Kryptex"]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
       key={
         item.key
@@ -2264,7 +2186,7 @@ if (
 
                   return (
                     <ProjectCard
-      todayUsd={Number(dailySourceTotals[project.platform]) || 0}
+      todayUsd={Number(displayDailySourceTotals[project.platform]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
@@ -2323,7 +2245,7 @@ if (
                 ) {
                   return (
                     <RollerCoinProjectCard
-      todayUsd={Number(dailySourceTotals["RollerCoin"]) || 0}
+      todayUsd={Number(displayDailySourceTotals["RollerCoin"]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
@@ -2405,7 +2327,7 @@ if (
                 ) {
                   return (
                     <SaladProjectCard
-      todayUsd={Number(dailySourceTotals["Salad"]) || 0}
+      todayUsd={Number(displayDailySourceTotals["Salad"]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
                       key={
                         item.key
@@ -2462,7 +2384,7 @@ if (
 
                 return (
                   <UnetworkProjectCard
-      todayUsd={Number(dailySourceTotals["Unetwork"]) || 0}
+      todayUsd={Number(displayDailySourceTotals["Unetwork"]) || 0}
       onDeactivate={() => deactivateProject(item.key)}
                     key={
                       item.key
