@@ -654,6 +654,7 @@ export default function FinancialsPage() {
   if (!live || !serverFinancial || !currentLedgerState.data ||
       !trialState.result) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <h1 className="text-2xl font-semibold">Financials</h1>
+    <FinancialsIntegrityPanel/>
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
       {liveError
         ? "Backend provider balances unavailable. Previous saved financial records remain untouched."
