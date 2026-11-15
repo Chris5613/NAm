@@ -3401,6 +3401,29 @@ Object.values(
 }
 
 
+function preserveConfirmedMonthlyProviders(liveMonth, savedMonth) {
+  // Monthly provider rows explicitly confirmed against backend dated receipts
+  // must survive a browser refresh built from a separate P/L approximation.
+  // Never add the two amounts: replace only the matching provider row.
+  const confirmed = (savedMonth?.platforms || []).filter(row =>
+    (row?.platform === "Loopscale" || row?.platform === "Lulo") &&
+    row?.basis === "user-confirmed-dated-receipts" &&
+    Number.isFinite(Number(row?.amount))
+  );
+  if (!confirmed.length) return liveMonth;
+  const combined = new Map((liveMonth?.platforms || []).map(row => [row.platform, row]));
+  for (const row of confirmed) combined.set(row.platform, row);
+  const platforms = [...combined.values()].sort((a, b) =>
+    Number(b.amount || 0) - Number(a.amount || 0));
+  return {
+    ...liveMonth,
+    platforms,
+    total: Math.round(platforms.reduce(
+      (sum, row) => sum + Number(row.amount || 0), 0) * 1e6) / 1e6,
+  };
+}
+
+
 function reconcileMonthlySnapshots(
   currentSnapshots,
   liveMonths
@@ -3475,10 +3498,13 @@ function reconcileMonthlySnapshots(
         month.monthKey ===
         currentMonthKey
       ) {
+        const confirmedMonth = preserveConfirmedMonthlyProviders(
+          month, next[month.monthKey]
+        );
         next[
           month.monthKey
         ] = {
-          ...month,
+          ...confirmedMonth,
           locked:
             false,
           lockedAt:
@@ -3561,7 +3587,7 @@ function getEffectiveProjectIncome(
         result.set(
           month.monthKey,
           {
-            ...month,
+            ...preserveConfirmedMonthlyProviders(month, saved),
             locked:
               false,
           }
