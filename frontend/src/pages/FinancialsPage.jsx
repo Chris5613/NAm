@@ -1,7 +1,7 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
-import { remoteStorage, subscribe } from "@/lib/serverStore";
+import { remoteStorage, subscribe, refreshSetting } from "@/lib/serverStore";
 import { preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
 import { financialLiveBalances as liveBalances } from "@/lib/financialAssetsSnapshot";
 import {
@@ -737,12 +737,25 @@ export default function FinancialsPage() {
     remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(updated));
     setJournal(updated);
   };
-  const reopenSelectedMonth = () => {
+  const reopenSelectedMonth = async () => {
     if (!closedMonths[month]) return;
-    const updated = {...closedMonths};
-    delete updated[month];
-    remoteStorage.setItem(MONTH_CLOSE_KEY, JSON.stringify(updated));
-    setClosedMonths(updated);
+    setQuickError("");
+    try {
+      const result = await api.post(
+        "/api/financial-core/reopen-month/" + encodeURIComponent(month), {});
+      if (result?.sourceOfCalculation !== "backend-explicit-financial-reopen" ||
+          result.month !== month || !result.closedMonths) {
+        throw Error("Unexpected response from Financials backend.");
+      }
+      setClosedMonths(result.closedMonths);
+      await refreshSetting(MONTH_CLOSE_KEY);
+      setQuickStatus("Financial month reopened on the backend.");
+    } catch (error) {
+      setQuickError(
+        "Could not complete the Financials reopen: " +
+        (error?.message || "Server unavailable.")
+      );
+    }
   };
   const editRowName = row => {
     const aliasKey=balanceAliasKey(row);
