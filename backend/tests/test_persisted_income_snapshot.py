@@ -49,6 +49,53 @@ class PersistedIncomeSnapshotTests(unittest.TestCase):
         self.assertEqual(row["sources"]["Other"], 1)
         self.assertEqual(result["missingOptionalSources"], [])
 
+    def test_current_provider_projection_fixes_stale_open_month_without_writes(self):
+        snapshots = {
+            "2026-10": {
+                "monthKey": "2026-10", "locked": True, "total": 25,
+                "platforms": [{"platform": "Kryptex", "amount": 25}],
+            },
+            "2026-11": {
+                "monthKey": "2026-11", "locked": False, "total": 10,
+                "platforms": [
+                    {"platform": "Kryptex", "amount": 8},
+                    {"platform": "Lulo", "amount": 2},
+                ],
+            },
+        }
+        original = copy.deepcopy(snapshots)
+        result = source_income_history(
+            snapshots, {}, [], {"monthly": {}}, "2026-11",
+            current_provider_months=[{
+                "monthKey": "2026-11",
+                "total": 11,
+                "platforms": [
+                    {"platform": "Kryptex", "amount": 11},
+                ],
+            }],
+        )
+        self.assertEqual([row["total"] for row in result["months"]],
+                         [25, 13])
+        self.assertEqual(result["months"][1]["sources"],
+                         {"Kryptex": 11, "Lulo": 2})
+        self.assertEqual(snapshots, original)
+
+    def test_current_earned_usd_can_decline_without_maximum_based_repricing(self):
+        snapshots = {
+            "2026-11": {"monthKey": "2026-11", "total": 15,
+                        "platforms": [{"platform": "Kryptex", "amount": 15}]},
+        }
+        result = source_income_history(
+            snapshots, {}, [], {}, "2026-11",
+            current_provider_months=[{
+                "monthKey": "2026-11",
+                "total": 12,
+                "platforms": [{"platform": "Kryptex", "amount": 12}],
+            }],
+        )
+        self.assertEqual(result["months"][0]["total"], 12)
+        self.assertEqual(snapshots["2026-11"]["total"], 15)
+
     def test_wallet_balance_is_never_recognized_as_earnings(self):
         result = source_income_history(
             {}, None, [{
