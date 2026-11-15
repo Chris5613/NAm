@@ -9,6 +9,7 @@
 
 import { resourceApi, settingsApi } from "./apiClient";
 import { projectChanges, rebaseProjects } from "./projectChanges";
+import { clearFinancialCache, invalidateFinancialCache } from "./financialFastCache";
 
 // Keys whose values are record collections with their own tables.
 const COLLECTION_RESOURCES = {
@@ -71,7 +72,27 @@ export function subscribe(listener) {
   return () => listeners.delete(listener);
 }
 
+const financialSourceKeys = new Set([
+  "financials_journal_v1",
+  "financials_month_closes_v1",
+  "financials_bank_openings_v1",
+  "financials_confirmed_movements_v1",
+  "financials_power_estimates_v1",
+  "financials_unetwork_business_phones_v1",
+  "financials_account_labels_v1",
+  "monthly_business_changes_v1",
+  "hardware_payback_devices_v1",
+  "project_income_kryptex_tracker_v1",
+  "project_income_salad_tracker_v1",
+  "project_income_rollercoin_tracker_v2",
+  "project_income_unetwork_tracker_v1",
+  "yield_monthly_snapshots_v1",
+  "yield_project_latest_balance_feed_v1",
+  "project_income_portfolio_summary_v1",
+]);
+
 function notify(key) {
+  if (financialSourceKeys.has(key)) invalidateFinancialCache();
   listeners.forEach((listener) => {
     try {
       listener(key);
@@ -330,6 +351,7 @@ export async function flushKey(key) {
 }
 
 export async function hydrate() {
+  clearFinancialCache();
   // A sign-out or newer hydration invalidates any earlier async response.
   const generation = ++storeGeneration;
   liveRefreshPromise = null;
@@ -368,6 +390,7 @@ export async function hydrate() {
 }
 
 export function resetStore() {
+  clearFinancialCache();
   storeGeneration += 1;
   liveRefreshPromise = null;
   savedProjects = [];
