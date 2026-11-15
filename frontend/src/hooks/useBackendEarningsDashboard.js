@@ -5,7 +5,7 @@ import { api } from "@/lib/apiClient";
 export function useBackendEarningsDashboard(month) {
   const [state, setState] = useState({ month: null, data: null, error: null });
   useEffect(() => {
-    if (!/^\\d{4}-\\d{2}$/.test(String(month))) return;
+    if (!/^\d{4}-\d{2}$/.test(String(month))) return;
     let active = true;
     const refresh = async () => {
       try {

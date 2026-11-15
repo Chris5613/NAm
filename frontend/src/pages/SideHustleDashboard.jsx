@@ -13,6 +13,7 @@ import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
+import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { PASSIVE_MONTHLY_INCOME_KEY } from "@/lib/monthlyEarningsChart";
 import { useBackendMonthlyIncome } from "@/hooks/useBackendMonthlyIncome";
 import { mergeBackendLoopscaleHistory } from "@/lib/mergeBackendLoopscaleHistory";
@@ -512,7 +513,7 @@ export default function SideHustleDashboard() {
   const [serverTodayIncome, setServerTodayIncome] = useState(null);
   const [serverTodaySources, setServerTodaySources] = useState(null);
   const [recordedHistory, setRecordedHistory] = useState(readRecordedHistory);
-  const [publishedPassiveMonth, setPublishedPassiveMonth] = useState(()=>readObject(PASSIVE_MONTHLY_INCOME_KEY));
+  // All income cards read the same backend-owned server projection.
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
   const [addModal, setAddModal] = useState(null);
@@ -622,7 +623,6 @@ export default function SideHustleDashboard() {
     setIncome(readIncomeData());
     setRecordedHistory(current => ({ ...readRecordedHistory(), manualIncome: current.manualIncome, luloBackfills: current.luloBackfills }));
     setHardware(readHardware());
-    setPublishedPassiveMonth(readObject(PASSIVE_MONTHLY_INCOME_KEY));
     refreshIncomeMetrics();
   }), [refreshIncomeMetrics]);
   useEffect(() => {
@@ -638,57 +638,19 @@ export default function SideHustleDashboard() {
     };
   }, [refreshPower, refreshIncomeMetrics]);
 
-  // A single mounted Passive Income chart publishes the current MTD number.
-  // Keeping the source mounted also avoids a stale monthly value on the
-  // Dashboard when users have not opened the Passive Income tab yet.
-  const receivePassiveMonthlyIncome=useCallback(next=>{
-    if(!next || !/^\d{4}-\d{2}$/.test(String(next.month)) ||
-       !Number.isFinite(Number(next.amount))) return;
-    const normalized = {
-      month: next.month,
-      amount: Number(next.amount),
-      day: next.day,
-      today: Number.isFinite(Number(next.today)) ? Number(next.today) : null,
-      yesterdayDay: next.yesterdayDay,
-      yesterday: next.yesterday == null ? null : Number(next.yesterday),
-    };
-    setPublishedPassiveMonth(previous =>
-      previous?.month === normalized.month &&
-      previous?.day === normalized.day &&
-      Math.abs(Number(previous.amount) - normalized.amount) < 0.000001 &&
-      previous?.today === normalized.today &&
-      previous?.yesterdayDay === normalized.yesterdayDay &&
-      previous?.yesterday === normalized.yesterday
-        ? previous : normalized
-    );
-  },[]);
-
+  // Financial summary values are NEVER calculated from browser cache.
   const currentMonthKey = getCurrentMonthKey();
-  const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) || { monthKey: currentMonthKey, total: 0, platforms: [] };
+  const { data: backendEarnings } = useBackendEarningsDashboard(currentMonthKey);
+  const currentMonth = income.months.find(row => row.monthKey === currentMonthKey) ||
+    { monthKey: currentMonthKey, total: 0, platforms: [] };
   const recordedCurrentMonth = recordedMonths.find(row => row.monthKey === currentMonthKey);
-  const chartTotal=publishedPassiveMonth?.month===currentMonthKey &&
-    Number.isFinite(Number(publishedPassiveMonth.amount))
-      ? Math.max(0,Number(publishedPassiveMonth.amount)) : null;
-  const monthlyIncome=chartTotal;
+  const monthlyIncome = backendEarnings?.monthTotalUsd ?? null;
   const recentMonths = recordedMonths.slice(-12);
-  const dailyRows = Array.isArray(income.dailyHistory) ? income.dailyHistory : [];
   const todayKey = pacificDayKey(clock);
-  const localTodayIncome = Number(dailyRows.find(row => row.date === todayKey)?.income) || 0;
-  const passiveIncomeToday = publishedPassiveMonth?.day === todayKey &&
-    publishedPassiveMonth?.today != null &&
-    Number.isFinite(Number(publishedPassiveMonth.today))
-      ? Math.max(0, Number(publishedPassiveMonth.today))
-      : Number.isFinite(Number(serverTodayIncome))
-        ? Math.max(0, Number(serverTodayIncome))
-        : Math.max(0, localTodayIncome);
-  const yesterdayDate = new Date(new Date(`${todayKey}T12:00:00Z`).getTime() - 86400000);
-  const yesterdayKey = yesterdayDate.toISOString().slice(0, 10);
-  const yesterdayIncome = publishedPassiveMonth?.yesterdayDay === yesterdayKey &&
-    publishedPassiveMonth.yesterday != null &&
-    Number.isFinite(Number(publishedPassiveMonth.yesterday))
-      ? Math.max(0, Number(publishedPassiveMonth.yesterday))
-      : null;
-  const todayVsYesterday = yesterdayIncome !== null && yesterdayIncome > 0
+  const passiveIncomeToday = backendEarnings?.todayKey === todayKey
+    ? backendEarnings.todayTotalUsd ?? null : null;
+  const yesterdayIncome = backendEarnings?.yesterdayTotalUsd ?? null;
+  const todayVsYesterday = passiveIncomeToday !== null && yesterdayIncome !== null && yesterdayIncome > 0
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
     : null;
   const previousMonth = recentMonths.length > 1 ? recentMonths[recentMonths.length - 2] : null;
@@ -890,7 +852,7 @@ export default function SideHustleDashboard() {
       <KpiCard
         icon={Coins}
         title="Income Today"
-        value={money(passiveIncomeToday)}
+        value={passiveIncomeToday == null ? "—" : money(passiveIncomeToday)}
         detail={todayVsYesterday == null ? "Actual earnings today" : `${todayVsYesterday >= 0 ? "▲" : "▼"} ${Math.abs(todayVsYesterday).toFixed(1)}% vs. yesterday`}
         tone="emerald"
         valueClass="text-emerald-400"
@@ -1174,7 +1136,7 @@ export default function SideHustleDashboard() {
     </div>
     </> : null}
     <div className={activeView==="passive" ? "pt-1" : "hidden"}>
-      <YieldFarmingPage onMonthlyEarningsChange={receivePassiveMonthlyIncome}/>
+      <YieldFarmingPage/>
     </div>
     {addModal && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4"
