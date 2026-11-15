@@ -186,6 +186,33 @@ def audit_integration_settings(values, now=None):
             "All present extension-provider holdings use backend tracker values.",
             unverifiedProviders=not_server_owned)
 
+    # A legacy browser cache can simultaneously contain two BTC market
+    # prices for the same coins. This is price provenance drift, NOT newly
+    # mined income or a transfer. Never alter saved balances to hide it.
+    legacy_crypto = as_object(values.get("networth_crypto_cache"))
+    legacy_portfolio = as_object(legacy_crypto.get("projectPortfolio"))
+    portfolio_btc = as_object(legacy_portfolio.get("bitcoin"))
+    btc_quote = safe_number(portfolio_btc.get("price"))
+    chain_prices = [
+        safe_number(as_object(token).get("price"))
+        for chain in (legacy_crypto.get("chains") or [])
+        if isinstance(chain, dict) and str(chain.get("chain") or "").lower() == "bitcoin"
+        for token in (chain.get("tokens") or [])
+        if isinstance(token, dict) and str(token.get("symbol") or "").upper() == "BTC"
+    ]
+    chain_prices = [p for p in chain_prices if p is not None and p > 0]
+    if btc_quote is not None and btc_quote > 0 and chain_prices:
+        biggest_gap = max(abs(p - btc_quote) for p in chain_prices)
+        add("bitcoin_legacy_quote_drift",
+            "warning" if biggest_gap > max(100.0, btc_quote * 0.01) else "pass",
+            "Legacy wallet and chain cache contain different BTC quotes; "
+            "use backend /bitcoin-valuation for one market quote."
+            if biggest_gap > max(100.0, btc_quote * 0.01) else
+            "Legacy Bitcoin quotations agree within display tolerance.",
+            walletQuoteUsd=round(btc_quote, 2),
+            chainQuoteUsd=round(chain_prices[0], 2),
+            maxPriceGapUsd=round(biggest_gap, 2))
+
     published = as_object(values.get("passive_income_monthly_chart_total_v1"))
     published_month = str(published.get("month") or "")
     published_amount = safe_number(published.get("amount"))

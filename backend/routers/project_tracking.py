@@ -337,6 +337,7 @@ async def project_integration_audit(
         "hardware_payback_devices_v1",
         "yield_project_latest_balance_feed_v1",
         "project_income_portfolio_summary_v1",
+        "networth_crypto_cache",
         "passive_income_monthly_chart_total_v1",
         "kryptex_recovery_verified_2026_11_01_06_v1",
     )
