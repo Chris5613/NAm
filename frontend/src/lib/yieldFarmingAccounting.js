@@ -2652,7 +2652,7 @@ function saveKryptexTracker(value) {
   next.kryptexMiningSatsDaily = { ...savedSats };
   for (const [day, raw] of Object.entries(newSats)) {
     const amount = Number(raw);
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day) || !Number.isFinite(amount) || amount < 0) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(amount) || amount < 0) continue;
     next.kryptexMiningSatsDaily[day] = Math.max(
       Number(savedSats[day]) || 0, amount
     );
@@ -2660,13 +2660,13 @@ function saveKryptexTracker(value) {
   const priorDaily = saved.kryptexMiningDaily || {};
   const submittedDaily = value?.kryptexMiningDaily || {};
   next.kryptexMiningDaily = { ...priorDaily };
-  next.kryptexConfirmedDays = {
-    ...(saved.kryptexConfirmedDays || {}),
-    ...(value?.kryptexConfirmedDays || {}),
-  };
+  next.kryptexConfirmedDays = { ...(saved.kryptexConfirmedDays || {}) };
+  for (const [day, yes] of Object.entries(value?.kryptexConfirmedDays || {})) {
+    if (yes === true) next.kryptexConfirmedDays[day] = true;
+  }
   for (const [day, raw] of Object.entries(submittedDaily)) {
     const amount = Number(raw);
-    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day) || !Number.isFinite(amount) || amount < 0) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(amount) || amount < 0) continue;
     if (!next.kryptexConfirmedDays[day]) continue;
     next.kryptexMiningDaily[day] = Math.max(Number(priorDaily[day]) || 0, amount);
   }
