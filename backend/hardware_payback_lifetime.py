@@ -12,6 +12,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_CEILING
 from .earnings_dashboard import provider_entries
 from .hardware_credit_audit import normalize_source, sources_for
 from .power_cost import is_free_month
+from .hardware_source_segments import checked_segments, sources_on_day, InvalidSourceSegments
 
 CENT = Decimal("0.01")
 EIGHT = Decimal("0.00000001")
@@ -203,6 +204,11 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key,
         carried = decimal_or_none(saved_checkpoint.get("carried"))
         cost = decimal_or_none(device.get("cost"))
         reasons = []
+        segments = None
+        try:
+            segments = checked_segments(device)
+        except InvalidSourceSegments:
+            reasons.append("invalid-dated-source-assignments")
         if start is None or not selected:
             reasons.append("missing-explicit-start-or-sources")
         if start and acquired and start < acquired:
@@ -234,8 +240,12 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key,
         missing = []
         unknown = []
         for day in days_in_range(start, now_day):
+            daily_selected = sources_on_day(segments, day, selected)
+            if daily_selected is None:
+                missing.append((day, "source-assignment-gap"))
+                continue
             values = day_sources(day)
-            for source in selected:
+            for source in daily_selected:
                 entry = values.get(source)
                 if entry is None:
                     missing.append((day, source))
@@ -258,7 +268,7 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key,
             start_month = start.replace(day=1)
             for day in days_in_range(start_month, start-timedelta(days=1)) if start > start_month else []:
                 values = day_sources(day)
-                for source in selected:
+                for source in (segments[0]["sources"] if segments else selected):
                     entry = values.get(source)
                     if entry and entry["trusted"]:
                         pre_start_confirmed += entry["usd"]
@@ -296,6 +306,10 @@ def build_lifetime_hardware_payback(devices, records, trackers, today_key,
             "confirmedBeforeEarningsStartUsd": numeric(pre_start_confirmed),
             "checkpointBaselineUnderstatesPriorRewards": baseline_understates_prior,
             "checkpointAppliedToRevenue": False,
+            "datedSourceSegmentsApplied": segments is not None,
+            "sourceSwitchEffectiveDay": (
+                segments[-1]["start"].isoformat()
+                if segments is not None and len(segments) > 1 else None),
             "paidMiningPowerUsd": 0.0,
             "powerPolicy": "free-mining-electricity-from-2026-11",
         })
