@@ -15,6 +15,7 @@ from ..input_validation import iso_day, money_decimal
 from ..db import get_db
 from ..models import SpendingAccount, SpendingTransaction, User
 from ..schemas import spending_account_to_dict, spending_transaction_to_dict
+from ..spending_analytics import spending_analytics
 
 router = APIRouter(prefix="/api/spending", tags=["spending"])
 
@@ -111,6 +112,39 @@ class SpendingBudgetInput(BaseModel):
             return money_decimal(value, "budget")
         except HTTPException as error:
             raise ValueError(str(error.detail)) from error
+
+
+class SpendingAnalyticsRequest(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    selectedMonth: str
+    range: str = "month"
+    today: str
+    elapsedDays: int
+    passiveMonths: list[dict] = []
+
+
+@router.post("/analytics/preview")
+async def analytics_preview(
+    payload: SpendingAnalyticsRequest,
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """One source-owned read-only calculation over user-scoped transaction rows."""
+    rows = db.scalars(select(SpendingTransaction).where(
+        SpendingTransaction.user_id == user.id,
+        SpendingTransaction.hidden.is_(False),
+    )).all()
+    if len(rows) > 50000 or len(payload.passiveMonths) > 2000:
+        raise HTTPException(422, "Spending analytics data exceeds review limits.")
+    try:
+        return spending_analytics(
+            [spending_transaction_to_dict(row) for row in rows],
+            payload.passiveMonths, payload.selectedMonth,
+            payload.range, payload.today, payload.elapsedDays,
+        )
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error
 
 
 @router.get("/accounts")
