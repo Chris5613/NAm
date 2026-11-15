@@ -89,6 +89,25 @@ class HardwareCheckpointPreviewTests(unittest.TestCase):
         self.assertIsNone(result["devices"][0]["earningsStartDay"])
         self.assertEqual(result["devices"][0]["checkpoint"], saved[0]["checkpoint"])
 
+    def test_legacy_missing_start_allows_cosmetic_edit_only(self):
+        saved = hardware()
+        saved[0]["earningsStartDay"] = None
+        proposed = copy.deepcopy(saved)
+        proposed[0]["name"] = "Renamed legacy RTX 2080"
+        result = preview(saved, copy.deepcopy(saved), proposed)
+        self.assertIsNone(result["devices"][0]["earningsStartDay"])
+        self.assertEqual(result["devices"][0]["checkpoint"], saved[0]["checkpoint"])
+        proposed[0]["sources"] = ["Salad"]
+        with self.assertRaisesRegex(HardwareEditConflict, "source-segment"):
+            preview(saved, copy.deepcopy(saved), proposed)
+
+    def test_source_order_change_does_not_rewrite_checkpoint(self):
+        saved = hardware()
+        proposed = copy.deepcopy(saved)
+        proposed[1]["sources"] = ["Salad", "Kryptex"]
+        result = preview(saved, copy.deepcopy(saved), proposed)
+        self.assertEqual(result["devices"][1]["checkpoint"], saved[1]["checkpoint"])
+
     def test_invalid_new_hardware_and_duplicate_ids_rejected(self):
         saved = hardware()
         repeated = copy.deepcopy(saved) + [copy.deepcopy(saved[0])]
