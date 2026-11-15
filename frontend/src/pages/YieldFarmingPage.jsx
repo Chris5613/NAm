@@ -319,9 +319,12 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
           const response =
             await projectsApi.getAll();
 
-          applyProjectData(
-            response?.data
-          );
+          // A malformed response is not an empty portfolio. Preserve the
+          // last valid server snapshot instead of clearing project cards.
+          if (!Array.isArray(response?.data)) {
+            throw new Error("Invalid project refresh response");
+          }
+          applyProjectData(response.data);
         } catch (
           error
         ) {
