@@ -295,6 +295,59 @@ def build_statement_rows(base_rows, ledger_entries, cash_opening=None,
     return rows
 
 
+def project_automatic_expenses(month, base_rows, ledger_entries,
+                               auto_power=0, min_month="2026-09"):
+    """Generate read-only depreciation and documented electricity estimates.
+
+    No direct financial posting. Existing manual depreciation is netted out;
+    recorded provider balances are not credited again for revenue.
+    """
+    if not isinstance(month, str) or not re.fullmatch(
+        r"\d{4}-(0[1-9]|1[0-2])", month,
+    ):
+        raise ValueError("Invalid reporting month")
+    scheduled = cents(sum(number(row.get("depreciation"))
+                          for row in entries_list(base_rows)
+                          if isinstance(row, dict) and
+                          row.get("category") == "equipment"))
+    manual = cents(activity(ledger_entries, "depreciation"))
+    adjustment = max(0, cents(scheduled - manual))
+    nominal_power = max(0, cents(auto_power))
+    entries = []
+    if month >= min_month and adjustment > 0:
+        entries.append({
+            "id": "auto-depreciation:" + month,
+            "date": month + "-28",
+            "description": "Monthly equipment depreciation",
+            "lines": [
+                {"account": "depreciation", "debit": adjustment, "credit": 0},
+                {"account": "accDep", "debit": 0, "credit": adjustment},
+            ],
+            "automatic": True,
+        })
+    if month >= min_month and nominal_power > 0:
+        entries.append({
+            "id": "auto-power-estimate:" + month,
+            "date": month + "-28",
+            "description": "Estimated mining electricity — not a confirmed payment",
+            "lines": [
+                {"account": "electric", "debit": nominal_power, "credit": 0},
+                {"account": "payable", "debit": 0, "credit": nominal_power},
+            ],
+            "automatic": True,
+            "estimated": True,
+        })
+    return {
+        "sourceOfCalculation": "backend-financial-core",
+        "month": month,
+        "scheduledDepreciationUsd": scheduled,
+        "manualDepreciationUsd": manual,
+        "autoDepreciationUsd": adjustment if month >= min_month else 0,
+        "powerEstimateUsd": nominal_power if month >= min_month else 0,
+        "entries": entries,
+    }
+
+
 def evaluate_statement(data):
     """Read-only calculation of a complete supplied ledger. No persistence."""
     ledger = entries_list(data.get("entries"))
