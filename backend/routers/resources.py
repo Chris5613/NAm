@@ -18,6 +18,8 @@ from ..models import NetWorthSnapshot, Setting, User, Project, Asset, Wallet
 from ..project_writes import plan_project_changes, ProjectConflict
 from ..server_owned_settings import is_server_owned_setting
 from ..kryptex_setting_guard import merge_legacy_kryptex_setting
+from ..monthly_snapshot_guard import guard_monthly_snapshots
+from ..provider_monthly_income import monthly_provider_income
 from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_profile
 from ..networth_reconciliation import home_reconciliation_preview
 from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
@@ -273,9 +275,12 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
         raise HTTPException(403, "Server-owned accounting settings are read-only.")
     if not all(field in payload for field in ("before", "after")):
         raise HTTPException(422, "Expected before and after values.")
-    if key == "project_income_kryptex_tracker_v1":
-        # Serialize legacy browser settings writes with the canonical multi-PC
-        # handler, which also locks this account's User row.
+    if key in ("project_income_kryptex_tracker_v1",
+               "yield_monthly_snapshots_v1"):
+        # Snapshot reconciliation also reads the Kryptex provider tracker.
+        # Share its account row lock so a fresh mining reward is never
+        # partially observed during this accounting projection.
+        # Existing per-setting advisory locks remain in force.
         db.scalar(select(User).where(User.id == user.id).with_for_update())
     lock_setting_key(db, user.id, key)
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
@@ -285,6 +290,26 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
     after = payload["after"]
     if key == "project_income_kryptex_tracker_v1":
         after = merge_legacy_kryptex_setting(current, after)
+    elif key == "yield_monthly_snapshots_v1":
+        provider_keys = {
+            "kryptex": "project_income_kryptex_tracker_v1",
+            "salad": "project_income_salad_tracker_v1",
+            "rollercoin": "project_income_rollercoin_tracker_v2",
+            "unetwork": "project_income_unetwork_tracker_v1",
+        }
+        tracker_rows = db.scalars(select(Setting).where(
+            Setting.user_id == user.id,
+            Setting.key.in_(tuple(provider_keys.values()))
+        )).all()
+        by_key = {item.key: item.value for item in tracker_rows}
+        trackers = {
+            name: by_key.get(setting_key) or {}
+            for name, setting_key in provider_keys.items()
+        }
+        month = datetime.now(timezone.utc).astimezone(
+            ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+        authoritative = monthly_provider_income(trackers, month)
+        after = guard_monthly_snapshots(current, after, authoritative, month)
     if current != after:
         if row:
             row.value = after
