@@ -19,14 +19,25 @@ explicitly authorizes changes to them.
   lifetime snapshots and remains distinct from the user-confirmed receipt.
 - [x] The backend identifies the receipts by their distinct evidence
   provenance and does not post a second business revenue entry.
+- [x] **Device-scoped provider coverage** now checks only the Salad earning
+  days beginning with each device's actual saved start date, honoring
+  validated dated source switches. The RTX 5080 began **November 13**:
+  November 13 is user-attested and November 14 has provider lifetime
+  evidence. Both completed days are covered as of November 15; the
+  incomplete November 15 is explicitly excluded from certification.
+  `backend/salad_device_day_coverage.py` exposes the coverage in
+  `/api/project-tracking/cross-page-integrity` and dedicated tests.
+  This does **not** certify older unassociated Salad income history.
 - [ ] Provider-grade daily evidence **before November 13**: available saved
   lifetime snapshots begin too late to prove those prior daily increments.
   Do not synthesize exact earlier earnings from month-level balances.
 - [ ] The current/incomplete Pacific day cannot be certified before a complete
   closing observation is available. Monitor further snapshots after day-end.
 
-**Status:** Completed-day RTX 5080 coverage through November 14 is accounted
-for; pre-November-13 history remains an evidence limitation.
+**Status:** Device-eligible completed-day RTX 5080 recovery through
+November 14 has sufficient evidence, checked automatically by the backend;
+pre-November-13 **general Salad income history**, and any future completed
+day lacking closeout evidence, remain separate unresolved limitations.
 
 ## 2. Hardware Payback calculation and cash basis
 
