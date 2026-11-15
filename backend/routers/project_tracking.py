@@ -770,7 +770,7 @@ async def evaluate_financial_trial_balance(
     if len(str(payload)) > 1_250_000:
         raise HTTPException(status_code=413, detail="Trial balance input too large")
     try:
-        return trial_balance(payload.get("entries"), payload.get("accounts"))
+        return trial_balance(payload.get("accounts"), payload.get("entries"))
     except (ValueError, TypeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
