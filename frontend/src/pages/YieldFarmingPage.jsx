@@ -4,7 +4,6 @@ import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
 import { buildSelectedEarningsBreakdown } from "../lib/earningsDisplay";
-import { reconcileLuloIncome } from "../lib/incomeHistory";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
@@ -1317,20 +1316,10 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const sourceTotalsForDay = key =>
     buildSourceTotalsForDay(key, sourceTotalsContext);
 
-  // Keep the yearly chart, its month breakdown popup, and the history table
-  // on the same Lulo month totals. Monthly snapshots can lag or omit Lulo
-  // while confirmed dated Lulo performance rows are already available.
-  const chartProjectIncome = useMemo(
-    () => reconcileLuloIncome(
-      projectIncome,
-      monthlyBackfills,
-      {},
-      todayKey.slice(0, 7),
-      luloProjects,
-      todayKey
-    ),
-    [projectIncome, monthlyBackfills, luloProjects, todayKey]
-  );
+  // All chart and history surfaces use the same booked monthly ledger.
+  // The retired browser-side Lulo reconciliation must not be reapplied:
+  // it can duplicate the provider's already-booked monthly rewards.
+  const chartProjectIncome = projectIncome;
 
   // Today's Earnings is a cumulative earned-income counter, not mark-to-market
   // P/L. Persist per-source high-water values in a dedicated hook.
