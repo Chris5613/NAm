@@ -84,11 +84,35 @@ class OpenMonthlyReconciliationTests(unittest.TestCase):
         self.assertEqual(self.run_reconcile(), 0)
         self.assertEqual(self.stored("yield_monthly_snapshots_v1"), fixed)
 
-    def test_no_browser_snapshot_is_not_invented(self):
+    def test_month_created_from_confirmed_rewards_even_without_browser(self):
         self.seed("project_income_kryptex_tracker_v1",
                   {"monthlyEarnings": {self.month: 20}})
+        self.assertEqual(self.run_reconcile(), 1)
+        stored = self.stored("yield_monthly_snapshots_v1")
+        self.assertEqual(stored[self.month]["total"], 20)
+        self.assertEqual(stored[self.month]["platforms"],
+                         [{"platform": "Kryptex", "amount": 20}])
+        self.assertEqual(self.run_reconcile(), 0)
+
+    def test_wallet_balance_alone_cannot_become_monthly_income(self):
+        self.seed("project_income_salad_tracker_v1",
+                  {"currentBalance": 500})
         self.assertEqual(self.run_reconcile(), 0)
         self.assertIsNone(self.stored("yield_monthly_snapshots_v1"))
+
+    def test_expired_snapshot_is_locked_without_changing_amounts(self):
+        historical = {"2026-10": {"monthKey": "2026-10",
+                                  "total": 13.5,
+                                  "platforms": [{"platform": "Kryptex",
+                                                 "amount": 13.5}],
+                                  "locked": False}}
+        self.seed("yield_monthly_snapshots_v1", historical)
+        self.assertEqual(self.run_reconcile(), 1)
+        stored = self.stored("yield_monthly_snapshots_v1")
+        self.assertEqual(stored["2026-10"]["total"], 13.5)
+        self.assertTrue(stored["2026-10"]["locked"])
+        self.assertIsNotNone(stored["2026-10"]["lockedAt"])
+        self.assertEqual(self.run_reconcile(), 0)
 
     def test_locked_current_month_cannot_be_rewritten(self):
         self.seed("project_income_kryptex_tracker_v1",
