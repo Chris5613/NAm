@@ -1,10 +1,8 @@
-import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, ChartNoAxesCombined, Coins, Cpu, Home, Layers3, Plus, Target, Zap, X } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { useBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
-import { recordedDailyProviderIncome } from "@/lib/recordedDailyProviderIncome";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
@@ -15,6 +13,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { readCryptoDashboardPowerCache, writeCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
 import { extractBackendKryptexRunRate, projectedDailyMiningNet } from "@/lib/backendKryptexRunRate";
 import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
+import { previewHardwareCheckpointEdit } from "@/lib/backendHardwareCheckpointEdit";
 
 
 
@@ -63,17 +62,6 @@ function readHardware() {
   } catch {
     return [];
   }
-}
-
-function readPaybackTrackers() {
-  // These trackers are used only to preserve legacy device checkpoints while
-  // editing hardware. Displayed recovery is calculated by the backend.
-  return {
-    kryptex: loadKryptexTracker(),
-    salad: loadSaladTracker(),
-    unetwork: loadUnetworkTracker(),
-    rollercoin: loadRollerCoinTracker(),
-  };
 }
 
 function readIncomeData() {
@@ -164,7 +152,6 @@ function readIncomeData() {
   };
 }
 
-const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
 
 function canonicalSourceName(source) {
   const value = String(source || "").trim().replace(/\s+/g, " ");
@@ -183,120 +170,6 @@ function pacificDayKey(time) {
     timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
   }).formatToParts(new Date(time)).map(part => [part.type, part.value]));
   return `${parts.year}-${parts.month}-${parts.day}`;
-}
-
-function monthPosition(time) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).formatToParts(new Date(time)).map(part => [part.type, Number(part.value)]));
-  const days = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
-  return parts.year * 12 + parts.month - 1 +
-    (parts.day - 1 + (parts.hour + parts.minute / 60 + parts.second / 3600) / 24) / days;
-}
-
-function confirmedKryptexIncomeByMonth(tracker, startMonth, endMonth) {
-  return Object.entries(tracker?.kryptexMiningDaily || {}).reduce((sum, [day, value]) => {
-    const month = day.slice(0, 7);
-    return month >= startMonth && month <= endMonth && tracker?.kryptexConfirmedDays?.[day]
-      ? sum + Math.max(0, Number(value) || 0)
-      : sum;
-  }, 0);
-}
-
-// Use exactly the same recorded daily values that power Top Projects.
-// Count every selected source independently from the inclusive start date.
-function datedSourceIncome(source, firstDay, lastDay, history) {
-  if(!/^\d{4}-\d{2}-\d{2}$/.test(firstDay) || firstDay>lastDay) return 0;
-  const start=new Date(firstDay+"T12:00:00Z");
-  const end=new Date(lastDay+"T12:00:00Z");
-  let total=0,found=false;
-  for(let day=start.getTime();day<=end.getTime();day+=86400000){
-    const dayKey=new Date(day).toISOString().slice(0,10);
-    const local=recordedDailyProviderIncome(source,dayKey,history);
-    const server=history.serverDaily?.date===dayKey
-      ? Object.entries(history.serverDaily.sources || {}).reduce((maximum,[name,value])=>{
-          if(canonicalSourceName(name).toLowerCase()!==canonicalSourceName(source).toLowerCase())
-            return maximum;
-          const n=Number(value);
-          return Number.isFinite(n) ? Math.max(maximum ?? 0,Math.max(0,n)) : maximum;
-        },null)
-      : null;
-    // Today's Earnings uses a server-side per-source high-water counter.
-    // Prefer its up-to-date recorded amount when local tracker sync lags.
-    const amount=server===null ? local : local===null ? server : Math.max(server,local);
-    if(amount!==null){total+=amount;found=true;}
-  }
-  return found ? total : null;
-}
-
-function hardwareEarningsByDevice(devices, currentMonth, tracker, now = Date.now(), incomeMonths = [], dailyTrackers = {}) {
-  const incomeFor = (source, start, finish) => source==="Kryptex"
-    ? confirmedKryptexIncomeByMonth(tracker,start,finish)
-    : incomeMonths.reduce((sum,row)=>row.monthKey>=start && row.monthKey<=finish
-        ? sum+Object.entries(row.sources || {}).reduce((total,[name,amount])=>
-            total+(canonicalSourceName(name)===source ? Math.max(0,Number(amount)||0):0),0)
-        : sum,0);
-  return Object.fromEntries(devices.map(device=>{
-    const sources=hardwareSources(device),checkpoint=device.checkpoint;
-    if(!checkpoint || !sources.length) return [device.id,0];
-    // Each card tracks the complete chosen source earnings; cost is solely its own payback target.
-    const singleKryptex=sources.length===1 && sources[0]==="Kryptex";
-    // RTX 2080 card is a direct view of the source's month-to-date earnings.
-    // It deliberately does not split Kryptex earnings with the RTX 5080.
-    // It changes payback display only, never the provider income ledger.
-    if(/\brtx\s*2080\b/i.test(String(device.name || "")) &&
-       singleKryptex && device.earningsStartDay === currentMonth+"-01"){
-      const monthRow=incomeMonths.find(row=>row.monthKey===currentMonth);
-      const reconciled=Object.entries(monthRow?.sources || {}).reduce((total,[name,amount])=>
-        canonicalSourceName(name).toLowerCase()==="kryptex"
-          ? total+Math.max(0,Number(amount)||0) : total,0);
-      const tracked=Math.max(0,Number(tracker?.monthlyEarnings?.[currentMonth])||0);
-      const confirmed=confirmedKryptexIncomeByMonth(tracker,currentMonth,currentMonth);
-      return [device.id,Math.max(0,reconciled,tracked,confirmed)];
-    }
-
-    // Count the full daily earnings of each selected source beginning on
-    // the inclusive start date. These figures are hardware tracking views.
-    const chosenStart=/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(String(device.earningsStartDay || ""))
-      ? device.earningsStartDay : null;
-    if(chosenStart){
-      const lastDay=pacificDayKey(now);
-      if(chosenStart>lastDay) return [device.id,0];
-      const history={...dailyTrackers,kryptex:tracker};
-      const dated=sources.map(source=>datedSourceIncome(source,chosenStart,lastDay,history));
-      // Missing daily observations for one provider must not suppress
-      // available income from another selected provider.
-      if(dated.some(amount=>amount!==null)){
-        // Full Kryptex + full Salad + any other selected source; no cost split.
-        return [device.id,Math.max(0,dated.reduce((sum,amount)=>sum+(amount ?? 0),0))];
-      }
-    }
-    // The Dashboard's Kryptex amount displays current-month mining income,
-    // not earnings since the last hardware checkpoint. Prefer the reconciled
-    // monthly income that also powers the General Ledger; fall back to
-    // confirmed daily tracker earnings if monthly reporting is unavailable.
-    // The full provider month total is shown regardless of other hardware.
-    if(singleKryptex){
-      const reported=incomeMonths.find(row=>row.monthKey===currentMonth);
-      const reconciled=Object.entries(reported?.sources || {})
-        .filter(([name])=>canonicalSourceName(name).toLowerCase()==="kryptex")
-        .reduce((sum,[,amount])=>sum+Math.max(0,Number(amount)||0),0);
-      const confirmed=confirmedKryptexIncomeByMonth(tracker,currentMonth,currentMonth);
-      const trackedMonthly=Math.max(0,Number(tracker?.monthlyEarnings?.[currentMonth])||0);
-      // The monthly earnings ledger can lead the older confirmed-day cache.
-      // Use the highest verified month-to-date figure instead of displaying
-      // a smaller checkpoint/day subtotal such as $6.73.
-      const monthToDate=Math.max(reconciled,confirmed,trackedMonthly);
-      return [device.id,Math.max(0,monthToDate)];
-    }
-    const powerStart=device.powerStartTime || checkpoint.time;
-    const power=Math.max(0,monthPosition(now)-monthPosition(powerStart))*(Number(device.power)||0);
-    const earned=sources.reduce((sum,source)=>
-      sum+incomeFor(source,checkpoint.month,currentMonth),0);
-    const baseline=Number(checkpoint.baseline)||0;
-    return [device.id,Math.max(0,(Number(checkpoint.carried)||0)+earned-baseline-power)];
-  }));
 }
 
 function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClass = "text-white" }) {
@@ -365,7 +238,6 @@ export default function SideHustleDashboard() {
   const [power, setPower] = useState(() => readCryptoDashboardPowerCache(user?.id)?.data || null);
   const [powerIsCached, setPowerIsCached] = useState(() => Boolean(readCryptoDashboardPowerCache(user?.id)));
   const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
-  const [recordedHistory, setRecordedHistory] = useState(readPaybackTrackers);
   // All income cards read the same backend-owned server projection.
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
@@ -374,10 +246,7 @@ export default function SideHustleDashboard() {
   const [projectDraft, setProjectDraft] = useState({ id: "", cost: "" });
   const [addError, setAddError] = useState("");
   const [photoLoading, setPhotoLoading] = useState(false);
-
-  const recordedMonths = useBackendIncomeHistory({
-    currentMonth: getCurrentMonthKey(),
-  });
+  const [savingHardware, setSavingHardware] = useState(false);
 
   const refreshPower = useCallback(async () => {
     try {
@@ -400,7 +269,6 @@ export default function SideHustleDashboard() {
 
   useEffect(() => subscribe(() => {
     setIncome(readIncomeData());
-    setRecordedHistory(readPaybackTrackers());
     setHardware(readHardware());
   }), []);
   useEffect(() => {
@@ -419,9 +287,6 @@ export default function SideHustleDashboard() {
   const { data: backendPortfolio, isCached: portfolioCached, error: portfolioError } = useCryptoDashboardSnapshot();
   const { data: backendHardware, error: backendHardwareError } = useBackendHardwarePayback();
   const { data: backendBitcoin, isCached: bitcoinCached, error: bitcoinError } = useBackendBitcoinValuation();
-  const serverTodaySources = backendEarnings?.todaySources
-    ? { date: backendEarnings.todayKey, sources: backendEarnings.todaySources } : null;
-  const recordedCurrentMonth = recordedMonths.find(row => row.monthKey === currentMonthKey);
   // Monthly Income is the separately booked provider snapshot, not the
   // dated chart's provisional legacy receipts. Both are exposed by the same
   // backend response so a stale browser cache cannot silently swap them.
@@ -479,14 +344,7 @@ export default function SideHustleDashboard() {
   const deviceRows = Array.isArray(latest?.devices) ? latest.devices : [];
   const deviceUsage = powerMonth?.devices || {};
 
-  // Use the same provider observations for Top Projects and Hardware Payback.
-  const kryptexTracker = recordedHistory.kryptex;
-  const hardwareEarnings = hardwareEarningsByDevice(hardware, currentMonthKey, kryptexTracker, clock, recordedMonths, {
-    salad:recordedHistory.salad,unetwork:recordedHistory.unetwork,
-    rollercoin:recordedHistory.rollercoin,serverDaily:serverTodaySources,
-  });
-  // The old checkpoint earnings helper above is retained for compatibility
-  // when editing legacy devices. Hardware recovery DISPLAY is backend-only.
+  // Hardware recovery and editing checkpoints are backend-owned.
   const backendHardwareRows = new Map(
     (backendHardware?.devices || []).map(device => [String(device.id), device])
   );
@@ -507,7 +365,7 @@ export default function SideHustleDashboard() {
 
   const addSourceOptions = [...new Set([
     ...income.projects.map(project => project.name),
-    ...Object.keys(recordedCurrentMonth?.sources || {}),
+    ...Object.keys(backendEarnings?.monthlySources || {}),
   ].map(canonicalSourceName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const projectAddOptions = [...income.projects]
     .filter(project => project.id && project.name)
@@ -525,62 +383,42 @@ export default function SideHustleDashboard() {
     setHardwareDraft({ ...device, sources:hardwareSources(device), earningsStartDay:device.earningsStartDay || "" });
     setAddModal("hardware");
   }
-  function saveHardware(event) {
+  async function saveHardware(event) {
     event.preventDefault();
-    const name=hardwareDraft.name.trim();
-    const sources=hardwareSources(hardwareDraft);
-    const cost=Number(hardwareDraft.cost),power=Number(hardwareDraft.power || 0);
-    const startDay=String(hardwareDraft.earningsStartDay || "");
-    if(!name || !sources.length || !/^\d{4}-\d{2}$/.test(hardwareDraft.startMonth) ||
-      hardwareDraft.startMonth>currentMonthKey || !Number.isFinite(cost) || cost<=0 ||
-      !Number.isFinite(power) || power<0 || (startDay && (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(startDay) || startDay>pacificDayKey(Date.now())))){
-      setAddError("Enter a name, cost, valid month, and at least one income source.");
+    if (savingHardware || photoLoading) return;
+    const name = hardwareDraft.name.trim();
+    const sources = hardwareSources(hardwareDraft);
+    const cost = Number(hardwareDraft.cost), power = Number(hardwareDraft.power || 0);
+    const startDay = String(hardwareDraft.earningsStartDay || "");
+    if (!name || !sources.length || !/^[0-9]{4}-[0-9]{2}$/.test(hardwareDraft.startMonth) ||
+        hardwareDraft.startMonth > currentMonthKey || !Number.isFinite(cost) || cost <= 0 ||
+        !Number.isFinite(power) || power < 0 ||
+        !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(startDay) ||
+        startDay > pacificDayKey(Date.now())) {
+      setAddError("Enter a name, cost, purchase month, earnings start date, and income source.");
       return;
     }
-    const prior=hardware.find(row=>row.id===hardwareDraft.id);
-    const device={
-      ...hardwareDraft,id:prior?.id || crypto.randomUUID(),
-      name,cost,power,sources,source:sources[0],earningsStartDay:startDay || null,
-      startMonth:hardwareDraft.startMonth,
+    const prior = hardware.find(row => row.id === hardwareDraft.id);
+    const device = {
+      ...hardwareDraft, id: prior?.id || crypto.randomUUID(),
+      name, cost, power, sources, source: sources[0], earningsStartDay: startDay,
+      startMonth: hardwareDraft.startMonth,
     };
-    if(prior){
-      const changed=JSON.stringify(hardwareSources(prior))!==JSON.stringify(sources);
-      if(changed){
-        // Preserve earned payback at the moment sources are switched; new
-        // sources start from their current month checkpoint.
-        const allocationCosts={};
-        for(const row of hardware.map(item=>item.id===prior.id ? device : item)) {
-          for(const source of hardwareSources(row)) allocationCosts[source]=(allocationCosts[source]||0)+(Number(row.cost)||0);
-        }
-        const baseline=sources.reduce((sum,source)=>
-          sum+(Number(recordedCurrentMonth?.sources?.[source]) || 0)*
-            (cost/(allocationCosts[source]||1)),0);
-        device.checkpoint={
-          time:Date.now(),month:currentMonthKey,
-          baseline,carried:Number(hardwareEarnings[prior.id]) || 0,
-          allocationMode:"allocated",
-          ...(sources.includes("Kryptex") ? {ledger:KRYPTEX_PAYBACK_LEDGER} : {}),
-        };
-        // Keep manually selected earnings start dates when sources change.
-        device.powerStartTime=null;
-      }
-    }else{
-      device.checkpoint={
-        time:Date.now(),month:currentMonthKey,
-        baseline:sources.length===1 && sources[0]==="Kryptex" ? 0 :
-          sources.reduce((sum,source)=>{
-            const total=[...hardware,device].filter(row=>hardwareSources(row).includes(source))
-              .reduce((n,row)=>n+(Number(row.cost)||0),0);
-            return sum+(Number(recordedCurrentMonth?.sources?.[source])||0)*cost/(total||1);
-          },0),
-        carried:0,allocationMode:"allocated",
-        ...(sources.includes("Kryptex") ? {ledger:KRYPTEX_PAYBACK_LEDGER} : {}),
-      };
+    const proposed = prior
+      ? hardware.map(row => row.id === prior.id ? device : row)
+      : [...hardware, device];
+    setAddError("");
+    setSavingHardware(true);
+    try {
+      const reviewed = await previewHardwareCheckpointEdit(hardware, proposed);
+      remoteStorage.setItem(HARDWARE_KEY, JSON.stringify(reviewed));
+      setHardware(reviewed);
+      setAddModal(null);
+    } catch (error) {
+      setAddError(error?.message || "Backend checkpoint verification unavailable");
+    } finally {
+      setSavingHardware(false);
     }
-    const next=prior ? hardware.map(row=>row.id===prior.id ? device : row) : [...hardware,device];
-    remoteStorage.setItem(HARDWARE_KEY,JSON.stringify(next));
-    setHardware(next);
-    setAddModal(null);
   }
   function saveProjectCost(event) {
     event.preventDefault();
@@ -969,7 +807,7 @@ export default function SideHustleDashboard() {
                 <input type="date" max={pacificDayKey(Date.now())} value={hardwareDraft.earningsStartDay || ""}
                   onChange={event=>setHardwareDraft(current=>({...current,earningsStartDay:event.target.value}))}
                   className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/>
-                <span className="mt-1 block text-xs text-[#91a4b8]">Counts available daily earnings beginning at midnight Pacific on this date. Leave blank to use existing checkpoint tracking.</span>
+                <span className="mt-1 block text-xs text-[#91a4b8]">Counts available daily earnings beginning at midnight Pacific on this date. The backend requires an explicit start date; existing historical checkpoints are preserved.</span>
               </label>
             </>
           ) : (
@@ -997,8 +835,8 @@ export default function SideHustleDashboard() {
           <div className="flex gap-2">
             <button type="button" onClick={() => setAddModal(null)}
               className="rounded-lg border border-[#3c5267] px-4 py-3 text-sm">Cancel</button>
-            <button type="submit" disabled={photoLoading} className="flex-1 rounded-lg bg-emerald-400 px-4 py-3 text-sm font-semibold text-[#061810] disabled:opacity-50">
-              {addModal === "hardware" ? (hardwareDraft.id ? "Save changes" : "Save hardware") : "Save project cost"}
+            <button type="submit" disabled={photoLoading || savingHardware} className="flex-1 rounded-lg bg-emerald-400 px-4 py-3 text-sm font-semibold text-[#061810] disabled:opacity-50">
+              {savingHardware ? "Verifying…" : addModal === "hardware" ? (hardwareDraft.id ? "Save changes" : "Save hardware") : "Save project cost"}
             </button>
           </div>
         </form>
