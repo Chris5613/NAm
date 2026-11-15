@@ -83,6 +83,16 @@ class ProjectFeedAuthorityTests(unittest.TestCase):
                     "sourceLastSyncedAt":recent,"requiresLiveSync":True}])
         self.assertAlmostEqual(self.summary()["portfolioBalance"],18.6)
 
+    def test_browser_spoofed_provider_balance_uses_saved_tracker(self):
+        synced = (datetime.now(timezone.utc)-timedelta(seconds=30)).isoformat()
+        self.db.add(Setting(user_id=1,key="project_income_kryptex_tracker_v1",
+                            value={"currentBalance":264.09,"lastSyncedAt":synced}))
+        self.db.commit()
+        result=self.save([{"id":"kryptex-project","name":"Kryptex",
+                          "balanceUsd":9999999,"sourceLastSyncedAt":synced}])
+        self.assertAlmostEqual(result["portfolio"]["totalUsd"],264.09)
+        self.assertAlmostEqual(self.summary()["portfolioBalance"],264.09)
+
     def test_invalid_feed_does_not_replace_saved_summary_with_zero(self):
         self.save([{"id":"salad-project","name":"Salad",
                     "balanceUsd":5.0,"requiresLiveSync":False}])

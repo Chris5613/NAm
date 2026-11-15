@@ -19,6 +19,7 @@ from ..models import Setting, User
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
 from ..earnings_dashboard import build_backend_earnings_dashboard, TRACKERS as DASHBOARD_TRACKERS
 from ..project_freshness import is_project_stale
+from ..project_feed_sources import PROVIDER_TRACKERS, from_tracker
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..integration_audit import audit_integration_settings
@@ -124,6 +125,7 @@ def validate_item(item: dict, old: dict | None, now: datetime) -> dict | None:
             for a in assets[:100] if isinstance(a, dict)
         ]
     normalized["stale"] = is_project_stale(normalized, now)
+    normalized["balanceSource"] = str(item.get("balanceSource") or "validated-project-observation")[:64]
     return normalized
 
 
@@ -386,10 +388,19 @@ async def receive_latest(payload: dict, user: User = Depends(current_user),
     if not isinstance(incoming, list):
         return {"status": "ignored", "reason": "invalid projects"}
     projects = dict(previous)
+    # Each extension provider has one persisted backend source. A stale tab
+    # cannot override its balance by sending a locally calculated aggregate.
+    trackers = {
+        project_id: setting(db, user.id, tracker_key)
+        for project_id, tracker_key in PROVIDER_TRACKERS.items()
+    }
     for item in incoming[:100]:
         if not isinstance(item, dict):
             continue
-        current = validate_item(item, projects.get(str(item.get("id"))), now)
+        source_item = from_tracker(item, trackers)
+        if source_item is None:
+            continue
+        current = validate_item(source_item, projects.get(str(item.get("id"))), now)
         if current:
             projects[current["id"]] = current
     # Re-evaluate all preserved rows, even when their next source reading has
