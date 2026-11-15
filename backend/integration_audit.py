@@ -158,6 +158,55 @@ def audit_integration_settings(values, now=None):
                 "Current unlocked monthly extension providers match backend trackers.",
                 mismatches=mismatches)
 
+    # Source polling is independent of the user opening a browser tab.
+    # Do not treat a stale Lulo balance as live or silently mark its prior
+    # value down to zero; report the failure and age with no wallet exposure.
+    registration = as_object(values.get("yield_backend_source_wallets_v1"))
+    upstream = as_object(values.get("yield_backend_source_snapshots_v1"))
+    if upstream or registration.get("lulo") or registration.get("loopscale"):
+        from datetime import timedelta
+        max_age = timedelta(minutes=30)
+
+        def freshness(raw):
+            if not isinstance(raw, dict):
+                return False
+            text_date = raw.get("syncedAt")
+            if not isinstance(text_date, str):
+                return False
+            try:
+                stamp = datetime.fromisoformat(text_date.replace("Z", "+00:00"))
+                if stamp.tzinfo is None:
+                    stamp = stamp.replace(tzinfo=timezone.utc)
+                return timedelta(0) <= now - stamp <= max_age
+            except (TypeError, ValueError, OverflowError):
+                return False
+
+        lulo = as_object(upstream.get("lulo"))
+        provider_errors = as_object(upstream.get("errors"))
+        expected_lulo = registration.get("lulo")
+        expected_lulo = expected_lulo if isinstance(expected_lulo, list) else []
+        lulo_stale = [
+            index for index, wallet in enumerate(expected_lulo)
+            if not freshness(as_object(lulo.get(wallet)))
+        ]
+        loop_registered = isinstance(registration.get("loopscale"), str) and bool(
+            registration["loopscale"])
+        loop_stale = loop_registered and not freshness(as_object(upstream.get("loopscale")))
+        categories = sorted(set(
+            "lulo" if key.startswith("lulo:") else "loopscale"
+            for key in provider_errors if isinstance(key, str)
+            and (key.startswith("lulo:") or key == "loopscale")
+        ))
+        issues = bool(lulo_stale or loop_stale or categories)
+        add("yield_upstream_source_health",
+            "warning" if issues else "pass",
+            "Registered yield source snapshots are stale or polling failed."
+            if issues else "Registered yield source polling is current.",
+            staleLuloWalletCount=len(lulo_stale),
+            loopscaleStale=bool(loop_stale),
+            failingProviders=categories,
+            checkedAt=upstream.get("checkedAt"))
+
     journal = values.get("financials_journal_v1")
     entries = journal if isinstance(journal, list) else []
     invalid = []
