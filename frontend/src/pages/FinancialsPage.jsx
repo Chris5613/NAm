@@ -701,6 +701,44 @@ export default function FinancialsPage() {
       {historicalCloseReadiness?.unavailable &&
         <> The backend close-readiness report is currently unavailable.</>}
     </p>}
+    {recorded.locked && !closeSnapshot &&
+      month < getCurrentMonthKey() &&
+      (historicalCloseReadiness?.assetEvidenceRows?.length > 0 ||
+       historicalCloseReadiness?.bankOpeningEvidence) &&
+      <details className="rounded-xl border border-amber-500/25 bg-[#111a21] p-4 text-xs text-[#d6e1e9]">
+        <summary className="cursor-pointer font-semibold text-amber-200">
+          Historical closing evidence needed — {monthTitle(month)}
+        </summary>
+        <p className="mt-3 text-[#9fb4c6]">
+          Recorded estimates are preserved, but they are not certified
+          closing values. No bank balance or journal entry has been changed.
+        </p>
+        {historicalCloseReadiness.bankOpeningEvidence?.status === "missing" &&
+          <p className="mt-3 text-amber-200">
+            Bank opening: {historicalCloseReadiness.bankOpeningEvidence.requiredEvidence}.
+          </p>}
+        <ul className="mt-3 space-y-2">
+          {(historicalCloseReadiness.assetEvidenceRows || []).map((asset, index) =>
+            <li key={asset.name + index} className="flex flex-wrap justify-between gap-2 rounded-lg border border-[#263342] px-3 py-2">
+              <span>{asset.name}</span>
+              <span className="text-[#a9bac8]">
+                {asset.reportedEndingUsd == null
+                  ? "Unknown"
+                  : formatCurrency(asset.reportedEndingUsd)}
+                {" · "}
+                {asset.status === "estimated-needs-document"
+                  ? "Needs month-end evidence"
+                  : asset.status === "unknown"
+                  ? "Missing ending value" : "Saved value (not independently audited)"}
+              </span>
+            </li>)}
+        </ul>
+        <p className="mt-3 text-[#9fb4c6]">
+          To certify this period, supply original dated statements for the
+          estimated rows and the beginning bank cash. These documents are
+          reviewed before any formal close; missing values are never set to zero.
+        </p>
+      </details>}
     {cachedFinancialWarning && <p role="status"
       className="rounded-xl border border-amber-500/30 px-4 py-3 text-xs text-amber-200">
       Showing the most recently verified in-session Financials data while
