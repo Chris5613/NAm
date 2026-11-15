@@ -8,6 +8,10 @@ test("Passive Income uses in-page provider polling, never a browser page reload"
   expect(page).toMatch(/window\.setInterval\(fullRefresh,\s*60000\)/);
   expect(page).toMatch(/window\.setInterval\(quickRefresh,\s*15000\)/);
   expect(page).toMatch(/document\.addEventListener\("visibilitychange",\s*onVisible\)/);
+  // The refresh timer must call current extension hooks, not mount-time closures.
+  expect(page).toMatch(/latestExtensionRequestsRef\.current/);
+  expect(page).toMatch(/latest\.rollercoin\(\)/);
+  expect(page).toMatch(/latest\.kryptex\(\)/);
   // Also reject hidden navigation or router redirects on an idle page.
   expect(page).not.toMatch(/window\.location\.(?:reload|assign|replace)\s*\(/);
   expect(page).not.toMatch(/window\.location\s*=\s*/);

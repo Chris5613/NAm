@@ -480,6 +480,21 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   syncLiveRef.current = syncLivePositions;
   const quickRefreshRef = useRef(refreshProjectsOnly);
   quickRefreshRef.current = refreshProjectsOnly;
+  // Extension hooks can replace request callbacks when connection state
+  // changes. Use the freshest callback on every tick, not the function
+  // captured by the first render three minutes earlier.
+  const latestExtensionRequestsRef = useRef({
+    rollercoin: requestRollerCoinLatest,
+    salad: requestSaladLatest,
+    unetwork: requestUnetworkLatest,
+    kryptex: requestKryptexLatest,
+  });
+  latestExtensionRequestsRef.current = {
+    rollercoin: requestRollerCoinLatest,
+    salad: requestSaladLatest,
+    unetwork: requestUnetworkLatest,
+    kryptex: requestKryptexLatest,
+  };
   const syncRunningRef = useRef(false);
   const quickRunningRef = useRef(false);
 
@@ -500,10 +515,11 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       try {
         // Request current extension readings whether or not a full API
         // accrual is still running.
-        requestRollerCoinLatest();
-        requestSaladLatest();
-        requestUnetworkLatest();
-        requestKryptexLatest();
+        const latest = latestExtensionRequestsRef.current;
+        latest.rollercoin();
+        latest.salad();
+        latest.unetwork();
+        latest.kryptex();
         await quickRefreshRef.current();
       } finally {
         quickRunningRef.current = false;
