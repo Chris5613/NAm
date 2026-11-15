@@ -85,7 +85,7 @@ def check_entry(entry):
         raise ValueError("Journal entry must have a positive amount.")
 
 
-def guard_journal_write(current, proposed, closes):
+def guard_journal_write(current, proposed, closes, business_months=None):
     """Return unchanged candidate after validating only changed manual entries."""
     if not isinstance(proposed, list) or len(proposed) > 20000:
         raise ValueError("Manual journal must be a bounded list.")
@@ -98,6 +98,11 @@ def guard_journal_write(current, proposed, closes):
         if count > 1 and count > historical_duplicates.get(key, 0):
             raise ValueError("Duplicate journal entry ID.")
     locked = closes if isinstance(closes, dict) else {}
+    business = business_months if isinstance(business_months, dict) else {}
+
+    def protected(month):
+        return (isinstance(locked.get(month), dict) or
+                bool((business.get(month) or {}).get("locked"))
     for entry in proposed:
         if not isinstance(entry, dict):
             raise ValueError("Invalid journal record.")
@@ -106,9 +111,9 @@ def guard_journal_write(current, proposed, closes):
             continue
         check_entry(entry)
         previous = history.get(ident)
-        if (isinstance(locked.get(entry["date"][:7]), dict) or
+        if (protected(entry["date"][:7]) or
                 (isinstance(previous, dict) and
-                 isinstance(locked.get(str(previous.get("date") or "")[:7]), dict))):
+                 protected(str(previous.get("date") or "")[:7])):
             raise ValueError("Cannot modify a closed accounting month.")
     # Deleting a previously posted entry in a closed month also counts as
     # editing the locked month, even if that row is absent from the payload.
@@ -117,6 +122,6 @@ def guard_journal_write(current, proposed, closes):
         if not isinstance(entry, dict):
             continue
         if (entry.get("id") not in proposed_ids and
-                isinstance(locked.get(str(entry.get("date") or "")[:7]), dict)):
+                protected(str(entry.get("date") or "")[:7])):
             raise ValueError("Cannot remove an entry from a closed month.")
     return proposed
