@@ -32,6 +32,7 @@ from ..provider_monthly_income import monthly_provider_income
 from ..financial_core import evaluate_statement, calculate_net_worth
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
+from ..lifetime_income import lifetime_earned_from_snapshots
 from ..integration_audit import audit_integration_settings
 from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
 
@@ -654,6 +655,11 @@ async def earnings_dashboard(
             comparison["snapshotNeedsReconciliation"] = (
                 normalized.get(month) != monthly_snapshots.get(month))
             dashboard["monthAccountingComparison"] = comparison
+        # The same normalized current-month booking used by Monthly Income
+        # also feeds Lifetime Earned. Older months are read once as booked,
+        # not reconstructed from daily receipts or project balances.
+        dashboard["lifetimeEarned"] = lifetime_earned_from_snapshots(
+            normalized, today.strftime("%Y-%m"))
     return dashboard
 
 

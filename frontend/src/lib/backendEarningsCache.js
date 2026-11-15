@@ -131,6 +131,17 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
       locked: rawComparison.locked === true,
     };
   }
+  // Preserve the server-calculated lifetime booking through session caching.
+  // Never compute a secondary cumulative total in the browser.
+  const lifetime = data.lifetimeEarned;
+  const lifetimeEarned = lifetime &&
+    lifetime.source === "booked-provider-monthly-ledger" &&
+    typeof lifetime.totalUsd === "number" && Number.isFinite(lifetime.totalUsd) &&
+    typeof lifetime.fromMonth === "string" &&
+    /^\\d{4}-\\d{2}$/.test(lifetime.fromMonth) &&
+    lifetime.throughMonth === month
+      ? { totalUsd: lifetime.totalUsd, fromMonth: lifetime.fromMonth,
+          throughMonth: lifetime.throughMonth, source: lifetime.source } : null;
   return {
     sourceOfCalculation: "backend-postgres",
     month, todayKey, days, weekDays,
@@ -141,6 +152,7 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
     monthlySources: copySources(data.monthlySources),
     todaySources: copySources(data.todaySources),
     reviewDays, fullyVerified, monthAccountingComparison,
+    lifetimeEarned,
     calculatedAt: data.calculatedAt,
   };
 }

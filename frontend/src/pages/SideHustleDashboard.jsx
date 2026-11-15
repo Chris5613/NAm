@@ -845,16 +845,7 @@ export default function SideHustleDashboard() {
 
     {activeView === "overview" ? <>
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-      <KpiCard
-        icon={Layers3}
-        title="Projects + Bitcoin"
-        value={totalNetWorth == null ? "—" : money(totalNetWorth)}
-        detail={backendBitcoin?.bitcoin?.quoteSource === "wallet-observation-fallback"
-          ? "Backend projects + BTC (cached market quote)"
-          : "Backend projects + BTC (single market quote)"}
-        tone="violet"
-      />
-      <KpiCard
+       <KpiCard
         icon={Coins}
         title="Income Today"
         value={passiveIncomeToday == null ? "—" : money(passiveIncomeToday)}
@@ -868,6 +859,15 @@ export default function SideHustleDashboard() {
         value={monthlyIncome===null ? "—" : money(monthlyIncome)}
         detail={monthIncomeDetail}
         tone="sky"
+      />
+      <KpiCard
+        icon={Layers3}
+        title="Lifetime Earned"
+        value={backendEarnings?.lifetimeEarned == null ? "—" : money(backendEarnings.lifetimeEarned.totalUsd)}
+        detail={backendEarnings?.lifetimeEarned
+          ? `Booked earnings since ${backendEarnings.lifetimeEarned.fromMonth} · excludes principal`
+          : "Waiting for complete backend income history"}
+        tone="violet"
       />
       <KpiCard
         icon={Zap}

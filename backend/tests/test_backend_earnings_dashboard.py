@@ -149,5 +149,31 @@ class BackendEarningsDashboardTests(unittest.TestCase):
         self.assertEqual(row["sources"], {"Loopscale": 1.1})
 
 
+class LifetimeEarnedTests(unittest.TestCase):
+    def test_booked_months_count_once_including_owner_confirmed_lulo_loopscale(self):
+        from backend.lifetime_income import lifetime_earned_from_snapshots
+        entries = {
+            "2026-09": {"monthKey": "2026-09", "total": 10,
+                        "platforms": [{"platform": "Kryptex", "amount": 10}]},
+            "2026-10": {"monthKey": "2026-10", "total": 9,
+                        "platforms": [{"platform": "Loopscale", "amount": 12},
+                                      {"platform": "Lulo", "amount": -3}]},
+            "2026-11": {"monthKey": "2026-11", "total": 19.83,
+                        "platforms": [{"platform": "Loopscale", "amount": 15.21},
+                                      {"platform": "Lulo", "amount": 4.62}]},
+        }
+        source = str(entries)
+        result = lifetime_earned_from_snapshots(entries, "2026-11")
+        self.assertAlmostEqual(result["totalUsd"], 38.83)
+        self.assertEqual(result["source"], "booked-provider-monthly-ledger")
+        self.assertEqual(str(entries), source)
+        # Missing months or corrupt snapshots must never be presented as zero.
+        self.assertIsNone(lifetime_earned_from_snapshots(
+            {k: v for k, v in entries.items() if k != "2026-10"}, "2026-11"))
+        corrupt = {**entries, "2026-11": {**entries["2026-11"], "total": 30}}
+        self.assertIsNone(lifetime_earned_from_snapshots(corrupt, "2026-11"))
+        self.assertIsNone(lifetime_earned_from_snapshots({}, "2026-11"))
+
+
 if __name__ == "__main__":
     unittest.main()

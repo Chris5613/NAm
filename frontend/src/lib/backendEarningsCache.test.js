@@ -123,6 +123,18 @@ test("backend ledger comparison survives the earnings dashboard cache", () => {
   expect(cached.data.monthTotalUsd).toBe(5.81);
 });
 
+test("server lifetime income is preserved but never recalculated from daily rows", () => {
+  const data = backend();
+  data.lifetimeEarned = {
+    totalUsd: 615.693122, fromMonth: "2026-09",
+    throughMonth: "2026-11", source: "booked-provider-monthly-ledger",
+  };
+  const cached = writeBackendEarningsCache(7, "2026-11", data, store());
+  expect(cached.data.lifetimeEarned.totalUsd).toBe(615.693122);
+  const wrong = {...data, lifetimeEarned: {...data.lifetimeEarned, source: "browser"}};
+  expect(validateBackendEarningsSnapshot(wrong, "2026-11", "2026-11-14").lifetimeEarned).toBeNull();
+});
+
 test("invalid backend comparison never becomes the booked monthly total", () => {
   const data = backend();
   data.monthAccountingComparison = {
