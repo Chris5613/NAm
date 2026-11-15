@@ -1,9 +1,5 @@
 // Pure parity checks used while moving provider accounting to PostgreSQL.
-// Keep the live browser reading on screen whenever backend data lags.
-export const EXTENSION_PROVIDERS = new Set([
-  "RollerCoin", "Salad", "Unetwork", "Kryptex",
-]);
-
+// Backend provider stats parity guards remain while readings can lag.
 export function statsMatch(local, server) {
   if (!server || !local) return false;
   return Object.entries(local).every(([key, value]) => {
@@ -23,46 +19,3 @@ export function statsMatch(local, server) {
   });
 }
 
-export function providerAmounts(months) {
-  const values = new Map();
-  for (const month of months || []) {
-    for (const row of month.platforms || []) {
-      if (!EXTENSION_PROVIDERS.has(row.platform)) continue;
-      values.set(month.monthKey + ":" + row.platform, Number(row.amount));
-    }
-  }
-  return values;
-}
-
-export function matchingProviderMonths(local, server) {
-  const left = providerAmounts(local);
-  const right = providerAmounts(server);
-  if (left.size !== right.size) return false;
-  for (const [key, value] of left) {
-    const fromServer = right.get(key);
-    if (!Number.isFinite(value) || !Number.isFinite(fromServer) ||
-        Math.abs(fromServer - value) > 0.000002) return false;
-  }
-  return true;
-}
-
-export function mergeServerMonthlyIncome(localMonths, backendMonths) {
-  if (!Array.isArray(backendMonths) ||
-      !matchingProviderMonths(localMonths, backendMonths)) return localMonths;
-
-  const amounts = providerAmounts(backendMonths);
-  return localMonths.map(month => {
-    const platforms = (month.platforms || []).map(entry => {
-      const key = month.monthKey + ":" + entry.platform;
-      if (!EXTENSION_PROVIDERS.has(entry.platform) || !amounts.has(key))
-        return entry;
-      return { ...entry, amount: amounts.get(key) };
-    });
-    return {
-      ...month, platforms,
-      total: Number(platforms.reduce(
-        (sum, entry) => sum + (Number(entry.amount) || 0), 0
-      ).toFixed(6)),
-    };
-  });
-}
