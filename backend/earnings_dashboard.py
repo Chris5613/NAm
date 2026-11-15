@@ -183,3 +183,78 @@ def build_backend_earnings_dashboard(month, today_key, records, trackers, now=No
         "calculatedAt": (now or datetime.now(timezone.utc)).isoformat(),
         "sourceOfCalculation": "backend-postgres",
     }
+
+
+def compare_monthly_snapshot(dashboard, snapshot):
+    """Read-only parity between dated receipts and the separately booked month.
+
+    A month-end provider ledger is not a timestamped daily receipt ledger.
+    Surface gaps with provenance rather than forcing either side to match
+    through invented daily credits or silent financial adjustments.
+    """
+    if not isinstance(snapshot, dict):
+        return None
+    platform_rows = snapshot.get("platforms")
+    if not isinstance(platform_rows, list) or not platform_rows:
+        return None
+
+    def signed_amount(raw):
+        if raw is None or isinstance(raw, bool):
+            return None
+        try:
+            value = float(raw)
+            return value if isfinite(value) else None
+        except (ValueError, TypeError, OverflowError):
+            return None
+
+    booked = signed_amount(snapshot.get("total"))
+    monthly = {}
+    for entry in platform_rows:
+        if not isinstance(entry, dict):
+            return {"status": "invalid-snapshot"}
+        name = entry.get("platform")
+        amount = signed_amount(entry.get("amount"))
+        if not isinstance(name, str) or not name or len(name) > 100 or amount is None:
+            return {"status": "invalid-snapshot"}
+        monthly[name] = monthly.get(name, 0.0) + amount
+    if booked is None or abs(booked - sum(monthly.values())) > 0.02:
+        return {"status": "invalid-snapshot"}
+
+    dated = mapping(dashboard.get("monthlySources"))
+    provisional = {
+        name for row in dashboard.get("days", [])
+        if isinstance(row, dict) and not row.get("future")
+        for name in row.get("provisionalSources", [])
+        if isinstance(name, str)
+    }
+    provider_differences = []
+    needs_review = False
+    for name in sorted(set(monthly) | set(dated)):
+        recorded = signed_amount(dated.get(name)) or 0.0
+        posted = monthly.get(name, 0.0)
+        delta = round(recorded - posted, 8)
+        if abs(delta) <= 0.02:
+            continue
+        legacy = name in provisional
+        needs_review = needs_review or not legacy
+        provider_differences.append({
+            "provider": name,
+            "datedUsd": round(recorded, 8),
+            "bookedUsd": round(posted, 8),
+            "differenceUsd": delta,
+            "provisionalDaily": legacy,
+        })
+    provider_differences.sort(key=lambda entry: -abs(entry["differenceUsd"]))
+    dated_total = signed_amount(dashboard.get("monthTotalUsd")) or 0.0
+    difference = round(dated_total - booked, 8)
+    return {
+        "status": "needs-review" if needs_review else (
+            "different-basis" if abs(difference) > 0.02 else "matched"),
+        "bookedTotalUsd": round(booked, 8),
+        "datedTotalUsd": round(dated_total, 8),
+        "differenceUsd": difference,
+        "providerDifferences": provider_differences,
+        "snapshotUpdatedAt": snapshot.get("updatedAt"),
+        "locked": snapshot.get("locked") is True,
+        "source": "yield_monthly_snapshots_v1",
+    }
