@@ -3,7 +3,6 @@ import {
   saveLoopscaleHistory,
   saveLuloMonthlyBaselines,
   saveMonthlyBackfills,
-  saveMonthlySnapshots,
   savePositions,
   saveProjectLogos,
   saveRollerCoinTracker,
@@ -20,7 +19,6 @@ export function useYieldPersistence({
   saladTracker,
   rollerCoinTracker,
   unetworkTracker,
-  monthlySnapshots,
 }) {
   useEffect(() => savePositions(manualPositions), [manualPositions]);
   useEffect(() => saveProjectLogos(projectLogos), [projectLogos]);
@@ -30,5 +28,4 @@ export function useYieldPersistence({
   useEffect(() => saveSaladTracker(saladTracker), [saladTracker]);
   useEffect(() => saveRollerCoinTracker(rollerCoinTracker), [rollerCoinTracker]);
   useEffect(() => saveUnetworkTracker(unetworkTracker), [unetworkTracker]);
-  useEffect(() => saveMonthlySnapshots(monthlySnapshots), [monthlySnapshots]);
 }
