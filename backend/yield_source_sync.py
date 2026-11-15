@@ -49,6 +49,23 @@ MAX_LULO_WALLETS = 8
 MAX_OBSERVATIONS = 288
 
 
+class ProviderRequestError(RuntimeError):
+    """Safe upstream failure code without API keys, URLs or response bodies."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__("Provider request failed.")
+
+
+class LuloSourceError(ValueError):
+    """Categorized, non-monetary Lulo data quality failure."""
+
+    def __init__(self, code: str):
+        self.code = code
+        super().__init__(code)
+
+
+
 def utc_iso(now: datetime | None = None) -> str:
     return (now or datetime.now(timezone.utc)).astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -82,8 +99,12 @@ def read_json(url: str, headers: dict[str, str], payload: dict | None = None) ->
             if len(raw) > 2_000_000:
                 raise ValueError("Upstream data exceeded snapshot limit.")
             return json.loads(raw)
-    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError, ValueError) as exc:
-        raise RuntimeError("Provider request failed.") from exc
+    except urllib.error.HTTPError as exc:
+        raise ProviderRequestError("http_" + str(exc.code)) from exc
+    except (urllib.error.URLError, TimeoutError) as exc:
+        raise ProviderRequestError("network_unavailable") from exc
+    except (json.JSONDecodeError, ValueError) as exc:
+        raise ProviderRequestError("invalid_payload") from exc
 
 
 def finite_first(*values: Any) -> float:
@@ -125,7 +146,7 @@ def normalize_lulo(wallet: str, api: dict[str, Any],
     account = api.get("account") or {}
     custom = api.get("custom") or {}
     if not account and not custom:
-        raise ValueError("Lulo did not return account data.")
+        raise LuloSourceError("no_account_data")
     pools = api.get("pools") or {}
     regular = finite_first(*(account.get(k) for k in
                            ("lusdUsdBalance", "regularUsdBalance", "regularBalanceUsd")))
@@ -143,7 +164,7 @@ def normalize_lulo(wallet: str, api: dict[str, Any],
     if v1_total <= 0:
         total = max(0, regular) + max(0, protected) + max(0, custom_balance)
     if not (total > 0):
-        raise ValueError("Lulo returned no usable account balance.")
+        raise LuloSourceError("zero_or_unrecognized_balance")
     regular_apy = finite_first((pools.get("regular") or {}).get("apy")) * 100
     protected_apy = finite_first((pools.get("protected") or {}).get("apy")) * 100
     usds_apy = finite_first(custom.get("realtimeAPY"), custom.get("apy"))
@@ -209,7 +230,7 @@ def normalize_lulo(wallet: str, api: dict[str, Any],
 
 def fetch_lulo(wallet: str, now: datetime | None = None) -> dict:
     if not valid_wallet(wallet):
-        raise ValueError("Invalid Lulo wallet.")
+        raise LuloSourceError("invalid_wallet")
     api_key = os.getenv("LULO_API_KEY")
     if not api_key:
         raise RuntimeError("Lulo API key is not configured.")
@@ -227,6 +248,7 @@ def fetch_lulo(wallet: str, now: datetime | None = None) -> dict:
         }),
     }
     results: dict[str, Any] = {}
+    route_errors: dict[str, str] = {}
     with ThreadPoolExecutor(max_workers=5) as pool:
         requests = {}
         for name, (route, params) in routes.items():
@@ -237,9 +259,18 @@ def fetch_lulo(wallet: str, now: datetime | None = None) -> dict:
             key = requests[future]
             try:
                 results[key] = future.result()
-            except (RuntimeError, ValueError):
+            except (RuntimeError, ValueError) as exc:
                 results[key] = None
-                log.warning("Lulo %s source unavailable; retaining other readings", key)
+                route_errors[key] = getattr(exc, "code", type(exc).__name__)
+                log.warning("Lulo %s source unavailable (%s); retaining other readings",
+                            key, route_errors[key])
+    if not results.get("account") and not results.get("custom"):
+        # Do not mistake a rate limit or deprecated API route for a genuine
+        # zero-dollar withdrawal. Keep the last confirmed balance unchanged.
+        account = route_errors.get("account", "empty")
+        custom = route_errors.get("custom", "empty")
+        raise LuloSourceError("primary_unavailable:account=" + account +
+                              ",custom=" + custom)
     return normalize_lulo(wallet, results, now)
 
 
@@ -424,8 +455,10 @@ def poll_sources_for_user(user_id: int) -> int:
                                     "cumulativeInterestUsd": snapshot["totalInterestEarnedUsd"]})
             checked += 1
         except Exception as exc:
-            errors["lulo:" + wallet] = type(exc).__name__
-            log.warning("Lulo scheduled sync failed (%s)", type(exc).__name__)
+            reason = getattr(exc, "code", type(exc).__name__)
+            # No wallet, API key or upstream payload in the log message.
+            errors["lulo:" + wallet] = reason
+            log.warning("Lulo scheduled sync failed (%s)", reason)
     if loop_wallet:
         try:
             snap = fetch_loopscale(loop_wallet, now)
