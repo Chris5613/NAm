@@ -105,10 +105,12 @@ class BackendAccountingMigrationTests(unittest.TestCase):
             {"id": "gainDisposal", "name": "Disposal gain"},
             {"id": "revenue", "name": "Unused"},
         ]
-        result = trial_balance(entries, accounts)
+        result = trial_balance(accounts, entries)
         self.assertEqual(len(result["rows"]), 4)
-        self.assertEqual(result["debitTotal"], 1950)
-        self.assertEqual(result["creditTotal"], 1950)
+        self.assertEqual(result["debitsUsd"], 1950)
+        self.assertEqual(result["creditsUsd"], 1950)
+        self.assertEqual(result["differenceUsd"], 0)
+        self.assertTrue(result["balanced"])
         self.assertEqual(result["rows"][0]["debit"], 1950)
         self.assertEqual(result["rows"][1]["credit"], 1250)
 
