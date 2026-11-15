@@ -170,20 +170,8 @@ export default function HardwarePaybackPage() {
   }, []);
   const currentMonth = useMemo(getCurrentMonthKey, [clock]);
   const currentDay = useMemo(getTodayKey, [clock]);
-  const trackers = useMemo(() => ({ salad: history.salad, rollercoin: history.rollercoin, unetwork: history.unetwork, kryptex: history.kryptex }), [history.salad, history.rollercoin, history.unetwork, history.kryptex]);
-  const localMonths = useMemo(() => buildProjectIncome(history.luloProjects, history.loopscale, history.salad, history.backfills, history.rollercoin, history.unetwork, history.kryptex), [history]);
-  const liveMonths = useBackendMonthlyIncome(trackers, localMonths);
-  const localIncomeHistory = useMemo(() => {
-    const projects = reconcileLuloIncome(getEffectiveProjectIncome(liveMonths, history.snapshots), history.backfills, history.luloBackfills, currentMonth, history.luloProjects, currentDay);
-    return mergeManualIncome(buildIncomeHistory(projects, history.payouts, currentMonth, legacyProjectIncome(history.legacyProjects)), history.manualIncome?.monthly || {}, currentMonth);
-  }, [liveMonths, history, currentMonth, currentDay]);
-  const months = useBackendIncomeHistory({
-    months: getEffectiveProjectIncome(liveMonths, history.snapshots),
-    localBackfills: history.backfills, backendBackfills: history.luloBackfills,
-    luloProjects: history.luloProjects, currentMonth, currentDay,
-    payouts: history.payouts, legacyProjects: history.legacyProjects,
-    manualMonths: history.manualIncome?.monthly || {},
-  }, localIncomeHistory);
+  const months = useBackendIncomeHistory({ currentMonth });
+
   const sourceOptions = useMemo(() => sourceOptionsFor(history, months), [history, months]);
   // Per-device credits intentionally use full selected source earnings.
   // When multiple devices share Kryptex (or another provider), summing these
