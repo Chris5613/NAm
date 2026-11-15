@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/apiClient";
+import { reportFinancialParity } from "@/lib/financialParityTelemetry";
 
 /**
  * Pure, nonposting server projection of depreciation and estimated power.
@@ -24,8 +25,13 @@ export function useBackendAutomaticExpenses(
     return () => { active = false; };
   }, [signature, month]);
   const response = state?.signature === signature ? state.response : null;
-  return automaticExpenseEntriesMatch(localEntries, response?.entries)
-    ? response.entries : localEntries;
+  const reconciled = automaticExpenseEntriesMatch(localEntries, response?.entries);
+  useEffect(() => {
+    if (response) reportFinancialParity(
+      "automatic-expenses", month, reconciled,
+      "backend-projection", signature);
+  }, [response, month, reconciled, signature]);
+  return reconciled ? response.entries : localEntries;
 }
 
 export function automaticExpenseEntriesMatch(local, remote) {
