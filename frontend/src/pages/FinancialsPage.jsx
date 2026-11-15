@@ -358,7 +358,9 @@ export default function FinancialsPage() {
     month, currentMonth:getCurrentMonthKey(), records, live, hardwareDevices,
     phones:businessPhones, journal,
   });
-  const baseRows = backendBalanceRows.rows || [];
+  const baseRows = useMemo(
+    () => backendBalanceRows.rows || [], [backendBalanceRows.rows],
+  );
   // Each existing fixed asset is selectable as its own ledger subaccount.
   // Keep the generic equipment account for acquisitions not yet in the register.
   const equipmentAccounts = useMemo(() => baseRows
