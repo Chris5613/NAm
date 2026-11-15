@@ -1,3 +1,45 @@
+function nonnegative(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value : null;
+}
+function sanitizePowerCost(raw) {
+  if (!raw || raw.sourceOfCalculation !== "backend-power-meter-tariffs")
+    return null;
+  const deviceCosts = {};
+  if (raw.deviceCosts && typeof raw.deviceCosts === "object" &&
+      !Array.isArray(raw.deviceCosts)) {
+    for (const [key, entry] of Object.entries(raw.deviceCosts).slice(0, 16)) {
+      if (!entry || typeof entry !== "object") continue;
+      deviceCosts[String(key).slice(0, 64)] = {
+        complete: entry.complete === true,
+        nominalUsd: nonnegative(entry.nominalUsd),
+        outOfPocketUsd: nonnegative(entry.outOfPocketUsd),
+      };
+    }
+  }
+  const rate = raw.currentRate;
+  const safeRate = rate && nonnegative(rate.effectiveUsdPerKwh) != null &&
+    nonnegative(rate.nominalUsdPerKwh) != null ? {
+      label: String(rate.label || "").slice(0, 40),
+      effectiveUsdPerKwh: rate.effectiveUsdPerKwh,
+      nominalUsdPerKwh: rate.nominalUsdPerKwh,
+    } : null;
+  return {
+    sourceOfCalculation: "backend-power-meter-tariffs",
+    month: String(raw.month || "").slice(0, 7),
+    complete: raw.complete === true &&
+      nonnegative(raw.nominalUsd) != null &&
+      nonnegative(raw.outOfPocketUsd) != null,
+    freeMiningPower: raw.freeMiningPower === true,
+    nominalUsd: nonnegative(raw.nominalUsd),
+    outOfPocketUsd: nonnegative(raw.outOfPocketUsd),
+    hourlyOutOfPocketUsd: nonnegative(raw.hourlyOutOfPocketUsd),
+    dailyOutOfPocketUsd: nonnegative(raw.dailyOutOfPocketUsd),
+    projectedOutOfPocketMonthEndUsd: nonnegative(raw.projectedOutOfPocketMonthEndUsd),
+    currentRate: safeRate,
+    deviceCosts,
+  };
+}
 /** Short-lived, authenticated-account display cache of backend power telemetry. */
 export const POWER_PREVIEW_PREFIX = "nam:crypto-dashboard:power:v1:";
 export const POWER_PREVIEW_MAX_AGE = 10 * 60 * 1000;
@@ -24,6 +66,7 @@ export function validatePowerPreview(raw) {
   return {
     configured: raw.configured === true,
     kryptexDailyRunRate: validMining,
+    powerCost: sanitizePowerCost(raw.powerCost),
     latest: latest == null ? null : {
       observedAt: latest.observedAt, totalWatts: Number(latest.totalWatts),
       devices: latest.devices.map(d => ({
