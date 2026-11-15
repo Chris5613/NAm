@@ -198,6 +198,7 @@ export default function FinancialsPage() {
   });
   const [powerEstimates, setPowerEstimates] = useState(() => readJson(POWER_ESTIMATE_KEY, {}));
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
+  const [historicalCloseReadiness, setHistoricalCloseReadiness] = useState(null);
   const [accountLabels, setAccountLabels] = useState(() =>
     cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
   const [renaming, setRenaming] = useState(null);
@@ -255,6 +256,26 @@ export default function FinancialsPage() {
     refreshPower();
     const timer = window.setInterval(refreshPower, 90000);
     return () => { active=false; window.clearInterval(timer); };
+  }, [month]);
+  useEffect(() => {
+    let active = true;
+    if (month >= getCurrentMonthKey()) {
+      setHistoricalCloseReadiness(null);
+      return () => { active = false; };
+    }
+    setHistoricalCloseReadiness(null);
+    api.get("/api/project-tracking/financial-core/close-readiness/" + month)
+      .then(result => {
+        if (!active) return;
+        const valid = result?.sourceOfCalculation ===
+          "backend-financial-close-readiness-v1" &&
+          result.month === month && result.readOnly === true &&
+          Array.isArray(result.missingEvidence);
+        setHistoricalCloseReadiness(valid ? result : { unavailable: true });
+      }).catch(() => {
+        if (active) setHistoricalCloseReadiness({ unavailable: true });
+      });
+    return () => { active = false; };
   }, [month]);
   const closeSnapshot = closedMonths[month] || null;
   const protectedMonth = key => isFinancialMonthProtected(key, closedMonths, records);
@@ -654,6 +675,15 @@ export default function FinancialsPage() {
           className="rounded-lg p-2 text-[#cedbe7] disabled:opacity-30" aria-label="Next month"><ChevronRight size={18}/></button>
       </div>
     </div>
+    {recorded.locked && !closeSnapshot && month < getCurrentMonthKey() && <p
+      role="status" className="rounded-xl border border-amber-500/40 px-4 py-3 text-xs text-amber-200">
+      This historical month is protected from journal edits by its Monthly Changes lock.
+      A separate certified Financials closing statement has not been recorded.
+      {historicalCloseReadiness?.missingEvidence?.length > 0 &&
+        <> Evidence still needed: {historicalCloseReadiness.missingEvidence.join("; ")}.</>}
+      {historicalCloseReadiness?.unavailable &&
+        <> The backend close-readiness report is currently unavailable.</>}
+    </p>}
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
         {metric("Business Assets", assetsEnd, assetsEnd===null?"Some account balances are unverified":null, "text-sky-300")}
