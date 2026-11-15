@@ -14,6 +14,8 @@ from .models import Asset, NetWorthSnapshot, Project, Setting, User, utcnow
 from .project_freshness import is_project_stale
 from .networth_reconciliation import legacy_nightly_components
 from .yield_source_sync import poll_all_users, SNAPSHOTS_KEY, merge_server_project_balances
+from .provider_monthly_income import monthly_provider_income
+from .monthly_snapshot_guard import guard_monthly_snapshots
 
 _scheduler_task: asyncio.Task | None = None
 _leader = False
@@ -23,7 +25,9 @@ _last_daily_attempt: datetime | None = None
 _last_project_day: str | None = None
 _last_catchup_check: str | None = None
 _last_yield_poll: datetime | None = None
+_last_month_reconcile: datetime | None = None
 YIELD_SYNC_INTERVAL = timedelta(minutes=5)
+MONTH_RECONCILE_INTERVAL = timedelta(minutes=5)
 PACIFIC = ZoneInfo("America/Los_Angeles")
 log = logging.getLogger(__name__)
 PROJECT_FEED_KEY = "yield_project_latest_balance_feed_v1"
@@ -183,6 +187,66 @@ def take_project_balance_snapshots(day: str, scheduled_at: datetime | None = Non
         db.commit()
     return made
 
+# The server's provider trackers may advance while every browser is closed.
+# The browser PATCH guard protects writes but cannot repair an already-stale
+# snapshot by itself. Reconcile only the OPEN month and only extension-backed
+# provider values, leaving signed Loopscale/Lulo and locked history unchanged.
+MONTHLY_TRACKER_KEYS = {
+    "kryptex": "project_income_kryptex_tracker_v1",
+    "salad": "project_income_salad_tracker_v1",
+    "rollercoin": "project_income_rollercoin_tracker_v2",
+    "unetwork": "project_income_unetwork_tracker_v1",
+}
+
+
+def reconcile_open_monthly_snapshots() -> int:
+    """Repair incomplete live provider rows from durable tracker facts.
+
+    This procedure never edits dated earnings receipts, historical locked
+    snapshots, journal transactions or source provider trackers. It uses the
+    same account row lock as the guarded browser PATCH to serialize updates.
+    """
+    month = datetime.now(timezone.utc).astimezone(PACIFIC).strftime("%Y-%m")
+    updated = 0
+    with SessionLocal() as db:
+        user_ids = db.scalars(select(User.id)).all()
+        for user_id in user_ids:
+            # Prevent stale frontend snapshot writes racing a server repair.
+            db.scalar(select(User).where(User.id == user_id).with_for_update())
+            snapshot = db.scalar(select(Setting).where(
+                Setting.user_id == user_id,
+                Setting.key == "yield_monthly_snapshots_v1",
+            ))
+            saved = snapshot.value if snapshot is not None else None
+            if not isinstance(saved, dict) or not isinstance(saved.get(month), dict):
+                db.rollback()
+                continue
+            if saved[month].get("locked"):
+                db.rollback()
+                continue
+            provider_rows = db.scalars(select(Setting).where(
+                Setting.user_id == user_id,
+                Setting.key.in_(tuple(MONTHLY_TRACKER_KEYS.values())),
+            )).all()
+            by_key = {row.key: row.value for row in provider_rows}
+            trackers = {
+                name: by_key.get(key) or {}
+                for name, key in MONTHLY_TRACKER_KEYS.items()
+            }
+            authoritative = monthly_provider_income(trackers, month)
+            if not any(row.get("monthKey") == month for row in authoritative):
+                db.rollback()
+                continue
+            corrected = guard_monthly_snapshots(saved, saved, authoritative, month)
+            if corrected != saved:
+                snapshot.value = corrected
+                db.commit()
+                updated += 1
+            else:
+                db.rollback()
+    return updated
+
+
 def scheduler_status() -> dict[str, Any]:
     return {"status": "leader" if _leader else "standby", "last_daily_key": _last_daily_key,
             "last_project_day": _last_project_day,
@@ -213,7 +277,7 @@ def run_daily_snapshot_attempt(now: datetime, day: str) -> bool:
 
 
 async def scheduler_loop() -> None:
-    global _last_daily_key, _last_daily_attempt, _last_project_day, _last_catchup_check, _last_yield_poll, _leader
+    global _last_daily_key, _last_daily_attempt, _last_project_day, _last_catchup_check, _last_yield_poll, _last_month_reconcile, _leader
     connection = None
     try:
         while True:
@@ -274,6 +338,15 @@ async def scheduler_loop() -> None:
                     await asyncio.to_thread(poll_all_users)
                 except Exception:
                     log.exception("Lulo / Loopscale source polling failed")
+            # Repair snapshots even with no browser connected. This only
+            # corrects four authoritative provider rows and is idempotent.
+            if (_last_month_reconcile is None or
+                    now - _last_month_reconcile >= MONTH_RECONCILE_INTERVAL):
+                _last_month_reconcile = now
+                try:
+                    await asyncio.to_thread(reconcile_open_monthly_snapshots)
+                except Exception:
+                    log.exception("Open-month provider reconciliation failed; will retry")
             await asyncio.sleep(30)
     finally:
         _leader = False
