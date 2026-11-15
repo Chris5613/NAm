@@ -126,7 +126,10 @@ def home_business_snapshot(settings, month, bitcoin_usd=None):
         business = sum_business_rows(saved["rows"])
         return {"sourceOfCalculation": "backend-home-business",
                 "month": month, "business": business, "live": live,
-                "source": "locked-month-rows", "complete": True}
+                "source": "locked-month-rows",
+                "complete": (not business["incomplete"] and
+                             not business["liabilitiesIncomplete"]),
+                "bitcoinIncluded": bitcoin_usd is not None}
     base = financial_balance_rows(month, records, live, hardware, month)
     if not obj(records.get(month)).get("locked"):
         base += phone_asset_rows(phones, month)
