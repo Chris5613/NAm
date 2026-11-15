@@ -60,13 +60,35 @@ class HardwareCheckpointPreviewTests(unittest.TestCase):
         self.assertEqual(checkpoint["allocationMode"], "backend-start-day-v1")
         self.assertEqual(result["devices"][:2], saved)
 
-    def test_source_switch_requires_attribution_before_any_mutation(self):
+    def test_source_switch_preserves_prior_credit_with_tomorrow_effective_day(self):
         saved = hardware()
         proposed = copy.deepcopy(saved)
         proposed[1]["sources"] = ["Salad"]
-        with self.assertRaisesRegex(HardwareEditConflict, "source-segment"):
-            preview(saved, copy.deepcopy(saved), proposed)
+        result = preview(saved, copy.deepcopy(saved), proposed)
+        row = result["devices"][1]
+        self.assertEqual(row["checkpoint"], saved[1]["checkpoint"])
+        self.assertEqual(row["sources"], ["Salad"])
+        self.assertEqual(row["sourceSegments"], [
+            {"startDay": "2026-11-13", "endDay": "2026-11-15",
+             "sources": ["kryptex", "salad"]},
+            {"startDay": "2026-11-16", "sources": ["salad"]},
+        ])
         self.assertEqual(saved, hardware())
+
+    def test_repeated_same_day_switch_replaces_future_assignment(self):
+        saved = hardware()
+        proposed = copy.deepcopy(saved)
+        proposed[1]["sources"] = ["Salad"]
+        first = preview(saved, copy.deepcopy(saved), proposed)["devices"]
+        second = copy.deepcopy(first)
+        second[1]["sources"] = ["RollerCoin"]
+        reviewed = preview(first, copy.deepcopy(first), second)
+        segments = reviewed["devices"][1]["sourceSegments"]
+        self.assertEqual(len(segments), 2)
+        self.assertEqual(segments[1]["sources"], ["rollercoin"])
+        self.assertEqual(segments[0]["endDay"], "2026-11-15")
+        self.assertEqual(reviewed["devices"][1]["checkpoint"],
+                         saved[1]["checkpoint"])
 
     def test_stale_browser_copy_fails_closed(self):
         saved = hardware()
@@ -98,7 +120,7 @@ class HardwareCheckpointPreviewTests(unittest.TestCase):
         self.assertIsNone(result["devices"][0]["earningsStartDay"])
         self.assertEqual(result["devices"][0]["checkpoint"], saved[0]["checkpoint"])
         proposed[0]["sources"] = ["Salad"]
-        with self.assertRaisesRegex(HardwareEditConflict, "source-segment"):
+        with self.assertRaisesRegex(HardwareEditConflict, "Source-switch history"):
             preview(saved, copy.deepcopy(saved), proposed)
 
     def test_source_order_change_does_not_rewrite_checkpoint(self):
