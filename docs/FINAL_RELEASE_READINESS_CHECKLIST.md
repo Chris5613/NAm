@@ -93,17 +93,26 @@ source records are supplied. Lulo historical data/code remains untouched.
   shape, displays pass/warning/error checks and missing evidence, and lets
   the signed-in owner **Copy audit results** for review. Frontend component
   tests verify the button, reporting, failures and report copying.
-- [ ] A real signed-in **production browser session** has not been exercised
-  by this audit. Never impersonate the account or claim UI click testing
-  without a valid delegated browser session.
+- [x] On **November 15, 2026, at 22:46:24 UTC**, the account owner
+  used **Financials → Run live audit**, copied its authenticated production
+  report, and pasted the result in the ChatGPT project conversation.
+  This is **user-supplied live account evidence**, not an assistant-controlled
+  browser session. The report's overall status was `warning`, with **no
+  error-level checks**. Specifically **PASS**: all three monthly booking and
+  Passive Income history pairs, crypto portfolio, Home/Financials balances,
+  nonposting journal preview, Salad device dated coverage and provider-month
+  reconciliation. **WARNING**: inactive historical holding valuation;
+  uncertified September and October Financials closes; incomplete hardware
+  evidence; and provisional dated earnings. **INFO**: inactive portfolio
+  holdings and sub-cent source precision differences.
+- [x] The backend now includes exact device-specific missing/provisional
+  source dates, stale checkpoint flags and dated-provider review evidence
+  in the read-only audit and its copyable UI. No booked revenue was changed.
 
-**Status:** Authenticated API integration, browser component interactions,
-and signed-in production audit controls verified in CI. To finish this
-remaining acceptance check, the account owner must open
-`https://nam-qyn8.onrender.com`, sign in, go to **Financials → Run live
-audit**, then use **Copy audit results** to share the exact production
-status. The automated assistant has no signed-in production browser session
-or valid session cookie, and must not claim that the owner clicked it.
+**Status:** **Completed.** The owner provided a genuine
+authenticated production audit report; signed-in production execution is
+now evidenced. Backend and UI integration tests are independently green.
+This does not mean the remaining historical evidence warnings were resolved.
 
 ## 5. Cross-page source reconciliation
 
@@ -125,12 +134,17 @@ or valid session cookie, and must not claim that the owner clicked it.
   backend portfolio is **$3,947.57529904** overall / **$2,388.21713298**
   active, exactly equal to the most recent unique provider feed. Values
   are **sampled**, not fixed forever.
-- [ ] The authenticated **live production** cross-page endpoint was not
-  independently invoked with a real signed-in browser session. Available
-  source-level PostgreSQL reconciliation was read-only.
+- [x] The authenticated **live production** cross-page endpoint
+  returned a real signed-in owner-generated report on **November 15 at
+  22:46:24 UTC**. Home/Financials, project income, crypto totals and
+  provider booked-vs-dated sources all reported **PASS**.
+  The report's overall `warning` status reflects historical evidence
+  exceptions and provider-day recovery flags, **not an accounting mismatch**.
+  The assistant did not impersonate the owner or access login credentials.
 
-**Status:** Comparable source totals reconciled; full authenticated production
-UI parity is not yet independently certified.
+**Status:** **Completed for comparable source totals and the production
+authenticated report.** Remaining warning evidence is disclosed separately;
+no false zero warnings or historical corrections were inserted.
 
 ## 6. Deployment and ongoing monitoring
 
@@ -155,7 +169,7 @@ checked over time, not declared permanently finished from one good run.
 continued operation. Full unconditional historical accounting certification
 is NOT yet supported.** Remaining blockers are the missing pre-November-13
 Salad dated observations; historic September/October bank openings and
-estimated asset valuations; and the final production signed-in UI audit
-clickthrough, now available directly in Financials without a code change.
+estimated asset valuations; and ongoing device/dated-reward evidence.
+The owner has now completed the production signed-in audit clickthrough.
 
 Never mark a blocked box complete merely to reach six of six.
