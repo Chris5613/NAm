@@ -3,7 +3,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe, refreshSetting } from "@/lib/serverStore";
 import { preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
-import { financialLiveBalances as liveBalances } from "@/lib/financialAssetsSnapshot";
+import { useBackendFinancialLiveBalances } from "@/hooks/useBackendFinancialLiveBalances";
 import {
   readUnetworkPhones, readPhoneInventory, makePhoneAsset, phoneJournal, phoneAssetRows,
   UNETWORK_PHONES_KEY,
@@ -219,7 +219,7 @@ export default function FinancialsPage() {
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
-  const [live, setLive] = useState(liveBalances);
+  const { live, error: liveError } = useBackendFinancialLiveBalances();
   const [cryptoIncome, setCryptoIncome] = useState(readCryptoIncomeSources);
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [businessPhones, setBusinessPhones] = useState(readUnetworkPhones);
@@ -253,7 +253,6 @@ export default function FinancialsPage() {
   useEffect(() => subscribe(() => {
     setRecords(readJson(RECORDS_KEY, {}));
     setJournal(readJson(JOURNAL_KEY, []));
-    setLive(liveBalances());
     setHardwareDevices(readHardwareRegister());
     setBusinessPhones(readUnetworkPhones());
     setPhoneInventory(readPhoneInventory());
@@ -267,13 +266,6 @@ export default function FinancialsPage() {
       luloBackfills: current.luloBackfills,
     }));
   }), []);
-  useEffect(() => {
-    const refresh = () => setLive(liveBalances());
-    const timer = window.setInterval(refresh, 30000);
-    window.addEventListener("focus", refresh);
-    window.addEventListener("project-crypto-updated", refresh);
-    return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); window.removeEventListener("project-crypto-updated", refresh); };
-  }, []);
   useEffect(() => {
     let active = true;
     const refresh = async () => {
@@ -717,11 +709,13 @@ export default function FinancialsPage() {
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
-  if (!serverFinancial || !backendSyncedIncomeJournal ||
+  if (!live || !serverFinancial || !backendSyncedIncomeJournal ||
       !automaticExpensesState.entries || !trialState.result) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <h1 className="text-2xl font-semibold">Financials</h1>
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
-      {backendBalanceRows.error
+      {liveError
+        ? "Backend provider balances unavailable. Previous saved financial records remain untouched."
+        : backendBalanceRows.error
         ? "Backend asset rows unavailable. Saved equipment, journal records, and balances were not changed."
         : trialState.error
         ? "Backend trial balance unavailable. Saved ledger entries remain unchanged."
