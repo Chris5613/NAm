@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import {
-  saveKryptexTracker,
   saveLoopscaleHistory,
   saveLuloMonthlyBaselines,
   saveMonthlyBackfills,
@@ -19,7 +18,6 @@ export function useYieldPersistence({
   luloMonthlyBaselines,
   loopscaleHistory,
   saladTracker,
-  kryptexTracker,
   rollerCoinTracker,
   unetworkTracker,
   monthlySnapshots,
@@ -30,7 +28,6 @@ export function useYieldPersistence({
   useEffect(() => saveLuloMonthlyBaselines(luloMonthlyBaselines), [luloMonthlyBaselines]);
   useEffect(() => saveLoopscaleHistory(loopscaleHistory), [loopscaleHistory]);
   useEffect(() => saveSaladTracker(saladTracker), [saladTracker]);
-  useEffect(() => saveKryptexTracker(kryptexTracker), [kryptexTracker]);
   useEffect(() => saveRollerCoinTracker(rollerCoinTracker), [rollerCoinTracker]);
   useEffect(() => saveUnetworkTracker(unetworkTracker), [unetworkTracker]);
   useEffect(() => saveMonthlySnapshots(monthlySnapshots), [monthlySnapshots]);
