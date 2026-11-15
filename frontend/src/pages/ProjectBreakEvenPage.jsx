@@ -3,10 +3,7 @@ import { ChevronRight, X } from "lucide-react";
 import { subscribe } from "@/lib/serverStore";
 import { api } from "@/lib/apiClient";
 import {
-  formatCurrency, getKryptexStats, getPaybackStats, getRollerCoinTrackerStats,
-  getSaladTrackerStats, getUnetworkTrackerStats, groupManualPositions,
-  loadKryptexTracker, loadPositions, loadProjectPayback, loadRollerCoinTracker,
-  loadSaladTracker, loadUnetworkTracker, saveProjectPayback,
+  formatCurrency, loadProjectPayback, saveProjectPayback,
 } from "@/lib/yieldFarmingAccounting";
 
 const panel = "rounded-2xl border border-[#263342] bg-[#0b1017]";
@@ -19,56 +16,50 @@ const percent = value => `${Math.round(value)}%`;
 const isRecovered = row =>
   row.spent > 0 ? row.earned >= row.spent : row.id === "salad-project" && row.earned > 0;
 
-function readProjects() {
-  const manual = groupManualPositions(loadPositions());
-  const salad = getSaladTrackerStats(loadSaladTracker());
-  const rollercoin = getRollerCoinTrackerStats(loadRollerCoinTracker());
-  const unetwork = getUnetworkTrackerStats(loadUnetworkTracker());
-  const kryptex = getKryptexStats(loadKryptexTracker());
-  const rows = [
-    ...manual.map(project => ({
-      id: project.id, name: project.platform, earned: project.earned,
-      daily: project.totalBalance * (project.weightedApy || 0) / 100 / 365,
-    })),
-    { id: "salad-project", name: "Salad", earned: salad.lifetimeUsd, daily: salad.estimatedDailyUsd },
-    { id: "rollercoin-project", name: "RollerCoin", earned: rollercoin.lifetimeUsd, daily: Math.max(0, Number(rollercoin.todayUsd) || 0) },
-    { id: "unetwork-project", name: "Unetwork", earned: unetwork.lifetimeUsd, daily: unetwork.estimatedDailyUsd },
-    { id: "kryptex-project", name: "Kryptex", earned: kryptex.lifetimeUsd, daily: kryptex.dailyUsd },
-  ];
-  const payback = loadProjectPayback();
-  return {
-    rows: rows.map(row => ({ ...row, spent: Number(payback[row.id]?.totalSpent) || 0 })),
-  };
-}
-
 export default function ProjectBreakEvenPage() {
-  const [data, setData] = useState(readProjects);
   const [serverProjects, setServerProjects] = useState(null);
+  const [serverError, setServerError] = useState(false);
+  const [revision, setRevision] = useState(0);
   const [selectedId, setSelectedId] = useState(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const closeButtonRef = useRef(null);
   const dialogRef = useRef(null);
   const triggerRef = useRef(null);
-  useEffect(() => subscribe(() => setData(readProjects())), []);
+
+  // Only persisted backend earnings and invested capital can determine ROI.
+  // The browser no longer aggregates Kryptex, Salad, RollerCoin, uNetwork,
+  // or manual positions. Retain the last verified response on network failure.
+  useEffect(() => subscribe(() => setRevision(x => x + 1)), []);
   useEffect(() => {
     let active = true;
     const refresh = () => api.get("/api/project-tracking/project-break-even")
       .then(result => {
-        if (active && result?.sourceOfCalculation === "backend-project-break-even" &&
-            Array.isArray(result.rows)) setServerProjects(result);
-      }).catch(() => { if (active) setServerProjects(null); });
-    refresh();
-    const timer = window.setInterval(refresh, 90000);
-    return () => { active = false; window.clearInterval(timer); };
-  }, [data]);
-  const serverPaybackMatches = serverProjects?.rows?.length === data.rows.length &&
-    data.rows.every(local => {
-      const remote = serverProjects.rows.find(row => row.id === local.id);
-      return remote && ["earned", "daily", "spent"].every(field =>
-        Math.abs(Number(local[field] || 0) - Number(remote[field] || 0)) < 0.005);
-    });
-  const calculatedProjects = serverPaybackMatches ? serverProjects.rows : data.rows;
+        if (!active) return;
+        const complete = result?.sourceOfCalculation === "backend-project-break-even" &&
+          Array.isArray(result.rows) &&
+          ["totalSpent", "totalEarned", "overallPercent", "recoveredCount"].every(
+            key => Number.isFinite(result[key])
+          ) &&
+          result.rows.every(row =>
+            typeof row.id === "string" &&
+            ["earned", "daily", "spent"].every(key => Number.isFinite(row[key]))
+          );
+        if (!complete) throw Error("Incomplete backend payback response");
+        setServerProjects(result);
+        setServerError(false);
+      }).catch(() => { if (active) setServerError(true); });
+    // Local settings are debounced before they reach the backend. Let the
+    // write settle before requesting authoritative recalculated totals.
+    const timer = window.setTimeout(refresh, revision ? 800 : 0);
+    const poll = window.setInterval(refresh, 90000);
+    return () => {
+      active = false;
+      window.clearTimeout(timer);
+      window.clearInterval(poll);
+    };
+  }, [revision]);
+  const calculatedProjects = serverProjects?.rows || [];
   useEffect(() => {
     if (!selectedId) return undefined;
     closeButtonRef.current?.focus();
@@ -103,23 +94,15 @@ export default function ProjectBreakEvenPage() {
   const recoveredProjects = ranked.filter(isRecovered);
   const selected = ranked.find(row => row.id === selectedId) || null;
   const configured = ranked.filter(row => row.spent > 0);
-  const computedSpent = configured.reduce((sum, row) => sum + row.spent, 0);
-  const computedEarned = configured.reduce((sum, row) => sum + Math.max(0, Number(row.earned) || 0), 0);
-  const computedRecovered = configured.filter(row => row.earned >= row.spent).length;
-  const paybackTotalsMatch = serverPaybackMatches &&
-    Math.abs(Number(serverProjects.totalSpent) - computedSpent) < .005 &&
-    Math.abs(Number(serverProjects.totalEarned) - computedEarned) < .005 &&
-    serverProjects.recoveredCount === computedRecovered;
-  const totalSpent = paybackTotalsMatch ? serverProjects.totalSpent : computedSpent;
-  const totalEarned = paybackTotalsMatch ? serverProjects.totalEarned : computedEarned;
-  const recovered = paybackTotalsMatch ? serverProjects.recoveredCount : computedRecovered;
-  const overall = paybackTotalsMatch ? serverProjects.overallPercent
-    : totalSpent > 0 ? totalEarned / totalSpent * 100 : 0;
-  const selectedStats = selected && (serverPaybackMatches
-    ? { configured: selected.configured, spent: selected.spent, earned: selected.earned,
-        pnl: selected.pnl, remaining: selected.remaining,
-        daysToProfit: selected.daysToProfit }
-    : getPaybackStats(selected.earned, selected.daily, selected.spent));
+  const totalSpent = serverProjects?.totalSpent ?? 0;
+  const totalEarned = serverProjects?.totalEarned ?? 0;
+  const recovered = serverProjects?.recoveredCount ?? 0;
+  const overall = serverProjects?.overallPercent ?? 0;
+  const selectedStats = selected && {
+    configured: selected.configured, spent: selected.spent,
+    earned: selected.earned, pnl: selected.pnl,
+    remaining: selected.remaining, daysToProfit: selected.daysToProfit,
+  };
 
   function startEdit() {
     setDraft(selected?.spent > 0 ? String(selected.spent) : "");
@@ -143,7 +126,7 @@ export default function ProjectBreakEvenPage() {
     if (value > 0) next[selected.id] = { totalSpent: value, updatedAt: new Date().toISOString() };
     else delete next[selected.id];
     saveProjectPayback(next);
-    setData(readProjects());
+    setRevision(x => x + 1);
     setEditing(false);
   }
 
@@ -167,7 +150,17 @@ export default function ProjectBreakEvenPage() {
     </button>;
   }
 
+  if (!serverProjects) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="project-break-even-page">
+    <h1 className="text-[28px] font-semibold tracking-tight">Project Break-Even</h1>
+    <p role="status" className="rounded-xl border border-[#263342] bg-[#0b1017] p-5 text-[#c8d3df]">
+      {serverError ? "Payback data unavailable. Saved earnings and spending have not been changed." :
+        "Loading verified earnings and payback calculations from the backend…"}
+    </p>
+  </div>;
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="project-break-even-page">
+    {serverError && <p role="status" className="rounded-lg border border-amber-700/40 p-3 text-sm text-amber-200">
+      Showing the last verified backend result. Live payback refresh is temporarily unavailable.
+    </p>}
     <header className="px-1">
       <h1 className="text-[28px] font-semibold tracking-tight">Project Break-Even</h1>
     </header>
