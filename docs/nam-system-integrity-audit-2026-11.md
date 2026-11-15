@@ -37,6 +37,35 @@
 5. **Missing shared diagnostics:** Added read-only authenticated `GET /api/project-tracking/integration-audit` checking Kryptex daily-vs-monthly reconciliation, missing BTC-to-USD conversion, unlocked Kryptex snapshot parity, snapshot row totals, compound journal balance, hardware identifiers and costs. An informational item explicitly distinguishes the Passive Income daily chart total from snapshot accounting totals.
 6. **Automated regression coverage:** Added tests for storage refresh safety, chart-vs-popup reconciliation, audit mismatches, and Kryptex reward preservation. Added `.github/workflows/nam-integrity.yml` to run backend Python tests and frontend Jest tests plus a production build after future pushes. **Workflow execution/result still requires verification.**
 
+## Continued audit pass (November 14, 2026, later Pacific session)
+
+### New confirmed code-level data-loss risks corrected
+
+1. **Kryptex loaded tracker fields were incomplete.** `loadKryptexTracker()` formerly reconstructed a subset of the persisted tracker and omitted `kryptexMiningSatsDaily`, `kryptexPendingEarningsDays`, `kryptexLastChartSyncAt`, and machine-audit fields. Since the Passive Income page also persisted its state on mount/change, opening it could have written that shorter object back into the shared settings record. The Kryptex loader now retains unknown fields, and Passive Income no longer blindly persists backend-owned Kryptex snapshots. Legacy extension writes explicitly preserve confirmed high-water daily amounts and satoshi evidence.
+2. **Hardware Payback had a second direct Kryptex earnings writer.** Its browser `KRYPTEX_PUSH` listener used raw `daily_usd` data and assigned `daily[date] = amount` without a high-water check. That could replace a verified/recovered day's higher earnings with a lower BTC-repriced amount. Hardware Payback now listens to `kryptex-aggregate-update`, consuming the reconciled backend tracker instead of directly saving raw chart numbers.
+3. **Provider state could drop unknown backend fields.** The Salad, Unetwork, RollerCoin, and Loopscale loaders also rebuilt objects without retaining new backend metadata. Each now preserves unknown persisted fields before normalizing known values, so future server-side reconciliation fields survive a frontend round trip.
+4. **Inactive-project preferences could remain stale in an open tab.** The Passive Income preference hook originally read `yield_inactive_project_ids_v1` only at mount. It now subscribes to the shared server-backed store; the setting is included in authenticated background refreshes. React state updaters no longer perform settings writes.
+5. **Distinct inactive definitions remain.** Legacy `projects.inactive` flags and the Passive Income `yield_inactive_project_ids_v1` preference use different identifiers and can legitimately describe different card sets. The audit identified different counts but did **not** rewrite those flags or choose one interpretation without user confirmation.
+
+### Live recheck
+
+A read-only SQL recheck after these fixes found the exact restored satoshi rewards for **Nov 1: 452 sats** and **Nov 6: 5,490 sats** still stored. November's confirmed Kryptex daily sum was **$40.605951** against its monthly tracker **$40.60595119** (rounding-only delta). Pending BTC-to-USD conversions: **none**. The live backend logs returned no error-level events for the queried interval. This is a point-in-time sample, not proof that all historic earnings are complete.
+
+### Additional regression coverage
+
+`frontend/src/lib/kryptexTrackerPersistence.test.js` now checks:
+- Backend satoshi evidence, missing-conversion flags, and chart timestamps survive tracker load.
+- Legacy fallback saves cannot reduce confirmed daily rewards or unset a confirmation.
+- All four other provider loaders retain unrecognized backend reconciliation fields.
+
+### Continued limitations
+
+- Render production deploy status can verify a build started/live, not that the automated GitHub Actions test suite actually passed. Workflow-run results were unavailable through the available PR-scoped workflow query.
+- No authenticated browser journey through all pages was executed. A production browser reload, multi-tab, and cross-device scenario must still be observed to verify all UI state transitions.
+- The data-loss risks above are confirmed in code; this does not independently establish that previous user earnings were erased by these exact code paths.
+- The two inactive-project systems are separate and should not be force-merged without checking user intent.
+- The full Financials versus Home personal/business cash overlap remains subject to transaction-level confirmation; no bank opening or trade-in records were altered.
+
 ## Important distinctions / outstanding verification
 
 - **Legacy daily-income server records cannot be treated as mining rewards:** Older Kryptex records can contain USD account balance movements driven by BTC prices. Do not combine those numbers with the confirmed mining ledger.
