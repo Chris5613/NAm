@@ -15,6 +15,7 @@ import {
   remoteStorage as localStorage, subscribe,
 } from "@/lib/serverStore";
 import { getFinancialTotalAssets } from "@/lib/financialAssetsSnapshot";
+import { shouldRefreshHomeNetWorth } from "@/lib/netWorthRefreshKeys";
 
 import {
   localStorage as storage,
@@ -554,14 +555,24 @@ export default function Dashboard() {
     );
 
   useEffect(() => {
-    // Storage notifications can be emitted by net-worth history writes.
-    // Refresh the business card only here to avoid recursive full reloads.
-    const unsubscribe = subscribe(() => setFinancialAssets(getFinancialTotalAssets()));
+    // A provider/bank/equipment update changes Home's *entire* net worth,
+    // not just the business card. Coalesce related writes from the same
+    // transaction and ignore history/baseline keys written by fetchData itself.
+    let pending = null;
     const refresh = () => fetchData();
+    const unsubscribe = subscribe(key => {
+      if (!shouldRefreshHomeNetWorth(key)) return;
+      if (pending !== null) window.clearTimeout(pending);
+      pending = window.setTimeout(() => {
+        pending = null;
+        refresh();
+      }, 80);
+    });
     const timer = window.setInterval(refresh, 30000);
     window.addEventListener("focus", refresh);
     return () => {
       unsubscribe();
+      if (pending !== null) window.clearTimeout(pending);
       window.clearInterval(timer);
       window.removeEventListener("focus", refresh);
     };
