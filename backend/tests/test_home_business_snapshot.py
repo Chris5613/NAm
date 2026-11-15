@@ -62,6 +62,34 @@ class HomeBusinessSnapshotTests(unittest.TestCase):
                    "creditAccount": "cash", "amount": 200}]
         self.assertEqual(cash_opening("2026-12", openings, ledger, []), 300)
 
+    def test_locked_month_missing_asset_remains_unverified(self):
+        saved = copy.deepcopy(self.saved)
+        saved["financials_month_closes_v1"] = {
+            "2026-11": {"rows": [
+                {"id": "ledger:cash", "category": "cash", "end": 100},
+                {"id": "bitcoin", "category": "digital", "end": None},
+                {"id": "payable", "category": "liabilities", "end": 0},
+            ]},
+        }
+        result = home_business_snapshot(saved, "2026-11", 50)
+        self.assertEqual(result["source"], "locked-month-rows")
+        self.assertFalse(result["complete"])
+        self.assertTrue(result["business"]["incomplete"])
+        self.assertIsNone(result["business"]["netValue"])
+
+    def test_locked_month_missing_liability_remains_unverified(self):
+        saved = copy.deepcopy(self.saved)
+        saved["financials_month_closes_v1"] = {
+            "2026-11": {"rows": [
+                {"id": "ledger:cash", "category": "cash", "end": 100},
+                {"id": "payable", "category": "liabilities", "end": None},
+            ]},
+        }
+        result = home_business_snapshot(saved, "2026-11", 50)
+        self.assertFalse(result["complete"])
+        self.assertTrue(result["business"]["liabilitiesIncomplete"])
+        self.assertIsNone(result["business"]["netValue"])
+
     def test_source_assets_are_read_only(self):
         original = copy.deepcopy(self.saved)
         home_business_snapshot(self.saved, "2026-11", 100)
