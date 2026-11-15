@@ -1,3 +1,4 @@
+import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useEffect, useMemo, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
@@ -106,10 +107,17 @@ export default function IncomeHistoryPage() {
   ), [liveMonths, history.snapshots, history.backfills, history.luloBackfills, history.luloProjects, currentMonth, currentDay]);
   const legacy = useMemo(() => legacyProjectIncome(history.legacyProjects), [history.legacyProjects]);
   const manualMonths = history.manualIncome?.monthly;
-  const months = useMemo(() => {
+  const localIncomeHistory = useMemo(() => {
     const recorded = buildIncomeHistory(projectMonths, history.payouts, currentMonth, legacy);
     return mergeManualIncome(recorded, manualMonths || {}, currentMonth);
   }, [projectMonths, history.payouts, currentMonth, legacy, manualMonths]);
+  const months = useBackendIncomeHistory({
+    months: getEffectiveProjectIncome(liveMonths, history.snapshots),
+    localBackfills: history.backfills, backendBackfills: history.luloBackfills,
+    luloProjects: history.luloProjects, currentMonth, currentDay,
+    payouts: history.payouts, legacyProjects: history.legacyProjects,
+    manualMonths: manualMonths || {},
+  }, localIncomeHistory);
   const monthMap = new Map(months.map(month => [month.monthKey, month]));
   const ytdMonths = [];
   for (let key = `${currentMonth.slice(0, 4)}-01`; key <= currentMonth; key = shiftMonth(key, 1)) {
