@@ -2,7 +2,6 @@ import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronLeft, ChevronRight, Plus, Pencil, Trash2, X } from "lucide-react";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
-import { api } from "@/lib/apiClient";
 
 
 
