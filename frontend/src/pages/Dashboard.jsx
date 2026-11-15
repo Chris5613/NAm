@@ -22,8 +22,6 @@ import {
   localStorage as storage,
 } from "@/lib/localStorage";
 import {
-  calculateNetWorth,
-  getCryptoBusinessValue,
   formatCurrency,
   getMonthKey,
   readOnlyNetWorthTrends,
@@ -447,20 +445,12 @@ export default function Dashboard() {
           // remains a read-only fallback until BTC/Financials are migrated
           // to a separate backend-owned business net-worth endpoint.
 
-          // Financials already includes crypto holdings and the business
-          // bank balance. Cash moved out of Lulo is also in Home's tracked
-          // bank accounts, so exclude that overlap from combined net worth,
-          // not from the business Balance Sheet or PPE.
+          // Financials combines portfolio assets and business bank cash.
+          // The backend is the only authority for personal/business overlap.
+          // If it cannot calculate, preserve the last displayed financial
+          // state rather than creating a competing browser calculation.
           const businessAssets = getFinancialTotalAssets();
-          const personalCash = calculateNetWorth(storedAssets, 0).breakdown.cash;
-          const localNetWorth = calculateNetWorth(
-            storedAssets,
-            getCryptoBusinessValue(businessAssets, cryptoTotal, personalCash),
-          );
-          // The backend now owns the calculation. During migration require
-          // penny-level parity before accepting a response; otherwise retain
-          // the known local snapshot and never rewrite saved balances.
-          let calculatedNetWorth = localNetWorth;
+          let calculatedNetWorth;
           try {
             const server = await api.post(
               "/api/project-tracking/financial-core/net-worth", {
@@ -469,21 +459,23 @@ export default function Dashboard() {
                 cryptoTotal,
               },
             );
-            const matches = server?.sourceOfCalculation === "backend-financial-core" &&
-              ["stocks", "crypto", "cash", "other", "debts"].every(key =>
-                Math.abs(Number(server.breakdown?.[key]) -
-                  Number(localNetWorth.breakdown[key])) < 0.005) &&
-              Math.abs(Number(server.total_net_worth) -
-                Number(localNetWorth.total_net_worth)) < 0.005;
-            if (matches) {
-              calculatedNetWorth = {
-                total_net_worth: server.total_net_worth,
-                breakdown: server.breakdown,
-                asset_count: server.asset_count,
-              };
-            }
-          } catch {
-            // Signed-in backend unavailable: don't erase Home financials.
+            const valid = server?.sourceOfCalculation === "backend-financial-core" &&
+              Number.isFinite(server.total_net_worth) &&
+              Number.isInteger(server.asset_count) &&
+              ["stocks", "crypto", "cash", "other", "debts"].every(
+                key => Number.isFinite(server.breakdown?.[key])
+              );
+            if (!valid) throw Error("Net worth response is incomplete.");
+            calculatedNetWorth = {
+              total_net_worth: server.total_net_worth,
+              breakdown: server.breakdown,
+              asset_count: server.asset_count,
+            };
+          } catch (error) {
+            if (isCurrent()) toast.error(
+              "Net worth unavailable. Previous verified values were preserved."
+            );
+            return;
           }
           if (!isCurrent()) return;
           setFinancialAssets(businessAssets);
