@@ -36,6 +36,15 @@ export function validateBackendHardwarePayback(raw, day) {
       observedCreditUsd: recorded,
       observedRemainingUsd: remaining,
       observedProgressPct: progress,
+      // Forecasts are backend-generated display estimates, not earned credits.
+      estimatedPaybackDate: typeof device.estimatedPaybackDate === "string" &&
+        /^\d{4}-\d{2}-\d{2}$/.test(device.estimatedPaybackDate) &&
+        !Number.isNaN(Date.parse(device.estimatedPaybackDate + "T12:00:00Z"))
+          ? device.estimatedPaybackDate : null,
+      estimatedDaysRemaining: finite(device.estimatedDaysRemaining),
+      estimatedDailyCreditUsd: finite(device.estimatedDailyCreditUsd),
+      forecastPartial: device.forecastPartial === true,
+      forecastBasis: text(device.forecastBasis),
       verifiedRecoveryUsd: finite(device.verifiedRecoveryUsd),
       confirmedBeforeEarningsStartUsd: finite(device.confirmedBeforeEarningsStartUsd),
       provisionalRewardSubtotalUsd: finite(device.provisionalRewardSubtotalUsd),
