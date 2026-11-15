@@ -66,6 +66,40 @@ class FinancialBalanceRowsTests(unittest.TestCase):
         self.assertTrue(result[0]["retired"])
         self.assertEqual(result[1]["end"], 1917.5)
 
+    def test_5070_trade_for_5080_preserves_full_purchase_and_retires_trade_in(self):
+        records = {
+            "2026-11": {"balanceSheetItems": [{
+                "id": "hardware:rtx5070", "name": "RTX 5070 GPU",
+                "category": "equipment", "historicalCost": 500,
+                "placedInServiceMonth": "2026-11", "usefulLifeMonths": 60,
+            }]},
+        }
+        devices = [{
+            "id": "rtx-5080", "name": "RTX 5080", "cost": 1250,
+            "startMonth": "2026-11",
+        }]
+        ledger = [{
+            "id": "buy5080", "date": "2026-11-13",
+            "description": "Purchase: RTX 5080",
+            "lines": [
+                {"account": "equipment", "debit": 1950, "credit": 0},
+                {"account": "cash", "debit": 0, "credit": 1250},
+                {"account": "equipment:hardware:rtx5070", "debit": 0,
+                 "credit": 491.67},
+                {"account": "gainDisposal", "debit": 0, "credit": 208.33},
+            ],
+        }]
+        rows = financial_balance_rows(
+            "2026-11", records, {}, devices, "2026-11")
+        values = with_journal_equipment(rows, ledger, "2026-11")
+        new_gpu = next(r for r in values if r["name"] == "RTX 5080")
+        old_gpu = next(r for r in values if r["id"] == "hardware:rtx5070")
+        self.assertEqual(new_gpu["historicalCost"], 1950)
+        self.assertEqual(new_gpu["end"], 1917.5)
+        self.assertTrue(old_gpu["retired"])
+        self.assertEqual(old_gpu["end"], 0)
+        self.assertEqual(len([r for r in values if r["name"] == "RTX 5080"]), 1)
+
     def test_locked_month_ignores_later_hardware_changes(self):
         records = {"2026-10": {"locked": True, "items": [
             {"name": "Lulo", "start": 100, "end": 110},
