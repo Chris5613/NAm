@@ -18,6 +18,7 @@ from .financial_core import (
 from .financial_current_journal import current_financial_ledger
 from .hardware_payback_lifetime import build_lifetime_hardware_payback
 from .earnings_dashboard import build_backend_earnings_dashboard
+from .financial_close_readiness import financial_close_readiness
 
 
 def amount(value):
@@ -162,12 +163,15 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
         business_locked = bool(obj(records.get(key)).get("locked"))
         has_financial_close = isinstance(obj(closed.get(key)).get("rows"), list)
         if business_locked and not has_financial_close:
+            readiness = financial_close_readiness(saved, key, month)
             check("unsealed-financial-ledger:" + key, "warning",
-                  "Provider and Monthly Changes months are locked, but no "
-                  "separate Financials General Ledger close is saved. "
-                  "UI editing is blocked by the business lock; a historical "
-                  "financial close must not be fabricated.",
-                  businessLocked=True, financialClosePresent=False)
+                  "Historical month is protected against journal edits; "
+                  "independent Financials close remains uncertified until "
+                  "actual missing evidence is supplied.",
+                  businessLocked=True, financialClosePresent=False,
+                  missingEvidence=readiness["missingEvidence"],
+                  estimatedAssetRows=readiness["estimatedAssetRows"],
+                  unknownAssetRows=readiness["unknownAssetRows"])
     live = current_live_assets(saved, bitcoin_usd)
     base = financial_balance_rows(month, records, live, devices, month)
     if not obj(records.get(month)).get("locked"):
