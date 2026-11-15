@@ -184,28 +184,6 @@ export default function HardwarePaybackPage() {
     payouts: history.payouts, legacyProjects: history.legacyProjects,
     manualMonths: history.manualIncome?.monthly || {},
   }, localIncomeHistory);
-  useEffect(() => {
-    if (!historyReady) return;
-    const legacyKryptex = devices.filter(device =>
-      canonicalSourceName(device.source) === "Kryptex" && device.checkpoint && device.checkpoint.ledger !== KRYPTEX_PAYBACK_LEDGER);
-    const needsNov1Backfill = device => canonicalSourceName(device.source) === "Kryptex" &&
-      device.name?.trim().toLowerCase() === "rtx 2080 pc" && device.checkpoint &&
-      pacificDayKey(device.checkpoint.time) >= "2026-11-01" &&
-      pacificDayKey(device.checkpoint.time) <= "2026-11-06" && !device.earningsStartDay;
-    if (!legacyKryptex.length && !devices.some(needsNov1Backfill)) return;
-    const now = Date.now();
-    const currentRow = months.find(row => row.monthKey === currentMonth);
-    const baseline = monthSourceAmount(currentRow, "Kryptex", history.kryptex);
-    const migrated = devices.map(device => {
-      const backfill = needsNov1Backfill(device);
-      const next = legacyKryptex.some(row => row.id === device.id)
-        ? { ...device, checkpoint: { time: now, month: currentMonth, baseline, carried: 0, ledger: KRYPTEX_PAYBACK_LEDGER } }
-        : device;
-      return backfill ? { ...next, earningsStartDay: "2026-11-01", powerStartTime: device.checkpoint.time } : next;
-    });
-    remoteStorage.setItem(KEY, JSON.stringify(migrated));
-    setDevices(migrated);
-  }, [historyReady, devices, months, currentMonth, history.kryptex]);
   const sourceOptions = useMemo(() => sourceOptionsFor(history, months), [history, months]);
   // Per-device credits intentionally use full selected source earnings.
   // When multiple devices share Kryptex (or another provider), summing these
