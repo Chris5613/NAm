@@ -847,7 +847,7 @@ async def record_financial_migration_parity(
         revised = record_parity_observation(
             original, payload.get("area"), payload.get("month"),
             payload.get("status"), payload.get("source"),
-            payload.get("fingerprint"),
+            payload.get("fingerprint"), reason=payload.get("reason"),
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
