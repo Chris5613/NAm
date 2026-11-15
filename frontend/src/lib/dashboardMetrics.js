@@ -531,3 +531,56 @@ export function getCryptoBusinessValue(financialAssets, cryptoTotal = 0, persona
   );
   return Math.round((value - overlap) * 100) / 100;
 }
+
+
+/**
+ * Read-only display fallback when backend Home trend calculation is unavailable.
+ * Never creates a new baseline or modifies a historical month; only the
+ * backend home-trends endpoint is allowed to write those records.
+ */
+export function readOnlyNetWorthTrends(netWorth) {
+  const value = Number(netWorth?.total_net_worth) || 0;
+  const breakdown = netWorth?.breakdown || {};
+  const today = getPstDateKey();
+  const month = getMonthKey();
+  const label = getMonthLabel();
+  const read = (key, fallback) => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(key) || "null");
+      return saved ?? fallback;
+    } catch { return fallback; }
+  };
+  const daily = read(DAILY_BASELINE_KEY, {});
+  const savedBase = Number(daily?.baseline);
+  const baseline = daily?.dateKey === today &&
+    Number.isFinite(savedBase) && savedBase > 0 ? savedBase : value;
+  const dailyChange = {
+    baseline,
+    change: value - baseline,
+    percentChange: baseline > 0 ? ((value - baseline) / baseline) * 100 : 0,
+    dateKey: today,
+  };
+  const savedCategories = read(DAILY_CATEGORY_BASELINE_KEY, {});
+  const categoryChange = {};
+  for (const category of ["stocks", "crypto", "cash", "other", "debts"]) {
+    const current = Number(breakdown[category]) || 0;
+    const previous = savedCategories?.dateKey === today
+      ? Number(savedCategories?.baseline?.[category]) : NaN;
+    categoryChange[category] = Number.isFinite(previous)
+      ? current - previous : 0;
+  }
+  const previousMonths = read(MONTHLY_NET_WORTH_HISTORY_KEY, []);
+  const monthlyHistory = (Array.isArray(previousMonths) ? previousMonths : [])
+    .filter(row => row && typeof row.monthKey === "string")
+    .map(row => ({
+      monthKey: row.monthKey,
+      month: row.month || row.label || row.time || row.monthKey,
+      value: row.monthKey === month ? value : row.value,
+      live: row.monthKey === month,
+    }));
+  if (!monthlyHistory.some(row => row.monthKey === month)) {
+    monthlyHistory.push({ monthKey: month, month: label, value, live: true });
+  }
+  monthlyHistory.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
+  return { dailyChange, categoryChanges: categoryChange, monthlyHistory };
+}
