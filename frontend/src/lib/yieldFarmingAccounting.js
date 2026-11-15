@@ -632,6 +632,10 @@ function loadUnetworkTracker() {
     );
 
   return {
+    // Preserve backend-owned audit/evidence fields (notably
+    // kryptexMiningSatsDaily and kryptexPendingEarningsDays). Omitting them
+    // previously made a frontend re-save delete valid mining history.
+    ...parsed,
     initialized:
       Boolean(
         parsed.initialized
@@ -2637,13 +2641,57 @@ function loadKryptexTracker() {
   };
 }
 
-function saveKryptexTracker(
-  value
-) {
-  saveObject(
-    KRYPTEX_TRACKER_KEY,
-    value
+function saveKryptexTracker(value) {
+  // Only the legacy extension importer should call this writer. Preserve
+  // server-synced satoshi evidence and any fields an older payload doesn't
+  // understand, rather than replacing the full authoritative tracker.
+  const saved = readObject(KRYPTEX_TRACKER_KEY);
+  const next = { ...saved, ...(value || {}) };
+  const savedSats = saved.kryptexMiningSatsDaily || {};
+  const newSats = value?.kryptexMiningSatsDaily || {};
+  next.kryptexMiningSatsDaily = { ...savedSats };
+  for (const [day, raw] of Object.entries(newSats)) {
+    const amount = Number(raw);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day) || !Number.isFinite(amount) || amount < 0) continue;
+    next.kryptexMiningSatsDaily[day] = Math.max(
+      Number(savedSats[day]) || 0, amount
+    );
+  }
+  const priorDaily = saved.kryptexMiningDaily || {};
+  const submittedDaily = value?.kryptexMiningDaily || {};
+  next.kryptexMiningDaily = { ...priorDaily };
+  next.kryptexConfirmedDays = {
+    ...(saved.kryptexConfirmedDays || {}),
+    ...(value?.kryptexConfirmedDays || {}),
+  };
+  for (const [day, raw] of Object.entries(submittedDaily)) {
+    const amount = Number(raw);
+    if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(day) || !Number.isFinite(amount) || amount < 0) continue;
+    if (!next.kryptexConfirmedDays[day]) continue;
+    next.kryptexMiningDaily[day] = Math.max(Number(priorDaily[day]) || 0, amount);
+  }
+  // Don't allow an older client to roll back confirmed monthly or lifetime
+  // earnings, even when BTC holdings have fallen in market value.
+  next.monthlyEarnings = { ...(saved.monthlyEarnings || {}), ...(value?.monthlyEarnings || {}) };
+  for (const month of new Set(
+    Object.keys(next.kryptexMiningDaily)
+      .filter(day => next.kryptexConfirmedDays[day])
+      .map(day => day.slice(0, 7))
+  )) {
+    next.monthlyEarnings[month] = Number(
+      Object.entries(next.kryptexMiningDaily)
+        .filter(([day]) => day.startsWith(month + "-") && next.kryptexConfirmedDays[day])
+        .reduce((sum, [, income]) => sum + (Number(income) || 0), 0)
+        .toFixed(8)
+    );
+  }
+  next.lifetimeEarnedUsd = Math.max(
+    Number(saved.lifetimeEarnedUsd) || 0,
+    Number(value?.lifetimeEarnedUsd) || 0,
   );
+  next.kryptexLastChartSyncAt = saved.kryptexLastChartSyncAt || value?.kryptexLastChartSyncAt;
+  next.kryptexPendingEarningsDays = saved.kryptexPendingEarningsDays || value?.kryptexPendingEarningsDays || [];
+  saveObject(KRYPTEX_TRACKER_KEY, next);
 }
 
 function getKryptexStats(
