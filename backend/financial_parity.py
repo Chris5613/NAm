@@ -19,7 +19,7 @@ MONTH_RE = re.compile(r"\A\d{4}-(0[1-9]|1[0-2])\Z")
 
 
 def record_parity_observation(current, area, month, status, source,
-                              fingerprint, timestamp=None):
+                              fingerprint, timestamp=None, reason=None):
     if area not in AREAS or status not in STATUSES or source not in SOURCES:
         raise ValueError("Invalid accounting parity category.")
     if not isinstance(month, str) or not MONTH_RE.fullmatch(month):
@@ -27,6 +27,13 @@ def record_parity_observation(current, area, month, status, source,
     if (not isinstance(fingerprint, str) or not
             re.fullmatch(r"[0-9a-f]{8}", fingerprint)):
         raise ValueError("Invalid parity revision token.")
+    allowed_reasons = frozenset({
+        "missing-server-month", "extra-server-month",
+        "monthly-total-difference", "project-total-difference",
+        "source-difference", "duplicate-server-month", "other",
+    })
+    if reason is not None and reason not in allowed_reasons:
+        raise ValueError("Invalid parity mismatch category.")
     old = current if isinstance(current, dict) else {}
     records = deepcopy(old.get("lastByArea")) if isinstance(
         old.get("lastByArea"), dict) else {}
@@ -34,7 +41,8 @@ def record_parity_observation(current, area, month, status, source,
     previous = records.get(key)
     if isinstance(previous, dict) and (
         previous.get("fingerprint") == fingerprint and
-        previous.get("status") == status
+        previous.get("status") == status and
+        previous.get("reason") == reason
     ):
         return deepcopy(old)
     stamp = timestamp or datetime.now(timezone.utc).isoformat()
@@ -42,6 +50,7 @@ def record_parity_observation(current, area, month, status, source,
         "area": area, "month": month, "status": status,
         "source": source, "fingerprint": fingerprint,
         "checkedAt": stamp,
+        **({"reason": reason} if reason else {}),
     }
     # Bounded per account; leave only latest checks for up to 96 areas/months.
     if len(records) > 96:
