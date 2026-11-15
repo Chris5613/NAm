@@ -156,6 +156,18 @@ def cross_page_integrity(settings, month, today_key, bitcoin_usd,
     phones = arr(saved.get("financials_unetwork_business_phones_v1"))
     devices = arr(saved.get("hardware_payback_devices_v1"))
     closed = obj(saved.get("financials_month_closes_v1"))
+    for key, raw in sorted(snapshots.items()):
+        if key >= month or not obj(raw).get("locked"):
+            continue
+        business_locked = bool(obj(records.get(key)).get("locked"))
+        has_financial_close = isinstance(obj(closed.get(key)).get("rows"), list)
+        if business_locked and not has_financial_close:
+            check("unsealed-financial-ledger:" + key, "warning",
+                  "Provider and Monthly Changes months are locked, but no "
+                  "separate Financials General Ledger close is saved. "
+                  "UI editing is blocked by the business lock; a historical "
+                  "financial close must not be fabricated.",
+                  businessLocked=True, financialClosePresent=False)
     live = current_live_assets(saved, bitcoin_usd)
     base = financial_balance_rows(month, records, live, devices, month)
     if not obj(records.get(month)).get("locked"):
