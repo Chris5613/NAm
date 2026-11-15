@@ -1,11 +1,14 @@
 """Read-only Lulo / Loopscale server polling normalization and wallet validation."""
 from datetime import datetime, timezone
+from urllib.error import HTTPError
 from unittest import TestCase
 from unittest.mock import patch
+from io import BytesIO
 
 from backend.yield_source_sync import (
     valid_wallet, registered_wallets, normalize_lulo, normalize_loopscale,
     stamp_ms, fetch_lulo, fetch_loopscale, merge_server_project_balances,
+    LuloSourceError, ProviderRequestError, read_json,
     USDC_MINT, ONYC_MINT, USDS_MINT,
 )
 
@@ -90,6 +93,35 @@ class YieldSourceNormalizationTests(TestCase):
         self.assertAlmostEqual(observations["2026-10-28"], .33)
         self.assertAlmostEqual(observations["2026-10-29"], .25)
         self.assertAlmostEqual(result["fiveDayAverageUsd"], .29)
+
+    def test_lulo_failure_reports_safe_upstream_reasons(self):
+        def fail(_url, _headers):
+            raise ProviderRequestError("http_401")
+        with patch("backend.yield_source_sync.read_json", side_effect=fail):
+            with self.assertRaises(LuloSourceError) as failure:
+                fetch_lulo(LULO_WALLET, self.now)
+        self.assertEqual(failure.exception.code,
+                         "primary_unavailable:account=http_401,custom=http_401")
+        self.assertNotIn(LULO_WALLET, failure.exception.code)
+        self.assertNotIn("x-api-key", failure.exception.code)
+
+    def test_lulo_unrecognized_balance_is_not_booked_as_zero(self):
+        with self.assertRaises(LuloSourceError) as failure:
+            normalize_lulo(LULO_WALLET,
+                           {"account": {"totalUsdValue": 0}}, self.now)
+        self.assertEqual(failure.exception.code, "zero_or_unrecognized_balance")
+
+    def test_upstream_http_status_is_categorized_without_response_body(self):
+        err = HTTPError("https://api.lulo.fi/v1/account.getAccount",
+                        429, "rate limit", {}, BytesIO(b"private error"))
+        with patch("backend.yield_source_sync.urllib.request.urlopen",
+                   side_effect=err):
+            with self.assertRaises(ProviderRequestError) as failure:
+                read_json("https://api.lulo.fi/v1/account.getAccount",
+                          {"x-api-key": "secret"})
+        self.assertEqual(failure.exception.code, "http_429")
+        self.assertNotIn("private", str(failure.exception))
+        self.assertNotIn("secret", str(failure.exception))
 
     def test_lulo_no_zero_balance_written_when_api_unusable(self):
         with self.assertRaises(ValueError):
