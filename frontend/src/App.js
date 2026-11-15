@@ -9,7 +9,6 @@ import {
 import Sidebar from "@/components/Sidebar";
 import HomePage from "@/pages/Dashboard";
 import InvestmentOverview from "@/pages/InvestmentOverview";
-import CloudPage from "@/pages/CloudPage";
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
 import ProjectBreakEvenPage from "@/pages/ProjectBreakEvenPage";
 import HardwarePaybackPage from "@/pages/HardwarePaybackPage";
@@ -129,10 +128,8 @@ function App() {
                 element={<SpendingPage />}
               />
 
-              <Route
-                path="/cloud"
-                element={<CloudPage />}
-              />
+              {/* Retired Cloud betting page; preserve old bookmarks without a dead route. */}
+              <Route path="/cloud" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </main>
