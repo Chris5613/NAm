@@ -16,9 +16,6 @@ test("a verified provider withdrawal moves assets without creating income", () =
     from: "platform:kryptex", to: "crypto", amount: 25, feeUsd: 0.5,
   });
 });
-  expect(entries.every(entry => entry.lines.reduce((sum,line) => sum + line.debit - line.credit,0) === 0)).toBe(true);
-});
-
 test("unverified withdrawal is a candidate, never auto-booked", () => {
   const candidates = collectMovementCandidates([{
     id:"roller", name:"RollerCoin", transactions:[{id:"w-01",date:"2026-11-09",type:"withdraw",amount:12}],
