@@ -75,6 +75,13 @@ A read-only SQL recheck after these fixes found the exact restored satoshi rewar
 - `backend/tests/test_kryptex_setting_guard.py` covers old browser overwrites, confirmed day preservation, satoshi high-water history, pending conversion clearing, and protection of modern machine status. Tests committed; **test-run results not yet verified**.
 - This update is a forward-looking safeguard; it does not itself backfill earnings before the verified start date. Manual financial journal entries, bank openings, device cost basis, and income snapshots were not modified.
 
+## Bank-feed versus journal cross-check
+
+- The manually entered RTX 5080 journal acquisition/trade is dated **November 13, 2026**, with **$1,250 cash outflow** and **$1,950 gross equipment debit** including trade-in. A connected personal-bank transaction for **$1,250** is dated **November 14, 2026**. This might reflect the difference between transaction and posting dates; it is a **date discrepancy for review, not automatic duplicate spending**, and neither side was edited.
+- The manually recorded **$2,488.14 Lulo-to-cash withdrawal** dated November 1 has no exact matching entry in the available linked bank-transaction feed for the inspected October 25–November 20 window. The withdrawal may be represented by a different amount/date, unlinked account, or missing bank history; absence of an exact feed match is **not evidence the withdrawal didn't happen**.
+- Home's display adjustment subtracts the lesser of business cash and total personal cash to avoid an assumed overlap. It does not currently prove the two accounts hold the same transferred funds by matching a bank-transaction ID. Keep this as a **manual reconciliation item**, not a reason to delete a cash balance.
+- These checks queried only dates and amounts, not bank credentials. No changes were made to journal entries, business cash, personal accounts, or spending transactions.
+
 ## Important distinctions / outstanding verification
 
 - **Legacy daily-income server records cannot be treated as mining rewards:** Older Kryptex records can contain USD account balance movements driven by BTC prices. Do not combine those numbers with the confirmed mining ledger.
