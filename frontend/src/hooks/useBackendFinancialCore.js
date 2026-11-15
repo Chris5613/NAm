@@ -6,10 +6,10 @@ import { api } from "@/lib/apiClient";
  * Never posts transactions or modifies balances. A response is accepted only
  * for the current exact input; older async requests cannot replace it.
  */
-export function useBackendFinancialCore(month, entries, rows, devices, savedExpenses, cashOpening, payableOpening) {
+export function useBackendFinancialCore(month, entries, rows, devices, savedExpenses) {
   const signature = useMemo(() => JSON.stringify({
-    month, entries, rows, devices, savedExpenses, cashOpening, payableOpening,
-  }), [month, entries, rows, devices, savedExpenses, cashOpening, payableOpening]);
+    month, entries, rows, devices, savedExpenses,
+  }), [month, entries, rows, devices, savedExpenses]);
   const [result, setResult] = useState(null);
   useEffect(() => {
     let active = true;
