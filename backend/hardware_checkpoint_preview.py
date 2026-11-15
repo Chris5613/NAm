@@ -60,24 +60,31 @@ def preview_hardware_edit(saved, expected, proposed, today_key, timestamp):
         selected = sources_for(device)
         if not selected:
             raise ValueError("Choose at least one income source")
-        beginning = str(device.get("earningsStartDay") or "")
-        try:
-            start = date.fromisoformat(beginning)
-            acquired = date.fromisoformat(str(device.get("startMonth") or "") + "-01")
-        except (TypeError, ValueError) as exc:
-            raise ValueError("A valid earnings start date and purchase month are required") from exc
-        if start > today or start < acquired:
-            raise ValueError("Earnings start must be after the purchase month and not in the future")
+        if original is not None and set(sources_for(original)) != set(selected):
+            raise HardwareEditConflict(
+                "Changing income sources needs dated source-segment attribution; "
+                "existing verified earnings and checkpoints were not changed"
+            )
+        # Cosmetic/cost edits preserve the original earning dates even if a
+        # legacy device predates the explicit-start policy. Only a requested
+        # change to earning dates must pass the new strict date validation.
+        same_dates = original is not None and (
+            device.get("earningsStartDay") == original.get("earningsStartDay") and
+            device.get("startMonth") == original.get("startMonth"))
+        if not same_dates:
+            beginning = str(device.get("earningsStartDay") or "")
+            try:
+                start = date.fromisoformat(beginning)
+                acquired = date.fromisoformat(str(device.get("startMonth") or "") + "-01")
+            except (TypeError, ValueError) as exc:
+                raise ValueError("A valid earnings start date and purchase month are required") from exc
+            if start > today or start < acquired:
+                raise ValueError("Earnings start must be after the purchase month and not in the future")
         cost = decimal_or_none(device.get("cost"))
         power = decimal_or_none(device.get("power", 0))
         if cost is None or cost <= 0 or power is None:
             raise ValueError("Valid positive purchase cost and nonnegative power are required")
         if original is not None:
-            if sources_for(original) != selected:
-                raise HardwareEditConflict(
-                    "Changing income sources needs dated source-segment attribution; "
-                    "existing verified earnings and checkpoints were not changed"
-                )
             # An existing checkpoint is immutable during ordinary edits.
             # Explicit earningsStartDay changes affect the backend projection
             # but must not rewrite a historical checkpoint.
