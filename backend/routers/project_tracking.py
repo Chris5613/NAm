@@ -29,6 +29,7 @@ from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
 from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
+from ..financial_core import evaluate_statement, calculate_net_worth
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
 from ..integration_audit import audit_integration_settings
@@ -712,6 +713,37 @@ async def hardware_payback_lifetime(
                 for name, key in DASHBOARD_TRACKERS.items()}
     response.headers["Cache-Control"] = "private, no-store"
     return build_lifetime_hardware_payback(devices, daily, trackers, today.isoformat())
+
+
+@router.post("/financial-core/evaluate")
+async def evaluate_financial_core(
+    payload: dict, user: User = Depends(current_user),
+) -> dict:
+    """Read-only arithmetic on candidate statement lines.
+
+    This endpoint computes, never posts, income, financial statements,
+    cash movements or equipment values. Only saved/locked source records
+    can authorize financial writes through their existing routes.
+    """
+    if len(str(payload)) > 1_000_000:
+        raise HTTPException(status_code=413, detail="Financial input too large")
+    try:
+        return evaluate_statement(payload)
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.post("/financial-core/net-worth")
+async def evaluate_net_worth(
+    payload: dict, user: User = Depends(current_user),
+) -> dict:
+    """Non-mutating parity calculation while Home migrates to backend."""
+    if len(str(payload)) > 200_000:
+        raise HTTPException(status_code=413, detail="Net worth input too large")
+    result = calculate_net_worth(
+        payload.get("assets"), payload.get("business"), payload.get("cryptoTotal")
+    )
+    return {"sourceOfCalculation": "backend-financial-core", **result}
 
 
 @router.get("/provider-stats")
