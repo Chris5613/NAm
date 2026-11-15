@@ -9,8 +9,10 @@ export function useBackendTrialBalance(payload) {
     let active = true;
     setState(previous => previous?.signature === signature
       ? previous : { signature, loading: true });
-    api.post("/api/project-tracking/financial-core/historical-trial-balance",
-      JSON.parse(signature)).then(data => {
+    const refresh = () => api.post(
+      "/api/project-tracking/financial-core/historical-trial-balance",
+      JSON.parse(signature)
+    ).then(data => {
       if (!active) return;
       const valid = data?.sourceOfCalculation === "backend-trial-balance" &&
         Array.isArray(data.rows) &&
@@ -23,7 +25,11 @@ export function useBackendTrialBalance(payload) {
       setState(valid ? { signature, result: data } :
         { signature, error: true });
     }).catch(() => { if (active) setState({ signature, error: true }); });
-    return () => { active = false; };
+    // Persisted journals and provider income can update without a browser
+    // input change; poll the authoritative server projection.
+    refresh();
+    const interval = window.setInterval(refresh, 90000);
+    return () => { active = false; window.clearInterval(interval); };
   }, [signature, payload.month]);
   return state?.signature === signature ? state : { loading: true };
 }
