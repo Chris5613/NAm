@@ -27,7 +27,7 @@ import {
 } from "@/lib/financialAccountNames";
 import {
   buildFinancialBalanceRows, includeJournalEquipment, unmatchedEquipmentPurchases,
-  journalAccountActivity, deriveCashOpening, derivePayableOpening,
+  deriveCashOpening, derivePayableOpening,
   moneyRound, valueOrNull,
 } from "@/lib/financialAccounting";
 import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
