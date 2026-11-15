@@ -8,6 +8,8 @@ evidence, or live machine telemetry.
 from copy import deepcopy
 from math import isfinite
 
+from .kryptex_earnings_audit import recognize_mined_satoshi_increment
+
 
 def _nonnegative(value):
     if isinstance(value, bool) or value is None:
@@ -56,6 +58,10 @@ def merge_legacy_kryptex_setting(current, proposed):
         if checked is True:
             confirmed[day] = True
 
+    old_sats = current.get("kryptexMiningSatsDaily") or {}
+    merged_sats = _merge_high_water(
+        old_sats, proposed.get("kryptexMiningSatsDaily")
+    )
     daily = dict(previous_usd)
     for day, raw in new_usd.items():
         if not confirmed.get(day):
@@ -63,15 +69,14 @@ def merge_legacy_kryptex_setting(current, proposed):
         value = _nonnegative(raw)
         if value is None:
             continue
-        prev = _nonnegative(daily.get(day))
-        daily[day] = max(value, prev or 0)
+        prior_usd = _nonnegative(daily.get(day)) or 0
+        daily[day] = recognize_mined_satoshi_increment(
+            prior_usd, old_sats.get(day), merged_sats.get(day), value
+        )
 
     result["kryptexMiningDaily"] = daily
     result["kryptexConfirmedDays"] = confirmed
-    result["kryptexMiningSatsDaily"] = _merge_high_water(
-        current.get("kryptexMiningSatsDaily"),
-        proposed.get("kryptexMiningSatsDaily"),
-    )
+    result["kryptexMiningSatsDaily"] = merged_sats
 
     monthly = {
         **(current.get("monthlyEarnings") or {}),
