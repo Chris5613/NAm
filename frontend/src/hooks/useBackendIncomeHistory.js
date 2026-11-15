@@ -20,7 +20,7 @@ export function useBackendIncomeHistory(payload) {
       const valid = result?.sourceOfCalculation ===
         "backend-persisted-income-history" &&
         result.currentMonth === month && Array.isArray(result.months) &&
-        result.months.every(row => /^\\d{4}-\\d{2}$/.test(row.monthKey) &&
+        result.months.every(row => /^\d{4}-\d{2}$/.test(row.monthKey) &&
           Number.isFinite(row.total) &&
           typeof row.sources === "object" && row.sources !== null);
       if (!valid) throw Error("Incomplete backend income history");
