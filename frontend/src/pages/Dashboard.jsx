@@ -23,7 +23,6 @@ import {
 import {
   formatCurrency,
   getMonthKey,
-  readOnlyNetWorthTrends,
 } from "@/lib/dashboardMetrics";
 import {
   AllocationBar,
@@ -469,10 +468,10 @@ export default function Dashboard() {
             // Never generate browser-side financial history writes.
           }
           if (!isCurrent()) return;
-          const fallbackTrends = trends || readOnlyNetWorthTrends(calculatedNetWorth);
-          const categoryChanges = fallbackTrends.categoryChanges;
-          const monthlyHistory = fallbackTrends.monthlyHistory;
-          const dailyChange = fallbackTrends.dailyChange;
+          // No browser-generated daily/monthly financial trend fallback.
+          // If the backend trend calculation is unavailable, preserve the
+          // previously verified trend display rather than asserting a new
+          // computed history from browser-local baselines.
 
           setAssets(
             storedAssets
@@ -482,17 +481,11 @@ export default function Dashboard() {
             calculatedNetWorth
           );
 
-          setDailyNetWorthChange(
-            dailyChange
-          );
-
-          setDailyCategoryChanges(
-            categoryChanges
-          );
-
-          setHistory(
-            monthlyHistory
-          );
+          if (trends) {
+            setDailyNetWorthChange(trends.dailyChange);
+            setDailyCategoryChanges(trends.categoryChanges);
+            setHistory(trends.monthlyHistory);
+          }
 
           setLastUpdated(
             new Date()
