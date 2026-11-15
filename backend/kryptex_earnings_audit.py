@@ -42,10 +42,14 @@ def recognize_mined_satoshi_increment(previous_usd, previous_sats, total_sats, l
     chart_usd = _amount(latest_total_usd)
     if chart_usd is None or chart_usd <= 0:
         return old_usd
-    if old_usd <= 0 or old_sats <= 0:
-        # No dated satoshi+USD baseline yet. Preserve any previously
-        # confirmed income; the original total is only recognized once.
-        return max(old_usd, chart_usd)
+    if old_usd <= 0:
+        # First positive dated earnings observation: recognize once.
+        return chart_usd
+    if old_sats <= 0:
+        # Existing income with no historical satoshi basis cannot be
+        # repriced safely. Keep that USD amount fixed while establishing a
+        # sats baseline; later *increases* in sats can then be recognized.
+        return old_usd
     if current_sats <= old_sats:
         # BTC price appreciation alone is not mining income.
         return old_usd
