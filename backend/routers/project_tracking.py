@@ -31,8 +31,7 @@ from ..provider_stats import current_keys, provider_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..financial_historical_ledger import historical_trial_balance
 from ..home_business_snapshot import home_business_snapshot
-from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses, trial_balance
-from ..income_history_core import reconcile_lulo_months, historical_income, legacy_months
+from ..financial_core import evaluate_statement, calculate_net_worth, auto_income_journal, project_break_even, phone_asset_rows, sum_business_rows, project_automatic_expenses
 from ..persisted_income_snapshot import source_income_history, project_history_rows
 from ..financial_parity import record_parity_observation, parity_summary
 from ..manual_income_history import manual_income_for_user
@@ -789,19 +788,6 @@ async def evaluate_financial_historical_trial_balance(
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
-@router.post("/financial-core/trial-balance")
-async def evaluate_financial_trial_balance(
-    payload: dict, user: User = Depends(current_user),
-) -> dict:
-    """Server-only cumulative debit/credit ledger projection."""
-    if len(str(payload)) > 1_250_000:
-        raise HTTPException(status_code=413, detail="Trial balance input too large")
-    try:
-        return trial_balance(payload.get("accounts"), payload.get("entries"))
-    except (ValueError, TypeError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
-
-
 @router.post("/financial-core/evaluate")
 async def evaluate_financial_core(
     payload: dict, user: User = Depends(current_user),
@@ -968,36 +954,6 @@ async def source_owned_income_history(
         confirmed_legacy=confirmed_november_sources(dated, month, day),
     )
     return {**result, "calculatedAt": datetime.now(timezone.utc).isoformat()}
-
-
-@router.post("/financial-core/income-history")
-async def evaluate_income_history(
-    payload: dict, user: User = Depends(current_user),
-) -> dict:
-    """Canonical historical income arithmetic; never post a transaction.
-
-    Includes Lulo duplicate-baseline reconciliation, completed dated
-    performance, dividends, saved legacy project income and manual imports.
-    """
-    if len(str(payload)) > 1_500_000:
-        raise HTTPException(status_code=413, detail="Income history input too large")
-    current_month = payload.get("currentMonth")
-    if not isinstance(current_month, str) or not re.fullmatch(
-        r"\d{4}-(0[1-9]|1[0-2])", current_month
-    ):
-        raise HTTPException(status_code=422, detail="Invalid current month")
-    reconciled = reconcile_lulo_months(
-        payload.get("months"), payload.get("localBackfills"),
-        payload.get("backendBackfills"), current_month,
-        payload.get("luloProjects"), payload.get("currentDay"),
-    )
-    history = historical_income(
-        reconciled, payload.get("payouts"), current_month,
-        legacy_months(payload.get("legacyProjects")),
-        payload.get("manualMonths"),
-    )
-    return {"sourceOfCalculation": "backend-income-history",
-            "currentMonth": current_month, "months": history}
 
 
 @router.post("/financial-core/auto-expenses")
