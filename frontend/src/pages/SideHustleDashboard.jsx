@@ -393,8 +393,9 @@ export default function SideHustleDashboard() {
     if (!name || !sources.length || !/^[0-9]{4}-[0-9]{2}$/.test(hardwareDraft.startMonth) ||
         hardwareDraft.startMonth > currentMonthKey || !Number.isFinite(cost) || cost <= 0 ||
         !Number.isFinite(power) || power < 0 ||
-        !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(startDay) ||
-        startDay > pacificDayKey(Date.now())) {
+        (!hardwareDraft.id && !startDay) ||
+        (startDay && (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(startDay) ||
+        startDay > pacificDayKey(Date.now())))) {
       setAddError("Enter a name, cost, purchase month, earnings start date, and income source.");
       return;
     }
