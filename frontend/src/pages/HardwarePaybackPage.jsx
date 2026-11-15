@@ -1,7 +1,7 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Pencil, Trash2, X, CalendarDays, Zap } from "lucide-react";
-import { api } from "@/lib/apiClient";
+import { previewHardwareCheckpointEdit } from "@/lib/backendHardwareCheckpointEdit";
 import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 import { sharedPaybackSources } from "@/lib/hardwarePaybackReporting";
@@ -13,7 +13,6 @@ import { outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { formatCurrency, getCurrentMonthKey, getTodayKey, INACTIVE_PROJECTS_KEY, loadKryptexTracker, loadLoopscaleHistory, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
 
 const KEY = "hardware_payback_devices_v1";
-const KRYPTEX_PAYBACK_LEDGER = "kryptex-confirmed-v2";
 const INTEGRATED_SOURCES = ["Kryptex", "Salad", "RollerCoin", "Unetwork", "Loopscale", "Lulo"];
 const panel = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const money = value => formatCurrency(Number(value) || 0);
@@ -30,36 +29,6 @@ const deviceSources = device => Array.from(new Set(
   (Array.isArray(device?.sources) ? device.sources : [device?.source])
     .map(canonicalSourceName).filter(Boolean)
 ));
-const allocatedSourceIncome = (device, devices, monthRow, tracker) =>
-  deviceSources(device).reduce((sum,source)=>
-    sum + monthSourceAmount(monthRow,source,tracker),0);
-const monthSourceAmount = (row, source, kryptexTracker) => {
-  if (canonicalSourceName(source) === "Kryptex") {
-    const prefix = `${row?.monthKey || ""}-`;
-    if (!row?.monthKey) return 0;
-    return Object.entries(kryptexTracker?.kryptexMiningDaily || {})
-      .reduce((sum, [day, value]) => day.startsWith(prefix) &&
-        kryptexTracker?.kryptexConfirmedDays?.[day]
-        ? sum + Math.max(0, Number(value) || 0) : sum, 0);
-  }
-  return Object.entries(row?.sources || {}).reduce((sum, [name, amount]) =>
-    canonicalSourceName(name) === canonicalSourceName(source) ? sum + Math.max(0, Number(amount) || 0) : sum, 0);
-};
-const pacificDayKey = time => {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
-  }).formatToParts(new Date(time)).map(part => [part.type, part.value]));
-  return `${parts.year}-${parts.month}-${parts.day}`;
-};
-const todayKryptexIncome = tracker => {
-  const day = pacificDayKey(Date.now());
-  return tracker?.kryptexConfirmedDays?.[day]
-    ? Math.max(0, Number(tracker?.kryptexMiningDaily?.[day]) || 0) : 0;
-};
-const backfilledKryptexIncome = (device, tracker, today) =>
-  Object.entries(tracker?.kryptexMiningDaily || {}).reduce((sum, [day, value]) =>
-    day >= device.earningsStartDay && day <= today && tracker?.kryptexConfirmedDays?.[day]
-      ? sum + Math.max(0, Number(value) || 0) : sum, 0);
 const sourceOptionsFor = (history, months) => {
   const activeNames = new Set((history.activeProjectNames || []).map(canonicalSourceName));
   const hasTrackerData = tracker => tracker && Object.keys(tracker).some(key =>
@@ -85,59 +54,13 @@ function readHistory() {
   ].filter(Boolean);
   return { activeProjectNames, luloProjects: quickProjects.filter(p => p?.yield_tracking === "lulo_lending"), loopscale: loadLoopscaleHistory(), salad: loadSaladTracker(), rollercoin: loadRollerCoinTracker(), unetwork: loadUnetworkTracker(), kryptex: loadKryptexTracker() };
 }
-// Fractional Pacific calendar month, used to prorate power after a checkpoint.
-function monthPosition(time) {
-  const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "numeric",
-    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
-  }).formatToParts(time).map(part => [part.type, Number(part.value)]));
-  const days = new Date(Date.UTC(parts.year, parts.month, 0)).getUTCDate();
-  return parts.year * 12 + parts.month - 1 +
-    (parts.day - 1 + (parts.hour + parts.minute / 60 + parts.second / 3600) / 24) / days;
-}
-
-function deviceEarnings(devices, months, month, now, kryptexTracker) {
-  return Object.fromEntries(devices.map(device => {
-    const sources=deviceSources(device);
-    if(!device.checkpoint || !sources.length) return [device.id,0];
-    const checkpoint=device.checkpoint;
-    const isKryptexOnly=sources.length===1 && sources[0]==="Kryptex";
-    if(isKryptexOnly && checkpoint.ledger!==KRYPTEX_PAYBACK_LEDGER) return [device.id,0];
-    // Hardware cost is a payback target, not an income-allocation weight.
-    const income=months.reduce((sum,row) =>
-      row.monthKey>=checkpoint.month && row.monthKey<=month
-        ? sum+sources.reduce((total,source)=>total+monthSourceAmount(row,source,kryptexTracker),0)
-        : sum,0);
-    const power=Math.max(0,monthPosition(now)-monthPosition(checkpoint.time)) *
-      outOfPocketMiningPowerCost(device.power,month);
-    if(isKryptexOnly && device.earningsStartDay) {
-      const today=pacificDayKey(now);
-      const accrued=backfilledKryptexIncome(device,kryptexTracker,today);
-      const startTime=new Date(device.earningsStartDay+"T12:00:00Z");
-      const powerCost=Math.max(0,monthPosition(now)-monthPosition(startTime))*
-        outOfPocketMiningPowerCost(device.power,month);
-      return [device.id,Math.max(0,accrued-powerCost)];
-    }
-    if(isKryptexOnly && pacificDayKey(checkpoint.time)===pacificDayKey(Date.now())) {
-      const todayIncome=todayKryptexIncome(kryptexTracker);
-      return [device.id,Math.max(0,todayIncome-power)];
-    }
-    // Old single-source checkpoints stored an unallocated baseline;
-    // new multi-source checkpoints store the allocated total.
-    const baseline=checkpoint.allocationMode==="allocated"
-      ? Number(checkpoint.baseline) || 0
-      : (Number(checkpoint.baseline) || 0);
-    return [device.id,Math.max(0,(Number(checkpoint.carried) || 0)+income-baseline-power)];
-  }));
-}
-
 export default function HardwarePaybackPage() {
   const [devices, setDevices] = useState(readDevices);
   const [history, setHistory] = useState(readHistory);
   const [draft, setDraft] = useState(null);
   const [error, setError] = useState("");
   const [photoLoading, setPhotoLoading] = useState(false);
-  const [historyReady, setHistoryReady] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [clock, setClock] = useState(Date.now());
   const {data: backendRecovery, error: backendRecoveryError} = useBackendHardwarePayback();
   useEffect(() => subscribe(() => { setDevices(readDevices()); setHistory(readHistory()); }), []);
@@ -161,11 +84,6 @@ export default function HardwarePaybackPage() {
       window.removeEventListener("kryptex-aggregate-update", receiveAggregate);
   }, []);
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 60000); return () => clearInterval(timer); }, []);
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => { try { const result = await api.get("/api/yield-sources/earnings"); if (active && result) setHistoryReady(true); } catch {} };
-    refresh(); const timer = setInterval(refresh, 90000); return () => { active = false; clearInterval(timer); };
-  }, []);
   const currentMonth = useMemo(getCurrentMonthKey, [clock]);
   const currentDay = useMemo(getTodayKey, [clock]);
   const months = useBackendIncomeHistory({ currentMonth });
@@ -185,48 +103,41 @@ export default function HardwarePaybackPage() {
   const totalEarned = backendRecovery?.sumObservedDeviceCreditsUsd ?? null;
   const left = backendRecovery?.sumObservedRemainingUsd ?? null;
   const totalCost = backendRecovery?.sumDeviceCashCostUsd ?? null;
-  function persist(next) {
-    const time=Date.now();
-    const carried=deviceEarnings(devices,months,currentMonth,time,history.kryptex);
-    const currentRow=months.find(row=>row.monthKey===currentMonth);
-    const updated=next.map(device=>{
-      const sources=deviceSources(device);
-      const previous=devices.find(row=>row.id===device.id);
-      const unchanged=previous && JSON.stringify(deviceSources(previous))===JSON.stringify(sources);
-      return {
-        ...device,
-        sources,
-        source:sources[0] || "",
-        // Keep accrued payback earned before a source change. The new source
-        // only starts contributing from the newly recorded checkpoint.
-        checkpoint:{
-          time,month:currentMonth,
-          baseline:!previous && sources.length===1 && sources[0]==="Kryptex"
-            ? 0 : allocatedSourceIncome(device,next,currentRow,history.kryptex),
-          allocationMode:"allocated",
-          carried:previous ? (carried[device.id] ?? 0) : 0,
-          ...(sources.includes("Kryptex") ? {ledger:KRYPTEX_PAYBACK_LEDGER} : {}),
-        },
-        // Preserve confirmed Kryptex backfills only for an unchanged
-        // Kryptex-only configuration.
-        ...(device.earningsStartDay ? {} : {earningsStartDay:null,powerStartTime:null}),
-      };
-    });
-    remoteStorage.setItem(KEY,JSON.stringify(updated));
-    setDevices(updated);
-    setDraft(null);
+  async function persist(next) {
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      const reviewed = await previewHardwareCheckpointEdit(devices, next);
+      // No checkpoint is persisted until the backend has reviewed the
+      // complete proposed register against the currently saved version.
+      remoteStorage.setItem(KEY, JSON.stringify(reviewed));
+      setDevices(reviewed);
+      setDraft(null);
+    } catch (error) {
+      setError(error?.message || "Hardware edit could not be verified by the backend");
+    } finally {
+      setSaving(false);
+    }
   }
-  const save = event => {
+  const save = async event => {
     event.preventDefault();
     const name = draft.name.trim(), cost = Number(draft.cost), power = Number(draft.power || 0);
-    if (photoLoading) return;
-    if (!name || (draft.earningsStartDay && (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(draft.earningsStartDay) || draft.earningsStartDay>currentDay)) || !deviceSources(draft).length || !/^\d{4}-\d{2}$/.test(draft.startMonth) || draft.startMonth > currentMonth || !Number.isFinite(cost) || cost <= 0 || !Number.isFinite(power) || power < 0) { setError("Enter a name, purchase month, cost, and income source."); return; }
-    const sources=deviceSources(draft);
-    const device = { ...draft, sources, source:sources[0] };
-    const next = draft.id ? devices.map(row => row.id === draft.id ? { ...device, name, cost, power } : row) : [...devices, { ...device, id: crypto.randomUUID(), name, cost, power }];
-    persist(next); setError("");
+    if (photoLoading || saving) return;
+    if (!name || (!/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(draft.earningsStartDay || "") || draft.earningsStartDay>currentDay) || !deviceSources(draft).length || !/^\\d{4}-\\d{2}$/.test(draft.startMonth) || draft.startMonth > currentMonth || !Number.isFinite(cost) || cost <= 0 || !Number.isFinite(power) || power < 0) {
+      setError("Enter a name, purchase month, cost, earnings start date, and income source.");
+      return;
+    }
+    const sources = deviceSources(draft);
+    const device = { ...draft, sources, source: sources[0] };
+    const next = draft.id
+      ? devices.map(row => row.id === draft.id ? { ...device, name, cost, power } : row)
+      : [...devices, { ...device, id: crypto.randomUUID(), name, cost, power }];
+    await persist(next);
   };
-  const remove = id => { const next = devices.filter(row => row.id !== id); persist(next); };
+  const remove = async id => {
+    await persist(devices.filter(row => row.id !== id));
+  };
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="hardware-payback-page">
     <header className="flex flex-wrap items-center justify-between gap-3 px-1"><h1 className="text-[32px] font-semibold tracking-tight">Hardware Payback</h1><button type="button" onClick={() => { setError(""); setDraft({ name: "", cost: "", power: "", startMonth: currentMonth, source: "", sources: [], earningsStartDay:currentDay }); }} className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-500/20"><Plus className="h-4 w-4"/>Add hardware</button></header>
     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{[["Hardware cash cost", totalCost], ["Backend-observed device credits", totalEarned], ["Observed remaining to recover", left]].map(([title, value], i) => <section key={title} className={`${panel} border-t-2 p-5 sm:p-6 ${i === 0 ? "border-t-sky-500" : i === 1 ? "border-t-emerald-400" : "border-t-indigo-400"}`}><p className="text-sm font-semibold text-[#c4d1de]">{title}</p><strong className={`mt-3 block text-4xl tabular-nums ${i === 1 ? "text-emerald-400" : ""}`}>{devices.length && value != null ? money(value) : "—"}</strong></section>)}</div>
@@ -285,6 +196,6 @@ finally{setPhotoLoading(false);e.target.value="";}}}
 className="block w-full text-xs text-[#aab9c6] file:mr-2 file:rounded-md file:border-0 file:bg-[#243a4e] file:px-2 file:py-1.5 file:text-white"/>
 {draft.photo && <button type="button" className="text-xs text-rose-300 hover:underline" onClick={()=>setDraft(current=>({...current,photo:""}))}>Remove photo</button>}
 <p className="text-[11px] text-[#91a4b8]">Optional JPG, PNG or WebP. RTX 5080 has a default illustration.</p>
-</div></div></div><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><fieldset className="space-y-2"><legend className="text-sm">Income sources (select multiple)</legend><div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#3c5267] bg-[#111b25] p-2">{Array.from(new Set([...sourceOptions,...deviceSources(draft)])).map(source=><label key={source} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"><input type="checkbox" checked={deviceSources(draft).includes(source)} onChange={event=>{ const current=deviceSources(draft); const sources=event.target.checked ? [...current,source] : current.filter(item=>item!==source); setDraft({...draft,sources,source:sources[0] || ""}); }} className="h-4 w-4 accent-emerald-400"/>{source}</label>)}</div></fieldset><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Earnings start date<input type="date" max={currentDay} value={draft.earningsStartDay || ""} onChange={e => setDraft({ ...draft, earningsStartDay: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/><span className="mt-1 block text-xs text-[#91a4b8]">Backend recovery uses this Pacific start date for every selected source. Changing income sources may require a separate historical checkpoint review. A blank start date cannot be certified.</span></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" disabled={!historyReady} onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" disabled={!historyReady || photoLoading} className="disabled:opacity-50 flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">{historyReady ? "Save" : "Loading earnings…"}</button></div></form></div>}
+</div></div></div><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><fieldset className="space-y-2"><legend className="text-sm">Income sources (select multiple)</legend><div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#3c5267] bg-[#111b25] p-2">{Array.from(new Set([...sourceOptions,...deviceSources(draft)])).map(source=><label key={source} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"><input type="checkbox" checked={deviceSources(draft).includes(source)} onChange={event=>{ const current=deviceSources(draft); const sources=event.target.checked ? [...current,source] : current.filter(item=>item!==source); setDraft({...draft,sources,source:sources[0] || ""}); }} className="h-4 w-4 accent-emerald-400"/>{source}</label>)}</div></fieldset><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Earnings start date<input type="date" max={currentDay} value={draft.earningsStartDay || ""} onChange={e => setDraft({ ...draft, earningsStartDay: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/><span className="mt-1 block text-xs text-[#91a4b8]">Backend recovery uses this Pacific start date for every selected source. Changing income sources may require a separate historical checkpoint review. A blank start date cannot be certified.</span></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" disabled={saving} onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" disabled={saving || photoLoading} className="disabled:opacity-50 flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">{saving ? "Verifying…" : "Save"}</button></div></form></div>}
   </div>;
 }
