@@ -359,10 +359,6 @@ export default function FinancialsPage() {
     (currentLedgerState.error && currentLedgerState.data) ||
     (serverFinancialState.error && serverFinancialState.data)
   );
-  const refreshingCachedFinancials = Boolean(
-    liveStale || backendBalanceRows.stale || currentLedgerState.stale ||
-    serverFinancialState.stale || trialState.stale
-  );
   const report = serverFinancial?.profit || {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
     depreciation: 0, expenses: 0, profit: 0,
@@ -432,6 +428,10 @@ export default function FinancialsPage() {
   const trial = trialState.result?.rows || [];
   const trialDebit = trialState.result?.debitsUsd ?? 0;
   const trialCredit = trialState.result?.creditsUsd ?? 0;
+  const refreshingCachedFinancials = Boolean(
+    liveStale || backendBalanceRows.stale || currentLedgerState.stale ||
+    serverFinancialState.stale || trialState.stale
+  );
   const cashFlow = serverFinancial?.cashFlow || {
     sections: { operating: [], investing: [], financing: [], transfers: [] },
     totals: { operating: 0, investing: 0, financing: 0, transfers: 0 },
