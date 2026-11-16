@@ -1,4 +1,14 @@
 /** Account-scoped short-lived preview of backend-owned device recovery. */
+/** Show backend forecast duration as months without changing forecast math. */
+export function formatEstimatedPaybackMonths(daysRemaining, remainingUsd) {
+  if (typeof remainingUsd === "number" && Number.isFinite(remainingUsd) &&
+      remainingUsd <= 0) return "Recovered";
+  if (typeof daysRemaining !== "number" || !Number.isFinite(daysRemaining) ||
+      daysRemaining < 0) return "—";
+  const months = Math.round(daysRemaining / (365.2425 / 12) * 10) / 10;
+  return `${months.toFixed(1)} months`;
+}
+
 export const HARDWARE_PREVIEW_TTL = 2 * 60 * 1000;
 const key = (userId, day) => userId == null || !/^\d{4}-\d{2}-\d{2}$/.test(String(day))
   ? null : "nam:hardware-payback:backend:v1:" +

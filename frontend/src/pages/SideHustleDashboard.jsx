@@ -13,6 +13,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { readCryptoDashboardPowerCache, writeCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
 import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
 import { previewHardwareCheckpointEdit } from "@/lib/backendHardwareCheckpointEdit";
+import { formatEstimatedPaybackMonths } from "@/lib/backendHardwarePaybackCache";
 
 
 
@@ -432,10 +433,9 @@ export default function SideHustleDashboard() {
             const recovered=verified?.observedCreditUsd ?? null;
             const progress=verified?.observedProgressPct ?? null;
             const remaining=verified?.observedRemainingUsd ?? null;
-            const payoffDay=verified?.estimatedPaybackDate || null;
-            const payoffLabel=payoffDay && /^\d{4}-\d{2}-\d{2}$/.test(payoffDay)
-              ? new Date(payoffDay+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})
-              : remaining != null && remaining <= 0 ? "Recovered" : "—";
+            const payoffLabel=formatEstimatedPaybackMonths(
+              verified?.estimatedDaysRemaining, remaining
+            );
 
             return <div
               key={row.id} role="button" tabIndex={0}
@@ -472,7 +472,7 @@ export default function SideHustleDashboard() {
                   <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]" title={verified?.estimatedDailyCreditUsd != null
                     ? `${verified.forecastBasis==="blend-70pct-7day-30pct-live-kryptex" ? "70% 7-day average + 30% live Kryptex estimate" : "7-day observed average (live Kryptex unavailable)"}: ${money(verified.estimatedDailyCreditUsd)}/day · ${verified.estimatedDaysRemaining ?? "?"} days remaining`
                     : "No reliable estimate available yet"}>{payoffLabel}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">{payoffDay && verified?.forecastPartial ? "Est. payback · partial data" : "Estimated payback date"}</p>
+                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">{verified?.forecastPartial && payoffLabel !== "—" && payoffLabel !== "Recovered" ? "Est. payback · partial data" : "Estimated payback time"}</p>
                 </div>
               </div>
             </div>;
