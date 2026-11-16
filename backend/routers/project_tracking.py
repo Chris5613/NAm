@@ -1077,8 +1077,27 @@ async def source_owned_income_history(
     """
     month = datetime.now(timezone.utc).astimezone(
         ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
-    snapshots = setting(db, user.id, "yield_monthly_snapshots_v1")
-    dividends = setting(db, user.id, "yield_stock_dividend_payouts_v1")
+    # Read all source-income settings in a single indexed database query,
+    # rather than separately fetching snapshots, payouts, and four trackers.
+    tracker_keys = {
+        "salad": "project_income_salad_tracker_v1",
+        "unetwork": "project_income_unetwork_tracker_v1",
+        "kryptex": "project_income_kryptex_tracker_v1",
+        "rollercoin": "project_income_rollercoin_tracker_v2",
+    }
+    settings_keys = (
+        "yield_monthly_snapshots_v1",
+        "yield_stock_dividend_payouts_v1",
+        *tracker_keys.values(),
+    )
+    saved = {
+        row.key: row.value for row in db.scalars(select(Setting).where(
+            Setting.user_id == user.id,
+            Setting.key.in_(settings_keys),
+        )).all()
+    }
+    snapshots = saved.get("yield_monthly_snapshots_v1")
+    dividends = saved.get("yield_stock_dividend_payouts_v1")
     # No browser supplied financial totals or temporary Quick Cache inputs.
     projects = db.scalars(select(Project).where(Project.user_id == user.id)).all()
     transactions = db.scalars(select(ProjectTransaction).where(
@@ -1093,17 +1112,9 @@ async def source_owned_income_history(
             "amount": entry.amount,
         })
     project_rows = project_history_rows(projects, per_project)
-    # Use durable tracker and daily ledger observations, never current
-    # wallet balances. This endpoint must not depend on another handler's
-    # local variables (trackers/dates/current Pacific day).
+    # Keep provider projections entirely server-owned.
     trackers = {
-        name: setting(db, user.id, key) or {}
-        for name, key in {
-            "salad": "project_income_salad_tracker_v1",
-            "unetwork": "project_income_unetwork_tracker_v1",
-            "kryptex": "project_income_kryptex_tracker_v1",
-            "rollercoin": "project_income_rollercoin_tracker_v2",
-        }.items()
+        name: saved.get(key) or {} for name, key in tracker_keys.items()
     }
     prefix = "yield_server_daily_income_" + month + "-"
     dated = {
