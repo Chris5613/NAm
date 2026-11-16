@@ -381,6 +381,17 @@ def _run_import(
     }
 
 
+async def preview_dump(
+    payload: dict[str, Any],
+    user: User = Depends(current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Internal read-only import preview used by migration safety tests.
+    This helper is intentionally not exposed as an HTTP endpoint.
+    """
+    return _run_import(payload, user, db, commit=False)
+
+
 @router.post("/import")
 async def import_dump(
     payload: dict[str, Any],
