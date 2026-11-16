@@ -1,8 +1,7 @@
-"""Market GETs are bounded, coalesced, and MLB is read-only."""
+"""Market GET requests are bounded and coalesced."""
 import asyncio
 import time
 import unittest
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from backend.routers import market
@@ -36,27 +35,12 @@ class MarketCacheTests(unittest.TestCase):
         self.assertIn("same", market._cache)
         self.assertNotIn("same", market._inflight_gets)
 
-    def test_mlb_route_is_get_only_and_requires_auth_dependency(self):
-        route = next(
-            row for row in market.router.routes
-            if getattr(row, "path", "") == "/api/market/mlb/{path:path}"
-        )
-        self.assertEqual(route.methods, {"GET"})
-        dependency_names = {
-            getattr(dep.call, "__name__", "")
-            for dep in route.dependant.dependencies
-        }
-        self.assertIn("current_user", dependency_names)
-
-    def test_mlb_get_uses_cache(self):
-        request = SimpleNamespace(method="GET", query_params={})
-        user = SimpleNamespace(id=1)
-        with patch.object(market, "_fetch", return_value={"dates": []}) as fetch:
-            first = asyncio.run(market.public_mlb_proxy("schedule", request=request, user=user))
-            second = asyncio.run(market.public_mlb_proxy("schedule", request=request, user=user))
-        self.assertEqual(first, {"dates": []})
-        self.assertEqual(second, {"dates": []})
-        self.assertEqual(fetch.call_count, 1)
+    def test_removed_mlb_route_is_not_registered(self):
+        self.assertFalse(any(
+            getattr(route, "path", "") == "/api/market/mlb/{path:path}"
+            for route in market.router.routes
+        ))
+        self.assertNotIn("mlb", market._provider_config())
 
     def test_cache_is_bounded(self):
         for i in range(market.CACHE_MAX_ENTRIES + 30):
