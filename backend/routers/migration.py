@@ -146,19 +146,6 @@ def _linked_at(value: Any) -> datetime | None:
         raise HTTPException(status_code=422, detail="linkedAt must be a valid ISO timestamp.") from error
 
 
-@router.get("/status")
-async def status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    counts = {
-        "assets": db.scalar(select(func.count()).select_from(RESOURCES["assets"][0]).where(RESOURCES["assets"][0].user_id == user.id)),
-        "projects": db.scalar(select(func.count()).select_from(RESOURCES["projects"][0]).where(RESOURCES["projects"][0].user_id == user.id)),
-        "spending_transactions": db.scalar(
-            select(func.count()).select_from(SpendingTransaction).where(SpendingTransaction.user_id == user.id)
-        ),
-        "settings": db.scalar(select(func.count()).select_from(Setting).where(Setting.user_id == user.id)),
-    }
-    return {"imported": any(counts.values()), "counts": counts}
-
-
 def _run_import(
     payload: dict[str, Any],
     user: User,
@@ -392,16 +379,6 @@ def _run_import(
         "skip_details": skip_details,
         "skipped_samples": skip_counts.get("sample", 0),
     }
-
-
-@router.post("/preview")
-async def preview_dump(
-    payload: dict[str, Any],
-    user: User = Depends(current_user),
-    db: Session = Depends(get_db),
-) -> dict:
-    """Preview exactly what an import would add without mutating the database."""
-    return _run_import(payload, user, db, commit=False)
 
 
 @router.post("/import")
