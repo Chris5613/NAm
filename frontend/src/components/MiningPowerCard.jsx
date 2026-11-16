@@ -283,9 +283,10 @@ export default function MiningPowerCard() {
 
   const monthlyDevices = currentMonth?.devices || {};
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
-  // Keep GPU cards at the reference's compact five-up width even with 1-2
-  // connected devices. Never expand them to occupy the entire dashboard.
-  const gpuGridClass = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
+  // Use a roughly 390px GPU card footprint, including when only two GPUs
+  // are connected. Auto-fill reserves empty columns instead of stretching
+  // existing cards across the available dashboard width.
+  const gpuGridColumns = "repeat(auto-fill, minmax(min(100%, 390px), 1fr))";
 
 
 
@@ -342,7 +343,7 @@ export default function MiningPowerCard() {
         </div>
       </section>
 
-      <section aria-label="Tracked mining GPUs" className={"grid min-w-0 items-stretch gap-3 " + gpuGridClass}>
+      <section aria-label="Tracked mining GPUs" className="grid min-w-0 items-stretch gap-3" style={{ gridTemplateColumns: gpuGridColumns }}>
         {deviceRows.map(device => (
           <DeviceCard key={device.id} device={device}
             label={settings.deviceLabels?.[device.id] || device.label}
