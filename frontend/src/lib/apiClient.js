@@ -120,6 +120,5 @@ export const spendingApi = {
 };
 
 export const migrationApi = {
-  status: () => api.get("/api/migration/status"),
   importDump: (dump) => api.post("/api/migration/import", dump),
 };
