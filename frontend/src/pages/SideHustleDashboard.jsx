@@ -664,7 +664,7 @@ export default function SideHustleDashboard() {
                     {hardwareDraft.photo && <button type="button"
                       onClick={()=>setHardwareDraft(current=>({...current,photo:""}))}
                       className="text-xs text-rose-300 hover:underline">Remove photo</button>}
-                    <p className="text-[11px] text-[#91a4b8]">Optional JPG, PNG or WebP. RTX 5080 has a default illustration.</p>
+                    <p className="text-[11px] text-[#91a4b8]">Optional JPG, PNG or WebP. RTX 5080 has a transparent default image.</p>
                   </div>
                 </div>
               </div>
