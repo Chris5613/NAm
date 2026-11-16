@@ -2,15 +2,13 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { authApi } from "@/lib/apiClient";
 import { NavLink } from "react-router-dom";
-import ImportDataDialog from "@/components/ImportDataDialog";
 import { useAuth } from "@/lib/AuthContext";
-import { Home, CreditCard, Download, LogOut, KeyRound, Zap, Menu, X, LayoutDashboard, FileText } from "lucide-react";
+import { Home, CreditCard, LogOut, KeyRound, Zap, Menu, X, LayoutDashboard, FileText } from "lucide-react";
 
 const mainLinks = [{ to: "/", label: "Home", Icon: Home }, { to: "/spending", label: "Spending", Icon: CreditCard }];
 const financeLinks = [{ to: "/crypto-dashboard", label: "Crypto Dashboard", Icon: LayoutDashboard }, { to: "/financials", label: "Financials", Icon: FileText }, { to: "/mining-power", label: "Mining Power", Icon: Zap }];
 
 export default function Sidebar() {
-  const [importOpen, setImportOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [passwordOpen, setPasswordOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -67,12 +65,10 @@ export default function Sidebar() {
           <div className="flex h-7 w-7 items-center justify-center rounded-full border border-[#666374] text-[11px] text-white">{String(user.username || "U").slice(0,2).toUpperCase()}</div>
           <div className="min-w-0"><p className="text-[10px] text-[#848892]">Signed in</p><p className="truncate text-xs font-medium text-white">{user.username}</p></div>
         </div>}
-        <button type="button" onClick={() => { setMobileOpen(false); setImportOpen(true); }} className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-xs text-[#a2a6af] hover:bg-white/[0.055] hover:text-white"><Download className="h-4 w-4"/>Import data</button>
         <button type="button" onClick={() => { setMobileOpen(false); setPasswordOpen(true); }} className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-xs text-[#a2a6af] hover:bg-white/[0.055] hover:text-white"><KeyRound className="h-4 w-4"/>Change password</button>
         <button type="button" onClick={() => { setMobileOpen(false); logout(); }} className="flex h-9 w-full items-center gap-3 rounded-md px-3 text-xs text-[#a2a6af] hover:bg-white/[0.055] hover:text-white"><LogOut className="h-4 w-4"/>Sign out</button>
       </div>
     </aside>
-    <ImportDataDialog open={importOpen} onOpenChange={setImportOpen}/>
     {passwordOpen && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPasswordOpen(false); }}>
       <form onSubmit={changePassword} aria-label="Change password" className="w-full max-w-sm space-y-4 rounded-xl border border-[#333] bg-[#151618] p-6 text-white">
         <h2 className="text-lg font-semibold">Change password</h2>
