@@ -116,81 +116,64 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
       }
     : DEVICE_META[device?.id] || null;
   return (
-    <section className="rounded-2xl border border-border/55 bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="rounded-lg bg-sky-400/10 p-2 text-sky-300">
-            <Cpu className="h-4 w-4" />
-          </div>
-          <div>
+    <section className="flex min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="shrink-0 rounded-lg bg-sky-400/10 p-1.5 text-sky-300">
+            <Cpu className="h-3.5 w-3.5" />
+          </span>
+          <div className="min-w-0">
             {editing ? (
-              <form onSubmit={saveLabel} className="flex flex-wrap items-center gap-1.5">
+              <form onSubmit={saveLabel} className="flex min-w-0 items-center gap-1">
                 <input autoFocus aria-label="GPU name" maxLength={80} value={draftLabel}
-                  onChange={event=>setDraftLabel(event.target.value)}
-                  onKeyDown={event=>{if(event.key==="Escape"){setEditing(false);setRenameError("");}}}
-                  className="w-[min(210px,45vw)] rounded-md border border-sky-400/50 bg-background px-2 py-1 text-sm text-foreground outline-none focus:border-sky-400"/>
-                <button type="submit" aria-label="Save GPU name" className="rounded p-1 text-emerald-400 hover:bg-secondary"><Check size={16}/></button>
-                <button type="button" aria-label="Cancel GPU rename" onClick={()=>{setEditing(false);setRenameError("");}}
-                  className="rounded p-1 text-muted-foreground hover:bg-secondary"><X size={16}/></button>
+                  onChange={event => setDraftLabel(event.target.value)}
+                  onKeyDown={event => {if(event.key==="Escape"){setEditing(false);setRenameError("");}}}
+                  className="min-w-0 w-full rounded-md border border-sky-400/50 bg-background px-1.5 py-1 text-xs text-foreground outline-none focus:border-sky-400" />
+                <button type="submit" aria-label="Save GPU name" className="shrink-0 rounded p-1 text-emerald-400 hover:bg-secondary"><Check size={13} /></button>
+                <button type="button" aria-label="Cancel GPU rename" onClick={() => {setEditing(false);setRenameError("");}}
+                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-secondary"><X size={13} /></button>
               </form>
             ) : (
-              <div className="flex items-center gap-1.5">
-                <h2 className="text-base font-semibold">{label || device?.label || "PC"}</h2>
+              <div className="flex min-w-0 items-center gap-0.5">
+                <h2 className="truncate text-[12px] font-semibold leading-tight" title={label || device?.label || "PC"}>{label || device?.label || "PC"}</h2>
                 <button type="button" aria-label={"Rename " + (label || device?.label || "GPU")}
                   title="Rename GPU" onClick={beginRename}
-                  className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-sky-300"><Pencil size={14}/></button>
+                  className="shrink-0 rounded p-1 text-muted-foreground hover:bg-secondary hover:text-sky-300"><Pencil size={11} /></button>
               </div>
             )}
-            {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
-            {meta?.brand && (
-              <p className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.16em] text-muted-foreground">
-                {meta.brand}
-              </p>
-            )}
+            {meta?.brand && <p className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">{meta.brand}</p>}
           </div>
         </div>
-        <span className={"inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
-          <span className={"h-1.5 w-1.5 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
+        <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
+          <span className={"h-1 w-1 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
           {live ? "Live" : "Stale"}
         </span>
       </div>
-
-      <div className="relative mt-4 min-h-[160px] overflow-hidden rounded-xl">
-        <div className={meta ? "relative z-20 max-w-[52%] pt-3" : "relative z-20 pt-3"}>
-          <p className="text-[38px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
-            {watts == null ? "—" : `${watts.toFixed(0)} W`}
-          </p>
-        </div>
-
-        {meta?.image && (
+      {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
+      <p className="mt-3 text-[27px] font-semibold leading-none tracking-tight tabular-nums text-foreground">{watts == null ? "—" : watts.toFixed(0) + "W"}</p>
+      <div className="relative mt-1 flex h-24 min-w-0 items-center justify-center overflow-hidden rounded-md">
+        {meta?.image ? (
           <>
-            <div className={"pointer-events-none absolute -right-10 -top-8 h-44 w-72 rounded-full bg-gradient-to-l " + meta.glow + " to-transparent blur-2xl"} />
-            <div className="pointer-events-none absolute inset-y-0 right-[40%] z-10 w-24 bg-gradient-to-r from-card via-card/70 to-transparent" />
-            <img
-              src={meta.image}
-              alt={meta.alt}
-              loading="lazy"
-              referrerPolicy="no-referrer"
-              className={"pointer-events-none absolute -bottom-1 right-2 z-10 object-contain object-right opacity-95 drop-shadow-[0_18px_28px_rgba(0,0,0,0.58)] " + (is5080 ? "h-[176px] w-[62%]" : "h-[128px] w-[50%]")}
-            />
+            <div className={"pointer-events-none absolute inset-0 bg-gradient-to-t " + meta.glow + " to-transparent blur-xl"} />
+            <img src={meta.image} alt={meta.alt} loading="lazy" referrerPolicy="no-referrer"
+              className="relative h-full w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.55)]" />
           </>
+        ) : (
+          <Cpu className="h-12 w-12 text-sky-400/25" aria-hidden="true" />
         )}
       </div>
-
-      <div className="grid grid-cols-2 divide-x divide-border/40 border-t border-border/35 pt-4">
-        <div className="pr-4">
-          <div className="flex items-center gap-2 text-cyan-300">
-            <CalendarDays className="h-4 w-4" />
-            <span className="text-sm font-semibold tabular-nums">{monthlyKwh.toFixed(2)} kWh</span>
-          </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">Total kWh this month</p>
+      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/40 pt-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1 text-[11px] font-semibold tabular-nums text-cyan-300">
+            <CalendarDays className="h-3 w-3 shrink-0" />{monthlyKwh.toFixed(2)} kWh
+          </p>
+          <p className="mt-1 text-[9px] leading-snug text-muted-foreground">This month</p>
         </div>
-        <div className="pl-4">
-          <div className="flex items-center gap-2 text-amber-400">
-            <Coins className="h-4 w-4" />
-            <span className="text-sm font-semibold tabular-nums">{monthlyCost == null ? "—" : money(monthlyCost)}</span>
-          </div>
-          <p className="mt-1 text-[10px] text-muted-foreground">Total monthly cost</p>
+        <div className="min-w-0">
+          <p className="flex items-center gap-1 text-[11px] font-semibold tabular-nums text-amber-400">
+            <Coins className="h-3 w-3 shrink-0" />{monthlyCost == null ? "—" : money(monthlyCost)}
+          </p>
+          <p className="mt-1 text-[9px] leading-snug text-muted-foreground">Monthly cost</p>
         </div>
       </div>
     </section>
@@ -301,14 +284,11 @@ export default function MiningPowerCard() {
   const monthlyDevices = currentMonth?.devices || {};
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
   const gpuGridClass =
-    deviceRows.length <= 1
-      ? "grid-cols-1"
-      : deviceRows.length === 2
-        ? "grid-cols-1 sm:grid-cols-2"
-        : deviceRows.length === 3
-          ? "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3"
-          : "grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4";
-
+    deviceRows.length <= 1 ? "grid-cols-1"
+      : deviceRows.length === 2 ? "grid-cols-1 sm:grid-cols-2"
+      : deviceRows.length === 3 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+      : deviceRows.length === 4 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
+      : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
 
 
 
@@ -323,109 +303,54 @@ export default function MiningPowerCard() {
   }
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-4 px-1">
-        <div>
-          <div className="flex flex-wrap items-center gap-3">
-            <Zap className="h-8 w-8 text-emerald-400" />
-            <h1 className="text-[32px] font-semibold tracking-tight">Mining Power</h1>
-            <span className={"inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium " + (live ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
-              <span className={"h-2 w-2 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
-              {live ? "Live" : "Stale"}
-            </span>
-          </div>
+    <div className="min-w-0 space-y-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className="rounded-xl bg-emerald-500/10 p-2 text-emerald-400"><Zap className="h-5 w-5" /></span>
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-[28px]">Mining Power</h1>
         </div>
-
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>Last updated: {formatUpdated(latest?.observedAt)}</span>
-          <button type="button" onClick={() => refresh(true)} className="rounded-full border border-border/50 p-2 hover:bg-secondary hover:text-foreground" aria-label="Refresh mining power">
+        <div className="flex items-center gap-2">
+          <span title={"Last updated: " + formatUpdated(latest?.observedAt)}
+            className={"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
+            <span className={"h-1.5 w-1.5 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
+            {live ? "All Systems Online" : "Readings Stale"}
+          </span>
+          <button type="button" onClick={() => refresh(true)} aria-label="Refresh mining power"
+            title={"Refresh · Last updated: " + formatUpdated(latest?.observedAt)}
+            className="rounded-lg border border-border/50 p-2 text-muted-foreground hover:bg-secondary hover:text-foreground">
             <RefreshCw className={"h-4 w-4 " + (refreshing ? "animate-spin" : "")} />
           </button>
         </div>
       </header>
 
-      <section className="rounded-2xl border border-border/55 bg-card shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/40 px-5 py-4">
-          <div className="flex items-center gap-2">
-            <CalendarDays className="h-4 w-4 text-muted-foreground" />
-            <h2 className="text-base font-semibold">This Month</h2>
-          </div>
-          <p className="text-[10px] text-muted-foreground">
-            {currentMonth?.startedAt ? "Tracking since " + formatUpdated(currentMonth.startedAt) : "Tracking starts with the new meter"}
-          </p>
+      <section aria-label="Mining power summary" className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-4">
+          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Zap className="h-4 w-4 text-emerald-400" />Total Mining Power</p>
+          <p className="mt-2 text-[25px] font-semibold leading-none tabular-nums text-foreground">{totalWatts == null ? "—" : totalWatts.toFixed(0) + "W"}</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">Live power across connected GPUs</p>
         </div>
-
-        <div className="grid grid-cols-1 divide-y divide-border/35 sm:grid-cols-2 sm:divide-y-0 xl:grid-cols-4 xl:divide-x">
-          <div className="p-5">
-            <p className="text-xs text-muted-foreground">Energy used</p>
-            <p className="mt-1 text-2xl font-semibold text-cyan-300 tabular-nums">{monthKwh.toFixed(2)} kWh</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">{monthTrackedDays.toFixed(2)} tracked days</p>
-          </div>
-          <div className="p-5">
-            <p className="text-xs text-muted-foreground">Cost so far</p>
-            <p className="mt-1 text-2xl font-semibold text-amber-400 tabular-nums">{monthCost == null ? "—" : money(monthCost)}</p>
-            <p className="mt-1 text-[10px] text-muted-foreground">{freePower ? "Power provided at no cost" : "Tracked energy cost"}</p>
-          </div>
-          <div className="p-5">
-            <p className="text-xs text-muted-foreground">Projected month-end cost</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums">
-              {projectionReady && projectedMonthCost != null ? money(projectedMonthCost) : "Collecting…"}
-            </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">{freePower ? "Power provided at no cost" : "Based on tracked usage rate"}</p>
-          </div>
-          <div className="p-5">
-            <p className="text-xs text-muted-foreground">Est. net since tracking</p>
-            <p className={"mt-1 text-2xl font-semibold tabular-nums " + (monthEstimatedNet == null || monthEstimatedNet >= 0 ? "text-emerald-400" : "text-rose-400")}>
-              {monthEstimatedNet == null ? "Waiting for Kryptex…" : money(monthEstimatedNet)}
-            </p>
-            <p className="mt-1 text-[10px] text-muted-foreground">{dailyRevenue == null ? "Waiting for live Kryptex profitability" : `Uses ${money(dailyRevenue)}/day live Kryptex revenue · combined PCs`}</p>
-          </div>
+        <div className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-4">
+          <p className="flex items-center gap-2 text-xs text-muted-foreground"><CalendarDays className="h-4 w-4 text-cyan-300" />Total Monthly Usage</p>
+          <p className="mt-2 text-[25px] font-semibold leading-none tabular-nums text-cyan-300">{monthKwh.toFixed(2)} kWh</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">Across {deviceRows.length} tracked GPU{deviceRows.length === 1 ? "" : "s"}</p>
         </div>
-
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-3 border-t border-border/35 px-5 py-4 text-sm">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-sky-400" />
-            <span className="text-muted-foreground">Total Power</span>
-            <span className="font-semibold tabular-nums">{totalWatts == null ? "—" : `${totalWatts.toFixed(0)} W`}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Coins className="h-4 w-4 text-amber-400" />
-            <span className="text-muted-foreground">Cost / Hour</span>
-            <span className="font-semibold tabular-nums">{hourlyCost == null ? "—" : money(hourlyCost)}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <PlugZap className="h-4 w-4 text-cyan-300" />
-            <span className="text-muted-foreground">Effective Rate</span>
-            <span className="font-semibold tabular-nums">{Number.isFinite(rateInfo?.effectiveUsdPerKwh) ? `${(rateInfo.effectiveUsdPerKwh * 100).toFixed(2)}¢/kWh` : "—"}</span>
-            <span className="text-xs text-muted-foreground">{rateInfo?.label || "Unverified"}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-emerald-400" />
-            <span className="text-muted-foreground">Net Profit / Day</span>
-            <span className={"font-semibold tabular-nums " + (dailyNet == null || dailyNet >= 0 ? "text-emerald-400" : "text-rose-400")}>{dailyNet == null ? "—" : money(dailyNet)}</span>
-          </div>
+        <div className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-4">
+          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Coins className="h-4 w-4 text-amber-400" />Total Monthly Cost</p>
+          <p className="mt-2 text-[25px] font-semibold leading-none tabular-nums text-amber-400">{monthCost == null ? "—" : money(monthCost)}</p>
+          <p className="mt-2 text-[10px] text-muted-foreground">{freePower ? "Power provided at no cost" : "Backend-calculated electricity cost"}</p>
         </div>
-
       </section>
 
-      <div className={"grid gap-4 " + gpuGridClass}>
+      <section aria-label="Tracked mining GPUs" className={"grid min-w-0 items-stretch gap-3 " + gpuGridClass}>
         {deviceRows.map(device => (
-          <DeviceCard
-            key={device.id}
-            device={device}
+          <DeviceCard key={device.id} device={device}
             label={settings.deviceLabels?.[device.id] || device.label}
-            hardware={hardware}
-            onRename={renameDevice}
+            hardware={hardware} onRename={renameDevice}
             monthlyUsage={monthlyDevices[device.id]}
             backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
-            live={live}
-          />
+            live={live} />
         ))}
-      </div>
-
-
-
-
+      </section>
     </div>
   );
 }
