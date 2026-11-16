@@ -18,9 +18,11 @@ const fallbackSvg = (label) => {
   return "data:image/svg+xml;charset=UTF-8,"+encodeURIComponent(svg);
 };
 export function hardwareImageFor(device) {
-  if(typeof device?.photo==="string" && /^data:image\/(?:jpeg|png|webp);base64,/.test(device.photo)) return device.photo;
   const name=String(device?.name||"").toLowerCase();
+  // The shared 5080 cutout must win over previously uploaded images that
+  // still contain a baked-in background; leave those saved photos untouched.
   if(name.includes("5080")) return "/gpu/asus-rtx5080-transparent.webp";
+  if(typeof device?.photo==="string" && /^data:image\/(?:jpeg|png|webp);base64,/.test(device.photo)) return device.photo;
   if(name.includes("2080")) return "/gpu/rtx2080-super.webp";
   if(name.includes("5070")) return "/gpu/rtx5070-msi.webp";
   return fallbackSvg("GPU");
