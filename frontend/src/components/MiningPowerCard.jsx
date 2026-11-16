@@ -116,7 +116,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
       }
     : DEVICE_META[device?.id] || null;
   return (
-    <section className="flex h-[430px] min-h-[430px] min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
+    <section className="flex h-[465px] min-h-[465px] min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="shrink-0 rounded-lg bg-sky-400/10 p-1.5 text-sky-300">
@@ -156,21 +156,21 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
           <>
             <div className={"pointer-events-none absolute inset-0 bg-gradient-to-t " + meta.glow + " to-transparent blur-xl"} />
             <img src={meta.image} alt={meta.alt} loading="lazy" referrerPolicy="no-referrer"
-              className="relative h-full max-h-[235px] w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.55)]" />
+              className="relative h-full max-h-[255px] w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.55)]" />
           </>
         ) : (
           <Cpu className="h-12 w-12 text-sky-400/25" aria-hidden="true" />
         )}
       </div>
-      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/40 pt-3">
+      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/40 pt-4">
         <div className="min-w-0">
-          <p className="flex items-center gap-1 text-[11px] font-semibold tabular-nums text-cyan-300">
+          <p className="flex items-center gap-1 text-[12px] font-semibold tabular-nums text-cyan-300">
             <CalendarDays className="h-3 w-3 shrink-0" />{monthlyKwh.toFixed(2)} kWh
           </p>
           <p className="mt-1 text-[9px] leading-snug text-muted-foreground">This month</p>
         </div>
         <div className="min-w-0">
-          <p className="flex items-center gap-1 text-[11px] font-semibold tabular-nums text-amber-400">
+          <p className="flex items-center gap-1 text-[12px] font-semibold tabular-nums text-amber-400">
             <Coins className="h-3 w-3 shrink-0" />{monthlyCost == null ? "—" : money(monthlyCost)}
           </p>
           <p className="mt-1 text-[9px] leading-snug text-muted-foreground">Monthly cost</p>
