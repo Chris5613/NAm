@@ -116,7 +116,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
       }
     : DEVICE_META[device?.id] || null;
   return (
-    <section className="flex h-[435px] min-h-[435px] min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
+    <section className="flex h-[390px] min-h-[390px] min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="shrink-0 rounded-lg bg-sky-400/10 p-1.5 text-sky-300">
@@ -156,7 +156,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
           <>
             <div className={"pointer-events-none absolute inset-0 bg-gradient-to-t " + meta.glow + " to-transparent blur-xl"} />
             <img src={meta.image} alt={meta.alt} loading="lazy" referrerPolicy="no-referrer"
-              className="relative h-full max-h-[235px] w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.55)]" />
+              className="relative h-full max-h-[205px] w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.55)]" />
           </>
         ) : (
           <Cpu className="h-12 w-12 text-sky-400/25" aria-hidden="true" />
