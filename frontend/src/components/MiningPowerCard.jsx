@@ -13,20 +13,9 @@ import {
   Zap,
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
-import { getCurrentMonthKey } from "@/lib/yieldFarmingAccounting";
-import { hasFreeMiningPower, outOfPocketMiningPowerCost } from "@/lib/powerOutOfPocket";
 import { toast } from "sonner";
 
 const SETTINGS_KEY = "mining_power_dashboard_v1";
-const TOD_EFFECTIVE_AT = new Date("2026-12-10T00:00:00-08:00");
-const TOD_EFFECTIVE_MONTH = "2026-12";
-const DEFAULTS = {
-  offPeakRate: 0.0893,
-  midPeakRate: 0.1670,
-  peakRate: 0.4313,
-  basicRate: 0.1691,
-};
-
 const DEVICE_META = {
   rtx5070: {
     brand: "MSI",
@@ -41,26 +30,6 @@ const DEVICE_META = {
     glow: "from-orange-400/16 via-orange-400/5",
   },
 };
-
-function pacificParts(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    weekday: "short",
-    hour: "2-digit",
-    hour12: false,
-  }).formatToParts(date);
-  return Object.fromEntries(parts.map(part => [part.type, part.value]));
-}
-
-function currentRate(settings, date = new Date()) {
-  if (date < TOD_EFFECTIVE_AT) return { rate: settings.basicRate, label: "Basic" };
-  const parts = pacificParts(date);
-  if (["Sat", "Sun"].includes(parts.weekday)) return { rate: settings.offPeakRate, label: "Off-peak" };
-  const hour = Number(parts.hour) % 24;
-  if (hour >= 17 && hour < 21) return { rate: settings.peakRate, label: "Peak" };
-  if ((hour >= 21 && hour < 24) || hour < 7) return { rate: settings.offPeakRate, label: "Off-peak" };
-  return { rate: settings.midPeakRate, label: "Mid-peak" };
-}
 
 function money(value) {
   return new Intl.NumberFormat("en-US", {
@@ -81,38 +50,11 @@ function formatUpdated(value) {
   });
 }
 
-function daysInPacificMonth(date = new Date()) {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "America/Los_Angeles",
-    year: "numeric",
-    month: "numeric",
-  }).formatToParts(date);
-  const values = Object.fromEntries(parts.map(part => [part.type, part.value]));
-  return new Date(Number(values.year), Number(values.month), 0).getDate();
-}
-
 function trackedDays(seconds) {
   return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
-function usageCost(usage, settings, monthKey) {
-  const tiers = usage?.tiers || {};
-  const totalKwh = Number(usage?.totalKwh ?? usage?.kwh) || 0;
-
-  // Months before TOD activation were billed entirely on Basic Service.
-  if (monthKey && monthKey < TOD_EFFECTIVE_MONTH) {
-    return totalKwh * Number(settings.basicRate || 0);
-  }
-
-  return (
-    (Number(tiers.basic) || 0) * Number(settings.basicRate || 0) +
-    (Number(tiers.offPeak) || 0) * Number(settings.offPeakRate || 0) +
-    (Number(tiers.midPeak) || 0) * Number(settings.midPeakRate || 0) +
-    (Number(tiers.peak) || 0) * Number(settings.peakRate || 0)
-  );
-}
-
-function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename }) {
+function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live }) {
   const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const [renameError, setRenameError] = useState("");
@@ -136,7 +78,8 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename }
       setRenameError(error?.message || "Couldn't save this name.");
     }
   };
-  const watts = Number(device?.watts) || 0;
+  const watts = Number.isFinite(Number(device?.watts)) && device?.watts != null
+    ? Number(device.watts) : null;
   const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
   const monthlyCost = backendDeviceCost?.complete ? backendDeviceCost.outOfPocketUsd : null;
   const originalMeta = DEVICE_META[device?.id] || null;
@@ -176,16 +119,16 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename }
             )}
           </div>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] font-medium text-emerald-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-          Live
+        <span className={"inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
+          <span className={"h-1.5 w-1.5 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
+          {live ? "Live" : "Stale"}
         </span>
       </div>
 
       <div className="relative mt-4 min-h-[126px] overflow-hidden rounded-xl">
         <div className={meta ? "relative z-20 max-w-[52%] pt-3" : "relative z-20 pt-3"}>
           <p className="text-[38px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
-            {watts.toFixed(0)} W
+            {watts == null ? "—" : `${watts.toFixed(0)} W`}
           </p>
         </div>
 
@@ -266,6 +209,7 @@ export default function MiningPowerCard() {
       }
     } catch {
       setStatus(null);
+      setKryptexDailyRevenue(null);
     } finally {
       if (manual) setRefreshing(false);
     }
@@ -278,7 +222,8 @@ export default function MiningPowerCard() {
   }, [refresh]);
 
   const latest = status?.latest;
-  const totalWatts = Number(latest?.totalWatts) || 0;
+  const totalWatts = latest?.totalWatts != null && Number.isFinite(Number(latest.totalWatts))
+    ? Number(latest.totalWatts) : null;
   const staleMs = latest?.observedAt ? Date.now() - new Date(latest.observedAt).getTime() : Infinity;
   const live = staleMs < 90000;
   const powerCost = status?.powerCost?.sourceOfCalculation === "backend-power-meter-tariffs"
@@ -397,7 +342,7 @@ export default function MiningPowerCard() {
           <div className="flex items-center gap-2">
             <Zap className="h-4 w-4 text-sky-400" />
             <span className="text-muted-foreground">Total Power</span>
-            <span className="font-semibold tabular-nums">{totalWatts.toFixed(0)} W</span>
+            <span className="font-semibold tabular-nums">{totalWatts == null ? "—" : `${totalWatts.toFixed(0)} W`}</span>
           </div>
           <div className="flex items-center gap-2">
             <Coins className="h-4 w-4 text-amber-400" />
@@ -407,7 +352,7 @@ export default function MiningPowerCard() {
           <div className="flex items-center gap-2">
             <PlugZap className="h-4 w-4 text-cyan-300" />
             <span className="text-muted-foreground">Effective Rate</span>
-            <span className="font-semibold tabular-nums">{rateInfo ? (rateInfo.effectiveUsdPerKwh * 100).toFixed(2) : "—"}¢/kWh</span>
+            <span className="font-semibold tabular-nums">{Number.isFinite(rateInfo?.effectiveUsdPerKwh) ? `${(rateInfo.effectiveUsdPerKwh * 100).toFixed(2)}¢/kWh` : "—"}</span>
             <span className="text-xs text-muted-foreground">{rateInfo?.label || "Unverified"}</span>
           </div>
           <div className="flex items-center gap-2">
@@ -428,6 +373,7 @@ export default function MiningPowerCard() {
             onRename={renameDevice}
             monthlyUsage={monthlyDevices[device.id]}
             backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
+            live={live}
           />
         ))}
       </div>
