@@ -4,7 +4,6 @@ import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
 import { buildSelectedEarningsBreakdown } from "../lib/earningsDisplay";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
-import { useBackendIncomeHistoryState } from "@/hooks/useBackendIncomeHistory";
 import { backendYieldIncomeRows } from "@/lib/backendYieldIncomeRows";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
@@ -917,10 +916,12 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // Historical earnings are sourced exclusively from persisted backend
   // provider snapshots, dated dividends and verified legacy records. Do not
   // reconstruct monthly earnings from wallet balances or browser trackers.
-  const { months: sourceIncomeMonths, loading: sourceIncomeLoading,
-    error: sourceIncomeError } = useBackendIncomeHistoryState({
-    currentMonth: getTodayKey().slice(0, 7),
-  });
+  // Monthly, Weekly, and Yearly all come from the same authenticated
+  // earnings dashboard response. Other accounting screens may still request
+  // the independent source-income-history endpoint.
+  const { data: backendEarnings, error: backendEarningsError } =
+    useBackendEarningsDashboard(getTodayKey().slice(0, 7));
+  const sourceIncomeMonths = backendEarnings?.incomeHistory?.months;
   const projectIncome = useMemo(
     () => backendYieldIncomeRows(sourceIncomeMonths), [sourceIncomeMonths]
   );
@@ -1187,8 +1188,6 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // Legacy extension observations are ingested for recovery only; all
   // financial values displayed on this page come from the backend ledger.
   useServerDailyIncome(todayKey, dailySourceTotals, mergeHighWaterSources);
-  const { data: backendEarnings, error: backendEarningsError } =
-    useBackendEarningsDashboard(todayKey.slice(0, 7));
   const hasServerToday = backendEarnings?.todayKey === todayKey;
   const todayEarnings = hasServerToday ? backendEarnings.todayTotalUsd : null;
   const displayDailySourceTotals = hasServerToday ? (backendEarnings.todaySources || {}) : {};
@@ -1263,7 +1262,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     : month);
   // The current-month earnings endpoint may finish before the full historical
   // ledger. Never show a fake Jan-Oct $0 chart or a partial yearly headline.
-  const yearlyHistoryReady = !sourceIncomeLoading && !sourceIncomeError;
+  const yearlyHistoryReady = Boolean(backendEarnings?.incomeHistory);
   const thisYearEarned = yearlyHistoryReady ? yearlyChartData.reduce(
     (sum, month) => sum + (Number(month.value) || 0),
     0
@@ -1749,7 +1748,7 @@ const summary =
           <div className="mt-2 h-[265px] w-full min-h-0 lg:h-auto lg:min-h-[280px] lg:flex-1">
             {earningsChartRange === "yearly" && !yearlyHistoryReady ? (
               <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                {sourceIncomeError ? "Reconnecting to recorded earnings…" : "Loading recorded yearly earnings…"}
+                {backendEarningsError ? "Reconnecting to recorded earnings…" : "Loading recorded yearly earnings…"}
               </div>
             ) : (
             <ResponsiveContainer width="100%" height="100%">
