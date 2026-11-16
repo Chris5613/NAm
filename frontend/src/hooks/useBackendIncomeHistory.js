@@ -20,7 +20,7 @@ const validIncomeHistory = (data, month) =>
  * A sign-out or session change cannot write an outstanding response.
  */
 export async function prefetchBackendIncomeHistory(month, isCurrent = () => true) {
-  if (!/^\\d{4}-\\d{2}$/.test(String(month))) return null;
+  if (!/^[0-9]{4}-[0-9]{2}$/.test(String(month))) return null;
   const path = incomePath(month);
   return requestFinancialCache(
     financialCacheKey(path),
