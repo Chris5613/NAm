@@ -12,9 +12,7 @@ import {
   pricesApi,
 } from "@/lib/api";
 
-import {
-  remoteStorage as localStorage, subscribe,
-} from "@/lib/serverStore";
+import { subscribe } from "@/lib/serverStore";
 import { shouldRefreshHomeNetWorth } from "@/lib/netWorthRefreshKeys";
 
 import {
@@ -53,8 +51,6 @@ import {
   ChevronDown,
   Search,
   ArrowUpRight,
-  Download,
-  Upload,
   X,
   Target,
   CalendarClock,
@@ -78,115 +74,6 @@ const LIVE_HISTORY_MAX_POINTS = 200;
 
 // Personal historical net-worth rows are loaded from the authenticated
 // backend private accounting profile, never bundled into public source.
-
-/* =========================================================
-   EXPORT
-========================================================= */
-
-const exportAllLocalStorage = () => {
-  const backup = {};
-
-  for (
-    let i = 0;
-    i < localStorage.length;
-    i++
-  ) {
-    const key =
-      localStorage.key(i);
-
-    backup[key] =
-      localStorage.getItem(
-        key
-      );
-  }
-
-  const blob = new Blob(
-    [
-      JSON.stringify(
-        backup,
-        null,
-        2
-      ),
-    ],
-    {
-      type: "application/json",
-    }
-  );
-
-  const url =
-    URL.createObjectURL(
-      blob
-    );
-
-  const a =
-    document.createElement(
-      "a"
-    );
-
-  a.href = url;
-
-  a.download =
-    "dashboard-backup.json";
-
-  a.click();
-
-  URL.revokeObjectURL(
-    url
-  );
-};
-
-/* =========================================================
-   IMPORT
-========================================================= */
-
-const importAllLocalStorage = (
-  event
-) => {
-  const file =
-    event.target.files?.[0];
-
-  if (!file) {
-    return;
-  }
-
-  const reader =
-    new FileReader();
-
-  reader.onload = (e) => {
-    try {
-      const backup =
-        JSON.parse(
-          e.target.result
-        );
-
-      Object.entries(
-        backup
-      ).forEach(
-        ([key, value]) => {
-          localStorage.setItem(
-            key,
-            value
-          );
-        }
-      );
-
-      window.location.reload();
-    } catch (error) {
-      console.error(
-        "Could not import backup:",
-        error
-      );
-
-      toast.error(
-        "Could not import JSON file"
-      );
-    }
-  };
-
-  reader.readAsText(
-    file
-  );
-};
 
 /* =========================================================
    DASHBOARD
