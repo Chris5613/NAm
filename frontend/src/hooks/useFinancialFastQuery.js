@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/apiClient";
-import { financialCacheKey, readFinancialCache, requestFinancialCache } from "@/lib/financialFastCache";
+import { financialCacheKey, readFinancialCacheState, requestFinancialCache, clearFinancialCache } from "@/lib/financialFastCache";
 
 /**
  * Authenticated Financials read-through cache. It stores only backend-
@@ -18,9 +18,9 @@ export function useFinancialFastQuery({
   const validatorRef = useRef(validator);
   validatorRef.current = validator;
   const [result, setResult] = useState(() => {
-    const data = enabled ? readFinancialCache(signature, maxAgeMs) : null;
-    return data === null ? { signature, loading: true } :
-      { signature, data, cached: true, refreshing: true };
+    const cached = enabled ? readFinancialCacheState(signature, maxAgeMs) : null;
+    return cached === null ? { signature, loading: true } :
+      { signature, data: cached.data, cached: true, stale: cached.stale, refreshing: cached.stale };
   });
 
   useEffect(() => {
@@ -29,10 +29,11 @@ export function useFinancialFastQuery({
       setResult({ signature, loading: true });
       return () => { active = false; };
     }
-    const cached = readFinancialCache(signature, maxAgeMs);
+    const cached = readFinancialCacheState(signature, maxAgeMs);
     setResult(previous => {
       if (cached !== null) {
-        return { signature, data: cached, cached: true, refreshing: true };
+        return { signature, data: cached.data, cached: true, stale: cached.stale,
+          refreshing: cached.stale };
       }
       return previous.signature === signature && previous.data ?
         { ...previous, refreshing: true } : { signature, loading: true };
@@ -46,20 +47,33 @@ export function useFinancialFastQuery({
       data => validatorRef.current(data),
       { force: true, maxAgeMs },
     ).then(data => {
-      if (active) setResult({ signature, data, cached: false, refreshing: false });
-    }).catch(() => {
+      if (active) setResult({ signature, data, cached: false, stale: false, refreshing: false });
+    }).catch(error => {
       if (!active) return;
+      // A rejected session must never continue showing another signed-in user's
+      // prior financial projections, even temporarily.
+      if (error?.status === 401 || error?.status === 403) {
+        clearFinancialCache();
+        setResult({ signature, error: true, unauthorized: true });
+        return;
+      }
       setResult(previous => previous.signature === signature && previous.data
-        ? { ...previous, refreshing: false, error: true }
+        ? { ...previous, stale: true, refreshing: false, error: true }
         : { signature, error: true });
     });
-    refresh();
+    // A fresh cached result already satisfies this request. Do not make a
+    // redundant network call on every tab/page remount.
+    if (cached === null || cached.stale) refresh();
     const timer = intervalMs > 0 ? window.setInterval(refresh, intervalMs) : null;
-    if (onFocus) window.addEventListener("focus", refresh);
+    const refreshOnFocus = () => {
+      const current = readFinancialCacheState(signature, maxAgeMs);
+      if (!current || current.stale) refresh();
+    };
+    if (onFocus) window.addEventListener("focus", refreshOnFocus);
     return () => {
       active = false;
       if (timer !== null) window.clearInterval(timer);
-      if (onFocus) window.removeEventListener("focus", refresh);
+      if (onFocus) window.removeEventListener("focus", refreshOnFocus);
     };
   // signature captures exact payload; do not re-fetch for an unstable
   // validator function or an equivalent newly allocated payload object.
