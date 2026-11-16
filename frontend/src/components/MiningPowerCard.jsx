@@ -13,9 +13,33 @@ import {
   Zap,
 } from "lucide-react";
 import { api, settingsApi } from "@/lib/apiClient";
+import { hardwareImageFor } from "@/lib/hardwarePhotos";
+import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { toast } from "sonner";
 
 const SETTINGS_KEY = "mining_power_dashboard_v1";
+const HARDWARE_KEY = "hardware_payback_devices_v1";
+
+function readHardwarePaybackDevices() {
+  try {
+    const saved = JSON.parse(remoteStorage.getItem(HARDWARE_KEY) || "[]");
+    return Array.isArray(saved) ? saved : [];
+  } catch {
+    return [];
+  }
+}
+
+// Use Hardware Payback as the single source of GPU photos; never copy photos
+// into Mining Power settings or alter Tapo device IDs.
+export function rtx5080PaybackPhoto(hardware) {
+  const matching = (Array.isArray(hardware) ? hardware : [])
+    .filter(row => /5080/i.test(String(row?.name || "")));
+  const withPhoto = matching.find(row => /asus/i.test(String(row.name)) && row.photo) ||
+    matching.find(row => row.photo);
+  const device = withPhoto || matching.find(row => /asus/i.test(String(row.name))) ||
+    matching[0] || { name: "ASUS RTX 5080" };
+  return hardwareImageFor(device);
+}
 const DEVICE_META = {
   rtx5070: {
     brand: "MSI",
@@ -54,7 +78,7 @@ function trackedDays(seconds) {
   return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
-function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live }) {
+function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live, hardware }) {
   const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const [renameError, setRenameError] = useState("");
@@ -82,9 +106,15 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
     ? Number(device.watts) : null;
   const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
   const monthlyCost = backendDeviceCost?.complete ? backendDeviceCost.outOfPocketUsd : null;
-  const originalMeta = DEVICE_META[device?.id] || null;
-  // Do not display an RTX 5070 product photo for a renamed RTX 5080.
-  const meta = /5080/i.test(label || "") && device?.id === "rtx5070" ? null : originalMeta;
+  const is5080 = /5080/i.test(label || device?.label || "");
+  const meta = is5080
+    ? {
+        brand: "ASUS",
+        image: rtx5080PaybackPhoto(hardware),
+        alt: "ASUS GeForce RTX 5080",
+        glow: "from-cyan-400/18 via-cyan-400/5",
+      }
+    : DEVICE_META[device?.id] || null;
   return (
     <section className="rounded-2xl border border-border/55 bg-card p-5 shadow-[0_10px_30px_rgba(0,0,0,0.12)]">
       <div className="flex items-start justify-between gap-3">
@@ -172,7 +202,20 @@ export default function MiningPowerCard() {
   const [kryptexDailyRevenue, setKryptexDailyRevenue] = useState(null);
   // Device labels are persisted backend settings; no browser tariff defaults.
   const [settings, setSettings] = useState({});
+  const [hardware, setHardware] = useState(readHardwarePaybackDevices);
   const [refreshing, setRefreshing] = useState(false);
+  useEffect(() => {
+    const refreshHardware = () => setHardware(readHardwarePaybackDevices());
+    const unsubscribe = subscribe(key => {
+      if (key === HARDWARE_KEY) refreshHardware();
+    });
+    window.addEventListener("hardware-payback-updated", refreshHardware);
+    refreshHardware();
+    return () => {
+      unsubscribe();
+      window.removeEventListener("hardware-payback-updated", refreshHardware);
+    };
+  }, []);
   const renameDevice = useCallback(async (id,label) => {
     // Guarded settings writes require an exact before/after pair. Fetch the
     // latest server value first so a stale refresh cannot overwrite settings.
@@ -371,6 +414,7 @@ export default function MiningPowerCard() {
             key={device.id}
             device={device}
             label={settings.deviceLabels?.[device.id] || device.label}
+            hardware={hardware}
             onRename={renameDevice}
             monthlyUsage={monthlyDevices[device.id]}
             backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
