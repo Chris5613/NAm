@@ -8,9 +8,11 @@ describe("Shared RTX 5080 transparent image", () => {
       .toBe("/gpu/asus-rtx5080-transparent.webp");
   });
 
-  test("keeps custom user-uploaded photos as an override", () => {
+  test("RTX 5080 uses transparent cutout instead of a legacy uploaded photo", () => {
     const photo = "data:image/png;base64,iVBORw0KGgo=";
-    expect(hardwareImageFor({ name: "ASUS RTX 5080", photo })).toBe(photo);
+    expect(hardwareImageFor({ name: "ASUS RTX 5080", photo }))
+      .toBe("/gpu/asus-rtx5080-transparent.webp");
+    expect(hardwareImageFor({ name: "RTX 2080 Super", photo })).toBe(photo);
   });
 
   test("does not change the other GPU images", () => {
