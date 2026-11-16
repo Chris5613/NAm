@@ -1,0 +1,43 @@
+name: NAm Mining Power 5080 photo tests
+
+on:
+  push:
+    branches: [chatgpt/mining-power-5080-photo-20261115]
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  backend-unittest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements.txt
+      - name: Run complete backend unittest discovery
+        run: python -m unittest discover -s backend/tests -p 'test_*.py' -v
+
+  frontend-unittest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Run complete frontend tests
+        run: CI=true npm test -- --watchAll=false --runInBand
