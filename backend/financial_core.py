@@ -592,7 +592,7 @@ def auto_income_journal(month, income_month, manual_journal,
     }
 
 
-def project_break_even(positions, stats, saved_payback):
+def project_break_even(positions, stats, saved_payback, quick_cache=None):
     """Backend payback analysis from recorded provider earnings, not balances.
 
     Portfolio balances never become earned income. User-entered totalSpent is
@@ -626,6 +626,28 @@ def project_break_even(positions, stats, saved_payback):
         provider = stats.get(key) if isinstance(stats.get(key), dict) else {}
         result.append({"id": pid, "name": name, "earned": number(provider.get(earned_key)),
                        "daily": max(0, number(provider.get(daily_key)))})
+    # Restore Lulo and Loopscale break-even rows using persisted provider
+    # observations without treating principal as earned income.
+    quick = quick_cache if isinstance(quick_cache, dict) else {}
+    observed = quick.get("projects")
+    projects = observed if isinstance(observed, list) else []
+    lulo = [project for project in projects if isinstance(project, dict) and
+            project.get("yield_tracking") == "lulo_lending"]
+    lulo_earned = sum(number(project.get("lulo_lifetime_interest_usd"))
+                      for project in lulo)
+    lulo_daily = sum(number(project.get("lulo_total_balance_usd")) *
+                     number(project.get("lulo_weighted_apy")) / 100 / 365
+                     for project in lulo)
+    if lulo:
+        result.append({"id": "lulo-live", "name": "Lulo",
+                       "earned": lulo_earned, "daily": max(0, lulo_daily)})
+    loop = quick.get("loopscaleSnapshot")
+    if isinstance(loop, dict):
+        loop_daily = (number(loop.get("positionValueUsd")) *
+                      number(loop.get("netApy")) / 100 / 365)
+        result.append({"id": "loopscale-live", "name": "Loopscale",
+                       "earned": number(loop.get("pnlUsd")),
+                       "daily": max(0, loop_daily)})
     payback = saved_payback if isinstance(saved_payback, dict) else {}
     rows = []
     for row in result:
