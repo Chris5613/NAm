@@ -753,6 +753,11 @@ async def earnings_dashboard(
         # not reconstructed from daily receipts or project balances.
         dashboard["lifetimeEarned"] = lifetime_earned_from_snapshots(
             normalized, today.strftime("%Y-%m"))
+    # The Passive Income page consumes one coherent backend response for
+    # Monthly, Weekly, and Yearly. Booked historical income is calculated by
+    # the same source-owned function used by Financials; it is not reconstructed
+    # from daily receipts or browser wallet balances.
+    dashboard["incomeHistory"] = await source_owned_income_history(user=user, db=db)
     return dashboard
 
 
