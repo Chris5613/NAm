@@ -10,13 +10,27 @@ export function financialCacheKey(path, payload) {
   return JSON.stringify([path, payload ?? null]);
 }
 
-export function readFinancialCache(key, maxAgeMs = 15000) {
+// Retain validated server responses briefly beyond their refresh window.
+ // Stale data is view-only, never posted or substituted into changed inputs.
+export const FINANCIAL_STALE_VIEW_MS = 5 * 60 * 1000;
+
+export function readFinancialCacheState(key, maxAgeMs = 15000, maxStaleMs = FINANCIAL_STALE_VIEW_MS) {
   const item = entries.get(key);
-  if (!item || Date.now() - item.savedAt > maxAgeMs) return null;
-  // LRU eviction. All values were validated before being cached.
+  if (!item) return null;
+  const ageMs = Date.now() - item.savedAt;
+  if (ageMs < 0 || ageMs > maxStaleMs) {
+    entries.delete(key);
+    return null;
+  }
+  // Touch entries for LRU; only previously validated backend values qualify.
   entries.delete(key);
   entries.set(key, item);
-  return item.value;
+  return { data: item.value, stale: ageMs > maxAgeMs, ageMs };
+}
+
+export function readFinancialCache(key, maxAgeMs = 15000) {
+  const state = readFinancialCacheState(key, maxAgeMs, maxAgeMs);
+  return state ? state.data : null;
 }
 
 export function peekFinancialCache(key) {
