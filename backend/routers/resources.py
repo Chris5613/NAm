@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..db import get_db
 from ..input_validation import finite_money
-from ..models import NetWorthSnapshot, Setting, User, Project, Asset, Wallet
+from ..models import Setting, User, Project, Asset, Wallet
 from ..project_writes import plan_project_changes, ProjectConflict
 from ..server_owned_settings import is_server_owned_setting
 from ..kryptex_setting_guard import merge_legacy_kryptex_setting
@@ -23,12 +23,11 @@ from ..journal_guard import guard_journal_write
 from ..legacy_income_reconciliation import confirmed_november_sources
 from ..provider_monthly_income import monthly_provider_income
 from ..private_accounting import PRIVATE_ACCOUNTING_KEY, private_accounting_profile
-from ..networth_reconciliation import home_reconciliation_preview
 from ..financial_core import calculate_net_worth, maybe_number as accounting_number
 from ..networth_trends import networth_trends
 from ..monthly_changes_seal import seal_completed_business_months, preserve_locked_business_months
 from ..closed_month_guard import protect_closed_financial_months, reopen_closed_financial_month
-from ..schemas import RESOURCES, dict_to_columns, row_to_dict, snapshot_to_dict
+from ..schemas import RESOURCES, dict_to_columns, row_to_dict
 
 router = APIRouter(prefix="/api", tags=["data"])
 
@@ -483,78 +482,3 @@ async def explicitly_reopen_financial_month(
     db.commit()
     return {"sourceOfCalculation": "backend-explicit-financial-reopen",
             "month": month, "closedMonths": updated}
-
-
-@router.get("/net-worth/reconciliation")
-async def net_worth_reconciliation(
-    user: User = Depends(current_user), db: Session = Depends(get_db)
-) -> dict:
-    """Explain the discrepancy without altering Home or nightly history.
-
-    This is a backend audit preview; it is *not* a substitute for Financials'
-    still-client-derived accounting Balance Sheet.
-    """
-    uid = user.id
-    keys = (
-        "yield_project_latest_balance_feed_v1",
-        "project_income_portfolio_summary_v1",
-        "crypto_wallet_balance_cache",
-        "networth_crypto_cache",
-        "monthly_business_changes_v1",
-        "financials_journal_v1",
-        "financials_bank_openings_v1",
-        "financials_confirmed_movements_v1",
-        "hardware_payback_devices_v1",
-    )
-    settings_rows = db.scalars(select(Setting).where(
-        Setting.user_id == uid, Setting.key.in_(keys)
-    )).all()
-    settings = {row.key: row.value for row in settings_rows}
-    now = datetime.now(timezone.utc)
-    month = now.astimezone(ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
-    return home_reconciliation_preview(
-        db.scalars(select(Asset).where(Asset.user_id == uid)).all(),
-        db.scalars(select(Wallet).where(Wallet.user_id == uid)).all(),
-        settings.get("crypto_wallet_balance_cache"),
-        settings.get("yield_project_latest_balance_feed_v1"),
-        settings.get("project_income_portfolio_summary_v1"),
-        settings.get("networth_crypto_cache"),
-        settings.get("monthly_business_changes_v1"),
-        settings.get("financials_journal_v1"),
-        month, uid, now,
-        bank_openings=settings.get("financials_bank_openings_v1"),
-        confirmed_movements=settings.get("financials_confirmed_movements_v1"),
-        hardware_devices=settings.get("hardware_payback_devices_v1"),
-    )
-
-
-@router.get("/net-worth/history")
-async def net_worth_history(user: User = Depends(current_user), db: Session = Depends(get_db)) -> list[dict]:
-    rows = db.scalars(
-        select(NetWorthSnapshot).where(NetWorthSnapshot.user_id == user.id).order_by(NetWorthSnapshot.timestamp)
-    ).all()
-    return [snapshot_to_dict(row) for row in rows]
-
-
-@router.post("/net-worth/history")
-async def add_snapshot(payload: dict[str, Any], user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    reserved = {"timestamp", "value", "source"}
-    raw_timestamp = payload.get("timestamp")
-    if not isinstance(raw_timestamp, str) or not raw_timestamp.strip():
-        raise HTTPException(422, "timestamp must be a valid ISO date/time.")
-    timestamp = raw_timestamp.strip()
-    try:
-        datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    except ValueError as error:
-        raise HTTPException(422, "timestamp must be a valid ISO date/time.") from error
-
-    snapshot = NetWorthSnapshot(
-        user_id=user.id,
-        timestamp=timestamp,
-        value=finite_money(payload.get("value"), "value"),
-        source=payload.get("source"),
-        data={key: value for key, value in payload.items() if key not in reserved},
-    )
-    db.add(snapshot)
-    db.commit()
-    return snapshot_to_dict(snapshot)
