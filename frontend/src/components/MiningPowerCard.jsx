@@ -135,22 +135,22 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
               </form>
             ) : (
               <div className="flex min-w-0 items-center gap-0.5">
-                <h2 className="truncate text-[12px] font-semibold leading-tight" title={label || device?.label || "PC"}>{label || device?.label || "PC"}</h2>
+                <h2 className="truncate text-[15px] font-semibold leading-tight" title={label || device?.label || "PC"}>{label || device?.label || "PC"}</h2>
                 <button type="button" aria-label={"Rename " + (label || device?.label || "GPU")}
                   title="Rename GPU" onClick={beginRename}
                   className="shrink-0 rounded p-1 text-muted-foreground hover:bg-secondary hover:text-sky-300"><Pencil size={11} /></button>
               </div>
             )}
-            {meta?.brand && <p className="mt-0.5 text-[9px] uppercase tracking-wider text-muted-foreground">{meta.brand}</p>}
+            {meta?.brand && <p className="mt-0.5 text-[11px] uppercase tracking-wider text-muted-foreground">{meta.brand}</p>}
           </div>
         </div>
-        <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[9px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
+        <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
           <span className={"h-1 w-1 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
           {live ? "Live" : "Stale"}
         </span>
       </div>
       {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
-      <p className="mt-3 text-[27px] font-semibold leading-none tracking-tight tabular-nums text-foreground">{watts == null ? "—" : watts.toFixed(0) + "W"}</p>
+      <p className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums text-foreground">{watts == null ? "—" : watts.toFixed(0) + "W"}</p>
       <div className="relative mt-3 flex min-h-0 flex-1 min-w-0 items-center justify-center overflow-hidden rounded-md">
         {meta?.image ? (
           <>
@@ -164,16 +164,16 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
       </div>
       <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/40 pt-4">
         <div className="min-w-0">
-          <p className="flex items-center gap-1 text-[12px] font-semibold tabular-nums text-cyan-300">
+          <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-cyan-300">
             <CalendarDays className="h-3 w-3 shrink-0" />{monthlyKwh.toFixed(2)} kWh
           </p>
-          <p className="mt-1 text-[9px] leading-snug text-muted-foreground">This month</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">This month</p>
         </div>
         <div className="min-w-0">
-          <p className="flex items-center gap-1 text-[12px] font-semibold tabular-nums text-amber-400">
+          <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-amber-400">
             <Coins className="h-3 w-3 shrink-0" />{monthlyCost == null ? "—" : money(monthlyCost)}
           </p>
-          <p className="mt-1 text-[9px] leading-snug text-muted-foreground">Monthly cost</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">Monthly cost</p>
         </div>
       </div>
     </section>
@@ -283,10 +283,8 @@ export default function MiningPowerCard() {
 
   const monthlyDevices = currentMonth?.devices || {};
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
-  // Use a roughly 390px GPU card footprint, including when only two GPUs
-  // are connected. Auto-fill reserves empty columns instead of stretching
-  // existing cards across the available dashboard width.
-  const gpuGridColumns = "repeat(auto-fill, minmax(min(100%, 390px), 1fr))";
+  // Preserve the earlier compact five-column GPU layout.
+  const gpuGridClass = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
 
 
 
@@ -343,7 +341,7 @@ export default function MiningPowerCard() {
         </div>
       </section>
 
-      <section aria-label="Tracked mining GPUs" className="grid min-w-0 items-stretch gap-3" style={{ gridTemplateColumns: gpuGridColumns }}>
+      <section aria-label="Tracked mining GPUs" className={"grid min-w-0 items-stretch gap-3 " + gpuGridClass}>
         {deviceRows.map(device => (
           <DeviceCard key={device.id} device={device}
             label={settings.deviceLabels?.[device.id] || device.label}
