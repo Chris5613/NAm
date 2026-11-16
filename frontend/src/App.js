@@ -37,7 +37,6 @@ import {
 import { Loader2 } from "lucide-react";
 import { prefetchCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
 import { prefetchBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
-import { prefetchBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { prefetchBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
 import { getCurrentMonthKey } from "@/lib/yieldFarmingAccounting";
 
@@ -188,9 +187,6 @@ function AuthGate() {
     // Warm the actual Crypto Dashboard income cards in parallel with login.
     prefetchBackendEarningsDashboard(user.id, getCurrentMonthKey(), () => !cancelled)
       .catch(() => {});
-    // Start the verified booked-month read while account hydration runs.
-    // Shared requests use generation-guarded per-login cache, not a cancellable caller.
-    prefetchBackendIncomeHistory(getCurrentMonthKey()).catch(() => {});
     prefetchBackendBitcoinValuation(user.id, () => !cancelled)
       .catch(() => {});
 
