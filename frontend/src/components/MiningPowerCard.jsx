@@ -155,7 +155,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
         </span>
       </div>
 
-      <div className="relative mt-4 min-h-[126px] overflow-hidden rounded-xl">
+      <div className="relative mt-4 min-h-[160px] overflow-hidden rounded-xl">
         <div className={meta ? "relative z-20 max-w-[52%] pt-3" : "relative z-20 pt-3"}>
           <p className="text-[38px] font-semibold leading-none tracking-tight text-foreground tabular-nums">
             {watts == null ? "—" : `${watts.toFixed(0)} W`}
@@ -171,7 +171,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
               alt={meta.alt}
               loading="lazy"
               referrerPolicy="no-referrer"
-              className="pointer-events-none absolute -bottom-1 right-2 z-10 h-[128px] w-[50%] object-contain object-right opacity-95 drop-shadow-[0_18px_28px_rgba(0,0,0,0.58)]"
+              className={"pointer-events-none absolute -bottom-1 right-2 z-10 object-contain object-right opacity-95 drop-shadow-[0_18px_28px_rgba(0,0,0,0.58)] " + (is5080 ? "h-[176px] w-[62%]" : "h-[128px] w-[50%]")}
             />
           </>
         )}
