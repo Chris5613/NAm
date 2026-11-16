@@ -188,7 +188,7 @@ export default function FinancialsPage() {
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
-  const { live, error: liveError } = useBackendFinancialLiveBalances();
+  const { live, error: liveError, stale: liveStale } = useBackendFinancialLiveBalances();
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [businessPhones, setBusinessPhones] = useState(readUnetworkPhones);
   const [phoneInventory, setPhoneInventory] = useState(readPhoneInventory);
@@ -358,6 +358,10 @@ export default function FinancialsPage() {
     (backendBalanceRows.error && backendBalanceRows.rows) ||
     (currentLedgerState.error && currentLedgerState.data) ||
     (serverFinancialState.error && serverFinancialState.data)
+  );
+  const refreshingCachedFinancials = Boolean(
+    liveStale || backendBalanceRows.stale || currentLedgerState.stale ||
+    serverFinancialState.stale || trialState.stale
   );
   const report = serverFinancial?.profit || {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
@@ -748,6 +752,10 @@ export default function FinancialsPage() {
           reviewed before any formal close; missing values are never set to zero.
         </p>
       </details>}
+    {refreshingCachedFinancials && !cachedFinancialWarning && <p role="status"
+      className="px-1 text-[11px] text-[#8299aa]">
+      Showing previously verified figures while Financials refreshes.
+    </p>}
     {cachedFinancialWarning && <p role="status"
       className="rounded-xl border border-amber-500/30 px-4 py-3 text-xs text-amber-200">
       Showing the most recently verified in-session Financials data while
