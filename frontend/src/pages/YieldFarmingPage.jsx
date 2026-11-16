@@ -1749,7 +1749,7 @@ const summary =
           <div className="mt-2 h-[265px] w-full min-h-0 lg:h-auto lg:min-h-[280px] lg:flex-1">
             {earningsChartRange === "yearly" && !yearlyHistoryReady ? (
               <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                {sourceIncomeError ? "Recorded yearly earnings unavailable." : "Loading recorded yearly earnings…"}
+                {sourceIncomeError ? "Reconnecting to recorded earnings…" : "Loading recorded yearly earnings…"}
               </div>
             ) : (
             <ResponsiveContainer width="100%" height="100%">
