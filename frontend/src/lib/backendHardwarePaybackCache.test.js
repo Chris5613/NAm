@@ -1,6 +1,7 @@
 import {
  validateBackendHardwarePayback,readBackendHardwarePaybackCache,
- writeBackendHardwarePaybackCache,clearBackendHardwarePaybackCache,HARDWARE_PREVIEW_TTL
+ writeBackendHardwarePaybackCache,clearBackendHardwarePaybackCache,HARDWARE_PREVIEW_TTL,
+ formatEstimatedPaybackMonths
 } from "./backendHardwarePaybackCache";
 
 const day="2026-11-14";
@@ -88,4 +89,13 @@ test("preserves backend payback date, rate and provisional flag across cache",()
  const invalid=report();
  invalid.devices[0].estimatedPaybackDate="invalid-date";
  expect(validateBackendHardwarePayback(invalid,day).devices[0].estimatedPaybackDate).toBeNull();
+});
+
+test("estimated payback renders decimal months using backend remaining-days forecast", () => {
+ expect(formatEstimatedPaybackMonths(106.5, 250)).toBe("3.5 months");
+ expect(formatEstimatedPaybackMonths(365.2425, 700)).toBe("12.0 months");
+ expect(formatEstimatedPaybackMonths(0, 25)).toBe("0.0 months");
+ expect(formatEstimatedPaybackMonths(null, 100)).toBe("—");
+ expect(formatEstimatedPaybackMonths(Infinity, 100)).toBe("—");
+ expect(formatEstimatedPaybackMonths(99, 0)).toBe("Recovered");
 });
