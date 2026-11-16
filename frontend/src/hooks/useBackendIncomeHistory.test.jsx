@@ -3,7 +3,7 @@ import { act } from "react-dom/test-utils";
 import { createRoot } from "react-dom/client";
 import { api } from "@/lib/apiClient";
 import { clearFinancialCache, financialCacheKey, requestFinancialCache } from "@/lib/financialFastCache";
-import { useBackendIncomeHistoryState } from "./useBackendIncomeHistory";
+import { prefetchBackendIncomeHistory, useBackendIncomeHistoryState } from "./useBackendIncomeHistory";
 
 jest.mock("@/lib/apiClient", () => ({
   api: { get: jest.fn(), post: jest.fn() },
@@ -85,6 +85,45 @@ test("transient request failure can recover on focus without losing history", as
     await Promise.resolve();
   });
   expect(observed.error).toBe(false);
+  expect(observed.months).toHaveLength(3);
+  expect(api.get).toHaveBeenCalledTimes(2);
+});
+
+test("login prefetch and mounted yearly chart share one backend request", async () => {
+  let release;
+  api.get.mockImplementation(() => new Promise(resolve => { release = resolve; }));
+  const warming = prefetchBackendIncomeHistory(month);
+  let observed;
+  await act(async () => {
+    root.render(<Probe onResult={state => { observed = state; }} />);
+    await Promise.resolve();
+  });
+  expect(observed.loading).toBe(true);
+  expect(api.get).toHaveBeenCalledTimes(1);
+  await act(async () => {
+    release(snapshot);
+    await warming;
+    await Promise.resolve();
+  });
+  expect(observed.months).toHaveLength(3);
+  expect(container.textContent).toBe("3");
+  expect(api.get).toHaveBeenCalledTimes(1);
+});
+
+test("sign-out invalidates a pending prefetch and prevents stale-cache reuse", async () => {
+  let release;
+  api.get.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }))
+    .mockResolvedValueOnce(snapshot);
+  const warming = prefetchBackendIncomeHistory(month);
+  await Promise.resolve();
+  clearFinancialCache();
+  release(snapshot);
+  await expect(warming).rejects.toThrow("invalidated");
+  let observed;
+  await act(async () => {
+    root.render(<Probe onResult={state => { observed = state; }} />);
+    await Promise.resolve();
+  });
   expect(observed.months).toHaveLength(3);
   expect(api.get).toHaveBeenCalledTimes(2);
 });
