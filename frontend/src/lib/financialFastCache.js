@@ -29,8 +29,10 @@ export function readFinancialCacheState(key, maxAgeMs = 15000, maxStaleMs = FINA
 }
 
 export function readFinancialCache(key, maxAgeMs = 15000) {
-  const state = readFinancialCacheState(key, maxAgeMs, maxAgeMs);
-  return state ? state.data : null;
+  const state = readFinancialCacheState(key, maxAgeMs);
+  // A request requiring fresh data must not discard the validated stale
+  // display copy, which can be shown while the new request completes.
+  return state && !state.stale ? state.data : null;
 }
 
 export function peekFinancialCache(key) {
