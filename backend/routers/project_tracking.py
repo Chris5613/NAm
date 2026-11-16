@@ -1067,21 +1067,6 @@ async def evaluate_financial_asset_rows(
     }
 
 
-@router.post("/financial-core/phone-assets")
-async def evaluate_phone_equipment(
-    payload: dict, user: User = Depends(current_user),
-) -> dict:
-    """Read-only valuation of phones explicitly opted into business equipment."""
-    month = payload.get("month")
-    if not isinstance(month, str) or not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
-        raise HTTPException(status_code=422, detail="Invalid equipment month")
-    phones = payload.get("phones") or []
-    if not isinstance(phones, list) or len(phones) > 100:
-        raise HTTPException(status_code=422, detail="Invalid phone asset register")
-    return {"sourceOfCalculation": "backend-financial-core", "month": month,
-            "rows": phone_asset_rows(phones, month)}
-
-
 @router.post("/financial-core/parity-observation")
 async def record_financial_migration_parity(
     payload: dict, user: User = Depends(current_user),
