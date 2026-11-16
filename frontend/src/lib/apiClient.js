@@ -119,6 +119,3 @@ export const spendingApi = {
     api.put("/api/spending/budget", { budget }),
 };
 
-export const migrationApi = {
-  importDump: (dump) => api.post("/api/migration/import", dump),
-};
