@@ -142,6 +142,30 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
     lifetime.throughMonth === month
       ? { totalUsd: lifetime.totalUsd, fromMonth: lifetime.fromMonth,
           throughMonth: lifetime.throughMonth, source: lifetime.source } : null;
+  // Historical source-month bookings arrive with the daily/weekly dashboard.
+  // Validate and retain them across session cache reads; no browser income
+  // reconstruction or assumption that missing months mean zero.
+  const history = data.incomeHistory;
+  let incomeHistory = null;
+  if (history?.sourceOfCalculation === "backend-persisted-income-history" &&
+      history.currentMonth === month && Array.isArray(history.months) &&
+      history.months.every(row =>
+        row && /^[0-9]{4}-(0[1-9]|1[0-2])$/.test(row.monthKey) &&
+        typeof row.total === "number" && Number.isFinite(row.total) &&
+        row.sources && typeof row.sources === "object" &&
+        !Array.isArray(row.sources) &&
+        Object.entries(row.sources).every(([name, value]) =>
+          typeof name === "string" && name.length > 0 && name.length <= 80 &&
+          typeof value === "number" && Number.isFinite(value)))) {
+    incomeHistory = {
+      sourceOfCalculation: history.sourceOfCalculation,
+      currentMonth: month,
+      months: history.months.map(row => ({
+        monthKey: row.monthKey, total: row.total,
+        sources: { ...row.sources },
+      })),
+    };
+  }
   return {
     sourceOfCalculation: "backend-postgres",
     month, todayKey, days, weekDays,
@@ -152,7 +176,7 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
     monthlySources: copySources(data.monthlySources),
     todaySources: copySources(data.todaySources),
     reviewDays, fullyVerified, monthAccountingComparison,
-    lifetimeEarned,
+    lifetimeEarned, incomeHistory,
     calculatedAt: data.calculatedAt,
   };
 }

@@ -145,3 +145,43 @@ test("invalid backend comparison never becomes the booked monthly total", () => 
   expect(validated.monthAccountingComparison).toBeNull();
   expect(validated.monthTotalUsd).toBe(5.81);
 });
+
+test("unified backend response preserves booked month history in session cache", () => {
+  const storage = store();
+  const data = backend();
+  data.incomeHistory = {
+    sourceOfCalculation: "backend-persisted-income-history",
+    currentMonth: "2026-11",
+    months: [
+      { monthKey: "2026-09", total: 14.75, sources: { Kryptex: 14.75 } },
+      { monthKey: "2026-10", total: 31.5, sources: { Kryptex: 20, Salad: 11.5 } },
+      { monthKey: "2026-11", total: 12.25, sources: { Kryptex: 12.25 } },
+    ],
+  };
+  const saved = writeBackendEarningsCache(7, "2026-11", data, storage);
+  expect(saved.data.incomeHistory.months.map(row => row.total))
+    .toEqual([14.75, 31.5, 12.25]);
+  const read = readBackendEarningsCache(7, "2026-11", "2026-11-14", storage);
+  expect(read.data.incomeHistory).toEqual(saved.data.incomeHistory);
+  expect(read.data.monthTotalUsd).toBe(5.81);
+  expect(read.data.weeklyTotalUsd).toBe(5.81);
+});
+
+test("untrusted or cross-month source history cannot populate the yearly chart", () => {
+  const data = backend();
+  data.incomeHistory = {
+    sourceOfCalculation: "browser",
+    currentMonth: "2026-11",
+    months: [{monthKey: "2026-10", total: 999, sources: { Fake: 999 }}],
+  };
+  expect(validateBackendEarningsSnapshot(data, "2026-11", "2026-11-14")
+    .incomeHistory).toBeNull();
+  data.incomeHistory.sourceOfCalculation = "backend-persisted-income-history";
+  data.incomeHistory.currentMonth = "2026-10";
+  expect(validateBackendEarningsSnapshot(data, "2026-11", "2026-11-14")
+    .incomeHistory).toBeNull();
+  data.incomeHistory.currentMonth = "2026-11";
+  data.incomeHistory.months[0].total = Infinity;
+  expect(validateBackendEarningsSnapshot(data, "2026-11", "2026-11-14")
+    .incomeHistory).toBeNull();
+});
