@@ -221,9 +221,6 @@ def _provider_config() -> dict[str, dict[str, Any]]:
         "nosana": {
             "base": "https://dashboard.k8s.prd.nos.ci/api",
         },
-        "mlb": {
-            "base": "https://statsapi.mlb.com/api/v1",
-        },
         "lulo": {
             "base": "https://api.lulo.fi",
             "headers": {
@@ -316,22 +313,6 @@ def _fetch(
             status_code=502,
             detail="Upstream returned a non-JSON response.",
         ) from error
-
-
-@router.get("/mlb/{path:path}")
-async def public_mlb_proxy(
-    path: str,
-    request: Request,
-    user: User = Depends(current_user),
-) -> Any:
-    """Authenticated read-only proxy for MLB schedule and game data."""
-    if ".." in path:
-        raise HTTPException(status_code=400, detail="Invalid path.")
-
-    config = _provider_config()["mlb"]
-    params = urllib.parse.urlencode(dict(request.query_params))
-    url = f'{config["base"]}/{path.lstrip("/")}' + (f"?{params}" if params else "")
-    return await cached_get(f"mlb:{url}", url, config.get("headers", {}))
 
 
 @router.api_route(
