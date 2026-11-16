@@ -103,7 +103,8 @@ test("stale validated result remains viewable but is never treated as fresh", as
   });
   // An unrelated request should never be answered by a stale cached result.
   const fresh = await requestFinancialCache(key, fetcher,
-    data => data.sourceOfCalculation === "backend-financial-core");
+    data => data.sourceOfCalculation === "backend-financial-core",
+    { maxAgeMs: 12000 });
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(fresh.total).toBe(23);
   expect(readFinancialCacheState(key, 12000).stale).toBe(false);
