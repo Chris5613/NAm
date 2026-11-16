@@ -170,7 +170,8 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
 export default function MiningPowerCard() {
   const [status, setStatus] = useState(null);
   const [kryptexDailyRevenue, setKryptexDailyRevenue] = useState(null);
-  const [settings, setSettings] = useState(DEFAULTS);
+  // Device labels are persisted backend settings; no browser tariff defaults.
+  const [settings, setSettings] = useState({});
   const [refreshing, setRefreshing] = useState(false);
   const renameDevice = useCallback(async (id,label) => {
     // Guarded settings writes require an exact before/after pair. Fetch the
