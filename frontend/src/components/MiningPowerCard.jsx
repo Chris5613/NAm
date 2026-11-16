@@ -116,7 +116,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
       }
     : DEVICE_META[device?.id] || null;
   return (
-    <section className="flex min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
+    <section className="flex min-h-[315px] min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="shrink-0 rounded-lg bg-sky-400/10 p-1.5 text-sky-300">
@@ -151,7 +151,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
       </div>
       {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
       <p className="mt-3 text-[27px] font-semibold leading-none tracking-tight tabular-nums text-foreground">{watts == null ? "—" : watts.toFixed(0) + "W"}</p>
-      <div className="relative mt-1 flex h-24 min-w-0 items-center justify-center overflow-hidden rounded-md">
+      <div className="relative mt-3 flex h-40 min-w-0 items-center justify-center overflow-hidden rounded-md">
         {meta?.image ? (
           <>
             <div className={"pointer-events-none absolute inset-0 bg-gradient-to-t " + meta.glow + " to-transparent blur-xl"} />
