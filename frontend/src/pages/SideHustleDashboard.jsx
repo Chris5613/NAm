@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { CalendarDays, ChartNoAxesCombined, Coins, Cpu, Home, Layers3, Plus, Target, Zap, X } from "lucide-react";
-import { api, settingsApi } from "@/lib/apiClient";
+import { api } from "@/lib/apiClient";
 import { remoteStorage, subscribe } from "@/lib/serverStore";
 import { useBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
@@ -11,24 +11,16 @@ import { useCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
 import { backendCryptoProviderIncomeRows } from "@/lib/cryptoDashboardIncomeRows";
 import { useAuth } from "@/lib/AuthContext";
 import { readCryptoDashboardPowerCache, writeCryptoDashboardPowerCache } from "@/lib/cryptoDashboardPowerCache";
-import { extractBackendKryptexRunRate, projectedDailyMiningNet } from "@/lib/backendKryptexRunRate";
 import { useBackendHardwarePayback } from "@/hooks/useBackendHardwarePayback";
 import { previewHardwareCheckpointEdit } from "@/lib/backendHardwareCheckpointEdit";
 
 
 
 
-import { formatCurrency, getCurrentMonthKey, getKryptexStats, getRollerCoinTrackerStats, getSaladTrackerStats, getUnetworkTrackerStats, groupManualPositions, loadKryptexTracker, loadPositions, loadProjectPayback, saveProjectPayback, loadRollerCoinTracker, loadSaladTracker, loadUnetworkTracker, PROJECT_QUICK_CACHE_KEY, readObject } from "@/lib/yieldFarmingAccounting";
+import { formatCurrency, getCurrentMonthKey, loadProjectPayback, saveProjectPayback } from "@/lib/yieldFarmingAccounting";
 
 const panel = "rounded-2xl border border-[#242b33] bg-[#0d1014] shadow-[0_12px_36px_rgba(0,0,0,0.16)]";
-const POWER_SETTINGS_KEY = "mining_power_dashboard_v1";
 const HARDWARE_KEY = "hardware_payback_devices_v1";
-const POWER_DEFAULTS = {
-  offPeakRate: 0.0893,
-  midPeakRate: 0.1670,
-  peakRate: 0.4313,
-  basicRate: 0.1691,
-};
 const GPU_META = {
   rtx5070: { image: "/gpu/rtx5070-msi.webp", brand: "MSI" },
   rtx2080super: { image: "/gpu/rtx2080-super.webp", brand: "GIGABYTE" },
@@ -44,94 +36,6 @@ function readHardware() {
   } catch {
     return [];
   }
-}
-
-function readIncomeData() {
-  const quick = readObject(PROJECT_QUICK_CACHE_KEY);
-  const lulo = (quick.projects || []).filter(project => project?.yield_tracking === "lulo_lending");
-  const saladTracker = loadSaladTracker();
-  const rollerTracker = loadRollerCoinTracker();
-  const unetworkTracker = loadUnetworkTracker();
-  const kryptexTracker = loadKryptexTracker();
-  const manual = groupManualPositions(loadPositions());
-  const salad = getSaladTrackerStats(saladTracker);
-  const roller = getRollerCoinTrackerStats(rollerTracker);
-  const unetwork = getUnetworkTrackerStats(unetworkTracker);
-  const kryptex = getKryptexStats(kryptexTracker);
-  const luloBalance = lulo.reduce((sum, project) => sum + (Number(project?.lulo_total_balance_usd) || 0), 0);
-  const luloApyWeighted = luloBalance > 0
-    ? lulo.reduce((sum, project) => sum + (Number(project?.lulo_total_balance_usd) || 0) * (Number(project?.lulo_weighted_apy) || 0), 0) / luloBalance
-    : 0;
-  const loopscaleSnapshot = quick.loopscaleSnapshot || null;
-  const loopscaleBalance = Number(loopscaleSnapshot?.positionValueUsd) || 0;
-  const loopscaleApy = Number(loopscaleSnapshot?.netApy) || 0;
-  const projects = [
-    ...manual.map(project => ({
-      id: project.id,
-      name: project.platform,
-      earned: Number(project.earned) || 0,
-      balance: Number(project.totalBalance) || 0,
-      roi: Number(project.weightedApy) || 0,
-      daily: (Number(project.totalBalance) || 0) * (Number(project.weightedApy) || 0) / 100 / 365,
-    })),
-    {
-      id: "lulo-live",
-      name: "Lulo",
-      earned: lulo.reduce((sum, project) => sum + (Number(project?.lulo_lifetime_interest_usd) || 0), 0),
-      balance: luloBalance,
-      roi: luloApyWeighted,
-      daily: luloBalance * luloApyWeighted / 100 / 365,
-    },
-    {
-      id: "loopscale-live",
-      name: "Loopscale",
-      earned: Number(loopscaleSnapshot?.pnlUsd) || 0,
-      balance: loopscaleBalance,
-      roi: loopscaleApy,
-      daily: loopscaleBalance * loopscaleApy / 100 / 365,
-    },
-    {
-      id: "salad-project",
-      name: "Salad",
-      earned: salad.lifetimeUsd,
-      balance: Number(salad.currentBalance) || 0,
-      roi: Number(salad.currentBalance) > 0 ? (Number(salad.estimatedDailyUsd) || 0) * 365 / Number(salad.currentBalance) * 100 : 0,
-      daily: salad.estimatedDailyUsd,
-    },
-    {
-      id: "rollercoin-project",
-      name: "RollerCoin",
-      earned: roller.lifetimeUsd,
-      balance: Number(roller.currentBalanceUsd) || 0,
-      roi: Number(roller.currentBalanceUsd) > 0 ? (Number(roller.todayUsd) || 0) * 365 / Number(roller.currentBalanceUsd) * 100 : 0,
-      daily: Math.max(0, Number(roller.todayUsd) || 0),
-    },
-    {
-      id: "unetwork-project",
-      name: "Unetwork",
-      earned: unetwork.lifetimeUsd,
-      balance: Number(unetwork.currentBalance) || 0,
-      roi: Number(unetwork.currentBalance) > 0 ? (Number(unetwork.estimatedDailyUsd) || 0) * 365 / Number(unetwork.currentBalance) * 100 : 0,
-      daily: unetwork.estimatedDailyUsd,
-    },
-    {
-      id: "kryptex-project",
-      name: "Kryptex",
-      earned: kryptex.lifetimeUsd,
-      balance: Number(kryptex.currentBalanceUsd) || 0,
-      roi: Number(kryptex.currentBalanceUsd) > 0 ? (Number(kryptex.dailyUsd) || 0) * 365 / Number(kryptex.currentBalanceUsd) * 100 : 0,
-      daily: kryptex.dailyUsd,
-    },
-  ];
-  const payback = loadProjectPayback();
-  return {
-    projects: projects.map(project => ({
-      ...project,
-      earned: Math.max(0, Number(project.earned) || 0),
-      daily: Math.max(0, Number(project.daily) || 0),
-      spent: Number(payback[project.id]?.totalSpent) || 0,
-    })),
-  };
 }
 
 
@@ -214,12 +118,10 @@ function projectTableMeta(name) {
 }
 
 export default function SideHustleDashboard() {
-  const [income, setIncome] = useState(readIncomeData);
   const [hardware, setHardware] = useState(readHardware);
   const { user } = useAuth();
   const [power, setPower] = useState(() => readCryptoDashboardPowerCache(user?.id)?.data || null);
   const [powerIsCached, setPowerIsCached] = useState(() => Boolean(readCryptoDashboardPowerCache(user?.id)));
-  const [powerSettings, setPowerSettings] = useState(POWER_DEFAULTS);
   // All income cards read the same backend-owned server projection.
   const [activeView, setActiveView] = useState("overview");
   const [clock, setClock] = useState(Date.now());
@@ -229,20 +131,16 @@ export default function SideHustleDashboard() {
   const [addError, setAddError] = useState("");
   const [photoLoading, setPhotoLoading] = useState(false);
   const [savingHardware, setSavingHardware] = useState(false);
+  const [projectBreakEven, setProjectBreakEven] = useState(null);
+  const [projectBreakEvenError, setProjectBreakEvenError] = useState(false);
+  const [projectRevision, setProjectRevision] = useState(0);
 
   const refreshPower = useCallback(async () => {
     try {
-      const [status, saved, kryptex] = await Promise.all([
-        api.get("/api/power/status"),
-        settingsApi.get(POWER_SETTINGS_KEY).catch(() => null),
-        api.get("/api/project-tracking/kryptex/aggregate").catch(() => null),
-      ]);
-      const snapshot = { ...status,
-        kryptexDailyRunRate: extractBackendKryptexRunRate(kryptex) };
+      const snapshot = await api.get("/api/power/status");
       setPower(snapshot);
       writeCryptoDashboardPowerCache(user?.id, snapshot);
       setPowerIsCached(false);
-      if (saved && typeof saved === "object") setPowerSettings(current => ({ ...current, ...saved }));
     } catch {
       // Preserve but label a saved measured snapshot during backend outages.
       setPowerIsCached(true);
@@ -250,9 +148,43 @@ export default function SideHustleDashboard() {
   }, [user?.id]);
 
   useEffect(() => subscribe(() => {
-    setIncome(readIncomeData());
     setHardware(readHardware());
+    setProjectRevision(current => current + 1);
   }), []);
+  // The authenticated backend owns break-even earnings, remaining costs and
+  // estimated days. The frontend only displays and sorts these verified rows.
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const result = await api.get("/api/project-tracking/project-break-even");
+        if (result?.sourceOfCalculation !== "backend-project-break-even" ||
+            !Array.isArray(result.rows) ||
+            !result.rows.every(row => typeof row.id === "string" &&
+              typeof row.name === "string" &&
+              ["earned", "daily", "spent", "recoveredPct"].every(key =>
+                Number.isFinite(row[key])) &&
+              (row.daysToProfit == null ||
+                (Number.isInteger(row.daysToProfit) && row.daysToProfit >= 0)))) {
+          throw new Error("Incomplete backend break-even response");
+        }
+        if (active) {
+          setProjectBreakEven(result);
+          setProjectBreakEvenError(false);
+        }
+      } catch {
+        if (active) setProjectBreakEvenError(true);
+      }
+    };
+    // Saved setting edits debounce for 600ms before backend reconciliation.
+    const initial = window.setTimeout(refresh, projectRevision ? 900 : 0);
+    const interval = window.setInterval(refresh, 90000);
+    return () => {
+      active = false;
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+    };
+  }, [projectRevision]);
   useEffect(() => {
     refreshPower();
     const powerTimer = window.setInterval(refreshPower, 15000);
@@ -267,8 +199,8 @@ export default function SideHustleDashboard() {
   const currentMonthKey = getCurrentMonthKey();
   const { data: backendEarnings, isCached: earningsCached, error: earningsError } = useBackendEarningsDashboard(currentMonthKey);
   const { data: backendPortfolio, isCached: portfolioCached, error: portfolioError } = useCryptoDashboardSnapshot();
-  const { data: backendHardware, error: backendHardwareError } = useBackendHardwarePayback();
-  const { data: backendBitcoin, isCached: bitcoinCached, error: bitcoinError } = useBackendBitcoinValuation();
+  const { data: backendHardware } = useBackendHardwarePayback();
+  const { isCached: bitcoinCached, error: bitcoinError } = useBackendBitcoinValuation();
   // Monthly Income is the separately booked provider snapshot, not the
   // dated chart's provisional legacy receipts. Both are exposed by the same
   // backend response so a stale browser cache cannot silently swap them.
@@ -292,19 +224,11 @@ export default function SideHustleDashboard() {
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
     : null;
 
-  const rankedProjects = [...income.projects].sort((a, b) => {
-    const ar = a.spent > 0 ? a.earned / a.spent : 0;
-    const br = b.spent > 0 ? b.earned / b.spent : 0;
-    return br - ar || b.daily - a.daily;
-  });
-  const configuredProjects = rankedProjects.filter(project => project.spent > 0);
-  const incompleteProjects = configuredProjects
-    .filter(project => Math.max(0, Number(project.earned) || 0) < Math.max(0, Number(project.spent) || 0))
-    .sort((a, b) => {
-      const ar = a.spent > 0 ? a.earned / a.spent : 0;
-      const br = b.spent > 0 ? b.earned / b.spent : 0;
-      return br - ar;
-    });
+
+  const backendBreakEvenRows = Array.isArray(projectBreakEven?.rows) ? projectBreakEven.rows : [];
+  const incompleteProjects = backendBreakEvenRows
+    .filter(row => row.spent > 0 && row.recovered !== true)
+    .sort((a,b) => b.recoveredPct - a.recoveredPct || b.daily - a.daily);
 
   const latest = power?.latest || null;
   const totalWatts = Number(latest?.totalWatts) || 0;
@@ -313,27 +237,14 @@ export default function SideHustleDashboard() {
   const monthKwh = Number(powerMonth?.totalKwh) || 0;
   const powerCost = power?.powerCost?.sourceOfCalculation === "backend-power-meter-tariffs"
     ? power.powerCost : null;
-  const freePower = powerCost?.freeMiningPower === true;
-  const rateInfo = powerCost?.currentRate || null;
   const monthPowerCost = powerCost?.complete ? powerCost.outOfPocketUsd : null;
-  // Both profitability and power charge are backend readings, neither is
-  // a historical earnings credit. Do not invent a zero for an offline meter.
-  const miningDailyCost = powerCost?.dailyOutOfPocketUsd ?? null;
-  const miningDailyNet = projectedDailyMiningNet(power?.kryptexDailyRunRate, miningDailyCost);
   const deviceRows = Array.isArray(latest?.devices) ? latest.devices : [];
-  const deviceUsage = powerMonth?.devices || {};
 
   // Hardware recovery and editing checkpoints are backend-owned.
   const backendHardwareRows = new Map(
     (backendHardware?.devices || []).map(device => [String(device.id), device])
   );
 
-  // The server-owned provider feed, not a browser portfolio calculation.
-  const totalProjectBalance = backendPortfolio?.totalUsd ?? null;
-  // One complete server calculation: provider balances and BTC wallet
-  // quantity are revalued from ONE server-fetched market quote.
-  const totalNetWorth = backendBitcoin?.complete === true
-    ? backendBitcoin.cryptoTotalUsd : null;
   // Use the same reconciled per-source monthly totals as Income History.
   // This includes Lulo earnings even when the quick dashboard cache lacks a Lulo row.
   // Match KPI, monthly chart, and Top Projects to the one backend ledger.
@@ -343,10 +254,11 @@ export default function SideHustleDashboard() {
   }));
 
   const addSourceOptions = [...new Set([
-    ...income.projects.map(project => project.name),
+    ...backendBreakEvenRows.map(project => project.name),
+    ...(backendPortfolio?.projects || []).map(project => project.name),
     ...Object.keys(backendEarnings?.monthlySources || {}),
   ].map(canonicalSourceName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  const projectAddOptions = [...income.projects]
+  const projectAddOptions = [...backendBreakEvenRows]
     .filter(project => project.id && project.name)
     .sort((a, b) => a.name.localeCompare(b.name));
   function openAddModal(kind) {
@@ -413,7 +325,9 @@ export default function SideHustleDashboard() {
       totalSpent: cost, updatedAt: new Date().toISOString(),
     } };
     saveProjectPayback(next);
-    setIncome(readIncomeData());
+    // Hide stale recovery figures until the backend reflects the new cost.
+    setProjectBreakEven(null);
+    setProjectRevision(current => current + 1);
     setAddModal(null);
   }
 
@@ -576,6 +490,7 @@ export default function SideHustleDashboard() {
           </div>
           <button
             type="button"
+            disabled={!projectBreakEven || projectBreakEvenError}
             onClick={() => openAddModal("project")}
             className="inline-flex h-7 shrink-0 items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/[0.08] px-2.5 text-[10px] font-semibold text-emerald-400 transition-colors hover:bg-emerald-500/15"
           >
@@ -586,11 +501,10 @@ export default function SideHustleDashboard() {
 
         <div className="mt-3 divide-y divide-[#202932]">
           {incompleteProjects.slice(0, 3).map(row => {
-            const spent = Math.max(0, Number(row.spent) || 0);
-            const earned = Math.max(0, Number(row.earned) || 0);
-            const ratio = spent > 0 ? Math.min(100, earned / spent * 100) : 0;
-            const remaining = Math.max(0, spent - earned);
-            const days = Number(row.daily) > 0 ? Math.ceil(remaining / Number(row.daily)) : null;
+            const spent = row.spent;
+            const earned = row.earned;
+            const ratio = Math.min(100, Math.max(0, row.recoveredPct));
+            const days = row.daysToProfit;
             const meta = projectTableMeta(row.name);
             return <div key={row.id} className="grid grid-cols-[minmax(0,.85fr)_minmax(120px,1.4fr)_52px_65px] items-center gap-3 py-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -607,7 +521,11 @@ export default function SideHustleDashboard() {
               <span className="text-right text-[9px] tabular-nums text-[#c0c8d0]">{days != null ? `~${days} days` : "—"}</span>
             </div>;
           })}
-          {!incompleteProjects.length && <p className="py-8 text-center text-xs text-[#778491]">All configured projects have broken even.</p>}
+          {!projectBreakEven && <p role="status" className="py-8 text-center text-xs text-[#778491]">
+            {projectBreakEvenError ? "Backend break-even data unavailable." : "Loading backend break-even data…"}
+          </p>}
+          {projectBreakEven && projectBreakEvenError && <p role="status" className="py-2 text-center text-xs text-amber-300">Showing last verified break-even figures while the backend refresh is unavailable.</p>}
+          {projectBreakEven && !incompleteProjects.length && <p className="py-8 text-center text-xs text-[#778491]">All configured projects have broken even.</p>}
         </div>
       </section>
     </div>
@@ -688,7 +606,7 @@ export default function SideHustleDashboard() {
               </div>
               <div className="pt-5 pl-5">
                 <p className="text-[10px] text-[#83909d]">Est. Net Profit (MTD)</p>
-                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{monthlyIncome===null ? "—" : money(Math.max(0, monthlyIncome - monthPowerCost))}</strong>
+                <strong className="mt-1.5 block text-[22px] font-semibold tracking-tight text-emerald-400">{monthlyIncome == null || monthPowerCost == null ? "—" : money(monthlyIncome - monthPowerCost)}</strong>
                 
               </div>
             </div>
