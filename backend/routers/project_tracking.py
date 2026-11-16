@@ -1257,6 +1257,7 @@ async def backend_project_break_even(
     result = project_break_even(
         setting(db, user.id, "networth_yield_positions") or [],
         stats, setting(db, user.id, "yield_project_payback_v1") or {},
+        setting(db, user.id, "yield_project_quick_cache_v1") or {},
     )
     return {"month": month, "calculatedAt": datetime.now(timezone.utc).isoformat(),
             **result}
