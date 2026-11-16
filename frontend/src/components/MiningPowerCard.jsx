@@ -283,12 +283,9 @@ export default function MiningPowerCard() {
 
   const monthlyDevices = currentMonth?.devices || {};
   const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
-  const gpuGridClass =
-    deviceRows.length <= 1 ? "grid-cols-1"
-      : deviceRows.length === 2 ? "grid-cols-1 sm:grid-cols-2"
-      : deviceRows.length === 3 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
-      : deviceRows.length === 4 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
-      : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5";
+  // Keep GPU cards at the reference's compact five-up width even with 1-2
+  // connected devices. Never expand them to occupy the entire dashboard.
+  const gpuGridClass = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
 
 
 
@@ -323,21 +320,25 @@ export default function MiningPowerCard() {
         </div>
       </header>
 
-      <section aria-label="Mining power summary" className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-4">
-          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Zap className="h-4 w-4 text-emerald-400" />Total Mining Power</p>
-          <p className="mt-2 text-[25px] font-semibold leading-none tabular-nums text-foreground">{totalWatts == null ? "—" : totalWatts.toFixed(0) + "W"}</p>
-          <p className="mt-2 text-[10px] text-muted-foreground">Live power across connected GPUs</p>
+      <section aria-label="Mining power summary"
+        className="grid min-w-0 grid-cols-1 rounded-xl border border-border/55 bg-[#0d1116] px-3 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)] sm:grid-cols-3 sm:divide-x sm:divide-border/35">
+        <div className="min-w-0 py-1 sm:px-3">
+          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Zap className="h-3.5 w-3.5 shrink-0 text-emerald-400" />Total Mining Power
+          </p>
+          <p className="mt-1 text-xl font-semibold leading-none tabular-nums text-foreground">{totalWatts == null ? "—" : totalWatts.toFixed(0) + "W"}</p>
         </div>
-        <div className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-4">
-          <p className="flex items-center gap-2 text-xs text-muted-foreground"><CalendarDays className="h-4 w-4 text-cyan-300" />Total Monthly Usage</p>
-          <p className="mt-2 text-[25px] font-semibold leading-none tabular-nums text-cyan-300">{monthKwh.toFixed(2)} kWh</p>
-          <p className="mt-2 text-[10px] text-muted-foreground">Across {deviceRows.length} tracked GPU{deviceRows.length === 1 ? "" : "s"}</p>
+        <div className="min-w-0 border-t border-border/35 py-2 sm:border-t-0 sm:px-4 sm:py-1">
+          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <CalendarDays className="h-3.5 w-3.5 shrink-0 text-cyan-300" />Total Monthly Usage
+          </p>
+          <p className="mt-1 text-xl font-semibold leading-none tabular-nums text-cyan-300">{monthKwh.toFixed(2)} kWh</p>
         </div>
-        <div className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-4">
-          <p className="flex items-center gap-2 text-xs text-muted-foreground"><Coins className="h-4 w-4 text-amber-400" />Total Monthly Cost</p>
-          <p className="mt-2 text-[25px] font-semibold leading-none tabular-nums text-amber-400">{monthCost == null ? "—" : money(monthCost)}</p>
-          <p className="mt-2 text-[10px] text-muted-foreground">{freePower ? "Power provided at no cost" : "Backend-calculated electricity cost"}</p>
+        <div className="min-w-0 border-t border-border/35 py-2 sm:border-t-0 sm:px-4 sm:py-1">
+          <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+            <Coins className="h-3.5 w-3.5 shrink-0 text-amber-400" />Total Monthly Cost
+          </p>
+          <p className="mt-1 text-xl font-semibold leading-none tabular-nums text-amber-400">{monthCost == null ? "—" : money(monthCost)}</p>
         </div>
       </section>
 
