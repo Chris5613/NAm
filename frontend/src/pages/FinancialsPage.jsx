@@ -433,6 +433,11 @@ export default function FinancialsPage() {
     totals: { operating: 0, investing: 0, financing: 0, transfers: 0 },
     total: 0,
   };
+  // Cash-flow transactions are classified and calculated by the backend.
+  // Flatten solely for the Cash Flow tab's activity list.
+  const cashEvents = Object.values(cashFlow.sections || {})
+    .flatMap(section => Array.isArray(section) ? section : [])
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
   const cashIn = serverFinancial?.cashMovements?.cashIn ?? 0;
   const cashOut = serverFinancial?.cashMovements?.cashOut ?? 0;
   const openPhoneEditor = () => {
