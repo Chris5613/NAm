@@ -4,7 +4,7 @@ import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
 import { buildSelectedEarningsBreakdown } from "../lib/earningsDisplay";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
-import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
+import { useBackendIncomeHistoryState } from "@/hooks/useBackendIncomeHistory";
 import { backendYieldIncomeRows } from "@/lib/backendYieldIncomeRows";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
 import { useDailyEarningsObservations } from "../hooks/useDailyEarningsObservations";
@@ -917,7 +917,8 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // Historical earnings are sourced exclusively from persisted backend
   // provider snapshots, dated dividends and verified legacy records. Do not
   // reconstruct monthly earnings from wallet balances or browser trackers.
-  const sourceIncomeMonths = useBackendIncomeHistory({
+  const { months: sourceIncomeMonths, loading: sourceIncomeLoading,
+    error: sourceIncomeError } = useBackendIncomeHistoryState({
     currentMonth: getTodayKey().slice(0, 7),
   });
   const projectIncome = useMemo(
@@ -1260,10 +1261,13 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   ).map(month => month.monthKey === todayKey.slice(0, 7)
     ? { ...month, value: thisMonthBooked ?? thisMonthEarned }
     : month);
-  const thisYearEarned = yearlyChartData.reduce(
+  // The current-month earnings endpoint may finish before the full historical
+  // ledger. Never show a fake Jan-Oct $0 chart or a partial yearly headline.
+  const yearlyHistoryReady = !sourceIncomeLoading && !sourceIncomeError;
+  const thisYearEarned = yearlyHistoryReady ? yearlyChartData.reduce(
     (sum, month) => sum + (Number(month.value) || 0),
     0
-  );
+  ) : null;
   const yearlyChartMax = Math.max(
     0.1,
     ...yearlyChartData.map(month => Number(month.value) || 0)
@@ -1705,7 +1709,7 @@ const summary =
               <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400"
                 title={backendEarnings?.fullyVerified === false
                   ? "Includes legacy receipts awaiting provider reconciliation"
-                  : undefined}>{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthHeadline : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
+                  : undefined}>{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) ? "—" : earningsChartRange === "yearly" && thisYearEarned == null ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthHeadline : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-[#303842] bg-[#13181e] p-0.5" aria-label="Earnings chart period">
@@ -1743,6 +1747,11 @@ const summary =
             </div>
           </div>
           <div className="mt-2 h-[265px] w-full min-h-0 lg:h-auto lg:min-h-[280px] lg:flex-1">
+            {earningsChartRange === "yearly" && !yearlyHistoryReady ? (
+              <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">
+                {sourceIncomeError ? "Recorded yearly earnings unavailable." : "Loading recorded yearly earnings…"}
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               {earningsChartRange === "monthly" ? (
                 <AreaChart data={monthlyChartData} margin={{top:18,right:15,left:-8,bottom:3}} onClick={point => { const index = Number(point?.activeTooltipIndex); const day = point?.activePayload?.[0]?.payload?.key || (Number.isInteger(index) ? monthlyChartData[index]?.key : null); if (day && day <= todayKey) setSelectedEarningsPoint({range:"monthly",key:day}); }}>
@@ -1840,6 +1849,7 @@ const summary =
                 </AreaChart>
               )}
             </ResponsiveContainer>
+            )}
           </div>
         </section>
         <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
