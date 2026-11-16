@@ -2,8 +2,8 @@ import React from "react";
 import { act } from "react-dom/test-utils";
 import { createRoot } from "react-dom/client";
 import { api } from "@/lib/apiClient";
-import { clearFinancialCache } from "@/lib/financialFastCache";
-import { prefetchBackendIncomeHistory, useBackendIncomeHistoryState } from "./useBackendIncomeHistory";
+import { clearFinancialCache, financialCacheKey, requestFinancialCache } from "@/lib/financialFastCache";
+import { useBackendIncomeHistoryState } from "./useBackendIncomeHistory";
 
 jest.mock("@/lib/apiClient", () => ({
   api: { get: jest.fn(), post: jest.fn() },
@@ -56,30 +56,35 @@ test("unknown source-month history remains loading, never pretends to be zero", 
   expect(observed.months[0].total).toBe(50);
 });
 
-test("prefetch gives instant verified history without another network request", async () => {
-  api.get.mockResolvedValue(snapshot);
-  await prefetchBackendIncomeHistory(month);
-  expect(api.get).toHaveBeenCalledWith(path);
-  expect(api.get).toHaveBeenCalledTimes(1);
+test("verified session history can render immediately on a return visit", async () => {
+  await requestFinancialCache(
+    financialCacheKey(path), async () => snapshot,
+    data => data?.sourceOfCalculation === "backend-persisted-income-history",
+  );
   let observed;
   await act(async () => {
     root.render(<Probe onResult={state => { observed = state; }} />);
   });
   expect(observed.loading).toBe(false);
   expect(observed.months).toHaveLength(3);
-  expect(api.get).toHaveBeenCalledTimes(1);
+  expect(api.get).not.toHaveBeenCalled();
 });
 
-test("prefetch refuses a response after the authenticated session changes", async () => {
-  let resolve;
-  let current = true;
-  api.get.mockImplementation(() => new Promise(done => { resolve = done; }));
-  const pending = prefetchBackendIncomeHistory(month, () => current);
-  await Promise.resolve();
-  current = false;
-  resolve(snapshot);
-  await expect(pending).rejects.toThrow();
-  api.get.mockResolvedValue(snapshot);
-  await act(async () => { root.render(<Probe onResult={() => {}} />); });
+test("transient request failure can recover on focus without losing history", async () => {
+  api.get.mockRejectedValueOnce(new Error("Temporary backend unavailable"))
+    .mockResolvedValue(snapshot);
+  let observed;
+  await act(async () => {
+    root.render(<Probe onResult={state => { observed = state; }} />);
+    await Promise.resolve();
+  });
+  expect(observed.error).toBe(true);
+  expect(observed.months).toHaveLength(0);
+  await act(async () => {
+    window.dispatchEvent(new Event("focus"));
+    await Promise.resolve();
+  });
+  expect(observed.error).toBe(false);
+  expect(observed.months).toHaveLength(3);
   expect(api.get).toHaveBeenCalledTimes(2);
 });
