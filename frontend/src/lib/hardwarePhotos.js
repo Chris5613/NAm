@@ -20,9 +20,10 @@ const fallbackSvg = (label) => {
 export function hardwareImageFor(device) {
   if(typeof device?.photo==="string" && /^data:image\/(?:jpeg|png|webp);base64,/.test(device.photo)) return device.photo;
   const name=String(device?.name||"").toLowerCase();
+  if(name.includes("5080")) return "/gpu/asus-rtx5080-transparent.webp";
   if(name.includes("2080")) return "/gpu/rtx2080-super.webp";
   if(name.includes("5070")) return "/gpu/rtx5070-msi.webp";
-  return fallbackSvg(name.includes("5080") ? "RTX 5080" : "GPU");
+  return fallbackSvg("GPU");
 }
 // Re-encode even small uploads to avoid filling the remote JSON store.
 // Raster photos only (not SVG), max 160 KB compressed.
