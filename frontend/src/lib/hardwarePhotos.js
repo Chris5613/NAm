@@ -1,4 +1,4 @@
-// Small, persistent hardware photos and a built-in RTX 5080 illustration.
+// Small, persistent hardware photos and a shared transparent ASUS RTX 5080 image.
 // Keep uploaded pictures compact: hardware register data is synced as JSON.
 const fallbackSvg = (label) => {
   const safe=String(label||"GPU").replace(/[^a-zA-Z0-9 -]/g,"").slice(0,24);
