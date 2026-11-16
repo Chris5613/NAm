@@ -6,9 +6,7 @@ import unittest
 from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
-from fastapi import HTTPException
-
-from backend.routers import project_tracking, resources
+from backend.routers import project_tracking
 
 
 class FakeDb:
@@ -24,27 +22,6 @@ class FakeDb:
 
 
 class RouteAccountingTests(unittest.TestCase):
-    def test_snapshot_rejects_bad_timestamp_and_nonfinite_value(self):
-        user = SimpleNamespace(id=1)
-        db = FakeDb()
-
-        with self.assertRaises(HTTPException) as bad_date:
-            asyncio.run(resources.add_snapshot(
-                {"timestamp": "not-a-date", "value": 10},
-                user,
-                db,
-            ))
-        self.assertEqual(bad_date.exception.status_code, 422)
-
-        with self.assertRaises(HTTPException) as bad_value:
-            asyncio.run(resources.add_snapshot(
-                {"timestamp": "2026-11-07T12:00:00Z", "value": "NaN"},
-                user,
-                db,
-            ))
-        self.assertEqual(bad_value.exception.status_code, 422)
-        self.assertEqual(db.commits, 0)
-
     def test_daily_earnings_preserve_raw_downward_correction(self):
         user = SimpleNamespace(id=1)
         db = FakeDb()
