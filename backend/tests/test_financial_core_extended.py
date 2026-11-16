@@ -204,6 +204,26 @@ class BackendAccountingMigrationTests(unittest.TestCase):
         self.assertNotEqual(result["statementTotals"]["assetsEnd"], 350)
         self.assertEqual(result["cashMovements"], {"cashIn": 0, "cashOut": 0})
 
+    def test_break_even_preserves_lulo_loopscale_without_counting_principal(self):
+        quick = {"projects": [
+            {"yield_tracking": "lulo_lending", "lulo_total_balance_usd": 1000,
+             "lulo_weighted_apy": 5, "lulo_lifetime_interest_usd": 3},
+        ], "loopscaleSnapshot": {
+            "positionValueUsd": 500, "netApy": 10, "pnlUsd": 7,
+        }}
+        costs = {"lulo-live": {"totalSpent": 20},
+                 "loopscale-live": {"totalSpent": 25}}
+        result = project_break_even([], {}, costs, quick)
+        rows = {row["id"]: row for row in result["rows"]}
+        self.assertEqual(rows["lulo-live"]["earned"], 3)
+        self.assertEqual(rows["loopscale-live"]["earned"], 7)
+        self.assertEqual(rows["lulo-live"]["spent"], 20)
+        self.assertEqual(rows["loopscale-live"]["spent"], 25)
+        self.assertAlmostEqual(rows["lulo-live"]["daily"], 1000 * .05 / 365)
+        self.assertAlmostEqual(rows["loopscale-live"]["daily"], 500 * .10 / 365)
+        self.assertEqual(result["totalEarned"], 10)
+        self.assertEqual(result["totalSpent"], 45)
+
     def test_break_even_never_treats_portfolio_balance_as_earnings(self):
         stats = {
             "salad": {"lifetimeUsd": 4, "estimatedDailyUsd": 1},
