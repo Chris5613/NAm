@@ -216,6 +216,13 @@ export default function FinancialsPage() {
   const [quickEntry, setQuickEntry] = useState(null);
   const [quickError, setQuickError] = useState("");
   const [quickStatus, setQuickStatus] = useState("");
+  // Short-lived connection failures are common while session data hydrates.
+  // Do not flash an outage warning during the initial backend handshake.
+  const [showInitialLoadError, setShowInitialLoadError] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowInitialLoadError(true), 7000);
+    return () => window.clearTimeout(timer);
+  }, []);
   useEffect(() => subscribe(() => {
     setRecords(readJson(RECORDS_KEY, {}));
     setJournal(readJson(JOURNAL_KEY, []));
@@ -651,7 +658,9 @@ export default function FinancialsPage() {
     <h1 className="text-2xl font-semibold">Financials</h1>
 
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
-      {liveError
+      {!showInitialLoadError
+        ? "Loading backend financial statements…"
+        : liveError
         ? "Backend provider balances unavailable. Previous saved financial records remain untouched."
         : backendBalanceRows.error
         ? "Backend asset rows unavailable. Saved equipment, journal records, and balances were not changed."
