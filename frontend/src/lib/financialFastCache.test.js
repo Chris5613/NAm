@@ -1,5 +1,5 @@
 import {
-  financialCacheKey, readFinancialCache, peekFinancialCache,
+  financialCacheKey, readFinancialCache, readFinancialCacheState, peekFinancialCache,
   clearFinancialCache, invalidateFinancialCache, requestFinancialCache,
 } from "./financialFastCache";
 
@@ -87,4 +87,38 @@ test("cache obeys short expiration, bounded capacity and session reset", async (
   expect(peekFinancialCache(financialCacheKey("/ledger", { revision: 44 }))).not.toBeNull();
   clearFinancialCache();
   expect(peekFinancialCache(financialCacheKey("/ledger", { revision: 44 }))).toBeNull();
+});
+
+test("stale validated result remains viewable but is never treated as fresh", async () => {
+  let now = 1000;
+  jest.spyOn(Date, "now").mockImplementation(() => now);
+  const key = financialCacheKey("/financial-core/evaluate", { month: "2026-11" });
+  const fetcher = jest.fn(async () => ({ sourceOfCalculation: "backend-financial-core", total: 23 }));
+  await requestFinancialCache(key, fetcher,
+    data => data.sourceOfCalculation === "backend-financial-core");
+  now += 12001;
+  expect(readFinancialCache(key, 12000)).toBeNull();
+  expect(readFinancialCacheState(key, 12000)).toMatchObject({
+    data: { total: 23 }, stale: true, ageMs: 12001,
+  });
+  // An unrelated request should never be answered by a stale cached result.
+  const fresh = await requestFinancialCache(key, fetcher,
+    data => data.sourceOfCalculation === "backend-financial-core");
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(fresh.total).toBe(23);
+  expect(readFinancialCacheState(key, 12000).stale).toBe(false);
+});
+
+test("stale views expire after five minutes and invalidation erases them", async () => {
+  let now = 1000;
+  jest.spyOn(Date, "now").mockImplementation(() => now);
+  const key = financialCacheKey("/trial", { month: "2026-10" });
+  await requestFinancialCache(key, async () => ({ balanced: true }), v => v.balanced);
+  now += 300001;
+  expect(readFinancialCacheState(key, 12000)).toBeNull();
+  await requestFinancialCache(key, async () => ({ balanced: true }), v => v.balanced);
+  now += 15000;
+  expect(readFinancialCacheState(key, 12000)?.stale).toBe(true);
+  invalidateFinancialCache();
+  expect(readFinancialCacheState(key, 12000)).toBeNull();
 });
