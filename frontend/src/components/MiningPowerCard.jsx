@@ -388,6 +388,7 @@ export default function MiningPowerCard() {
         </div>
       </section>
 
+      {Number(status?.gpuMonthlyUsage?.["rtx2080super:unallocated"]?.kwh) > 0 && <p className="px-1 text-xs text-muted-foreground" title="Metered energy during missing or inconsistent GPU telemetry is included in the total but cannot be attributed to an individual GPU.">{Number(status.gpuMonthlyUsage["rtx2080super:unallocated"].kwh).toFixed(2)} kWh unallocated</p>}
       <section aria-label="Tracked mining GPUs" className={"grid min-w-0 items-stretch gap-3 " + gpuGridClass}>
         {deviceRows.flatMap(device => {
           const breakdown = status?.gpuBreakdown?.[device.id];
