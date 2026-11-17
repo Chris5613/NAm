@@ -406,8 +406,8 @@ export default function MiningPowerCard() {
               label={settings.deviceLabels?.[id] || gpu.name}
               hardware={hardware} onRename={renameDevice} gpu={gpu} photo={settings.devicePhotos?.[id]} onPhoto={savePhoto}
               sharedRig={shared && index === 0}
-              monthlyUsage={shared && index !== 0 ? null : monthlyDevices[device.id]}
-              backendDeviceCost={shared && index !== 0 ? null : cost}
+              monthlyUsage={shared ? (status?.gpuMonthlyUsage?.[id] ?? (index === 0 ? monthlyDevices[device.id] : null)) : monthlyDevices[device.id]}
+              backendDeviceCost={shared ? (status?.gpuMonthlyCosts?.[id] ?? (index === 0 ? cost : null)) : cost}
               live={live && gpu.gpuWatts != null}/>;
           });
         })}
