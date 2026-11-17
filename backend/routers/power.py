@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 from ..auth import current_user
 from ..db import get_db
 from ..models import Setting, User
-from ..power_cost import server_power_cost_preview
+from ..power_cost import server_power_cost_preview, decimal_nonnegative, money
+from decimal import Decimal
 
 router = APIRouter(prefix="/api/power", tags=["power"])
 
@@ -268,6 +269,24 @@ def _gpu_month_display(month, settings, now):
     return devices, preview.get("deviceCosts") or {}, second.get("trackedSeconds", 0)
 
 
+def _illustrative_month_cost(month, gpu_usage):
+    """Display-only flat-rate estimate, completely separate from billing."""
+    rate = Decimal("0.16")
+    def estimate(kwh):
+        value = decimal_nonnegative(kwh)
+        return money(value * rate) if value is not None else None
+    row = month if isinstance(month, dict) else {}
+    devices = dict(row.get("devices") or {})
+    devices.update(gpu_usage or {})
+    return {
+        "rateUsdPerKwh": float(rate),
+        "totalUsd": estimate(row.get("totalKwh")),
+        "deviceUsd": {key: estimate(value.get("kwh")) for key, value in devices.items()
+                      if isinstance(value, dict)},
+        "recordsFinancialExpense": False,
+    }
+
+
 @router.get("/status")
 async def power_status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     token_row = _setting(db, user.id, TOKEN_KEY)
@@ -281,6 +300,7 @@ async def power_status(user: User = Depends(current_user), db: Session = Depends
     kryptex = _setting(db, user.id, "yield_kryptex_machine_snapshots_v1")
     gpu_usage, gpu_costs, split_seconds = _gpu_month_display(month, settings.value if settings else {}, now)
     return {
+        "illustrativeMonthlyCost": _illustrative_month_cost(month, gpu_usage),
         "gpuMonthlyUsage": gpu_usage,
         "gpuMonthlyCosts": gpu_costs,
         "gpuSplitTrackedSeconds": split_seconds,
