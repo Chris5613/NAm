@@ -1,5 +1,5 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe, refreshSetting } from "@/lib/serverStore";
 import { preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
@@ -317,17 +317,17 @@ export default function FinancialsPage() {
     month, currentMonth:getCurrentMonthKey(), records, live, hardwareDevices,
     phones:businessPhones, journal,
   });
-  const baseRows = useMemo(
+  const queryBaseRows = useMemo(
     () => backendBalanceRows.rows || [], [backendBalanceRows.rows],
   );
   // Each existing fixed asset is selectable as its own ledger subaccount.
   // Keep the generic equipment account for acquisitions not yet in the register.
-  const equipmentAccounts = useMemo(() => baseRows
+  const queryEquipmentAccounts = useMemo(() => queryBaseRows
     .filter(row => row.category === "equipment" && row.id)
     .map(row => ({ id:"equipment:"+row.id, name:balanceDisplayName(row,accountLabels), type:"asset" }))
     .filter((row,index,array)=>array.findIndex(other=>other.id===row.id)===index),
-    [baseRows,accountLabels]);
-  const availableAccounts = [...accounts, ...equipmentAccounts];
+    [queryBaseRows,accountLabels]);
+  const queryAccounts = [...accounts, ...queryEquipmentAccounts];
   const recorded = records[month] || {};
   const syncedRevenue = closeSnapshot?.incomeMonth || incomeMonths.find(entry => entry.monthKey === month);
   const savedExpenses = valueOrNull(recorded.expenses);
@@ -335,7 +335,6 @@ export default function FinancialsPage() {
     closeSnapshot?.manualEntries || journal.filter(entry => String(entry.date).slice(0, 7) === month),
     month, businessPhones
   );
-  const unpostedEquipment = unmatchedEquipmentPurchases(baseRows,ledgerEntries,month);
   const electricityCovered = hasFreeMiningPower(month);
   const estimatedPower = powerEstimates[month]?.source === "backend-power-meter-tariffs"
     ? valueOrNull(powerEstimates[month]?.outOfPocketUsd) : null;
@@ -353,29 +352,46 @@ export default function FinancialsPage() {
     // month reopen, or updates to the authenticated income-history hook.
     closeRevision: closedMonths, incomeRevision: syncedRevenue,
   });
-  const entries = currentLedgerState.data?.entries || [];
-  const syncedIncomeJournal = currentLedgerState.data?.income || { entries: [] };
-  // Filter only visible General Ledger rows. All underlying accruals
-  // remain live and all accounting reports use unfiltered entries.
+  const queryEntries = currentLedgerState.data?.entries ?? null;
+  const serverFinancialState = useBackendFinancialCore(
+    month, queryEntries, queryEntries ? backendBalanceRows.rows || null : null,
+    hardwareDevices, savedExpenses);
+  const trialState = useBackendTrialBalance({
+    month, currentEntries: queryEntries, accounts: queryAccounts,
+  });
+  // A live price or source-income update invalidates the exact query chain.
+  // Retain only a complete, same-month/same-accounting-input backend report
+  // while the next chain finishes. Never reuse another month's or edited
+  // journal's projections, and never retain an unauthorized response.
+  const reportScope = JSON.stringify([month, records, journal, closedMonths,
+    hardwareDevices, businessPhones, accountLabels, autoPower]);
+  const lastCompleteReport = useRef(null);
+  const unauthorized = [backendBalanceRows, currentLedgerState, serverFinancialState,
+    trialState].some(state => state?.unauthorized) || !live && liveError;
+  const freshComplete = Boolean(live && backendBalanceRows.rows &&
+    currentLedgerState.data && serverFinancialState.data && trialState.result);
+  if (unauthorized) lastCompleteReport.current = null;
+  else if (freshComplete) lastCompleteReport.current = {
+    scope: reportScope, at: Date.now(), baseRows: backendBalanceRows.rows,
+    accounts: queryAccounts, ledger: currentLedgerState.data,
+    statement: serverFinancialState.data, trial: trialState.result,
+  };
+  const completeReport = !unauthorized && lastCompleteReport.current?.scope === reportScope &&
+    Date.now() - lastCompleteReport.current.at <= 300000 ? lastCompleteReport.current : null;
+  const baseRows = completeReport?.baseRows || [];
+  const availableAccounts = completeReport?.accounts || queryAccounts;
+  const entries = completeReport?.ledger.entries || [];
+  const syncedIncomeJournal = completeReport?.ledger.income || { entries: [] };
+  const serverFinancial = completeReport?.statement;
+  const unpostedEquipment = unmatchedEquipmentPurchases(baseRows,ledgerEntries,month);
   const displayedLedgerEntries=visibleLedgerEntries(entries,month,getCurrentMonthKey());
   const hiddenSyncedIncomeCount=entries.length-displayedLedgerEntries.length;
   const ledgerVisibleDebit=moneyRound(displayedLedgerEntries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
   const ledgerVisibleCredit=moneyRound(displayedLedgerEntries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.credit||0),0),0));
-  // Compute server-side; keep the proven browser view only when the backend
-  // response is stale or fails strict parity. This is read-only: it never
-  // generates new posted transactions or adjusts a locked month.
-  const serverFinancialState = useBackendFinancialCore(
-    month, entries, backendBalanceRows.rows || null, hardwareDevices,
-    savedExpenses);
-  const serverFinancial = serverFinancialState?.data;
-  const cachedFinancialWarning = Boolean(
-    (liveError && live) ||
-    (backendBalanceRows.error && backendBalanceRows.rows) ||
-    (currentLedgerState.error && currentLedgerState.data) ||
-    (serverFinancialState.error && serverFinancialState.data)
-  );
+  const cachedFinancialWarning = Boolean(liveError || backendBalanceRows.error ||
+    currentLedgerState.error || serverFinancialState.error || trialState.error);
   const report = serverFinancial?.profit || {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
     depreciation: 0, expenses: 0, profit: 0,
@@ -439,13 +455,10 @@ export default function FinancialsPage() {
   // external account balances are still not invented.
   // Previous-month journal assembly, income and fixed-asset adjustments
   // now run in the backend, including the opening phone adjustment.
-  const trialState = useBackendTrialBalance({
-    month, currentEntries: entries, accounts: availableAccounts,
-  });
-  const trial = trialState.result?.rows || [];
-  const trialDebit = trialState.result?.debitsUsd ?? 0;
-  const trialCredit = trialState.result?.creditsUsd ?? 0;
-  const refreshingCachedFinancials = Boolean(
+  const trial = completeReport?.trial.rows || [];
+  const trialDebit = completeReport?.trial.debitsUsd ?? 0;
+  const trialCredit = completeReport?.trial.creditsUsd ?? 0;
+  const refreshingCachedFinancials = Boolean(!freshComplete ||
     liveStale || backendBalanceRows.stale || currentLedgerState.stale ||
     serverFinancialState.stale || trialState.stale
   );
@@ -679,8 +692,7 @@ export default function FinancialsPage() {
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
-  if (!live || !serverFinancial || !currentLedgerState.data ||
-      !trialState.result) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
+  if (!completeReport) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <h1 className="text-2xl font-semibold">Financials</h1>
 
     <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
