@@ -41,28 +41,41 @@ const categories = [
   { id: "liabilities", name: "Liabilities" },
 ];
 const accounts = [
-  { id: "cash", name: "Cash / Bank", type: "asset" },
+  { id: "cash", name: "Cash", type: "asset" },
   { id: "luloCash", name: "Lulo Yield Savings", type: "asset" },
-  { id: "brokerage", name: "Brokerage Holdings / Receivable", type: "asset" },
+  { id: "brokerage", name: "Investments – Brokerage", type: "asset" },
   { id: "crypto", name: "Cryptocurrency", type: "asset" },
   { id: "platform", name: "Other Platform Receivables", type: "asset" },
   { id: "platform:kryptex", name: "Kryptex Receivables", type: "asset" },
   { id: "platform:rollercoin", name: "RollerCoin Receivables", type: "asset" },
   { id: "platform:salad", name: "Salad Receivables", type: "asset" },
   { id: "platform:unetwork", name: "Unetwork Receivables", type: "asset" },
-  { id: "defi", name: "DeFi / Investments", type: "asset" },
-  { id: "equipment", name: "Mining Equipment", type: "asset" },
+  { id: "defi", name: "Investments – DeFi", type: "asset" },
+  { id: "equipment", name: "Equipment", type: "asset" },
   { id: "accDep", name: "Accumulated Depreciation", type: "contra" },
   { id: "payable", name: "Accounts Payable", type: "liability" },
   { id: "equity", name: "Owner's Equity", type: "equity" },
-  { id: "revenue", name: "Mining / Yield Revenue", type: "revenue" },
-  { id: "dividendRevenue", name: "Dividend Revenue", type: "revenue" },
-  { id: "gainDisposal", name: "Gain on Equipment Disposal", type: "revenue" },
+  { id: "revenue", name: "Revenue", type: "revenue" },
+  { id: "dividendRevenue", name: "Dividend Income", type: "revenue" },
+  { id: "gainDisposal", name: "Gain on Disposal of Equipment", type: "revenue" },
   { id: "electric", name: "Electricity Expense", type: "expense" },
   { id: "expense", name: "Operating Expense", type: "expense" },
+  { id: "suppliesExpense", name: "Supplies Expense", type: "expense" },
   { id: "depreciation", name: "Depreciation Expense", type: "expense" },
-  { id: "fees", name: "Transaction & Network Fees", type: "expense" },
+  { id: "fees", name: "Transaction Fee Expense", type: "expense" },
 ];
+const accountGroups = [
+  ["asset", "Assets"], ["contra", "Contra Assets"], ["liability", "Liabilities"],
+  ["equity", "Equity"], ["revenue", "Revenue & Gains"], ["expense", "Expenses"],
+];
+function LedgerAccountOptions({ list }) {
+  return accountGroups.map(([type,label]) => {
+    const group = list.filter(account => account.type === type);
+    return group.length ? <optgroup key={type} label={label}>
+      {group.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}
+    </optgroup> : null;
+  });
+}
 function readJson(key, fallback) {
   try { const value = JSON.parse(remoteStorage.getItem(key) || "null"); return value ?? fallback; }
   catch { return fallback; }
@@ -156,7 +169,7 @@ function parseTransaction(text, month) {
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
     explanation = unpaid ? "Record an electricity bill owed." : "Record a paid electricity expense.";
   } else if (/\b(?:pci[ -]?e|pcie|gpu power|psu|power supply|graphics card)\s*(?:power\s*)?(?:cables?|adapters?|connectors?|risers?)\b|\b(?:cables?|thermal paste|replacement fans?|mining supplies)\b/.test(phrase) && paid) {
-    debitAccount = "expense";
+    debitAccount = "suppliesExpense";
     creditAccount = unpaid ? "payable" : personallyFunded ? "equity" : fromCrypto ? "crypto" : "cash";
     explanation = "Record a standalone cable, accessory, or supply as an operating expense.";
   } else if (/gpu|graphics card|computer|\bpc\b|mining equipment|hardware/.test(phrase) && paid) {
@@ -1108,7 +1121,7 @@ export default function FinancialsPage() {
                 {key === "debitAccount" ? "Debit" : "Credit"}
                 <select className={field} value={quickEntry[key]}
                   onChange={event => setQuickEntry(old => ({ ...old, [key]: event.target.value }))}>
-                  {accounts.map(account => <option key={account.id} value={account.id}>{accountName(account)}</option>)}
+                  <LedgerAccountOptions list={accounts}/>
                 </select>
               </label>)}
           </div>
@@ -1137,7 +1150,7 @@ export default function FinancialsPage() {
               onChange={event=>setDraft(old=>({...old,lines:old.lines.map((row,i)=>i===index?{...row,account:event.target.value}:row)}))}
               className={field+" min-w-0 px-1"}>
               <option value="">Select account</option>
-              {availableAccounts.map(account=><option key={account.id} value={account.id}>{accountName(account)}</option>)}
+              <LedgerAccountOptions list={availableAccounts}/>
             </select>
             <input aria-label={`Debit line ${index+1}`} type="number" min="0" step="0.01" value={item.debit}
               onChange={event=>setDraft(old=>({...old,lines:old.lines.map((row,i)=>i===index?{...row,debit:event.target.value,credit:""}:row)}))}
