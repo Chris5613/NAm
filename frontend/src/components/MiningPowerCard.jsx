@@ -78,29 +78,7 @@ function trackedDays(seconds) {
   return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
-function GpuPowerBreakdown({ breakdown, hardware }) {
-  if (!breakdown?.gpus?.length) return null;
-  const formatWatts = value => typeof value === "number" && Number.isFinite(value) ? value.toFixed(1) + " W" : "—";
-  return (
-    <div className="mt-3 space-y-2 rounded-lg border border-border/45 bg-black/15 p-2">
-      {breakdown.gpus.map(gpu => {
-        const model = gpu.id.replace(/-/g, " ");
-        const photo = hardwareImageFor(hardware.find(row => String(row?.name || "").toLowerCase().includes(model)) || {name: gpu.name});
-        return <div key={gpu.id} className="flex min-w-0 items-center gap-2" data-testid="gpu-power-row">
-          <img src={photo} alt="" className="h-9 w-14 shrink-0 object-contain"/>
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-xs font-semibold">{gpu.name}</p>
-            <p className="text-[10px] text-muted-foreground">{gpu.gpuWatts == null ? "Not reporting" : "GPU: " + formatWatts(gpu.gpuWatts) + (gpu.overheadWatts == null ? "" : " + " + formatWatts(gpu.overheadWatts) + " overhead")}</p>
-          </div>
-          <span className="shrink-0 text-sm font-semibold tabular-nums text-cyan-300" title={gpu.allocatedWatts == null ? "GPU-reported power only" : "GPU power plus allocated system overhead"}>{formatWatts(gpu.allocatedWatts ?? gpu.gpuWatts)}</span>
-        </div>;
-      })}
-      <p className="text-[10px] leading-snug text-muted-foreground">{breakdown.complete ? "Includes equal share of system overhead." : breakdown.unallocatedWatts != null ? formatWatts(breakdown.unallocatedWatts) + " unallocated wall power; waiting for all GPU readings." : "Allocation unavailable; waiting for consistent fresh readings."}</p>
-    </div>
-  );
-}
-
-function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live, hardware, breakdown }) {
+function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live, hardware, gpu, sharedRig, rigUsage }) {
   const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const [renameError, setRenameError] = useState("");
@@ -126,7 +104,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
   };
   const watts = Number.isFinite(Number(device?.watts)) && device?.watts != null
     ? Number(device.watts) : null;
-  const monthlyKwh = Number(monthlyUsage?.kwh) || 0;
+  const monthlyKwh = monthlyUsage?.kwh == null ? null : Number(monthlyUsage.kwh);
   const monthlyCost = backendDeviceCost?.complete ? backendDeviceCost.outOfPocketUsd : null;
   const is5080 = /5080/i.test(label || device?.label || "");
   const meta = is5080
@@ -136,9 +114,13 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
         alt: "ASUS GeForce RTX 5080",
         glow: "from-cyan-400/18 via-cyan-400/5",
       }
-    : DEVICE_META[device?.id] || null;
+    : gpu?.id === "4070-ti" ? {
+        image: hardwareImageFor(hardware.find(row => /4070\s*ti/i.test(String(row?.name || ""))) || {name:"RTX 4070 Ti"}),
+        alt: "GeForce RTX 4070 Ti",
+        glow: "from-sky-400/18 via-sky-400/5",
+      } : DEVICE_META[device?.id] || null;
   return (
-    <section className="flex min-h-[390px] min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
+    <section className="flex h-[390px] min-h-[390px] min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]" data-testid="mining-device-card">
       <div className="flex min-w-0 items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="shrink-0 rounded-lg bg-sky-400/10 p-1.5 text-sky-300">
@@ -168,13 +150,13 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
         </div>
         <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
           <span className={"h-1 w-1 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
-          {live ? "Live" : "Stale"}
+          {live ? "Live" : gpu && gpu.gpuWatts == null ? "Not reporting" : "Stale"}
         </span>
       </div>
       {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
       <p className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums text-foreground">{watts == null ? "—" : watts.toFixed(0) + "W"}</p>
-      {breakdown && <p className="mt-1 text-[11px] text-muted-foreground">Measured rig wall power · Tapo</p>}
-      {breakdown ? <GpuPowerBreakdown breakdown={breakdown} hardware={hardware}/> : <div className="relative mt-3 flex min-h-0 flex-1 min-w-0 items-center justify-center overflow-hidden rounded-md">
+      {gpu && <p className="mt-1 text-[11px] text-muted-foreground">{gpu.allocatedWatts != null ? "GPU + allocated system overhead" : gpu.gpuWatts != null ? "GPU only · overhead not allocated" : "No GPU telemetry"}</p>}
+      <div className="relative mt-3 flex min-h-0 flex-1 min-w-0 items-center justify-center overflow-hidden rounded-md">
         {meta?.image ? (
           <>
             <div className={"pointer-events-none absolute inset-0 bg-gradient-to-t " + meta.glow + " to-transparent blur-xl"} />
@@ -184,21 +166,22 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
         ) : (
           <Cpu className="h-12 w-12 text-sky-400/25" aria-hidden="true" />
         )}
-      </div>}
+      </div>
       <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/40 pt-4">
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-cyan-300">
-            <CalendarDays className="h-3 w-3 shrink-0" />{monthlyKwh.toFixed(2)} kWh
+            <CalendarDays className="h-3 w-3 shrink-0" />{monthlyKwh == null ? "—" : monthlyKwh.toFixed(2) + " kWh"}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{breakdown ? "Rig usage this month" : "This month"}</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{sharedRig ? "Individual usage unavailable" : "This month"}</p>
         </div>
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-amber-400">
             <Coins className="h-3 w-3 shrink-0" />{monthlyCost == null ? "—" : money(monthlyCost)}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{breakdown ? "Rig monthly cost" : "Monthly cost"}</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{sharedRig ? "Individual cost unavailable" : "Monthly cost"}</p>
         </div>
       </div>
+      {rigUsage && <p className="mt-2 text-[10px] text-muted-foreground">Shared rig total: {rigUsage.kwh == null ? "—" : Number(rigUsage.kwh).toFixed(2) + " kWh"}{rigUsage.cost == null ? "" : " · " + money(rigUsage.cost)}{rigUsage.unallocated == null ? "" : " · " + Number(rigUsage.unallocated).toFixed(1) + " W unallocated"}</p>}
     </section>
   );
 }
@@ -332,7 +315,7 @@ export default function MiningPowerCard() {
           <span title={"Last updated: " + formatUpdated(latest?.observedAt)}
             className={"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
             <span className={"h-1.5 w-1.5 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
-            {live ? "All Systems Online" : "Readings Stale"}
+            {live ? "Meter Readings Live" : "Readings Stale"}
           </span>
           <button type="button" onClick={() => refresh(true)} aria-label="Refresh mining power"
             title={"Refresh · Last updated: " + formatUpdated(latest?.observedAt)}
@@ -365,15 +348,29 @@ export default function MiningPowerCard() {
       </section>
 
       <section aria-label="Tracked mining GPUs" className={"grid min-w-0 items-stretch gap-3 " + gpuGridClass}>
-        {deviceRows.map(device => (
-          <DeviceCard key={device.id} device={device}
+        {deviceRows.flatMap(device => {
+          const breakdown = status?.gpuBreakdown?.[device.id];
+          const shared = (breakdown?.gpus?.length || 0) > 1;
+          if (!breakdown?.gpus?.length) return [<DeviceCard key={device.id} device={device}
             label={settings.deviceLabels?.[device.id] || device.label}
             hardware={hardware} onRename={renameDevice}
-            breakdown={status?.gpuBreakdown?.[device.id]}
             monthlyUsage={monthlyDevices[device.id]}
             backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
-            live={live} />
-        ))}
+            live={live}/>];
+          return breakdown.gpus.map((gpu, index) => {
+            const id = index === 0 ? device.id : device.id + ":" + gpu.id;
+            const display = {...device, id, watts: live ? (gpu.allocatedWatts ?? gpu.gpuWatts) : null};
+            const cost = powerCost?.deviceCosts?.[device.id];
+            return <DeviceCard key={id} device={display}
+              label={settings.deviceLabels?.[id] || gpu.name}
+              hardware={hardware} onRename={renameDevice} gpu={gpu}
+              sharedRig={shared}
+              rigUsage={shared && index === 0 ? {kwh: monthlyDevices[device.id]?.kwh, cost: cost?.complete ? cost.outOfPocketUsd : null, unallocated: breakdown.unallocatedWatts} : null}
+              monthlyUsage={shared ? null : monthlyDevices[device.id]}
+              backendDeviceCost={shared ? null : cost}
+              live={live && gpu.gpuWatts != null}/>;
+          });
+        })}
       </section>
     </div>
   );
