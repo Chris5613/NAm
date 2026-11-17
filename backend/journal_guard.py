@@ -14,7 +14,7 @@ ALLOWED_ACCOUNTS = frozenset((
     "platform:kryptex", "platform:rollercoin", "platform:salad",
     "platform:unetwork", "defi", "equipment", "accDep", "payable",
     "equity", "revenue", "dividendRevenue", "gainDisposal", "electric",
-    "expense", "depreciation", "fees",
+    "expense", "suppliesExpense", "depreciation", "fees",
 ))
 
 
