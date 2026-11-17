@@ -70,7 +70,7 @@ def compute_profit(entries, saved_expenses):
     revenue = cents(-balances("revenue") - balances("dividendRevenue"))
     gain = cents(-balances("gainDisposal"))
     fees = max(0, balances("fees"))
-    ordinary = max(0, cents(balances("expense") + balances("electric")))
+    ordinary = max(0, cents(balances("expense") + balances("suppliesExpense") + balances("electric")))
     depreciation = max(0, balances("depreciation"))
     saved = maybe_number(saved_expenses)
     operating = max(saved or 0, ordinary)
@@ -123,7 +123,7 @@ def classify_cash_flows(entries):
             category = "investing"
         elif "equity" in other:
             category = "financing"
-        elif any(a in {"revenue", "dividendRevenue", "expense", "fees", "electric"}
+        elif any(a in {"revenue", "dividendRevenue", "expense", "suppliesExpense", "fees", "electric"}
                  for a in other):
             category = "operating"
         else:
