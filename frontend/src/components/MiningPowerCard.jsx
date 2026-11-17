@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   CalendarDays,
@@ -78,7 +78,35 @@ function trackedDays(seconds) {
   return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
-function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live, hardware, gpu, sharedRig }) {
+function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live, hardware, gpu, sharedRig, photo, onPhoto }) {
+  const photoInput = useRef(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const changePhoto = async event => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file || photoBusy) return;
+    setPhotoBusy(true);
+    try {
+      if (!["image/png","image/jpeg","image/webp"].includes(file.type) || file.size > 12*1024*1024) throw new Error("Choose a PNG, JPG or WebP under 12 MB.");
+      const url = URL.createObjectURL(file);
+      let result;
+      try {
+        const img = new Image();
+        await new Promise((resolve,reject) => { img.onload=resolve; img.onerror=()=>reject(new Error("Unable to open image.")); img.src=url; });
+        const canvas=document.createElement("canvas");
+        const scale=Math.min(1,760/Math.max(img.width,img.height));
+        canvas.width=Math.max(1,Math.round(img.width*scale)); canvas.height=Math.max(1,Math.round(img.height*scale));
+        canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);
+        for (const quality of [0.85,0.7,0.5,0.35]) {
+          const candidate=canvas.toDataURL("image/webp",quality);
+          if (candidate.startsWith("data:image/webp;base64,") && candidate.length<215000) {result=candidate;break;}
+        }
+      } finally { URL.revokeObjectURL(url); }
+      if (!result) throw new Error("Could not compress this image.");
+      await onPhoto(device.id,result);
+    } catch(error) {toast.error(error?.message || "Couldn't save GPU image.");}
+    finally {setPhotoBusy(false);}
+  };
   const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const [renameError, setRenameError] = useState("");
@@ -154,17 +182,18 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
       </div>
       {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
       <p title={gpu ? (gpu.allocatedWatts != null ? "GPU plus allocated system overhead" : gpu.gpuWatts != null ? "GPU only; overhead not allocated" : "No GPU telemetry") : "Tapo wall power"} className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums text-foreground">{watts == null ? "—" : watts.toFixed(0) + "W"}</p>
-      <div className="relative mt-3 flex min-h-0 flex-1 min-w-0 items-center justify-center overflow-hidden rounded-md">
-        {meta?.image ? (
+      <input ref={photoInput} type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={changePhoto}/>
+      <button type="button" title="Change GPU image" aria-label={"Change image for " + label} disabled={photoBusy} onClick={()=>photoInput.current?.click()} className="relative mt-3 flex min-h-0 flex-1 min-w-0 cursor-pointer items-center justify-center overflow-hidden rounded-md hover:bg-white/5 focus-visible:outline focus-visible:outline-sky-400 disabled:opacity-60">
+        {(photo || meta?.image) ? (
           <>
-            <div className={"pointer-events-none absolute inset-0 bg-gradient-to-t " + meta.glow + " to-transparent blur-xl"} />
-            <img src={meta.image} alt={meta.alt} loading="lazy" referrerPolicy="no-referrer"
+            <div className={"pointer-events-none absolute inset-0 bg-gradient-to-t " + (meta?.glow || "from-sky-400/18") + " to-transparent blur-xl"} />
+            <img src={photo || meta?.image} alt={meta?.alt || label} loading="lazy" referrerPolicy="no-referrer"
               className="relative h-full max-h-[205px] w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.55)]" />
           </>
         ) : (
           <Cpu className="h-12 w-12 text-sky-400/25" aria-hidden="true" />
         )}
-      </div>
+      </button>
       <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/40 pt-4">
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-cyan-300">
@@ -222,6 +251,21 @@ export default function MiningPowerCard() {
     }
   },[]);
 
+  const savePhoto = useCallback(async (id,photo) => {
+    for(let attempt=0;attempt<2;attempt++) {
+      const before=await settingsApi.get(SETTINGS_KEY);
+      const base=before && typeof before==="object" && !Array.isArray(before) ? before : {};
+      const after={...base,devicePhotos:{...(base.devicePhotos || {}),[id]:photo}};
+      try {
+        const saved=await settingsApi.patch(SETTINGS_KEY,before,after);
+        setSettings(current=>({...current,...(saved || after)}));
+        toast.success("GPU image updated");
+        return;
+      } catch(error) {
+        if(attempt===1 || !String(error?.message || "").includes("changed in another session")) throw error;
+      }
+    }
+  },[]);
   const refresh = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true);
     try {
@@ -350,7 +394,7 @@ export default function MiningPowerCard() {
           const shared = (breakdown?.gpus?.length || 0) > 1;
           if (!breakdown?.gpus?.length) return [<DeviceCard key={device.id} device={device}
             label={settings.deviceLabels?.[device.id] || device.label}
-            hardware={hardware} onRename={renameDevice}
+            hardware={hardware} onRename={renameDevice} photo={settings.devicePhotos?.[device.id]} onPhoto={savePhoto}
             monthlyUsage={monthlyDevices[device.id]}
             backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
             live={live}/>];
@@ -360,7 +404,7 @@ export default function MiningPowerCard() {
             const cost = powerCost?.deviceCosts?.[device.id];
             return <DeviceCard key={id} device={display}
               label={settings.deviceLabels?.[id] || gpu.name}
-              hardware={hardware} onRename={renameDevice} gpu={gpu}
+              hardware={hardware} onRename={renameDevice} gpu={gpu} photo={settings.devicePhotos?.[id]} onPhoto={savePhoto}
               sharedRig={shared && index === 0}
               monthlyUsage={shared && index !== 0 ? null : monthlyDevices[device.id]}
               backendDeviceCost={shared && index !== 0 ? null : cost}
