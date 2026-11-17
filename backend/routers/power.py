@@ -201,6 +201,62 @@ def _gpu_breakdown(latest, snapshots, now):
     return result
 
 
+def _accumulate_gpu_interval(month, rig_id, tier, device_kwh, previous_split, current_split, elapsed):
+    """Allocate only measured rig energy, using two valid endpoint samples."""
+    if rig_id != "rtx2080super":
+        return
+    rows = dict(month.get("gpuAllocatedDevices") or {})
+    before = previous_split.get(rig_id, {})
+    after = current_split.get(rig_id, {})
+    def shares(split):
+        if not split.get("complete"):
+            return None
+        values = {g["id"]: g["allocatedWatts"] for g in split["gpus"]}
+        if set(values) != {"2080", "4070-ti"} or sum(values.values()) <= 0:
+            return None
+        return values
+    a, b = shares(before), shares(after)
+    if a is None or b is None:
+        return
+    weights = {key: a[key] + b[key] for key in a}
+    total = sum(weights.values())
+    # Record the second GPU's measured attribution as a subset of the existing
+    # rig meter, never as additional energy. The first GPU retains pre-cutover history.
+    portion = device_kwh * weights["4070-ti"] / total
+    key = rig_id + ":4070-ti"
+    row = dict(rows.get(key) or {})
+    tiers = dict(row.get("tiers") or {})
+    tiers[tier] = float(tiers.get(tier) or 0) + portion
+    row.update({"kwh": float(row.get("kwh") or 0) + portion,
+                "tiers": tiers, "trackedSeconds": float(row.get("trackedSeconds") or 0) + elapsed})
+    rows[key] = row
+    month["gpuAllocatedDevices"] = rows
+
+
+def _gpu_month_display(month, settings, now):
+    """Display partition of Tapo totals; pre-cutover and unassigned energy stay
+    in the original rig bucket, not retroactively assigned to the new GPU."""
+    if not isinstance(month, dict):
+        return {}, {}, None
+    rig_id = "rtx2080super"
+    second_id = rig_id + ":4070-ti"
+    original = (month.get("devices") or {}).get(rig_id)
+    if not isinstance(original, dict):
+        return {}, {}, None
+    second = (month.get("gpuAllocatedDevices") or {}).get(second_id) or {}
+    total = float(original.get("kwh") or 0)
+    amount = min(total, max(0.0, float(second.get("kwh") or 0)))
+    raw_tiers = original.get("tiers") or {}
+    second_tiers = second.get("tiers") or {}
+    allocated = {tier: min(float(value or 0), max(0.0, float(second_tiers.get(tier) or 0)))
+                 for tier, value in raw_tiers.items()}
+    first_tiers = {tier: float(value or 0) - allocated[tier] for tier, value in raw_tiers.items()}
+    devices = {rig_id: {"kwh": total - amount, "tiers": first_tiers},
+               second_id: {"kwh": amount, "tiers": allocated}}
+    preview = server_power_cost_preview({**month, "devices": devices}, settings, now=now)
+    return devices, preview.get("deviceCosts") or {}, second.get("trackedSeconds", 0)
+
+
 @router.get("/status")
 async def power_status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     token_row = _setting(db, user.id, TOKEN_KEY)
@@ -212,7 +268,11 @@ async def power_status(user: User = Depends(current_user), db: Session = Depends
     cost = server_power_cost_preview(month, settings.value if settings else {},
                                      value.get("latest"), now)
     kryptex = _setting(db, user.id, "yield_kryptex_machine_snapshots_v1")
+    gpu_usage, gpu_costs, split_seconds = _gpu_month_display(month, settings.value if settings else {}, now)
     return {
+        "gpuMonthlyUsage": gpu_usage,
+        "gpuMonthlyCosts": gpu_costs,
+        "gpuSplitTrackedSeconds": split_seconds,
         "gpuBreakdown": _gpu_breakdown(value.get("latest"), kryptex.value if kryptex else {}, now),
         "configured": bool(token_row and (token_row.value or {}).get("sha256")),
         "latest": value.get("latest"),
@@ -292,6 +352,8 @@ async def ingest_power(
 
     row = _setting(db, user_id, TELEMETRY_KEY)
     previous = dict(row.value or {}) if row else {}
+    kryptex = _setting(db, user_id, "yield_kryptex_machine_snapshots_v1")
+    current_split = _gpu_breakdown(latest, kryptex.value if kryptex else {}, now)
     history = list(previous.get("history") or [])
     history.append({"observedAt": observed_at, "totalWatts": latest["totalWatts"]})
     history = history[-HISTORY_LIMIT:]
@@ -379,6 +441,8 @@ async def ingest_power(
                     },
                 })
                 month_devices[device_id] = device_usage
+                _accumulate_gpu_interval(month, device_id, tier, device_kwh,
+                                         previous_latest.get("gpuAllocation") or {}, current_split, elapsed_seconds)
 
             month.update({
                 "month": key,
@@ -396,6 +460,7 @@ async def ingest_power(
             months.pop(old_key, None)
 
     usage["months"] = months
+    latest["gpuAllocation"] = current_split
 
     _write_setting(
         db,
