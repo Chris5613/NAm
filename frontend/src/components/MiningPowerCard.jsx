@@ -78,7 +78,7 @@ function trackedDays(seconds) {
   return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
-function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live, hardware, gpu, sharedRig, rigUsage }) {
+function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live, hardware, gpu, sharedRig }) {
   const [editing, setEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState("");
   const [renameError, setRenameError] = useState("");
@@ -145,7 +145,6 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
                   className="shrink-0 rounded p-1 text-muted-foreground hover:bg-secondary hover:text-sky-300"><Pencil size={11} /></button>
               </div>
             )}
-            {meta?.brand && <p className="mt-0.5 text-[11px] uppercase tracking-wider text-muted-foreground">{meta.brand}</p>}
           </div>
         </div>
         <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
@@ -154,8 +153,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
         </span>
       </div>
       {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
-      <p className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums text-foreground">{watts == null ? "—" : watts.toFixed(0) + "W"}</p>
-      {gpu && <p className="mt-1 text-[11px] text-muted-foreground">{gpu.allocatedWatts != null ? "GPU + allocated system overhead" : gpu.gpuWatts != null ? "GPU only · overhead not allocated" : "No GPU telemetry"}</p>}
+      <p title={gpu ? (gpu.allocatedWatts != null ? "GPU plus allocated system overhead" : gpu.gpuWatts != null ? "GPU only; overhead not allocated" : "No GPU telemetry") : "Tapo wall power"} className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums text-foreground">{watts == null ? "—" : watts.toFixed(0) + "W"}</p>
       <div className="relative mt-3 flex min-h-0 flex-1 min-w-0 items-center justify-center overflow-hidden rounded-md">
         {meta?.image ? (
           <>
@@ -172,16 +170,15 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-cyan-300">
             <CalendarDays className="h-3 w-3 shrink-0" />{monthlyKwh == null ? "—" : monthlyKwh.toFixed(2) + " kWh"}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{sharedRig ? "Individual usage unavailable" : "This month"}</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{sharedRig ? "Rig usage this month" : "This month"}</p>
         </div>
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-amber-400">
             <Coins className="h-3 w-3 shrink-0" />{monthlyCost == null ? "—" : money(monthlyCost)}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{sharedRig ? "Individual cost unavailable" : "Monthly cost"}</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{sharedRig ? "Rig monthly cost" : "Monthly cost"}</p>
         </div>
       </div>
-      {rigUsage && <p className="mt-2 text-[10px] text-muted-foreground">Shared rig total: {rigUsage.kwh == null ? "—" : Number(rigUsage.kwh).toFixed(2) + " kWh"}{rigUsage.cost == null ? "" : " · " + money(rigUsage.cost)}{rigUsage.unallocated == null ? "" : " · " + Number(rigUsage.unallocated).toFixed(1) + " W unallocated"}</p>}
     </section>
   );
 }
@@ -364,10 +361,9 @@ export default function MiningPowerCard() {
             return <DeviceCard key={id} device={display}
               label={settings.deviceLabels?.[id] || gpu.name}
               hardware={hardware} onRename={renameDevice} gpu={gpu}
-              sharedRig={shared}
-              rigUsage={shared && index === 0 ? {kwh: monthlyDevices[device.id]?.kwh, cost: cost?.complete ? cost.outOfPocketUsd : null, unallocated: breakdown.unallocatedWatts} : null}
-              monthlyUsage={shared ? null : monthlyDevices[device.id]}
-              backendDeviceCost={shared ? null : cost}
+              sharedRig={shared && index === 0}
+              monthlyUsage={shared && index !== 0 ? null : monthlyDevices[device.id]}
+              backendDeviceCost={shared && index !== 0 ? null : cost}
               live={live && gpu.gpuWatts != null}/>;
           });
         })}
