@@ -217,13 +217,18 @@ def _accumulate_gpu_interval(month, rig_id, tier, device_kwh, previous_split, cu
         return values
     a, b = shares(before), shares(after)
     if a is None or b is None:
-        return
-    weights = {key: a[key] + b[key] for key in a}
-    total = sum(weights.values())
-    # Record the second GPU's measured attribution as a subset of the existing
-    # rig meter, never as additional energy. The first GPU retains pre-cutover history.
-    portion = device_kwh * weights["4070-ti"] / total
-    key = rig_id + ":4070-ti"
+        # After tracking begins, gaps remain unallocated rather than silently
+        # assigning the entire dual-GPU rig to its original GPU.
+        if "gpuAllocationStarted" not in month:
+            return
+        portion = device_kwh
+        key = rig_id + ":unallocated"
+    else:
+        month["gpuAllocationStarted"] = True
+        weights = {key: a[key] + b[key] for key in a}
+        total = sum(weights.values())
+        portion = device_kwh * weights["4070-ti"] / total
+        key = rig_id + ":4070-ti"
     row = dict(rows.get(key) or {})
     tiers = dict(row.get("tiers") or {})
     tiers[tier] = float(tiers.get(tier) or 0) + portion
@@ -250,9 +255,15 @@ def _gpu_month_display(month, settings, now):
     second_tiers = second.get("tiers") or {}
     allocated = {tier: min(float(value or 0), max(0.0, float(second_tiers.get(tier) or 0)))
                  for tier, value in raw_tiers.items()}
-    first_tiers = {tier: float(value or 0) - allocated[tier] for tier, value in raw_tiers.items()}
-    devices = {rig_id: {"kwh": total - amount, "tiers": first_tiers},
-               second_id: {"kwh": amount, "tiers": allocated}}
+    unknown = (month.get("gpuAllocatedDevices") or {}).get(rig_id + ":unallocated") or {}
+    unknown_amount = min(total - amount, max(0.0, float(unknown.get("kwh") or 0)))
+    unknown_tiers = {tier: min(max(0.0, float(value or 0) - allocated[tier]),
+                               max(0.0, float((unknown.get("tiers") or {}).get(tier) or 0)))
+                     for tier, value in raw_tiers.items()}
+    first_tiers = {tier: float(value or 0) - allocated[tier] - unknown_tiers[tier] for tier, value in raw_tiers.items()}
+    devices = {rig_id: {"kwh": max(0.0, total - amount - unknown_amount), "tiers": first_tiers},
+               second_id: {"kwh": amount, "tiers": allocated},
+               rig_id + ":unallocated": {"kwh": unknown_amount, "tiers": unknown_tiers}}
     preview = server_power_cost_preview({**month, "devices": devices}, settings, now=now)
     return devices, preview.get("deviceCosts") or {}, second.get("trackedSeconds", 0)
 
@@ -387,6 +398,8 @@ async def ingest_power(
             days = dict(month.get("days") or {})
             month_devices = dict(month.get("devices") or {})
 
+            if previous_latest.get("gpuAllocation") is not None:
+                month.setdefault("gpuAllocationStarted", True)
             if not month.get("startedAt"):
                 month["startedAt"] = previous_time.astimezone(timezone.utc).isoformat()
 
