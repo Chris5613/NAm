@@ -78,7 +78,7 @@ function trackedDays(seconds) {
   return Math.max(0, Number(seconds) || 0) / 86400;
 }
 
-function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, live, hardware, gpu, sharedRig, photo, onPhoto }) {
+function DeviceCard({ device, monthlyUsage, backendDeviceCost, illustrativeCost, label, onRename, live, hardware, gpu, sharedRig, photo, onPhoto }) {
   const photoInput = useRef(null);
   const [photoBusy, setPhotoBusy] = useState(false);
   const changePhoto = async event => {
@@ -133,7 +133,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
   const watts = Number.isFinite(Number(device?.watts)) && device?.watts != null
     ? Number(device.watts) : null;
   const monthlyKwh = monthlyUsage?.kwh == null ? null : Number(monthlyUsage.kwh);
-  const monthlyCost = backendDeviceCost?.complete ? backendDeviceCost.outOfPocketUsd : null;
+  const monthlyCost = illustrativeCost ?? null;
   const is5080 = /5080/i.test(label || device?.label || "");
   const meta = is5080
     ? {
@@ -205,7 +205,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-amber-400">
             <Coins className="h-3 w-3 shrink-0" />{monthlyCost == null ? "—" : money(monthlyCost)}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">Monthly cost</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground" title="Illustrative only at $0.16/kWh; not an actual expense">Monthly cost</p>
         </div>
       </div>
     </section>
@@ -321,6 +321,7 @@ export default function MiningPowerCard() {
   const monthTrackedSeconds = Number(currentMonth?.trackedSeconds) || 0;
   const monthTrackedDays = trackedDays(monthTrackedSeconds);
   const monthCost = powerCost?.complete ? powerCost.outOfPocketUsd : null;
+  const illustrative = status?.illustrativeMonthlyCost;
   const monthEstimatedRevenue = dailyRevenue == null ? null : dailyRevenue * monthTrackedDays;
   const monthEstimatedNet = monthEstimatedRevenue == null || monthCost == null
     ? null : monthEstimatedRevenue - monthCost;
@@ -380,11 +381,11 @@ export default function MiningPowerCard() {
           </p>
           <p className="mt-1 text-xl font-semibold leading-none tabular-nums text-cyan-300">{monthKwh.toFixed(2)} kWh</p>
         </div>
-        <div className="min-w-0 border-t border-border/35 py-2 sm:border-t-0 sm:px-4 sm:py-1">
+        <div title="Illustrative only at $0.16/kWh; actual electricity expenses are unchanged" className="min-w-0 border-t border-border/35 py-2 sm:border-t-0 sm:px-4 sm:py-1">
           <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
             <Coins className="h-3.5 w-3.5 shrink-0 text-amber-400" />Total Monthly Cost
           </p>
-          <p className="mt-1 text-xl font-semibold leading-none tabular-nums text-amber-400">{monthCost == null ? "—" : money(monthCost)}</p>
+          <p className="mt-1 text-xl font-semibold leading-none tabular-nums text-amber-400">{illustrative?.totalUsd == null ? "—" : money(illustrative.totalUsd)}</p>
         </div>
       </section>
 
@@ -397,6 +398,7 @@ export default function MiningPowerCard() {
             label={settings.deviceLabels?.[device.id] || device.label}
             hardware={hardware} onRename={renameDevice} photo={settings.devicePhotos?.[device.id]} onPhoto={savePhoto}
             monthlyUsage={monthlyDevices[device.id]}
+            illustrativeCost={illustrative?.deviceUsd?.[device.id]}
             backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
             live={live}/>];
           return breakdown.gpus.map((gpu, index) => {
@@ -408,6 +410,7 @@ export default function MiningPowerCard() {
               hardware={hardware} onRename={renameDevice} gpu={gpu} photo={settings.devicePhotos?.[id]} onPhoto={savePhoto}
               sharedRig={shared && index === 0}
               monthlyUsage={shared ? (status?.gpuMonthlyUsage?.[id] ?? (index === 0 ? monthlyDevices[device.id] : null)) : monthlyDevices[device.id]}
+              illustrativeCost={illustrative?.deviceUsd?.[id]}
               backendDeviceCost={shared ? (status?.gpuMonthlyCosts?.[id] ?? (index === 0 ? cost : null)) : cost}
               live={live && gpu.gpuWatts != null}/>;
           });
