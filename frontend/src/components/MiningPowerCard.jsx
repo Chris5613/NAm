@@ -170,13 +170,13 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, label, onRename, 
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-cyan-300">
             <CalendarDays className="h-3 w-3 shrink-0" />{monthlyKwh == null ? "—" : monthlyKwh.toFixed(2) + " kWh"}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{sharedRig ? "Rig usage this month" : "This month"}</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">This month</p>
         </div>
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-amber-400">
             <Coins className="h-3 w-3 shrink-0" />{monthlyCost == null ? "—" : money(monthlyCost)}
           </p>
-          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{sharedRig ? "Rig monthly cost" : "Monthly cost"}</p>
+          <p className="mt-1 text-[11px] leading-snug text-muted-foreground">Monthly cost</p>
         </div>
       </div>
     </section>
