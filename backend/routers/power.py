@@ -118,6 +118,89 @@ async def create_power_token(user: User = Depends(current_user), db: Session = D
     return {"token": token, "createdAt": _now_iso()}
 
 
+def _gpu_breakdown(latest, snapshots, now):
+    """Live display allocation only; never change Tapo usage or the ledger.
+
+    Match the existing two stable Tapo plug IDs to the corresponding GPU
+    families. Only a unique fresh Kryptex machine may supply a rig's readings.
+    Missing GPUs never get fabricated readings or retroactive energy usage.
+    """
+    import math
+    groups = {"rtx2080super": ("2080", "4070 Ti"), "rtx5070": ("5080",)}
+    def model(name):
+        value = str(name or "")
+        for pattern, label in ((r"\b2080\b", "2080"), (r"\b4070\s*ti\b", "4070 Ti"),
+                               (r"\b5080\b", "5080")):
+            if re.search(pattern, value, re.I):
+                return label
+        return None
+    def age(value):
+        try:
+            stamp = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            return (now - stamp).total_seconds()
+        except (ValueError, TypeError, OverflowError):
+            return -1
+    def watts(value):
+        try:
+            n = float(value)
+            return n if math.isfinite(n) and 0 <= n <= MAX_WATTS_PER_DEVICE else None
+        except (TypeError, ValueError):
+            return None
+    latest = latest if isinstance(latest, dict) else {}
+    snapshots = snapshots if isinstance(snapshots, dict) else {}
+    machines = snapshots.get("machines")
+    machines = machines if isinstance(machines, dict) else {}
+    fresh_machines = []
+    for machine in machines.values():
+        if not isinstance(machine, dict) or not 0 <= age(machine.get("serverReceivedAt")) <= 90:
+            continue
+        miners = machine.get("miners")
+        if isinstance(miners, list):
+            fresh_machines.append([m for m in miners if isinstance(m, dict)
+                                   and str(m.get("device_type") or "").lower() == "gpu"])
+    result = {}
+    for rig in latest.get("devices") or []:
+        if not isinstance(rig, dict):
+            continue
+        rig_id = str(rig.get("id") or "")
+        expected = groups.get(rig_id)
+        if not expected:
+            continue
+        wall = watts(rig.get("watts"))
+        fresh = 0 <= age(latest.get("observedAt")) <= 90 and wall is not None
+        matches = [rows for rows in fresh_machines
+                   if any(model(m.get("device")) in expected for m in rows)]
+        rows = matches[0] if len(matches) == 1 else []
+        # An unexpected GPU or duplicate model makes attribution ambiguous.
+        valid_mapping = len(matches) == 1 and all(model(m.get("device")) in expected for m in rows)
+        gpu_rows = []
+        for label in expected:
+            readings = [m for m in rows if model(m.get("device")) == label]
+            reading = readings[0] if valid_mapping and len(readings) == 1 else None
+            direct = watts(reading.get("power_w")) if reading is not None else None
+            gpu_rows.append({"id": label.lower().replace(" ", "-"),
+                             "name": "RTX " + label + (" Super" if label == "2080" else ""),
+                             "gpuWatts": direct, "allocatedWatts": None,
+                             "overheadWatts": None})
+        complete = fresh and all(g["gpuWatts"] is not None for g in gpu_rows)
+        total_direct = sum(g["gpuWatts"] for g in gpu_rows if g["gpuWatts"] is not None)
+        residual = round(wall - total_direct, 2) if fresh and valid_mapping and any(
+            g["gpuWatts"] is not None for g in gpu_rows) and wall >= total_direct else None
+        # Allocate equally only when every expected GPU has a fresh reading
+        # and the wall meter covers their sum. Otherwise leave residual unassigned.
+        if complete and residual is not None:
+            for g in gpu_rows:
+                g["overheadWatts"] = residual / len(gpu_rows)
+                g["allocatedWatts"] = g["gpuWatts"] + g["overheadWatts"]
+        result[rig_id] = {"gpus": gpu_rows, "wallWatts": wall if fresh else None,
+                          "overheadWatts": residual if complete else None,
+                          "unallocatedWatts": residual if not complete else None,
+                          "complete": bool(complete and residual is not None),
+                          "status": ("allocated" if complete and residual is not None else
+                                     "missing-telemetry" if not complete else "inconsistent-readings")}
+    return result
+
+
 @router.get("/status")
 async def power_status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     token_row = _setting(db, user.id, TOKEN_KEY)
@@ -128,7 +211,9 @@ async def power_status(user: User = Depends(current_user), db: Session = Depends
     month = _current_month_usage(value, now)
     cost = server_power_cost_preview(month, settings.value if settings else {},
                                      value.get("latest"), now)
+    kryptex = _setting(db, user.id, "yield_kryptex_machine_snapshots_v1")
     return {
+        "gpuBreakdown": _gpu_breakdown(value.get("latest"), kryptex.value if kryptex else {}, now),
         "configured": bool(token_row and (token_row.value or {}).get("sha256")),
         "latest": value.get("latest"),
         "history": value.get("history") or [],
