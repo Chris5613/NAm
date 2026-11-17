@@ -155,6 +155,10 @@ function parseTransaction(text, month) {
     debitAccount = "electric";
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
     explanation = unpaid ? "Record an electricity bill owed." : "Record a paid electricity expense.";
+  } else if (/\b(?:pci[ -]?e|pcie|gpu power|psu|power supply|graphics card)\s*(?:power\s*)?(?:cables?|adapters?|connectors?|risers?)\b|\b(?:cables?|thermal paste|replacement fans?|mining supplies)\b/.test(phrase) && paid) {
+    debitAccount = "expense";
+    creditAccount = unpaid ? "payable" : personallyFunded ? "equity" : fromCrypto ? "crypto" : "cash";
+    explanation = "Record a standalone cable, accessory, or supply as an operating expense.";
   } else if (/gpu|graphics card|computer|\bpc\b|mining equipment|hardware/.test(phrase) && paid) {
     debitAccount = "equipment";
     creditAccount = unpaid ? "payable" : personallyFunded ? "equity" : fromCrypto ? "crypto" : "cash";
@@ -916,6 +920,13 @@ export default function FinancialsPage() {
           className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300 disabled:opacity-40">
           Review purchase ({unpostedEquipment.length})
         </button>}
+        <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => {
+          setEditingEntryId(null);
+          setDraft({date: month === getCurrentMonthKey() ? getTodayKey() : month+"-01", description:"", lines:[
+            {account:"expense",debit:"",credit:""},{account:"cash",debit:"",credit:""}
+          ]});
+          setError(""); setModal(true);
+        }} className="inline-flex items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm font-semibold text-amber-300 disabled:opacity-40"><Plus size={16}/> Add expense</button>
         <button disabled={Boolean(closeSnapshot)} onClick={() => { setEditingEntryId(null); setDraft({ ...emptyDraft(), date: month+"-01" }); setError(""); setModal(true); }}
           className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-300 disabled:opacity-40"><Plus size={16}/> Add entry</button>
       </div></div>
@@ -1080,6 +1091,9 @@ export default function FinancialsPage() {
             <strong className="text-sm text-white">Review journal entry</strong>
             <span className="text-xs text-[#a1bacb]">{quickEntry.explanation}</span>
           </div>
+          <label className="block space-y-1 text-xs text-[#a8bdce]">Transaction name / description
+            <input className={field} value={quickEntry.description} onChange={event => setQuickEntry(old => ({...old, description:event.target.value}))}/>
+          </label>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="space-y-1 text-xs text-[#a8bdce]">Date
               <input type="date" className={field} value={quickEntry.date}
@@ -1113,7 +1127,7 @@ export default function FinancialsPage() {
       <form onSubmit={saveEntry} className={card + " w-full max-w-2xl max-h-[90vh] space-y-4 overflow-y-auto p-5 shadow-2xl"} role="dialog" aria-modal="true" aria-label={editingEntryId ? "Edit journal entry" : "Add journal entry"}>
         <div className="flex items-center justify-between"><h2 className="text-lg font-semibold">{editingEntryId ? "Edit Journal Entry" : "New Journal Entry"}</h2><button type="button" onClick={()=>setModal(false)} aria-label="Close"><X size={19}/></button></div>
         <label className="block space-y-1 text-sm">Date<input required type="date" value={draft.date} onChange={event=>setDraft(old=>({...old,date:event.target.value}))} className={field}/></label>
-        <label className="block space-y-1 text-sm">Description<input required value={draft.description} onChange={event=>setDraft(old=>({...old,description:event.target.value}))} className={field} placeholder="e.g. Mining payout"/></label>
+        <label className="block space-y-1 text-sm">Transaction name / description<input required value={draft.description} onChange={event=>setDraft(old=>({...old,description:event.target.value}))} className={field} placeholder="e.g. PCIe power cable, replacement fan, or mining payout"/></label>
         <div className="space-y-2">
           <div className="grid grid-cols-[minmax(0,1fr)_90px_90px_24px] gap-2 text-xs text-[#9db0c1]">
             <span>Account</span><span>Debit ($)</span><span>Credit ($)</span><span/>
