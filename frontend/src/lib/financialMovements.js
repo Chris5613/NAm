@@ -11,6 +11,7 @@ export const ACCOUNT_OPTIONS = [
   { id: "platform:kryptex", name: "Kryptex" },
   { id: "platform:rollercoin", name: "RollerCoin" },
   { id: "platform:salad", name: "Salad" },
+  { id: "platform:bixberry", name: "Bixberry" },
   { id: "platform:unetwork", name: "Unetwork" },
   { id: "platform", name: "Other Platform" },
   { id: "brokerage", name: "Brokerage" },
@@ -25,7 +26,7 @@ export function resolveFinancialAccount(value) {
     lulo: "luloCash", lulosavings: "luloCash", loopscale: "defi",
     defi: "defi", brokerage: "brokerage", stock: "brokerage",
     kryptex: "platform:kryptex", kryptexwallet: "platform:kryptex", rollercoin: "platform:rollercoin", rollercoinwallet: "platform:rollercoin",
-    salad: "platform:salad", unetwork: "platform:unetwork",
+    salad: "platform:salad", bixberry: "platform:bixberry", unetwork: "platform:unetwork",
     unitynetwork: "platform:unetwork", platform: "platform",
   };
   return known[key] || (ACCOUNT_OPTIONS.some(item => item.id === value) ? value : null);
