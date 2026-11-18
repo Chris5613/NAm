@@ -620,10 +620,24 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     );
 
 
+  const [bixberryTracker, setBixberryTracker] = useState(null);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const value = await api.get("/api/project-tracking/bixberry");
+        if (active) setBixberryTracker(value);
+      } catch { /* retain last known balance */ }
+    };
+    refresh();
+    const timer = setInterval(refresh, 30000);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
   const sortedProgramCards =
     useMemo(
       () => {
         const items = [
+          { type: "bixberry", key: "bixberry-project", amount: Number(bixberryTracker?.currentBalance) || 0 },
           ...projectCards.map(
             (
               project
@@ -708,6 +722,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       },
 [
   projectCards,
+  bixberryTracker,
   rollerCoinStats,
   saladStats,
   unetworkStats,
@@ -744,7 +759,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
             : item.type === "rollercoin" ? "RollerCoin"
             : item.type === "salad" ? "Salad"
             : item.type === "unetwork" ? "Unetwork"
-            : item.type === "kryptex" ? "Kryptex" : String(item.key),
+            : item.type === "kryptex" ? "Kryptex" : item.type === "bixberry" ? "Bixberry" : String(item.key),
           balanceUsd: Number.isFinite(projectBalance) ? projectBalance : null,
           inactive: inactiveProjectIds.includes(String(item.key)),
           sourceLastSyncedAt: null,
@@ -756,6 +771,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
           sourceLastSyncedAt: rollerCoinTracker?.balanceSyncedAt || null,
           balanceSource: rollerCoinTracker?.balanceSource || null,
         };
+        if (item.type === "bixberry") return { ...base, balanceUsd: bixberryTracker?.currentBalance ?? null, sourceLastSyncedAt: bixberryTracker?.lastSyncedAt || null };
         if (item.type === "salad") return {
           ...base, sourceLastSyncedAt: saladTracker?.lastSyncedAt || null,
           lifetimeEarnedUsd: Number(saladTracker?.lifetimeBalance) || 0,
@@ -803,7 +819,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     };
   }, [
     sortedProgramCards, inactiveProjectIds, rollerCoinStats,
-    rollerCoinTracker, saladTracker, unetworkTracker, kryptexTracker,
+    rollerCoinTracker, saladTracker, unetworkTracker, kryptexTracker, bixberryTracker,
   ]);
 
   // Keep an authenticated, durable server copy of the last known project
@@ -815,6 +831,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const liveProjectFeed = sortedProgramCards.map(item => {
     const project = item.project;
     const sourceTimes = {
+      bixberry: bixberryTracker?.lastSyncedAt,
       rollercoin: rollerCoinTracker?.balanceSyncedAt,
       salad: saladTracker?.lastSyncedAt,
       unetwork: unetworkTracker?.lastSyncedAt,
@@ -1682,7 +1699,7 @@ const summary =
                   {inactiveProgramCards.map(item => (
                     <div key={item.key} className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card/30 px-3 py-2.5">
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : "Salad"}</div>
+                        <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : item.type === "bixberry" ? "Bixberry" : "Salad"}</div>
                         <div className="text-xs tabular-nums text-muted-foreground">{formatCurrency(item.amount)}</div>
                       </div>
                       <button type="button" onClick={() => reactivateProject(item.key)} className="shrink-0 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10">Reactivate</button>
@@ -1906,10 +1923,9 @@ const summary =
         </div>
       <section className="h-full min-w-0 space-y-2 rounded-2xl border border-[#242b33] bg-[#0d1014] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length + 1})</h2>
-          <span className="text-[11px] text-muted-foreground">Existing projects sorted by balance</span>
+          <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
+          <span className="text-[11px] text-muted-foreground">Sorted by balance · {activeProgramCards.length} projects</span>
         </div>
-<BixberryCard />
 {activeProgramCards.length ===
 0 ? (
           <Card className="border-border/50 bg-card/70">
@@ -1931,6 +1947,8 @@ const summary =
               (
                 item
               ) => {
+
+if (item.type === "bixberry") return <BixberryCard key={item.key} tracker={bixberryTracker} />;
 
 if (
   item.type ===
