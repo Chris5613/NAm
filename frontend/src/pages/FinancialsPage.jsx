@@ -49,6 +49,7 @@ const accounts = [
   { id: "platform:kryptex", name: "Kryptex Receivables", type: "asset" },
   { id: "platform:rollercoin", name: "RollerCoin Receivables", type: "asset" },
   { id: "platform:salad", name: "Salad Receivables", type: "asset" },
+  { id: "platform:bixberry", name: "Bixberry Receivables", type: "asset" },
   { id: "platform:unetwork", name: "Unetwork Receivables", type: "asset" },
   { id: "defi", name: "Investments – DeFi", type: "asset" },
   { id: "equipment", name: "Equipment", type: "asset" },
@@ -155,8 +156,8 @@ function parseTransaction(text, month) {
   const transfer = /\b(?:transferred|transfer|withdrew|withdrawn|withdrawal|moved|sent)\b/.test(phrase);
   if (transfer) {
     // Internal transfers move assets and are never additional revenue.
-    const from = phrase.match(/\bfrom\s+(?:my\s+)?(roller\s?coin|kryptex|salad|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
-    const to = phrase.match(/\b(?:to|into)\s+(?:my\s+)?(roller\s?coin|kryptex|salad|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
+    const from = phrase.match(/\bfrom\s+(?:my\s+)?(roller\s?coin|kryptex|salad|bixberry|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
+    const to = phrase.match(/\b(?:to|into)\s+(?:my\s+)?(roller\s?coin|kryptex|salad|bixberry|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
     const assetAccount = match => resolveFinancialAccount(match?.[1]) || "";
     debitAccount = assetAccount(to);
     creditAccount = assetAccount(from);
@@ -186,7 +187,7 @@ function parseTransaction(text, month) {
     debitAccount = "expense";
     creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
     explanation = "Record an operating expense.";
-  } else if (/received|earned|income|revenue|payout/.test(phrase) && /mining|kryptex|rollercoin|salad|unetwork|yield|lulo|loopscale|payment|payout/.test(phrase)) {
+  } else if (/received|earned|income|revenue|payout/.test(phrase) && /mining|kryptex|rollercoin|salad|bixberry|unetwork|yield|lulo|loopscale|payment|payout/.test(phrase)) {
     debitAccount = fromCash ? "cash" : fromCrypto ? "crypto" : "platform";
     creditAccount = "revenue";
     explanation = "Record earned revenue; ensure the provider has not already been recorded.";
@@ -412,7 +413,7 @@ export default function FinancialsPage() {
   // Keep unidentified manual revenue separate instead of attributing it
   // to mining or yield without evidence.
   const otherRecognizedRevenue = pnlRevenue === null ? null :
-    moneyRound(revenueSources.unclassified+pnlRevenue-report.revenue);
+    moneyRound((revenueSources.unclassified || 0)+pnlRevenue-report.revenue);
   const operatingExpenseWithoutPower = Math.max(0,moneyRound(operatingExpense-autoPower));
   const fixedDep = closeSnapshot ? closeSnapshot.fixedDep : report.depreciation;
   const totalStatementExpenses = moneyRound(operatingExpenseWithoutPower+autoPower+feeExpense+fixedDep);
@@ -891,6 +892,7 @@ export default function FinancialsPage() {
             <tbody>
               <tr className="bg-[#142333]"><th colSpan={2} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">Revenue</th></tr>
               <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">Mining Revenue</td><td className="py-2.5 text-right tabular-nums">{money(miningIncome)}</td></tr>
+              {Number(revenueSources.networkSharing) > 0 && <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">Network Sharing Revenue</td><td className="py-2.5 text-right tabular-nums">{money(revenueSources.networkSharing)}</td></tr>}
               <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">Yield Revenue</td><td className="py-2.5 text-right tabular-nums">{money(yieldIncome)}</td></tr>
               <tr className="border-b border-[#202f3c]"><td className="py-2.5 pl-2">{accountNameById("dividendRevenue")}</td><td className="py-2.5 text-right tabular-nums">{money(dividendIncome)}</td></tr>
               {otherRecognizedRevenue !== null && Math.abs(otherRecognizedRevenue) >= .005 && <tr className="border-b border-[#202f3c]">
