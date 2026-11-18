@@ -18,6 +18,7 @@ TRACKERS = {
     "Unetwork": "project_income_unetwork_tracker_v1",
     "RollerCoin": "project_income_rollercoin_tracker_v2",
     "Salad": "project_income_salad_tracker_v1",
+    "Bixberry": "project_income_bixberry_tracker_v1",
 }
 
 
@@ -91,6 +92,10 @@ def provider_entries(day, server_record, trackers):
         dated_salad = verified_salad_day(salad_tracker, day)
         if dated_salad is not None:
             overwrite("Salad", dated_salad, "dated-salad-lifetime-delta")
+
+    bixberry_daily = mapping(mapping(trackers.get("Bixberry")).get("daily"))
+    if day in bixberry_daily:
+        overwrite("Bixberry", bixberry_daily[day], "observed-bixberry-balance-delta")
 
     provisional = sorted(
         name for name, source in provenance.items()
