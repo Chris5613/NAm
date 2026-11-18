@@ -1094,7 +1094,8 @@ async def source_owned_income_history(
     # rather than separately fetching snapshots, payouts, and four trackers.
     tracker_keys = {
         "bixberry": BIXBERRY_KEY,
-        "salad": "project_income_salad_tracker_v1",        "unetwork": "project_income_unetwork_tracker_v1",
+        "salad": "project_income_salad_tracker_v1",
+        "unetwork": "project_income_unetwork_tracker_v1",
         "kryptex": "project_income_kryptex_tracker_v1",
         "rollercoin": "project_income_rollercoin_tracker_v2",
     }
@@ -1212,7 +1213,8 @@ async def backend_project_break_even(
     today, month = current_keys()
     sources = {
         "bixberry": BIXBERRY_KEY,
-        "salad": "project_income_salad_tracker_v1",        "rollercoin": "project_income_rollercoin_tracker_v2",
+        "salad": "project_income_salad_tracker_v1",
+        "rollercoin": "project_income_rollercoin_tracker_v2",
         "unetwork": "project_income_unetwork_tracker_v1",
         "kryptex": "project_income_kryptex_tracker_v1",
     }
@@ -1243,7 +1245,8 @@ async def calculate_provider_stats(
     today, month = current_keys()
     keys = {
         "bixberry": BIXBERRY_KEY,
-        "salad": "project_income_salad_tracker_v1",        "unetwork": "project_income_unetwork_tracker_v1",
+        "salad": "project_income_salad_tracker_v1",
+        "unetwork": "project_income_unetwork_tracker_v1",
         "kryptex": "project_income_kryptex_tracker_v1",
         "rollercoin": "project_income_rollercoin_tracker_v2",
     }
