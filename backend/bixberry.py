@@ -20,6 +20,18 @@ def amount(raw):
 def observe(previous, raw, at):
     balance = amount(raw)
     old = dict(previous or {})
+    # User confirmed the initial account balance is first-day earnings.
+    # Credit the original opening once, including existing installations.
+    if not old.get("openingBalanceCredited") and old.get("trackingStartedAt") and "openingBalance" in old:
+        first_day = datetime.fromisoformat(old["trackingStartedAt"]).astimezone(ZoneInfo("America/Los_Angeles")).date().isoformat()
+        if first_day == at.astimezone(ZoneInfo("America/Los_Angeles")).date().isoformat():
+            opening = amount(old["openingBalance"])
+            days = dict(old.get("daily") or {})
+            months = dict(old.get("monthlyEarnings") or {})
+            days[first_day] = float(amount(days.get(first_day, 0)) + opening)
+            months[first_day[:7]] = float(amount(months.get(first_day[:7], 0)) + opening)
+            old.update(daily=days, monthlyEarnings=months, openingBalanceCredited=True,
+                       lifetimeEarnedUsd=float(sum(Decimal(str(v)) for v in months.values())))
     last = old.get("lastSyncedAt")
     if last and at <= datetime.fromisoformat(last):
         return old
@@ -35,6 +47,8 @@ def observe(previous, raw, at):
         else:
             delta = diff
     else:
+        delta = balance
+        old["openingBalanceCredited"] = True
         old["openingBalance"] = float(balance)
         old["trackingStartedAt"] = at.isoformat()
     daily[day] = float(amount(daily.get(day, 0)) + delta)
