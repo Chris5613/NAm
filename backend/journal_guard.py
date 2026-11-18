@@ -12,7 +12,7 @@ from collections import Counter
 ALLOWED_ACCOUNTS = frozenset((
     "cash", "luloCash", "brokerage", "crypto", "platform",
     "platform:kryptex", "platform:rollercoin", "platform:salad",
-    "platform:unetwork", "defi", "equipment", "accDep", "payable",
+    "platform:bixberry", "platform:unetwork", "defi", "equipment", "accDep", "payable",
     "equity", "revenue", "dividendRevenue", "gainDisposal", "electric",
     "expense", "suppliesExpense", "depreciation", "fees",
 ))
