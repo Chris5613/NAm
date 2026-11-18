@@ -104,7 +104,9 @@ def split_revenue(entries):
                     else "mining" if re.search(
                         r"kryptex|roller\s*coin|salad|unetwork|unity\s*network|mining", source)
                     else "unclassified")
-        result[category] = cents(result[category] + revenue)
+        if re.search(r"bixberry|network sharing", source):
+            category = "networkSharing"
+        result[category] = cents(result.get(category, 0.0) + revenue)
     return result
 
 
@@ -468,7 +470,7 @@ def evaluate_statement(data):
 
 
 SOURCE_KEYS = ("lulo", "loopscale", "stocks", "kryptex", "rollercoin",
-               "salad", "unetwork")
+               "salad", "unetwork", "bixberry")
 
 
 def source_key(raw):
@@ -477,7 +479,7 @@ def source_key(raw):
         return "rollercoin"
     if re.search(r"unity\s*network|unitynetwork|unetwork", value):
         return "unetwork"
-    for key in ("kryptex", "loopscale", "lulo", "salad"):
+    for key in ("kryptex", "loopscale", "lulo", "salad", "bixberry"):
         if re.search(r"\b" + key + r"\b", value):
             return key
     if re.search(r"stocks|dividend|\bvoo\b|\bvti\b", value):
@@ -489,7 +491,7 @@ def debit_for_income(source):
     return {"lulo": "luloCash", "loopscale": "defi",
             "stocks": "brokerage", "kryptex": "platform:kryptex",
             "rollercoin": "platform:rollercoin", "salad": "platform:salad",
-            "unetwork": "platform:unetwork"}.get(source, "platform")
+            "unetwork": "platform:unetwork", "bixberry": "platform:bixberry"}.get(source, "platform")
 
 
 def auto_income_journal(month, income_month, manual_journal,
