@@ -1455,7 +1455,7 @@ def receive_bixberry(payload: dict, authorization: str = Header(default=""), db:
         raise HTTPException(401, "Bridge credential replaced")
     now = datetime.now(timezone.utc)
     at = timestamp(payload.get("observedAt"))
-    if at is None or at > now + timedelta(seconds=30) or at < now - timedelta(minutes=5):
+    if at is None or at > now or at < now - timedelta(minutes=5):
         raise HTTPException(422, "Observation must be recent")
     try:
         old = setting(db, uid, BIXBERRY_KEY) or {}
@@ -1463,5 +1463,21 @@ def receive_bixberry(payload: dict, authorization: str = Header(default=""), db:
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     save_setting(db, uid, BIXBERRY_KEY, next_tracker)
+    feed = setting(db, uid, LATEST_KEY) or {}
+    projects = {str(p["id"]): p for p in feed.get("projects", []) if isinstance(p, dict) and p.get("id")}
+    item = from_tracker({"id": "bixberry-project", "name": "Bixberry"}, {"bixberry-project": next_tracker})
+    if item:
+        normalized = validate_item(item, projects.get("bixberry-project"), now)
+        if normalized:
+            projects["bixberry-project"] = normalized
+    for project in projects.values():
+        project["stale"] = is_project_stale(project, now)
+    save_setting(db, uid, LATEST_KEY, {"receivedAt": now.isoformat(), "projects": list(projects.values())})
+    computed = portfolio_summary(list(projects.values()))
+    if computed["complete"]:
+        save_setting(db, uid, "project_income_portfolio_summary_v1", {
+            "portfolioBalance": computed["totalUsd"], "activePortfolioBalance": computed["activeTotalUsd"],
+            "activePositions": sum(1 for p in projects.values() if not p.get("inactive")),
+            "projectCount": computed["projectCount"], "source": "backend-project-feed", "updatedAt": now.isoformat()})
     db.commit()
     return {"accepted": True, "lastSyncedAt": next_tracker.get("lastSyncedAt")}
