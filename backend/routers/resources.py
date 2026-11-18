@@ -347,6 +347,7 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
         provider_keys = {
             "kryptex": "project_income_kryptex_tracker_v1",
             "salad": "project_income_salad_tracker_v1",
+            "bixberry": "project_income_bixberry_tracker_v1",
             "rollercoin": "project_income_rollercoin_tracker_v2",
             "unetwork": "project_income_unetwork_tracker_v1",
         }
