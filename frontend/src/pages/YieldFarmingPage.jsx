@@ -1948,7 +1948,7 @@ const summary =
                 item
               ) => {
 
-if (item.type === "bixberry") return <BixberryCard key={item.key} tracker={bixberryTracker} />;
+if (item.type === "bixberry") return <BixberryCard key={item.key} tracker={bixberryTracker} logo={projectLogos["bixberry-project"] || ""} onLogoChange={value => setProjectLogo("bixberry-project", value)} todayUsd={displayDailySourceTotals["Bixberry"]} />;
 
 if (
   item.type ===
