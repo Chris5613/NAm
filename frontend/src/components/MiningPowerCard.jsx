@@ -177,7 +177,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, illustrativeCost,
         </div>
         <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
           <span className={"h-1 w-1 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
-          {live ? "Live" : gpu && gpu.gpuWatts == null ? "Not reporting" : "Stale"}
+          {live ? (gpu && gpu.allocatedWatts == null ? "GPU only" : "Live") : gpu && gpu.gpuWatts == null ? "Not reporting" : "Stale"}
         </span>
       </div>
       {renameError && <p role="alert" className="mt-1 text-xs text-rose-400">{renameError}</p>}
@@ -403,7 +403,7 @@ export default function MiningPowerCard() {
             live={live}/>];
           return breakdown.gpus.map((gpu, index) => {
             const id = index === 0 ? device.id : device.id + ":" + gpu.id;
-            const display = {...device, id, watts: live ? (gpu.allocatedWatts ?? gpu.gpuWatts) : null};
+            const display = {...device, id, watts: gpu.allocatedWatts ?? gpu.gpuWatts ?? null};
             const cost = powerCost?.deviceCosts?.[device.id];
             return <DeviceCard key={id} device={display}
               label={settings.deviceLabels?.[id] || gpu.name}
@@ -412,7 +412,7 @@ export default function MiningPowerCard() {
               monthlyUsage={shared ? (status?.gpuMonthlyUsage?.[id] ?? (index === 0 ? monthlyDevices[device.id] : null)) : monthlyDevices[device.id]}
               illustrativeCost={illustrative?.deviceUsd?.[id]}
               backendDeviceCost={shared ? (status?.gpuMonthlyCosts?.[id] ?? (index === 0 ? cost : null)) : cost}
-              live={live && gpu.gpuWatts != null}/>;
+              live={gpu.gpuWatts != null}/>;
           });
         })}
       </section>
