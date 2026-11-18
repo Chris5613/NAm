@@ -11,7 +11,7 @@ receipt ledger. Locked historical months are never rewritten.
 from copy import deepcopy
 from math import isfinite
 
-EXTENSION_PROVIDERS = frozenset({"Kryptex", "Salad", "RollerCoin", "Unetwork"})
+EXTENSION_PROVIDERS = frozenset({"Kryptex", "Salad", "RollerCoin", "Unetwork", "Bixberry"})
 
 
 def _number(value):
