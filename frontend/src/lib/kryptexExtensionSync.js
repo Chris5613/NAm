@@ -54,6 +54,9 @@ export function requestLatestKryptexFromExtension() {
 }
 
 let applyChain = Promise.resolve();
+// Each machine and account chart have independent update clocks. Keep the
+// last successfully transmitted payload per machine in this page session.
+const appliedPayloads = new Map();
 
 function enqueueApply(payload) {
   applyChain = applyChain.catch(() => null).then(() => applyKryptexExtensionPayload(payload));
@@ -74,7 +77,13 @@ export async function applyKryptexExtensionPayload(payload) {
     last_payload: payload,
   });
 
-  if (state.last_applied_synced_at && syncedAt <= state.last_applied_synced_at) {
+  const machineKey = String(payload.machine?.id || "legacy");
+  const earnings = payload.earnings || {};
+  const signature = JSON.stringify([
+    syncedAt, payload.reachable, earnings.captured_at || null,
+    earnings.daily_sats || {}, earnings.daily_usd || {},
+  ]);
+  if (appliedPayloads.get(machineKey) === signature) {
     return { applied: false, reason: "already_applied" };
   }
 
@@ -115,6 +124,7 @@ export async function applyKryptexExtensionPayload(payload) {
         },
       }));
     }
+    appliedPayloads.set(machineKey, signature);
     setKryptexExtensionState({
       last_applied_synced_at: syncedAt,
       last_applied_received_at: new Date().toISOString(),
