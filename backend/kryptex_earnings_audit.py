@@ -127,6 +127,24 @@ def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
             or (_amount(amount) or 0) > (_amount(credited_sats.get(day)) or 0) + 0.000001
         )
     )
+    # The sender may resend the exact stored chart on every machine poll.
+    # Record capture time, never receipt time, when the sender supplies it.
+    chart_sync = tracker.get("kryptexLastChartSyncAt")
+    captured = incoming.get("captured_at")
+    if isinstance(captured, str):
+        try:
+            stamp = datetime.fromisoformat(captured.replace("Z", "+00:00"))
+            if stamp.tzinfo is not None and stamp <= now and (usd or sats):
+                prior_capture = tracker.get("kryptexActualChartCaptureAt")
+                prior = datetime.fromisoformat(str(prior_capture).replace("Z", "+00:00")) if prior_capture else None
+                if prior is None or stamp > prior:
+                    chart_sync = stamp.astimezone(timezone.utc).isoformat()
+                else:
+                    chart_sync = prior_capture
+        except (ValueError, TypeError):
+            pass
+    elif not chart_sync and (usd or sats):
+        chart_sync = now.isoformat()
     result = {
         "kryptexMiningDaily": recorded,
         "kryptexConfirmedDays": confirmed,
@@ -134,7 +152,8 @@ def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
         "kryptexIncomeCreditedSatsDaily": credited_sats,
         "kryptexPendingEarningsDays": pending,
         "monthlyEarnings": monthly,
-        "kryptexLastChartSyncAt": now.isoformat(),
+        "kryptexLastChartSyncAt": chart_sync,
+        "kryptexActualChartCaptureAt": chart_sync if isinstance(captured, str) else tracker.get("kryptexActualChartCaptureAt"),
     }
     if lifetime is not None or after > before:
         result["lifetimeEarnedUsd"] = round(next_lifetime, 8)
