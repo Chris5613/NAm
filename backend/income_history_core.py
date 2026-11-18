@@ -94,7 +94,7 @@ def reconcile_lulo_months(months, local_backfills, backend_backfills,
     return [result[k] for k in sorted(result)]
 
 
-TRACKED_SOURCES = {"lulo", "loopscale", "salad", "rollercoin", "unetwork", "kryptex"}
+TRACKED_SOURCES = {"lulo", "loopscale", "salad", "rollercoin", "unetwork", "kryptex", "bixberry"}
 TRACKED_TYPES = {"lulo_lending", "jupiter_inf_loop", "sanctum_inf", "kryptex"}
 
 
