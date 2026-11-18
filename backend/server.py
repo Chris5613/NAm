@@ -54,7 +54,10 @@ async def reject_cross_origin_mutations(request: Request, call_next):
     if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
         # The local Tapo bridge authenticates these endpoints with a per-user
         # Bearer token and is not a browser, so it has no Origin/Referer header.
-        if request.url.path in {"/api/power/ingest", "/api/power/backfill"}:
+        if request.url.path in {"/api/power/ingest", "/api/power/backfill"} or (
+            request.method.upper() == "POST" and
+            request.url.path == "/api/project-tracking/bixberry/observe"
+        ):
             return await call_next(request)
         allowed = {o.rstrip("/") for o in CORS_ORIGINS}
         # Local API docs are intentionally usable during local development.
