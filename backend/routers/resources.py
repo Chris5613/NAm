@@ -251,13 +251,15 @@ async def patch_resource_records(name: str, payload: dict[str, Any],
 @router.get("/settings")
 async def all_settings(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     rows = db.scalars(select(Setting).where(Setting.user_id == user.id)).all()
-    values = {row.key: row.value for row in rows}
+    values = {row.key: row.value for row in rows if row.key != "bixberry_bridge_digest_v1"}
     values[PRIVATE_ACCOUNTING_KEY] = private_accounting_profile()
     return values
 
 
 @router.get("/settings/{key}")
 async def get_setting(key: str, user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
+    if key == "bixberry_bridge_digest_v1":
+        raise HTTPException(404, "Setting not found")
     if key == PRIVATE_ACCOUNTING_KEY:
         return {"key": key, "value": private_accounting_profile()}
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == key))
@@ -347,6 +349,7 @@ async def patch_setting(key: str, payload: dict[str, Any], user: User = Depends(
         provider_keys = {
             "kryptex": "project_income_kryptex_tracker_v1",
             "salad": "project_income_salad_tracker_v1",
+            "bixberry": "project_income_bixberry_tracker_v1",
             "rollercoin": "project_income_rollercoin_tracker_v2",
             "unetwork": "project_income_unetwork_tracker_v1",
         }

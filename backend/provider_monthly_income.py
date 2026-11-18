@@ -111,6 +111,9 @@ def monthly_provider_income(trackers: dict, current_month: str) -> list[dict]:
     for month, raw in kryptex_monthly.items():
         add(month, "Kryptex", numeric(raw))
 
+    for month, raw in obj(obj(trackers.get("bixberry")).get("monthlyEarnings")).items():
+        add(month, "Bixberry", numeric(raw))
+
     return [
         {
             "monthKey": month,

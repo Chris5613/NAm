@@ -1,3 +1,4 @@
+import BixberryCard from "@/components/BixberryCard";
 import { useRollerCoinExtension } from "../hooks/useRollerCoinExtension";
 import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
@@ -1905,9 +1906,10 @@ const summary =
         </div>
       <section className="h-full min-w-0 space-y-2 rounded-2xl border border-[#242b33] bg-[#0d1014] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-          <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
-          <span className="text-[11px] text-muted-foreground">Sorted by balance · {activeProgramCards.length} projects</span>
+          <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length + 1})</h2>
+          <span className="text-[11px] text-muted-foreground">Existing projects sorted by balance</span>
         </div>
+<BixberryCard />
 {activeProgramCards.length ===
 0 ? (
           <Card className="border-border/50 bg-card/70">

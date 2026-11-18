@@ -123,6 +123,7 @@ def audit_integration_settings(values, now=None):
         provider_keys = {
             "kryptex": "project_income_kryptex_tracker_v1",
             "salad": "project_income_salad_tracker_v1",
+            "bixberry": "project_income_bixberry_tracker_v1",
             "rollercoin": "project_income_rollercoin_tracker_v2",
             "unetwork": "project_income_unetwork_tracker_v1",
         }
@@ -371,7 +372,7 @@ def audit_integration_settings(values, now=None):
                 totalUsd=round(total, 8), activeUsd=round(active, 8),
                 providerCount=expected["projectCount"])
         provider_ids = {
-            "kryptex-project", "salad-project",
+            "kryptex-project", "salad-project", "bixberry-project",
             "unetwork-project", "rollercoin-project",
         }
         latest = {str(row.get("id")): row for row in source_rows

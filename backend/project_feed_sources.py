@@ -9,6 +9,7 @@ from math import isfinite
 PROVIDER_TRACKERS = {
     "kryptex-project": "project_income_kryptex_tracker_v1",
     "salad-project": "project_income_salad_tracker_v1",
+    "bixberry-project": "project_income_bixberry_tracker_v1",
     "unetwork-project": "project_income_unetwork_tracker_v1",
     "rollercoin-project": "project_income_rollercoin_tracker_v2",
 }

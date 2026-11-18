@@ -198,6 +198,7 @@ def take_project_balance_snapshots(day: str, scheduled_at: datetime | None = Non
 MONTHLY_TRACKER_KEYS = {
     "kryptex": "project_income_kryptex_tracker_v1",
     "salad": "project_income_salad_tracker_v1",
+    "bixberry": "project_income_bixberry_tracker_v1",
     "rollercoin": "project_income_rollercoin_tracker_v2",
     "unetwork": "project_income_unetwork_tracker_v1",
 }

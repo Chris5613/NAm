@@ -27,6 +27,8 @@ SERVER_OWNED_SETTING_KEYS = frozenset({
     "project_income_portfolio_summary_v1",
     # Smart-plug bridge secrets and telemetry are only written by /api/power.
     "power_ingest_token_v1",
+    "project_income_bixberry_tracker_v1",
+    "bixberry_bridge_digest_v1",
     "power_telemetry_v1",
 })
 

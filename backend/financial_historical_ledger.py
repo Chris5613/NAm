@@ -58,13 +58,13 @@ def resolve_account(value):
         "kryptex": "platform:kryptex", "kryptexwallet": "platform:kryptex",
         "rollercoin": "platform:rollercoin",
         "rollercoinwallet": "platform:rollercoin", "salad": "platform:salad",
-        "unetwork": "platform:unetwork", "unitynetwork": "platform:unetwork",
+        "bixberry": "platform:bixberry", "unetwork": "platform:unetwork", "unitynetwork": "platform:unetwork",
         "platform": "platform",
     }
     ids = {
         "cash", "crypto", "luloCash", "defi", "brokerage", "platform",
         "platform:kryptex", "platform:rollercoin", "platform:salad",
-        "platform:unetwork",
+        "platform:unetwork", "platform:bixberry",
     }
     return known.get(key) or (value if value in ids else None)
 
