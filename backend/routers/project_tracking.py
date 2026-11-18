@@ -14,6 +14,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..auth import current_user
+from ..bixberry import KEY as BIXBERRY_KEY, observe as observe_bixberry
+from datetime import timedelta
+from fastapi import Header
+import hashlib
+import secrets
+import hmac
 from ..db import get_db
 from ..models import Setting, User, Wallet, Project, ProjectTransaction
 from ..project_accounting import portfolio_summary, daily_income_summary, monotonic_daily_sources
@@ -351,6 +357,7 @@ async def project_integration_audit(
     """Authenticated, read-only snapshot of cross-page/provider invariants."""
     keys = (
         "project_income_kryptex_tracker_v1",
+        BIXBERRY_KEY,
         "project_income_salad_tracker_v1",
         "project_income_rollercoin_tracker_v2",
         "project_income_unetwork_tracker_v1",
@@ -403,6 +410,7 @@ async def read_cross_page_integrity(
         "financials_unetwork_business_phones_v1",
         "hardware_payback_devices_v1",
         "yield_project_quick_cache_v1",
+        BIXBERRY_KEY,
         "project_income_salad_tracker_v1",
         "project_income_unetwork_tracker_v1",
         "project_income_kryptex_tracker_v1",
@@ -1085,8 +1093,8 @@ async def source_owned_income_history(
     # Read all source-income settings in a single indexed database query,
     # rather than separately fetching snapshots, payouts, and four trackers.
     tracker_keys = {
-        "salad": "project_income_salad_tracker_v1",
-        "unetwork": "project_income_unetwork_tracker_v1",
+        "bixberry": BIXBERRY_KEY,
+        "salad": "project_income_salad_tracker_v1",        "unetwork": "project_income_unetwork_tracker_v1",
         "kryptex": "project_income_kryptex_tracker_v1",
         "rollercoin": "project_income_rollercoin_tracker_v2",
     }
@@ -1159,6 +1167,7 @@ async def source_owned_home_business(
         "financials_month_closes_v1", "financials_confirmed_movements_v1",
         "financials_bank_openings_v1", "financials_power_estimates_v1",
         "yield_project_latest_balance_feed_v1", "yield_project_quick_cache_v1",
+        BIXBERRY_KEY,
         "project_income_salad_tracker_v1", "project_income_unetwork_tracker_v1",
         "project_income_kryptex_tracker_v1",
         "project_income_rollercoin_tracker_v2",
@@ -1202,8 +1211,8 @@ async def backend_project_break_even(
     """Server-owned lifetime earnings to paid-in capital; no inferred income."""
     today, month = current_keys()
     sources = {
-        "salad": "project_income_salad_tracker_v1",
-        "rollercoin": "project_income_rollercoin_tracker_v2",
+        "bixberry": BIXBERRY_KEY,
+        "salad": "project_income_salad_tracker_v1",        "rollercoin": "project_income_rollercoin_tracker_v2",
         "unetwork": "project_income_unetwork_tracker_v1",
         "kryptex": "project_income_kryptex_tracker_v1",
     }
@@ -1233,8 +1242,8 @@ async def calculate_provider_stats(
     """
     today, month = current_keys()
     keys = {
-        "salad": "project_income_salad_tracker_v1",
-        "unetwork": "project_income_unetwork_tracker_v1",
+        "bixberry": BIXBERRY_KEY,
+        "salad": "project_income_salad_tracker_v1",        "unetwork": "project_income_unetwork_tracker_v1",
         "kryptex": "project_income_kryptex_tracker_v1",
         "rollercoin": "project_income_rollercoin_tracker_v2",
     }
@@ -1410,3 +1419,46 @@ async def recovery_candidates(user: User = Depends(current_user),
                 "referenceCapturedAt": snapshot.get("capturedAt"),
                 "candidates": candidates}
     return {"referenceDate": None, "candidates": []}
+
+
+@router.post("/bixberry/pair")
+def pair_bixberry(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """Issue a revocable, write-only bridge credential; store only its digest."""
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    token = secrets.token_urlsafe(32)
+    save_setting(db, user.id, "bixberry_bridge_digest_v1", hashlib.sha256(token.encode()).hexdigest())
+    db.commit()
+    return {"bridgeToken": token}
+
+
+@router.get("/bixberry")
+def read_bixberry(user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return setting(db, user.id, BIXBERRY_KEY) or {}
+
+
+@router.post("/bixberry/observe")
+def receive_bixberry(payload: dict, authorization: str = Header(default=""), db: Session = Depends(get_db)):
+    if not authorization.startswith("Bearer ") or len(authorization) > 200:
+        raise HTTPException(401, "Invalid bridge credential")
+    digest = hashlib.sha256(authorization[7:].encode()).hexdigest()
+    pairings = db.scalars(select(Setting).where(Setting.key == "bixberry_bridge_digest_v1")).all()
+    pairing = next((row for row in pairings if isinstance(row.value, str) and hmac.compare_digest(row.value, digest)), None)
+    if pairing is None:
+        raise HTTPException(401, "Invalid bridge credential")
+    uid = pairing.user_id
+    db.scalar(select(User).where(User.id == uid).with_for_update())
+    db.refresh(pairing)
+    if not hmac.compare_digest(str(pairing.value), digest):
+        raise HTTPException(401, "Bridge credential replaced")
+    now = datetime.now(timezone.utc)
+    at = timestamp(payload.get("observedAt"))
+    if at is None or at > now + timedelta(seconds=30) or at < now - timedelta(minutes=5):
+        raise HTTPException(422, "Observation must be recent")
+    try:
+        old = setting(db, uid, BIXBERRY_KEY) or {}
+        next_tracker = observe_bixberry(old, payload.get("balanceUsd"), at)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    save_setting(db, uid, BIXBERRY_KEY, next_tracker)
+    db.commit()
+    return {"accepted": True, "lastSyncedAt": next_tracker.get("lastSyncedAt")}
