@@ -701,7 +701,8 @@ async def read_monthly_daily_earnings(
 
 @router.get("/earnings-dashboard/{month}")
 async def earnings_dashboard(
-    month: str, user: User = Depends(current_user), db: Session = Depends(get_db)
+    month: str, user: User = Depends(current_user), db: Session = Depends(get_db),
+    projects_only: bool = False,
 ) -> dict:
     """One backend-owned view for all daily/weekly/monthly earnings surfaces.
 
@@ -734,6 +735,11 @@ async def earnings_dashboard(
     }
     trackers = {name: setting(db, user.id, key) or {}
                 for name, key in DASHBOARD_TRACKERS.items()}
+    if projects_only:
+        daily = {day: {**record, "sources": {
+            name: amount for name, amount in (record.get("sources") or {}).items()
+            if name != "Stocks"
+        }} for day, record in daily.items()}
     dashboard = build_backend_earnings_dashboard(
         month, today.isoformat(), daily, trackers)
     monthly_snapshots = setting(db, user.id, "yield_monthly_snapshots_v1")
@@ -750,6 +756,13 @@ async def earnings_dashboard(
         normalized = guard_monthly_snapshots(
             monthly_snapshots, monthly_snapshots, canonical, today_month,
             confirmed_legacy=confirmed_legacy)
+        if projects_only:
+            normalized = {key: {**value, "platforms": [
+                row for row in value.get("platforms", []) if row.get("platform") != "Stocks"
+            ], "total": round(sum(row.get("amount", 0) for row in value.get("platforms", [])
+                                   if row.get("platform") != "Stocks"), 8)}
+                if isinstance(value, dict) and isinstance(value.get("platforms"), list)
+                else value for key, value in normalized.items()}
         comparison = compare_monthly_snapshot(
             dashboard, normalized.get(month))
         if comparison is not None:
@@ -765,7 +778,14 @@ async def earnings_dashboard(
     # Monthly, Weekly, and Yearly. Booked historical income is calculated by
     # the same source-owned function used by Financials; it is not reconstructed
     # from daily receipts or browser wallet balances.
-    dashboard["incomeHistory"] = await source_owned_income_history(user=user, db=db)
+    history = await source_owned_income_history(user=user, db=db)
+    if projects_only:
+        history = {**history, "months": [
+            {**row, "sources": {name: amount for name, amount in row["sources"].items()
+                               if name != "Stocks"},
+             "total": row["projectTotal"], "stocks": 0}
+            for row in history["months"]]}
+    dashboard["incomeHistory"] = history
     return dashboard
 
 
