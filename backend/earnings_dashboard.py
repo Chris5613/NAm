@@ -60,6 +60,13 @@ def provider_entries(day, server_record, trackers):
         overwrite("Kryptex", mapping(k.get("kryptexMiningDaily")).get(day),
                   "confirmed-kryptex-mining-day")
 
+    split = mapping(mapping(k.get("kryptexRentalAttributionDaily")).get(day))
+    rental = safe(split.get("rentalUsd"))
+    account = safe(sources.get("Kryptex"))
+    if confirmed.get(day) is True and rental is not None and account is not None and 0 < rental <= account:
+        overwrite("Kryptex", round(account - rental, 8), "confirmed-kryptex-owned-mining")
+        overwrite("Rentals", rental, "reconciled-kryptex-rental-workers")
+
     u = mapping(mapping(trackers.get("Unetwork")).get("daily")).get(day)
     if isinstance(u, dict) and (safe(u.get("micros")) or 0) > 0:
         overwrite("Unetwork", u.get("usd"), "dated-unetwork-reward")
