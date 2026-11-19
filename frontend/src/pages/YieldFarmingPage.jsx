@@ -771,7 +771,17 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
           sourceLastSyncedAt: rollerCoinTracker?.balanceSyncedAt || null,
           balanceSource: rollerCoinTracker?.balanceSource || null,
         };
-        if (item.type === "bixberry") return { ...base, balanceUsd: bixberryTracker?.currentBalance ?? null, sourceLastSyncedAt: bixberryTracker?.lastSyncedAt || null };
+        if (item.type === "rentals") return (
+  <div key={item.key} className="rounded-xl border border-[#242b33] bg-[#11161c] p-3">
+    <div className="text-sm font-semibold">Rentals</div>
+    <div className="mt-2 text-[11px] text-muted-foreground">Today's mining earnings</div>
+    <div className="text-lg font-semibold text-emerald-400">{backendEarnings?.todaySources?.Rentals == null ? "—" : "$" + Number(backendEarnings.todaySources.Rentals).toFixed(4)}</div>
+    <div className="mt-2 text-[11px] text-muted-foreground">This month</div>
+    <div className="text-sm font-medium">{backendEarnings?.monthlySources?.Rentals == null ? "—" : "$" + Number(backendEarnings.monthlySources.Rentals).toFixed(4)}</div>
+    <div className="mt-2 text-[10px] text-muted-foreground">Nosana workers · shared Kryptex wallet</div>
+  </div>
+);
+if (item.type === "bixberry") return { ...base, balanceUsd: bixberryTracker?.currentBalance ?? null, sourceLastSyncedAt: bixberryTracker?.lastSyncedAt || null };
         if (item.type === "salad") return {
           ...base, sourceLastSyncedAt: saladTracker?.lastSyncedAt || null,
           lifetimeEarnedUsd: Number(saladTracker?.lifetimeBalance) || 0,
@@ -915,7 +925,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     };
   }, []);
 
-  const activeProgramCards = sortedProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key)));
+  const activeProgramCards = [...sortedProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key))), { type: "rentals", key: "rentals-project" }];
   const inactiveProgramCards = sortedProgramCards.filter(item => inactiveProjectIds.includes(String(item.key)));
 
   const allAssets =
