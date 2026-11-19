@@ -9,10 +9,10 @@ import {
 
 const pending = new Map();
 
-function fetchBackendEarnings(userId, month, todayKey) {
-  const key = String(userId) + ":" + month + ":" + todayKey;
+function fetchBackendEarnings(userId, month, todayKey, projectsOnly = false) {
+  const key = String(userId) + ":" + month + ":" + todayKey + ":" + projectsOnly;
   if (pending.has(key)) return pending.get(key);
-  const request = api.get(`/api/project-tracking/earnings-dashboard/${month}`)
+  const request = api.get(`/api/project-tracking/earnings-dashboard/${month}${projectsOnly ? "?projects_only=true" : ""}`)
     .then(result => {
       const validated = validateBackendEarningsSnapshot(result, month, todayKey);
       if (!validated) throw new Error("Invalid backend earnings dashboard response");
@@ -43,18 +43,19 @@ export async function prefetchBackendEarningsDashboard(userId, month, isCurrent 
  * Account-specific session preview followed by backend revalidation.
  * No local earnings formula, cached figure writeback, or invented $0.
  */
-export function useBackendEarningsDashboard(month) {
+export function useBackendEarningsDashboard(month, projectsOnly = false) {
   const { user } = useAuth();
   const userId = user?.id;
+  const cacheUserId = projectsOnly && userId != null ? String(userId) + ":projects-only" : userId;
   const [state, setState] = useState(() => {
-    const saved = readBackendEarningsCache(userId, month, getTodayKey());
+    const saved = readBackendEarningsCache(cacheUserId, month, getTodayKey());
     return { userId, month, todayKey: getTodayKey(), data: saved?.data || null,
       cachedAt: saved?.cachedAt || 0, isCached: Boolean(saved), error: null };
   });
 
   useEffect(() => {
     const todayKey = getTodayKey();
-    const saved = readBackendEarningsCache(userId, month, todayKey);
+    const saved = readBackendEarningsCache(cacheUserId, month, todayKey);
     setState({ userId, month, todayKey, data: saved?.data || null,
       cachedAt: saved?.cachedAt || 0, isCached: Boolean(saved), error: null });
     if (userId == null || !/^\d{4}-\d{2}$/.test(String(month))) return;
@@ -69,9 +70,9 @@ export function useBackendEarningsDashboard(month) {
           todayKey: requestingDay, data: null, isCached: false, cachedAt: 0 }));
       }
       try {
-        const data = await fetchBackendEarnings(userId, month, requestingDay);
+        const data = await fetchBackendEarnings(userId, month, requestingDay, projectsOnly);
         if (!active || requestingDay !== getTodayKey()) return;
-        const savedResult = writeBackendEarningsCache(userId, month, data);
+        const savedResult = writeBackendEarningsCache(cacheUserId, month, data);
         if (active) setState({ userId, month, todayKey: requestingDay,
           data: savedResult?.data || data, cachedAt: savedResult?.cachedAt || Date.now(),
           isCached: Boolean(savedResult && Date.parse(savedResult.data.calculatedAt) >
@@ -96,7 +97,7 @@ export function useBackendEarningsDashboard(month) {
       window.removeEventListener("focus", visible);
       document.removeEventListener("visibilitychange", visible);
     };
-  }, [userId, month]);
+  }, [userId, month, projectsOnly, cacheUserId]);
 
   const todayKey = getTodayKey();
   const current = userId != null && String(state.userId) === String(userId) &&
