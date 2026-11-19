@@ -30,7 +30,7 @@ import DividendIncomeSection from "@/components/DividendIncomeSection";
 import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { CircleDollarSign, X } from "lucide-react";
+import { CircleDollarSign, X, ChevronRight } from "lucide-react";
 import {
   readObject,
   saveObject,
@@ -60,6 +60,7 @@ import {
   getPrivateAccountingProfile
 } from "@/lib/yieldFarmingAccounting";
 import {
+  ProjectLogoButton,
   KryptexProjectCard,
   getProjectProjections,
   ProjectCard,
@@ -68,6 +69,42 @@ import {
   RollerCoinProjectCard,
   ProjectIncomeSection
 } from "@/components/YieldFarmingComponents";
+
+function RentalsProjectCard({ todayUsd, monthUsd, logo, onLogoChange }) {
+  const [expanded, setExpanded] = useState(false);
+  const format = value => value == null || !Number.isFinite(Number(value)) ? "—" : "$" + Number(value).toFixed(4);
+  const hasEvidence = monthUsd != null || todayUsd != null;
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/60 bg-[#13181e] shadow-sm transition-all duration-200 hover:border-border hover:bg-[#171d24]">
+      <div className="flex w-full min-w-0 items-start gap-2 px-3.5 py-2.5">
+        <ProjectLogoButton platform="Rentals" logo={logo} onLogoChange={onLogoChange}/>
+        <button type="button" onClick={() => setExpanded(true)} className="flex min-w-0 flex-1 items-start gap-2 text-left" aria-label="Rentals project details">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-1">
+              <span className="min-w-0 truncate text-[12px] font-semibold">Rentals</span>
+              <span className={`shrink-0 text-[9px] ${hasEvidence ? "text-emerald-400" : "text-amber-300"}`}>● {hasEvidence ? "Tracked" : "Pending"}</span>
+            </div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{format(monthUsd)}</div>
+          </div>
+          <ChevronRight className="mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground"/>
+        </button>
+      </div>
+      <Dialog open={expanded} onOpenChange={setExpanded}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>Rentals</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            {[["Today's earnings", todayUsd], ["This month's earnings", monthUsd]].map(([label, value]) => (
+              <div key={label} className="rounded-xl border border-border/50 px-4 py-3">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</div>
+                <div className="mt-1 text-lg font-semibold tabular-nums">{format(value)}</div>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 
 export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const {
@@ -1949,14 +1986,12 @@ const summary =
               ) => {
 
 if (item.type === "rentals") return (
-  <div key={item.key} className="rounded-xl border border-[#242b33] bg-[#11161c] p-3">
-    <div className="text-sm font-semibold">Rentals</div>
-    <div className="mt-2 text-[11px] text-muted-foreground">Today's mining earnings</div>
-    <div className="text-lg font-semibold text-emerald-400">{backendEarnings?.todaySources?.Rentals == null ? "—" : "$" + Number(backendEarnings.todaySources.Rentals).toFixed(4)}</div>
-    <div className="mt-2 text-[11px] text-muted-foreground">This month</div>
-    <div className="text-sm font-medium">{backendEarnings?.monthlySources?.Rentals == null ? "—" : "$" + Number(backendEarnings.monthlySources.Rentals).toFixed(4)}</div>
-    <div className="mt-2 text-[10px] text-muted-foreground">Nosana workers · shared Kryptex wallet</div>
-  </div>
+  <RentalsProjectCard key={item.key}
+    todayUsd={backendEarnings?.todaySources?.Rentals}
+    monthUsd={backendEarnings?.monthlySources?.Rentals}
+    logo={projectLogos["rentals-project"] || ""}
+    onLogoChange={value => setProjectLogo("rentals-project", value)}
+  />
 );
 if (item.type === "bixberry") return <BixberryCard key={item.key} tracker={bixberryTracker} logo={projectLogos["bixberry-project"] || ""} onLogoChange={value => setProjectLogo("bixberry-project", value)} todayUsd={displayDailySourceTotals["Bixberry"]} />;
 
