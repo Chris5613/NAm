@@ -155,6 +155,32 @@ def reconcile_kryptex_rewards(tracker, earnings, received_at=None):
         "kryptexLastChartSyncAt": chart_sync,
         "kryptexActualChartCaptureAt": chart_sync if isinstance(captured, str) else tracker.get("kryptexActualChartCaptureAt"),
     }
+    # Worker evidence is separate from account revenue. Only attribute a
+    # complete positive day whose worker totals match already credited sats.
+    # Never add worker income on top of the account-wide reward.
+    worker_chart = incoming.get("worker_chart")
+    splits = dict(tracker.get("kryptexRentalAttributionDaily") or {})
+    if isinstance(worker_chart, dict) and isinstance(worker_chart.get("workers"), dict):
+        workers = worker_chart["workers"]
+        if 0 < len(workers) <= 100 and all(isinstance(w, dict) and isinstance(w.get("daily_sats"), dict) for w in workers.values()):
+            for day, total in credited_sats.items():
+                if not _valid_day(day, today) or not confirmed.get(day) or not (_amount(total) or 0) > 0:
+                    continue
+                amounts = {name: _amount(w["daily_sats"].get(day)) for name, w in workers.items()}
+                if any(v is None for v in amounts.values()):
+                    continue
+                if abs(sum(amounts.values()) - total) > max(.000001, total * 1e-8):
+                    continue
+                rental = sum(v for name, v in amounts.items() if re.fullmatch(r"(?:Rentals[^ ]*|Auto[345]\\d{3}_[a-f0-9]+)", name, re.I))
+                if rental <= 0:
+                    continue
+                previous = splits.get(day) or {}
+                if rental < (_amount(previous.get("rentalSats")) or 0):
+                    continue
+                splits[day] = {"rentalSats": rental, "accountSats": total,
+                               "rentalUsd": round(recorded[day] * rental / total, 8),
+                               "workers": amounts, "capturedAt": worker_chart.get("captured_at")}
+    result["kryptexRentalAttributionDaily"] = splits
     if lifetime is not None or after > before:
         result["lifetimeEarnedUsd"] = round(next_lifetime, 8)
     return result
