@@ -18,7 +18,6 @@ import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { useRegisteredYieldWallets } from "@/hooks/useRegisteredYieldWallets";
 import { useBackendLoopscaleHistory } from "@/hooks/useBackendLoopscaleHistory";
 import { useInactiveYieldProjects } from "@/hooks/useInactiveYieldProjects";
-import { useStockDividendPayouts } from "@/hooks/useStockDividendPayouts";
 import { useYieldPersistence } from "@/hooks/useYieldPersistence";
 import { api } from "@/lib/apiClient";
 import { toast } from "sonner";
@@ -26,7 +25,6 @@ import { useBackendProviderStats } from "@/hooks/useBackendProviderStats";
 import { currentLuloUtcDaily } from "@/lib/luloUtcDaily";
 import { useLegacyLuloMonthlyAccounting } from "@/hooks/useLegacyLuloMonthlyAccounting";
 import { Card, CardContent } from "@/components/ui/card";
-import DividendIncomeSection from "@/components/DividendIncomeSection";
 import { Area, AreaChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -107,17 +105,6 @@ function RentalsProjectCard({ todayUsd, monthUsd, logo, onLogoChange }) {
 }
 
 export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
-  const {
-    stockPayouts,
-    recordStockPayout,
-    removeStockPayout,
-    restoreStockPayout,
-    recordAnnouncedStockPayouts,
-  } = useStockDividendPayouts();
-  const [estimatedStockDividendsAnnual, setEstimatedStockDividendsAnnual] = useState(null);
-  const updateStockDividendEstimate = useCallback(value => {
-    setEstimatedStockDividendsAnnual(previous => previous === value ? previous : value);
-  }, []);
   const [
     manualPositions,
     setManualPositions,
@@ -975,7 +962,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // earnings dashboard response. Other accounting screens may still request
   // the independent source-income-history endpoint.
   const { data: backendEarnings, error: backendEarningsError } =
-    useBackendEarningsDashboard(getTodayKey().slice(0, 7));
+    useBackendEarningsDashboard(getTodayKey().slice(0, 7), true);
   const sourceIncomeMonths = backendEarnings?.incomeHistory?.months;
   const projectIncome = useMemo(
     () => backendYieldIncomeRows(sourceIncomeMonths), [sourceIncomeMonths]
@@ -1207,7 +1194,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     saladTracker,
     rollerCoinTracker,
     earningsLedger,
-    stockPayouts,
+    stockPayouts: {},
     loopscaleHistory,
     recoveredEarningsByDay,
     projectRecovery,
@@ -1301,9 +1288,6 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     todayKey.slice(0, 4),
     ...chartProjectIncome
       .map(month => String(month?.monthKey || "").slice(0, 4))
-      .filter(year => /^\d{4}$/.test(year)),
-    ...Object.values(stockPayouts || {})
-      .map(payout => String(payout?.date || "").slice(0, 4))
       .filter(year => /^\d{4}$/.test(year)),
   ])].sort((a, b) => b.localeCompare(a));
 
@@ -1947,17 +1931,7 @@ const summary =
         </section>
       </div>
 
-      <div className="grid items-stretch gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
-        <div className="h-full [&>section]:h-full">
-        <DividendIncomeSection
-          onEstimateChange={updateStockDividendEstimate}
-          payouts={stockPayouts}
-          onRecordPayout={recordStockPayout}
-          onRemovePayout={removeStockPayout}
-          onRestorePayout={restoreStockPayout}
-          onAnnouncedPayouts={recordAnnouncedStockPayouts}
-        />
-        </div>
+      <div className="grid gap-3">
       <section className="h-full min-w-0 space-y-2 rounded-2xl border border-[#242b33] bg-[#0d1014] p-2.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <h2 className="text-[15px] font-semibold">Projects ({activeProgramCards.length})</h2>
