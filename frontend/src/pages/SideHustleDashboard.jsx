@@ -417,7 +417,7 @@ export default function SideHustleDashboard() {
         </div>
 
 
-        <div className="mt-3 space-y-2">
+        <div className="mt-3 grid grid-cols-1 gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))]">
           {hardware.slice(0, 4).map(row => {
             const name = String(row.name || "");
             const lowerName = name.toLowerCase();
@@ -443,41 +443,44 @@ export default function SideHustleDashboard() {
               title="Click to edit hardware and income sources"
               onClick={()=>openHardwareEditor(row)}
               onKeyDown={event=>{if(event.key==="Enter"||event.key===" "){event.preventDefault();openHardwareEditor(row);}}}
-              className="min-w-0 cursor-pointer rounded-xl border border-[#202a33] bg-[linear-gradient(180deg,#10151a_0%,#0d1217_100%)] p-3 transition-colors hover:border-emerald-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
+              className="flex h-full min-w-0 cursor-pointer flex-col rounded-xl border border-[#202a33] bg-[linear-gradient(180deg,#10151a_0%,#0d1217_100%)] p-3 transition-colors hover:border-emerald-500/50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-400"
             >
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-14 w-24 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-[#26313b] bg-[#0a0e12] sm:h-12 sm:w-28">
+              <div className="flex min-w-0 flex-col gap-2">
+                <div className="relative flex min-w-0 items-start gap-2">
+                <div className="flex h-20 min-w-0 flex-1 items-center justify-center overflow-hidden rounded-lg border border-[#26313b] bg-[#0a0e12]">
                   <img src={hardwareImageFor(row)} alt={row.name + " hardware"}
                     className="h-full w-full object-contain px-1"/>
+                </div>
+                <span className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-emerald-400">
+                  {cost != null && progress != null ? percent(progress) : "—"}
+                </span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="break-words text-[12px] font-semibold text-[#eef2f6]">{row.name}</p>
                   <p className="mt-0.5 text-[9px] uppercase tracking-[0.13em] text-[#7f8b97]">{selectedSources.join(" · ") || meta?.brand || "Hardware"}</p>
                   {row.earningsStartDay && <p className="mt-1 text-[10px] text-sky-300">Earnings since {row.earningsStartDay}</p>}
                 </div>
-                <span className="inline-flex shrink-0 items-center justify-center rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2.5 py-1 text-[11px] font-semibold tabular-nums text-emerald-400">
-                  {cost != null && progress != null ? percent(progress) : "—"}
-                </span>
+
               </div>
-              <div className="mt-3 grid grid-cols-3 gap-2 border-t border-[#25313c] pt-3">
-                <div className="min-w-0">
-                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-amber-400 sm:text-[13px]">{cost == null ? "—" : money(cost)}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Amount Spent</p>
+              <div className="mt-3 flex flex-1 flex-col divide-y divide-[#25313c] border-t border-[#25313c]">
+                <div className="flex min-w-0 flex-col-reverse gap-1 py-2.5">
+                  <strong className="block break-words text-[16px] font-semibold tabular-nums text-amber-400 ">{cost == null ? "—" : money(cost)}</strong>
+                  <p className="text-[10px] leading-tight text-[#8fa0ad]">Amount Spent</p>
                 </div>
-                <div className="min-w-0">
-                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]">{recovered == null ? "—" : money(recovered)}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">Earned so far</p>
+                <div className="flex min-w-0 flex-col-reverse gap-1 py-2.5">
+                  <strong className="block break-words text-[16px] font-semibold tabular-nums text-[#eef2f6] ">{recovered == null ? "—" : money(recovered)}</strong>
+                  <p className="text-[10px] leading-tight text-[#8fa0ad]">Earned so far</p>
                 </div>
-                <div className="min-w-0 text-right">
-                  <strong className="block whitespace-nowrap text-[12px] font-semibold tabular-nums text-[#eef2f6] sm:text-[13px]" title={verified?.estimatedDailyCreditUsd != null
+                <div className="flex min-w-0 flex-col-reverse gap-1 py-2.5">
+                  <strong className="block break-words text-[16px] font-semibold tabular-nums text-[#eef2f6] " title={verified?.estimatedDailyCreditUsd != null
                     ? `${verified.forecastBasis==="blend-70pct-7day-30pct-live-kryptex" ? "70% 7-day average + 30% live Kryptex estimate" : "7-day observed average (live Kryptex unavailable)"}: ${money(verified.estimatedDailyCreditUsd)}/day · ${verified.estimatedDaysRemaining ?? "?"} days remaining`
                     : "No reliable estimate available yet"}>{payoffLabel}</strong>
-                  <p className="mt-1 text-[10px] leading-tight text-[#8fa0ad]">{verified?.forecastPartial && payoffLabel !== "—" && payoffLabel !== "Recovered" ? "Est. payback · partial data" : "Estimated payback time"}</p>
+                  <p className="text-[10px] leading-tight text-[#8fa0ad]">{verified?.forecastPartial && payoffLabel !== "—" && payoffLabel !== "Recovered" ? "Est. payback · partial data" : "Estimated payback time"}</p>
                 </div>
               </div>
             </div>;
           })}
-          {!hardware.length && <p className="rounded-xl border border-dashed border-[#2a343e] py-8 text-center text-xs text-[#778491]">No hardware tracked yet.</p>}
+          {!hardware.length && <p className="col-span-full rounded-xl border border-dashed border-[#2a343e] py-8 text-center text-xs text-[#778491]">No hardware tracked yet.</p>}
         </div>
       </section>
       <section className={panel + " min-h-[210px] min-w-0 overflow-hidden px-4 pb-3 pt-3.5"}>
