@@ -82,6 +82,7 @@ export async function applyKryptexExtensionPayload(payload) {
   const signature = JSON.stringify([
     syncedAt, payload.reachable, earnings.captured_at || null,
     earnings.daily_sats || {}, earnings.daily_usd || {},
+    earnings.worker_chart || null,
   ]);
   if (appliedPayloads.get(machineKey) === signature) {
     return { applied: false, reason: "already_applied" };
