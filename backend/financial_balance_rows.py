@@ -303,7 +303,7 @@ def with_journal_equipment(base_rows, journal, month, locked=False):
         # A legacy journal description can still name the whole RTX 2080
         # PC after it was split. Match its component cost only when there is
         # exactly one component with that amount in the acquisition month.
-        if not candidates and re.search(r"2080|pcbase", cleaned):
+        if re.search(r"2080|pcbase", cleaned):
             components = [
                 row for row in rows if row.get("source") == "hardware-payback"
                 and row.get("acquisitionMonth") == date_str[:7]
