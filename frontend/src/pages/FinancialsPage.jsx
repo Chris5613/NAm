@@ -131,13 +131,6 @@ export default function FinancialsPage() {
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
-  // Short-lived connection failures are common while session data hydrates.
-  // Do not flash an outage warning during the initial backend handshake.
-  const [showInitialLoadError, setShowInitialLoadError] = useState(false);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setShowInitialLoadError(true), 7000);
-    return () => window.clearTimeout(timer);
-  }, []);
   useEffect(() => subscribe(() => {
     setRecords(readJson(RECORDS_KEY, {}));
     setJournal(readJson(JOURNAL_KEY, []));
@@ -559,24 +552,39 @@ export default function FinancialsPage() {
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
     <th className="pb-3">Account</th><th className="pb-3 text-right">Start</th><th className="pb-3 text-right">Change</th><th className="pb-3 text-right">End</th>
   </tr></thead>;
-  if (!completeReport) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
-    <h1 className="text-2xl font-semibold">Financials</h1>
-
-    <p role="status" className="rounded-xl border border-[#293e4d] p-5 text-sm text-[#a9c4d2]">
-      {!showInitialLoadError
-        ? "Loading backend financial statements…"
-        : liveError
-        ? "Backend provider balances unavailable. Previous saved financial records remain untouched."
-        : backendBalanceRows.error
-        ? "Backend asset rows unavailable. Saved equipment, journal records, and balances were not changed."
-        : trialState.error
-        ? "Backend trial balance unavailable. Saved ledger entries remain unchanged."
-        : currentLedgerState.error
-        ? "Backend General Ledger assembly unavailable. Saved journal entries and month closes were not changed."
-        : serverFinancialState?.error
-        ? "Backend financial statements unavailable. Saved journal entries, month closes, and account balances were not changed."
-        : "Loading backend financial statements…"}
-    </p>
+  // Keep Financials navigation available while the authenticated backend
+  // computes verified figures in the background. Never invent zero balances.
+  if (!completeReport) return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page" aria-busy="true">
+    <nav aria-label="Financials sections" className="flex flex-wrap gap-2 rounded-xl border border-[#242b33] bg-[#0d1014] p-2">
+      {tabs.map(({ id, name }) => <button key={id} type="button"
+        onClick={() => setTab(id)} aria-pressed={tab === id}
+        className={`rounded-lg px-3 py-2 text-xs ${tab === id ? "bg-[#182633] text-white" : "text-[#9dafc0]"}`}>
+        {name}
+      </button>)}
+    </nav>
+    <div className="flex items-center justify-between gap-3">
+      <h1 className="text-lg font-semibold">{tabs.find(item => item.id === tab)?.name || "Financials"}</h1>
+      <div className="flex items-center gap-2">
+        <button type="button" aria-label="Previous month" disabled={month <= "2026-01"}
+          onClick={() => setMonth(value => shift(value,-1))}
+          className="rounded-md px-2 py-1 text-[#9dafc0] disabled:opacity-30">‹</button>
+        <span className="text-xs text-[#aab9c6]">{monthTitle(month)}</span>
+        <button type="button" aria-label="Next month" disabled={month >= getCurrentMonthKey()}
+          onClick={() => setMonth(value => shift(value,1))}
+          className="rounded-md px-2 py-1 text-[#9dafc0] disabled:opacity-30">›</button>
+      </div>
+    </div>
+    <section aria-label="Financial values awaiting verification" className="grid gap-3 sm:grid-cols-3">
+      {["Opening", "Movement", "Closing"].map(label => <div key={label}
+        className="rounded-xl border border-[#263342] bg-[#0b1017] p-4">
+        <p className="text-xs text-[#9db0c1]">{label}</p>
+        <p className="mt-3 text-xl text-[#8fa3b4]">—</p>
+      </div>)}
+    </section>
+    {(liveError || backendBalanceRows.error || currentLedgerState.error ||
+      serverFinancialState.error) && <p role="status" className="text-xs text-[#91a2b1]">
+      Financial data temporarily unavailable; saved records are unchanged.
+    </p>}
   </div>;
   return <div className="min-w-0 space-y-4 pb-8 text-white" data-testid="financials-page">
     <div className="flex min-w-0 items-center gap-3">
