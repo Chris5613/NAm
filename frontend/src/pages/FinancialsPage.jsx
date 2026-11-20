@@ -1,6 +1,6 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Send, Sparkles, Trash2, TrendingUp, Wallet, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe, refreshSetting } from "@/lib/serverStore";
 import { preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
 import { useBackendFinancialLiveBalances } from "@/hooks/useBackendFinancialLiveBalances";
@@ -16,9 +16,8 @@ import { financialCacheKey, readFinancialCache, requestFinancialCache } from "@/
 
 
 import { visibleLedgerEntries } from "@/lib/financialAutoJournal";
-import { resolveFinancialAccount } from "@/lib/financialMovements";
 import { balanceAliasKey, balanceAccountId, balanceDisplayName, chartDisplayName, cleanAccountLabels, equipmentEntryDisplayName, journalDisplayDescription, showBalanceSheetRow } from "@/lib/financialAccountNames";
-import { unmatchedEquipmentPurchases, moneyRound, valueOrNull } from "@/lib/financialAccounting";
+import { moneyRound, valueOrNull } from "@/lib/financialAccounting";
 import { hasFreeMiningPower } from "@/lib/powerOutOfPocket";
 import { isFinancialMonthProtected } from "@/lib/financialMonthWriteGuard";
 import { validateCompoundEntry, journalActivity } from "@/lib/compoundJournal";
@@ -104,109 +103,12 @@ const validLedgerDate = raw => {
   return Number.isFinite(value.getTime()) && value.toISOString().slice(0, 10) === raw;
 };
 
-// A conservative local interpreter: only recognize supported, explicit
-// transaction patterns. Unclear text never posts directly to the ledger.
-function parseTransaction(text, month) {
-  const input = String(text || "").trim();
-  if (!input) return { error: "Describe a transaction first." };
-  const phrase = input.toLowerCase();
-
-  // Accept "$500", "500 USD", or an amount after an action ("paid 500").
-  // Never mistake model numbers like "RTX 2080" or a date like "Nov 5th"
-  // for a transaction amount.
-  const explicitAmounts = [...input.matchAll(/(?:\$\s*([\d,]+(?:\.\d{1,2})?)|\b([\d,]+(?:\.\d{1,2})?)\s*USD\b)/gi)];
-  const actionAmounts = [...input.matchAll(/\b(?:paid|spent|bought|purchased|received|earned|deposited|contributed|transferred|withdrew|withdrawn|moved|sent)\s+(?:about\s+|approximately\s+)?([\d,]+(?:\.\d{1,2})?)\b/gi)];
-  const values = explicitAmounts.length
-    ? explicitAmounts.map(match => match[1] || match[2])
-    : actionAmounts.map(match => match[1]);
-  if (values.length !== 1) {
-    return { error: "Include one purchase or payment amount, such as 'Paid 500 for RTX 2080 Super PC Nov 5th'." };
-  }
-  const value = Number(values[0].replace(/,/g, ""));
-  if (!Number.isFinite(value) || value <= 0 || rounded(value) <= 0)
-    return { error: "Enter a valid amount greater than $0." };
-
-  const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5)), 0)).getUTCDate();
-  let date = month === getCurrentMonthKey()
-    ? getTodayKey()
-    : month + "-" + String(lastDay).padStart(2, "0");
-
-  const monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"];
-  const namedDate = input.match(/\b(Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{4}))?\b/i);
-  const isoDate = input.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
-  if (namedDate || isoDate) {
-    const year = namedDate ? Number(namedDate[3] || month.slice(0, 4)) : Number(isoDate[1]);
-    const monthNumber = namedDate ? monthNames.indexOf(namedDate[1].slice(0, 3).toLowerCase()) + 1 : Number(isoDate[2]);
-    const day = Number(namedDate ? namedDate[2] : isoDate[3]);
-    const candidate = new Date(Date.UTC(year, monthNumber - 1, day));
-    if (candidate.getUTCFullYear() !== year || candidate.getUTCMonth() + 1 !== monthNumber || candidate.getUTCDate() !== day) {
-      return { error: "That transaction date is invalid. Please check the day and month." };
-    }
-    date = candidate.toISOString().slice(0, 10);
-  }
-
-  let debitAccount = "", creditAccount = "";
-  let explanation = "";
-  const expense = /electric|power (?:bill|cost|expense)|utility|utilities|energy bill|electricity bill/.test(phrase);
-  const paid = /\b(?:paid|spent|purchased|bought|payment|purchase)\b/.test(phrase);
-  const unpaid = /\b(?:unpaid|owe|owed|on credit|not yet paid|bill due)\b/.test(phrase);
-  const fromCash = /\b(?:cash|bank|checking|debit card)\b|from (?:my )?account/.test(phrase);
-  const fromCrypto = /bitcoin|\bbtc\b|crypto wallet/.test(phrase);
-  const personallyFunded = /\b(?:personal(?:ly)?|my own|own money|owner(?:'s)?)\b/.test(phrase);
-  const transfer = /\b(?:transferred|transfer|withdrew|withdrawn|withdrawal|moved|sent)\b/.test(phrase);
-  if (transfer) {
-    // Internal transfers move assets and are never additional revenue.
-    const from = phrase.match(/\bfrom\s+(?:my\s+)?(roller\s?coin|kryptex|salad|bixberry|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
-    const to = phrase.match(/\b(?:to|into)\s+(?:my\s+)?(roller\s?coin|kryptex|salad|bixberry|unetwork|unity network|lulo|loopscale|bitcoin|btc|crypto wallet|cash|checking|bank)\b/);
-    const assetAccount = match => resolveFinancialAccount(match?.[1]) || "";
-    debitAccount = assetAccount(to);
-    creditAccount = assetAccount(from);
-    if (!debitAccount || !creditAccount || debitAccount === creditAccount) {
-      return { error: "Specify different transfer accounts, e.g. 'Transferred $10 from RollerCoin to BTC'. Transfers within one pooled account require manual details." };
-    }
-    explanation = "Internal asset transfer — not revenue or an expense.";
-  } else if (expense && (paid || unpaid)) {
-    debitAccount = "electric";
-    creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
-    explanation = unpaid ? "Record an electricity bill owed." : "Record a paid electricity expense.";
-  } else if (/\b(?:pci[ -]?e|pcie|gpu power|psu|power supply|graphics card)\s*(?:power\s*)?(?:cables?|adapters?|connectors?|risers?)\b|\b(?:cables?|thermal paste|replacement fans?|mining supplies)\b/.test(phrase) && paid) {
-    debitAccount = "suppliesExpense";
-    creditAccount = unpaid ? "payable" : personallyFunded ? "equity" : fromCrypto ? "crypto" : "cash";
-    explanation = "Record a standalone cable, accessory, or supply as an operating expense.";
-  } else if (/gpu|graphics card|computer|\bpc\b|mining equipment|hardware/.test(phrase) && paid) {
-    debitAccount = "equipment";
-    creditAccount = unpaid ? "payable" : personallyFunded ? "equity" : fromCrypto ? "crypto" : "cash";
-    explanation = personallyFunded
-      ? "Personally funded equipment is an owner contribution, not a business bank withdrawal."
-      : "Record a capital equipment purchase, not an operating expense.";
-  } else if (/transaction fee|network fee|processing fee|bank fee/.test(phrase) && paid) {
-    debitAccount = "fees";
-    creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
-    explanation = "Record a transaction or network fee.";
-  } else if (/rent|internet|subscription|repair|fee|operating expense|supplies/.test(phrase) && paid) {
-    debitAccount = "expense";
-    creditAccount = unpaid ? "payable" : fromCrypto ? "crypto" : "cash";
-    explanation = "Record an operating expense.";
-  } else if (/received|earned|income|revenue|payout/.test(phrase) && /mining|kryptex|rollercoin|salad|bixberry|unetwork|yield|lulo|loopscale|payment|payout/.test(phrase)) {
-    debitAccount = fromCash ? "cash" : fromCrypto ? "crypto" : "platform";
-    creditAccount = "revenue";
-    explanation = "Record earned revenue; ensure the provider has not already been recorded.";
-  } else if (/contribut|deposited|put.*into (?:the )?business/.test(phrase) && /owner|personal|business/.test(phrase)) {
-    debitAccount = "cash"; creditAccount = "equity";
-    explanation = "Record an owner contribution, not business income.";
-  }
-  if (!debitAccount || !creditAccount) {
-    return { error: "I couldn't classify this safely. Use Add entry for transfers, withdrawals, debt payments, or anything unusual." };
-  }
-  return { date, description: input, amount: rounded(value), debitAccount, creditAccount, explanation };
-}
-
 export default function FinancialsPage() {
   const [tab, setTab] = useState("balance");
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
-  const { live, error: liveError, stale: liveStale, unauthorized: liveUnauthorized } = useBackendFinancialLiveBalances();
+  const { live, error: liveError, unauthorized: liveUnauthorized } = useBackendFinancialLiveBalances();
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [businessPhones, setBusinessPhones] = useState(readUnetworkPhones);
   const [phoneInventory, setPhoneInventory] = useState(readPhoneInventory);
@@ -229,11 +131,6 @@ export default function FinancialsPage() {
   const [editingEntryId, setEditingEntryId] = useState(null);
   const [draft, setDraft] = useState(emptyDraft);
   const [error, setError] = useState("");
-  const [quickModalOpen, setQuickModalOpen] = useState(false);
-  const [quickText, setQuickText] = useState("");
-  const [quickEntry, setQuickEntry] = useState(null);
-  const [quickError, setQuickError] = useState("");
-  const [quickStatus, setQuickStatus] = useState("");
   // Short-lived connection failures are common while session data hydrates.
   // Do not flash an outage warning during the initial backend handshake.
   const [showInitialLoadError, setShowInitialLoadError] = useState(false);
@@ -377,8 +274,6 @@ export default function FinancialsPage() {
     accounts: queryAccounts, ledger: currentLedgerState.data,
     statement: serverFinancialState.data, trial: trialState.result,
   };
-  const cachedReportOutOfDate = Boolean(lastCompleteReport.current &&
-    lastCompleteReport.current.scope !== reportScope);
   const completeReport = !unauthorized && lastCompleteReport.current?.month === month &&
     Date.now() - lastCompleteReport.current.at <= 300000 ? lastCompleteReport.current : null;
   const baseRows = completeReport?.baseRows || [];
@@ -386,16 +281,12 @@ export default function FinancialsPage() {
   const entries = completeReport?.ledger.entries || [];
   const syncedIncomeJournal = completeReport?.ledger.income || { entries: [] };
   const serverFinancial = completeReport?.statement;
-  const unpostedEquipment = unmatchedEquipmentPurchases(baseRows,ledgerEntries,month);
   const displayedLedgerEntries=visibleLedgerEntries(entries,month,getCurrentMonthKey());
   const hiddenSyncedIncomeCount=entries.length-displayedLedgerEntries.length;
   const ledgerVisibleDebit=moneyRound(displayedLedgerEntries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
   const ledgerVisibleCredit=moneyRound(displayedLedgerEntries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.credit||0),0),0));
-  const cachedFinancialWarning = Boolean(cachedReportOutOfDate || liveError ||
-    backendBalanceRows.error || currentLedgerState.error ||
-    serverFinancialState.error || trialState.error);
   const report = serverFinancial?.profit || {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
     depreciation: 0, expenses: 0, profit: 0,
@@ -462,10 +353,6 @@ export default function FinancialsPage() {
   const trial = completeReport?.trial.rows || [];
   const trialDebit = completeReport?.trial.debitsUsd ?? 0;
   const trialCredit = completeReport?.trial.creditsUsd ?? 0;
-  const refreshingCachedFinancials = Boolean(!freshComplete ||
-    liveStale || backendBalanceRows.stale || currentLedgerState.stale ||
-    serverFinancialState.stale || trialState.stale
-  );
   const cashFlow = serverFinancial?.cashFlow || {
     sections: { operating: [], investing: [], financing: [], transfers: [] },
     totals: { operating: 0, investing: 0, financing: 0, transfers: 0 },
@@ -577,57 +464,6 @@ export default function FinancialsPage() {
       : [...journal,updatedEntry];
     remoteStorage.setItem(JOURNAL_KEY,JSON.stringify(updated));
     setJournal(updated); setMonth(draft.date.slice(0,7));setDraft(emptyDraft());setEditingEntryId(null);setError("");setModal(false);
-  };
-  const prepareQuickEntry = event => {
-    event.preventDefault();
-    setQuickStatus("");
-    const result = parseTransaction(quickText, month);
-    if (result.error) {
-      setQuickEntry(null);
-      setQuickError(result.error);
-    } else {
-      setQuickError("");
-      setQuickEntry(result);
-    }
-  };
-  const confirmQuickEntry = () => {
-    if (!quickEntry) return;
-    if (protectedMonth(String(quickEntry.date).slice(0, 7))) {
-      setQuickError("This month is locked or closed. Unlock it before posting.");
-      return;
-    }
-    if (!quickEntry.description.trim() || !validLedgerDate(quickEntry.date) ||
-      !Number.isFinite(quickEntry.amount) || quickEntry.amount <= 0 ||
-      !accounts.some(row=>row.id===quickEntry.debitAccount) ||
-      !accounts.some(row=>row.id===quickEntry.creditAccount) ||
-      quickEntry.debitAccount === quickEntry.creditAccount) {
-      setQuickError("Check the date, amount, and accounts before posting.");
-      return;
-    }
-    const updated = [...journal, {
-      id: "journal:" + Date.now() + ":" + Math.random().toString(36).slice(2, 7),
-      date: quickEntry.date, description: quickEntry.description,
-      amount: quickEntry.amount, debitAccount: quickEntry.debitAccount, creditAccount: quickEntry.creditAccount,
-      source: "quick-entry",
-    }];
-    remoteStorage.setItem(JOURNAL_KEY, JSON.stringify(updated));
-    setJournal(updated);
-    setMonth(quickEntry.date.slice(0, 7));
-    setQuickEntry(null);
-    setQuickText("");
-    setQuickError("");
-    setQuickStatus("Entry posted to your General Ledger and Trial Balance.");
-    setQuickModalOpen(false);
-  };
-  const reviewEquipmentPurchase = device => {
-    const amount=String(device.historicalCost || device.cost);
-    setEditingEntryId(null);
-    setDraft({date:"",description:"Purchase: "+device.name,lines:[
-      {account:"equipment",debit:amount,credit:""},{account:"",debit:"",credit:amount},
-    ]});
-    setTab("ledger");
-    setError("");
-    setModal(true);
   };
   const deleteEntry = id => {
     const original = journal.find(entry => entry.id === id);
@@ -809,10 +645,6 @@ export default function FinancialsPage() {
           reviewed before any formal close; missing values are never set to zero.
         </p>
       </details>}
-    {refreshingCachedFinancials && !cachedFinancialWarning && <p role="status"
-      className="px-1 text-[11px] text-[#8299aa]">
-      Showing previously verified figures while Financials refreshes.
-    </p>}
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
         {metric("Business Assets", assetsEnd, assetsEnd===null?"Some account balances are unverified":null, "text-sky-300")}
@@ -975,7 +807,6 @@ export default function FinancialsPage() {
         <button type="button" onClick={reopenSelectedMonth}
           className="rounded-lg border border-amber-500/40 px-3 py-1.5 text-xs font-semibold text-amber-300">Reopen month</button>
       </div>}
-      {quickStatus && <p role="status" className="text-sm text-emerald-400">{quickStatus}</p>}
       {syncedIncomeJournal.pendingReviewTotal > 0 && month >= LEGACY_LEDGER_CUTOFF && <div role="status" className="rounded-lg border border-amber-400/30 bg-amber-400/5 px-3 py-2 text-sm text-amber-300">
         <strong>{money(syncedIncomeJournal.pendingReviewTotal)} of tracked income needs reconciliation.</strong>
         <span className="block text-xs">Unallocated or unknown providers have not been posted as Other Platform Receivables or revenue. Verify their provider and account before recording them.</span>
@@ -1106,62 +937,6 @@ export default function FinancialsPage() {
           <button type="submit" className="rounded-lg bg-sky-400 px-4 py-2 text-sm font-semibold text-[#071824]">Save name</button>
         </div>
       </form>
-    </div>}
-    {quickModalOpen && <div className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-black/75 p-3 sm:p-5" onMouseDown={event => { if (event.target === event.currentTarget) setQuickModalOpen(false); }}>
-      <section className={card + " w-full max-w-2xl space-y-4 overflow-y-auto p-4 shadow-2xl sm:p-6"} data-testid="transaction-chat" role="dialog" aria-modal="true" aria-label="Describe a transaction">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2"><Sparkles size={17} className="text-cyan-400"/>
-            <h3 className="text-base font-semibold">Describe a transaction</h3></div>
-          <button type="button" aria-label="Close transaction popup" onClick={() => setQuickModalOpen(false)}
-            className="rounded-lg border border-[#34495c] p-2 text-[#a7bacb] hover:bg-white/[0.06] hover:text-white"><X size={17}/></button>
-        </div>
-        <p className="text-xs text-[#91a6b7]">Write what happened. I'll draft a journal entry for you to review before posting.</p>
-        <form onSubmit={prepareQuickEntry} className="flex flex-col gap-2 sm:flex-row">
-          <input aria-label="Describe a financial transaction" value={quickText}
-            onChange={event => { setQuickText(event.target.value); setQuickEntry(null); setQuickError(""); setQuickStatus(""); }}
-            placeholder="Transferred $25 from Kryptex to BTC"
-            className={field + " min-w-0 flex-1"} />
-          <button type="submit" className="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-sky-400 px-4 py-2 text-sm font-semibold text-[#071824] hover:bg-sky-300">
-            <Send size={15}/> Create draft
-          </button>
-        </form>
-        {quickError && <p role="alert" className="text-sm text-rose-400">{quickError}</p>}
-        {quickEntry && <div className="space-y-3 rounded-xl border border-[#355368] bg-[#111f2b] p-3 sm:p-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <strong className="text-sm text-white">Review journal entry</strong>
-            <span className="text-xs text-[#a1bacb]">{quickEntry.explanation}</span>
-          </div>
-          <label className="block space-y-1 text-xs text-[#a8bdce]">Transaction name / description
-            <input className={field} value={quickEntry.description} onChange={event => setQuickEntry(old => ({...old, description:event.target.value}))}/>
-          </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="space-y-1 text-xs text-[#a8bdce]">Date
-              <input type="date" className={field} value={quickEntry.date}
-                onChange={event => setQuickEntry(old => ({ ...old, date: event.target.value }))}/>
-            </label>
-            <label className="space-y-1 text-xs text-[#a8bdce]">Amount ($)
-              <input type="number" min="0.01" step="0.01" className={field} value={quickEntry.amount}
-                onChange={event => setQuickEntry(old => ({ ...old, amount: Number(event.target.value) }))}/>
-            </label>
-            {["debitAccount", "creditAccount"].map(key =>
-              <label key={key} className="space-y-1 text-xs text-[#a8bdce]">
-                {key === "debitAccount" ? "Debit" : "Credit"}
-                <select className={field} value={quickEntry[key]}
-                  onChange={event => setQuickEntry(old => ({ ...old, [key]: event.target.value }))}>
-                  <LedgerAccountOptions list={accounts}/>
-                </select>
-              </label>)}
-          </div>
-          <div className="flex items-center justify-between gap-2 border-t border-[#34485a] pt-3">
-            <span className="text-xs text-[#9bb2c3]">Debits and credits both equal {money(quickEntry.amount)}.</span>
-            <div className="flex gap-2">
-              <button type="button" onClick={() => setQuickEntry(null)} className="rounded-lg border border-[#3b5164] px-3 py-2 text-xs">Cancel</button>
-              <button type="button" onClick={confirmQuickEntry} className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-semibold text-[#061810]">Confirm & post</button>
-            </div>
-          </div>
-        </div>}
-        <p className="text-[11px] text-[#718b9e]">Recognizes common expenses, equipment purchases, transfers, owner contributions, and income. It drafts accounting entries only; it never moves funds or calls an AI service.</p>
-      </section>
     </div>}
     {modal && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" onMouseDown={event=>{if(event.target===event.currentTarget)setModal(false);}}>
       <form onSubmit={saveEntry} className={card + " w-full max-w-2xl max-h-[90vh] space-y-4 overflow-y-auto p-5 shadow-2xl"} role="dialog" aria-modal="true" aria-label={editingEntryId ? "Edit journal entry" : "Add journal entry"}>
