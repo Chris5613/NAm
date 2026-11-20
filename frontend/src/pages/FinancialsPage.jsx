@@ -848,7 +848,12 @@ export default function FinancialsPage() {
           <tr className="font-bold"><td colSpan={2} className="py-3">{hiddenSyncedIncomeCount ? "Visible total" : "Total"}</td><td className="text-right">{money(ledgerVisibleDebit)}</td><td className="text-right">{money(ledgerVisibleCredit)}</td><td/></tr>
         </tbody></table></div>{!displayedLedgerEntries.length && <p className="py-5 text-sm text-[#8397a9]">No journal entries visible this month.</p>}</section>
     </>}
-    {tab === "trial" && <>
+    {tab === "trial" && (!trialResult ? (
+      <p role="status" className="px-1 py-4 text-sm text-[#9db0c1]">
+        {trialState.error ? "Trial Balance temporarily unavailable; no amounts have been changed." :
+          "Calculating the historical Trial Balance…"}
+      </p>
+    ) : <>
       <div className="grid gap-3 sm:grid-cols-3">{metric("Debits", trialDebit)}{metric("Credits", trialCredit)}{metric("Difference", rounded(trialDebit-trialCredit), "Journal entries only", "text-emerald-400")}</div>
       <section className={card + " p-4 sm:p-6"}><h2 className="text-lg font-semibold">Trial Balance — {monthTitle(month)}</h2>
 
@@ -857,7 +862,7 @@ export default function FinancialsPage() {
           <tbody>{trial.map(row => <tr key={row.id} className="border-b border-[#243340]"><td className="py-2">{accountName(row)}</td><td className="text-right">{row.debit ? money(row.debit) : "—"}</td><td className="text-right">{row.credit ? money(row.credit) : "—"}</td></tr>)}
             <tr className="font-bold"><td className="py-3">Total</td><td className="text-right">{money(trialDebit)}</td><td className="text-right">{money(trialCredit)}</td></tr>
           </tbody></table></div></section>
-    </>}
+    </>)}
     {phoneModal && <div className="fixed inset-0 z-[95] flex items-center justify-center overflow-y-auto bg-black/80 p-4"
       onMouseDown={event=>{if(event.target===event.currentTarget)setPhoneModal(false);}}>
       <form onSubmit={addPhoneToFinancials} role="dialog" aria-modal="true"
