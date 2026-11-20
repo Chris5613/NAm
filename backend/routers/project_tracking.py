@@ -1197,7 +1197,16 @@ async def source_owned_home_business(
         Setting.user_id == user.id, Setting.key.in_(keys)
     )).all()
     source = {row.key: row.value for row in rows}
-    valuation = await bitcoin_valuation(response, user, db)
+    # The Financials page must not wait for an external BTC price request.
+    # Use authenticated, previously observed wallet quantities and their
+    # recorded quote. An unavailable quote stays unknown (never $0).
+    now = datetime.now(timezone.utc)
+    wallets = db.scalars(select(Wallet).where(Wallet.user_id == user.id)).all()
+    wallet_cache = setting(db, user.id, "crypto_wallet_balance_cache")
+    evidence = wallet_evidence(wallets, wallet_cache, now)
+    valuation = combine_crypto_valuation(
+        evidence, None, user_id=user.id, now=now
+    )
     btc = valuation.get("bitcoin") or {}
     result = home_business_snapshot(source, month, btc.get("valueUsd"))
     response.headers["Cache-Control"] = "private, no-store"
