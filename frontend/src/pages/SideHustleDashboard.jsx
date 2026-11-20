@@ -418,7 +418,19 @@ export default function SideHustleDashboard() {
 
 
         <div className="mt-3 grid grid-cols-1 gap-2 [grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr))]">
-          {hardware.slice(0, 4).map(row => {
+          {[...hardware].sort((a, b) => {
+            const rank = device => {
+              const result = backendHardwareRows.get(String(device.id));
+              const remaining = Number(result?.observedRemainingUsd);
+              const days = Number(result?.estimatedDaysRemaining);
+              if (result?.observedRemainingUsd != null && Number.isFinite(remaining) && remaining <= 0) return 0;
+              return result?.estimatedDaysRemaining != null && Number.isFinite(days) && days >= 0
+                ? days : Number.POSITIVE_INFINITY;
+            };
+            const difference = rank(a) - rank(b);
+            return Number.isNaN(difference) || difference === 0
+              ? String(a.name || "").localeCompare(String(b.name || "")) : difference;
+          }).slice(0, 4).map(row => {
             const name = String(row.name || "");
             const lowerName = name.toLowerCase();
             const meta = lowerName.includes("2080")
