@@ -528,6 +528,30 @@ export default function FinancialsPage() {
     setJournal(updatedJournal);
     setPhoneError("");
   };
+  const editEntry = entry => {
+    const original = journal.find(row => row.id === entry?.id);
+    if (!original || entry?.automatic || protectedMonth(String(original.date).slice(0, 7))) return;
+    const lines = Array.isArray(original.lines) && original.lines.length
+      ? original.lines
+      : original.debitAccount && original.creditAccount
+        ? [
+            { account: original.debitAccount, debit: original.amount, credit: "" },
+            { account: original.creditAccount, debit: "", credit: original.amount },
+          ]
+        : [];
+    setEditingEntryId(original.id);
+    setDraft({
+      date: String(original.date || "").slice(0, 10),
+      description: String(original.description || ""),
+      lines: lines.map(row => ({
+        account: String(row.account || ""),
+        debit: Number(row.debit) > 0 ? String(row.debit) : "",
+        credit: Number(row.credit) > 0 ? String(row.credit) : "",
+      })),
+    });
+    setError("");
+    setModal(true);
+  };
   const saveEntry = event => {
     event.preventDefault();
     const original = editingEntryId ? journal.find(entry=>entry.id===editingEntryId) : null;
