@@ -254,9 +254,11 @@ export default function FinancialsPage() {
   const serverFinancialState = useBackendFinancialCore(
     month, queryEntries, queryEntries ? backendBalanceRows.rows || null : null,
     hardwareDevices, savedExpenses);
+  // Trial Balance is an independent historical report. Do not block the
+  // Balance Sheet, General Ledger, Income Statement or Cash Flow on it.
   const trialState = useBackendTrialBalance({
     month, currentEntries: queryEntries, accounts: queryAccounts,
-  });
+  }, tab === "trial");
   // A live source update invalidates the exact query chain.
   // Retain the last verified same-month report as a clearly labeled stale
   // preview while an edit or temporary backend outage is recalculating.
@@ -267,7 +269,7 @@ export default function FinancialsPage() {
   const unauthorized = [backendBalanceRows, currentLedgerState, serverFinancialState,
     trialState].some(state => state?.unauthorized) || Boolean(liveUnauthorized);
   const freshComplete = Boolean(live && backendBalanceRows.rows &&
-    currentLedgerState.data && serverFinancialState.data && trialState.result);
+    currentLedgerState.data && serverFinancialState.data);
   if (unauthorized) lastCompleteReport.current = null;
   else if (freshComplete) lastCompleteReport.current = {
     scope: reportScope, month, at: Date.now(), baseRows: backendBalanceRows.rows,
@@ -350,9 +352,10 @@ export default function FinancialsPage() {
   // external account balances are still not invented.
   // Previous-month journal assembly, income and fixed-asset adjustments
   // now run in the backend, including the opening phone adjustment.
-  const trial = completeReport?.trial.rows || [];
-  const trialDebit = completeReport?.trial.debitsUsd ?? 0;
-  const trialCredit = completeReport?.trial.creditsUsd ?? 0;
+  const trialResult = tab === "trial" ? trialState.result : null;
+  const trial = trialResult?.rows || [];
+  const trialDebit = trialResult?.debitsUsd ?? 0;
+  const trialCredit = trialResult?.creditsUsd ?? 0;
   const cashFlow = serverFinancial?.cashFlow || {
     sections: { operating: [], investing: [], financing: [], transfers: [] },
     totals: { operating: 0, investing: 0, financing: 0, transfers: 0 },
