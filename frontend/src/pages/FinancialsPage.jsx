@@ -86,8 +86,8 @@ function readHardwareRegister() {
   return Array.isArray(devices) ? devices : [];
 }
 const rounded = value => Math.round((Number(value) || 0) * 100) / 100;
-const money = value => value === null ? "—" : formatCurrency(value);
-const signed = value => value === null ? "—" : (value > 0 ? "+" : value < 0 ? "−" : "") + money(Math.abs(value));
+const money = value => value == null ? "$0.00" : formatCurrency(value);
+const signed = value => value == null ? "$0.00" : (value > 0 ? "+" : value < 0 ? "−" : "") + money(Math.abs(value));
 function shift(month, delta) {
   const [year, number] = month.split("-").map(Number);
   return new Date(Date.UTC(year, number - 1 + delta, 15)).toISOString().slice(0, 7);
@@ -578,7 +578,7 @@ export default function FinancialsPage() {
       {["Opening", "Movement", "Closing"].map(label => <div key={label}
         className="rounded-xl border border-[#263342] bg-[#0b1017] p-4">
         <p className="text-xs text-[#9db0c1]">{label}</p>
-        <p className="mt-3 text-xl text-[#8fa3b4]">—</p>
+        <p className="mt-3 text-xl text-[#8fa3b4]" title="Not yet verified; display placeholder only">$0.00</p>
       </div>)}
     </section>
     {(liveError || backendBalanceRows.error || currentLedgerState.error ||
@@ -712,7 +712,7 @@ export default function FinancialsPage() {
                     </button>
                   )}{row.unverifiedOpening ? <span className="ml-2 text-xs text-amber-300">(opening unknown)</span> : null}</td>
                 <td className="py-2.5 text-right tabular-nums">{money(row.start)}</td>
-                <td className={`py-2.5 text-right tabular-nums ${row.start !== null && row.end !== null && row.end < row.start ? "text-rose-400" : "text-emerald-400"}`}>{row.start === null || row.end === null ? (row.journalChange != null ? signed(row.journalChange) : "—") : signed(rounded(row.end-row.start))}</td>
+                <td className={`py-2.5 text-right tabular-nums ${row.start !== null && row.end !== null && row.end < row.start ? "text-rose-400" : "text-emerald-400"}`}>{row.start === null || row.end === null ? (row.journalChange != null ? signed(row.journalChange) : "$0.00") : signed(rounded(row.end-row.start))}</td>
                 <td className="py-2.5 text-right font-semibold tabular-nums">{money(row.end)}</td>
               </tr>)}
               {!section.rows.length && <tr><td colSpan={4} className="px-2 py-2 text-xs text-[#72889a]">No accounts</td></tr>}
