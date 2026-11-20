@@ -286,7 +286,9 @@ export default function Dashboard() {
             const business = source?.business;
             if (source?.sourceOfCalculation !== "backend-home-business" ||
                 !business || typeof business !== "object" ||
-                !Number.isFinite(source.cryptoTotalUsd) ||
+                !(Number.isFinite(source.cryptoTotalUsd) ||
+                  (!business.incomplete && !business.liabilitiesIncomplete &&
+                   Number.isFinite(business.netValue) && business.count > 0)) ||
                 (business.netValue != null &&
                  !Number.isFinite(business.netValue)) ||
                 typeof business.incomplete !== "boolean" ||
@@ -700,10 +702,9 @@ export default function Dashboard() {
       debts: 0,
     };
 
-  const totalNetWorth =
-    netWorth
-      ?.total_net_worth ||
-    0;
+  // Never promote an unavailable backend valuation to a real $0.
+  const hasVerifiedNetWorth = Number.isFinite(netWorth?.total_net_worth);
+  const totalNetWorth = hasVerifiedNetWorth ? netWorth.total_net_worth : null;
 
   const allocationCategories =
     [
@@ -956,7 +957,7 @@ export default function Dashboard() {
     .map(p => p && toHistoryPoint(p.monthKey ? p.monthKey + "-01T12:00:00" : (p.timestamp || p.date || p.time), p.value ?? p.total_net_worth))
     .filter(p => p && !isImportedMonth(p));
   const importedPoints = privateHistory.map(p => toHistoryPoint(p.date, p.value)).filter(Boolean);
-  const currentPoint = toHistoryPoint(now, totalNetWorth);
+  const currentPoint = hasVerifiedNetWorth ? toHistoryPoint(now, totalNetWorth) : null;
   // A previously persisted May 9, 2026 zero snapshot is not a verified
   // portfolio valuation. Hide that exact point on the chart only; leave all
   // underlying server-backed history and other legitimate zero values intact.
@@ -1046,10 +1047,10 @@ export default function Dashboard() {
           </div>
           <div className="px-4 pt-3">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-2">
-              <p className="text-[clamp(24px,2.2vw,30px)] font-semibold leading-none tracking-tight tabular-nums">{formatCurrency(totalNetWorth)}</p>
-              <span className={`text-xs font-medium tabular-nums ${todayPositive ? "text-emerald-400" : "text-rose-400"}`}>
+              <p className="text-[clamp(24px,2.2vw,30px)] font-semibold leading-none tracking-tight tabular-nums">{hasVerifiedNetWorth ? formatCurrency(totalNetWorth) : "Unavailable"}</p>
+              {hasVerifiedNetWorth && dailyNetWorthChange && <span className={`text-xs font-medium tabular-nums ${todayPositive ? "text-emerald-400" : "text-rose-400"}`}>
                 {todayPositive ? "+" : "−"}{formatCurrency(Math.abs(todayChange))} today
-              </span>
+              </span>}
             </div>
             <div className="mt-2 h-[clamp(205px,24vh,245px)] w-full">
               {netChart.length > 0 ? (
