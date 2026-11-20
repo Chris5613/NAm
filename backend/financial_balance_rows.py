@@ -113,6 +113,16 @@ def financial_balance_rows(month, records, live, devices, current_month):
         number(d.get("cost")) > 0 and re.fullmatch(
             r"\d{4}-\d{2}", str(d.get("startMonth") or ""))
     ]
+    # The original $500 RTX 2080 PC was split into a $260 base PC and
+    # $240 RTX 2080 Super. Historical saved rows must not be booked a second
+    # time alongside both registered components in an open month.
+    registered_names = {asset_key(d.get("name")) for d in registered}
+    split_2080_pc = (
+        "rtx2080super" in registered_names and
+        any(name.startswith("pcbase") for name in registered_names)
+    )
+    legacy_split_ids = {"hardware:rtx2080super-pc"}
+    legacy_split_names = {"rtx2080pc", "rtx2080superpc"}
     seen = set()
     for device in registered:
         key = str(device.get("id") or "") or (
@@ -145,6 +155,8 @@ def financial_balance_rows(month, records, live, devices, current_month):
     for i, row in enumerate(legacy_hardware):
         if i in used_legacy:
             continue
+        if split_2080_pc and alias(row.get("name")) in legacy_split_names:
+            continue
         key = alias(row.get("name"))
         if any(alias(x.get("name")) == key and x.get("source") != "hardware-payback"
                for x in equipment):
@@ -168,6 +180,11 @@ def financial_balance_rows(month, records, live, devices, current_month):
         equipment.append(dict(row))
     for i, row in enumerate(all_extra):
         if not isinstance(row, dict) or i in used_extra or str(row.get("id")) in excluded_equipment:
+            continue
+        if split_2080_pc and (
+            str(row.get("id")) in legacy_split_ids or
+            alias(row.get("name")) in legacy_split_names
+        ):
             continue
         if not current.get("locked") and asset_key(row.get("name")) == "ratex":
             continue
@@ -213,6 +230,8 @@ def financial_balance_rows(month, records, live, devices, current_month):
              "cost": 500, "startMonth": "2026-11"},
         ]
         for fallback in fallbacks:
+            if split_2080_pc and fallback["id"] in legacy_split_ids:
+                continue
             if fallback["id"] in excluded_equipment or any(
                 alias(row.get("name")) == alias(fallback["name"]) for row in equipment
             ):
@@ -281,6 +300,19 @@ def with_journal_equipment(base_rows, journal, month, locked=False):
             )
             if len(normalized) >= 5 and match and row.get("acquisitionMonth") == date_str[:7]:
                 candidates.append(row)
+        # A legacy journal description can still name the whole RTX 2080
+        # PC after it was split. Match its component cost only when there is
+        # exactly one component with that amount in the acquisition month.
+        if not candidates and re.search(r"2080|pcbase", cleaned):
+            components = [
+                row for row in rows if row.get("source") == "hardware-payback"
+                and row.get("acquisitionMonth") == date_str[:7]
+                and (asset_key(row.get("name")) == "rtx2080super"
+                     or asset_key(row.get("name")).startswith("pcbase"))
+                and abs(number(row.get("historicalCost")) - amount) < .005
+            ]
+            if len(components) == 1:
+                candidates = components
         if len(candidates) == 1 and amount + .005 >= number(candidates[0].get("historicalCost")):
             existing = candidates[0]
             if amount > number(existing.get("historicalCost")) + .005:
