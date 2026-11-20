@@ -22,7 +22,12 @@ const canonicalSourceName = source => {
   const value = String(source || "").trim().replace(/\s+/g, " ");
   const normalized = value.toLowerCase();
   if (["unity network", "unitynetwork", "unetwork"].includes(normalized)) return "Unetwork";
-  if (normalized === "roller coin") return "RollerCoin";
+  if (normalized === "roller coin" || normalized === "rollercoin") return "RollerCoin";
+  if (normalized === "kryptex") return "Kryptex";
+  if (normalized === "bixberry") return "Bixberry";
+  if (normalized === "salad") return "Salad";
+  if (normalized === "lulo") return "Lulo";
+  if (normalized === "loopscale") return "Loopscale";
   return value;
 };
 const deviceSources = device => Array.from(new Set(
