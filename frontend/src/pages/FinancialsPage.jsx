@@ -813,13 +813,6 @@ export default function FinancialsPage() {
       className="px-1 text-[11px] text-[#8299aa]">
       Showing previously verified figures while Financials refreshes.
     </p>}
-    {cachedFinancialWarning && <p role="status"
-      className="rounded-xl border border-amber-500/30 px-4 py-3 text-xs text-amber-200">
-      Showing the last verified Financials snapshot while the latest changes
-      are recalculating or the backend is temporarily unavailable. Values may
-      not reflect your most recent edit until verification finishes; the
-      saved journal is not being overwritten.
-    </p>}
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
         {metric("Business Assets", assetsEnd, assetsEnd===null?"Some account balances are unverified":null, "text-sky-300")}
@@ -967,14 +960,6 @@ export default function FinancialsPage() {
     {tab === "ledger" && <>
       <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">General Ledger</h2></div>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => { setQuickModalOpen(true); setQuickStatus(""); setQuickError(""); }}
-          className="inline-flex items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-400/10 px-3 py-2 text-sm font-semibold text-sky-300 hover:bg-sky-400/20 disabled:opacity-40">
-          <Sparkles size={16}/> Describe Transaction
-        </button>
-        {unpostedEquipment.length > 0 && <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => reviewEquipmentPurchase(unpostedEquipment[0])}
-          className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm font-semibold text-amber-300 disabled:opacity-40">
-          Review purchase ({unpostedEquipment.length})
-        </button>}
         <button type="button" disabled={Boolean(closeSnapshot)} onClick={() => {
           setEditingEntryId(null);
           setDraft({date: month === getCurrentMonthKey() ? getTodayKey() : month+"-01", description:"", lines:[
