@@ -206,7 +206,7 @@ export default function FinancialsPage() {
   const [month, setMonth] = useState(getCurrentMonthKey);
   const [records, setRecords] = useState(() => readJson(RECORDS_KEY, {}));
   const [journal, setJournal] = useState(() => readJson(JOURNAL_KEY, []));
-  const { live, error: liveError, stale: liveStale } = useBackendFinancialLiveBalances();
+  const { live, error: liveError, stale: liveStale, unauthorized: liveUnauthorized } = useBackendFinancialLiveBalances();
   const [hardwareDevices, setHardwareDevices] = useState(readHardwareRegister);
   const [businessPhones, setBusinessPhones] = useState(readUnetworkPhones);
   const [phoneInventory, setPhoneInventory] = useState(readPhoneInventory);
@@ -360,24 +360,26 @@ export default function FinancialsPage() {
   const trialState = useBackendTrialBalance({
     month, currentEntries: queryEntries, accounts: queryAccounts,
   });
-  // A live price or source-income update invalidates the exact query chain.
-  // Retain only a complete, same-month/same-accounting-input backend report
-  // while the next chain finishes. Never reuse another month's or edited
-  // journal's projections, and never retain an unauthorized response.
+  // A live source update invalidates the exact query chain.
+  // Retain the last verified same-month report as a clearly labeled stale
+  // preview while an edit or temporary backend outage is recalculating.
+  // Never show another month's report or an unauthorized response.
   const reportScope = JSON.stringify([month, records, journal, closedMonths,
     hardwareDevices, businessPhones, accountLabels, autoPower]);
   const lastCompleteReport = useRef(null);
   const unauthorized = [backendBalanceRows, currentLedgerState, serverFinancialState,
-    trialState].some(state => state?.unauthorized) || !live && liveError;
+    trialState].some(state => state?.unauthorized) || Boolean(liveUnauthorized);
   const freshComplete = Boolean(live && backendBalanceRows.rows &&
     currentLedgerState.data && serverFinancialState.data && trialState.result);
   if (unauthorized) lastCompleteReport.current = null;
   else if (freshComplete) lastCompleteReport.current = {
-    scope: reportScope, at: Date.now(), baseRows: backendBalanceRows.rows,
+    scope: reportScope, month, at: Date.now(), baseRows: backendBalanceRows.rows,
     accounts: queryAccounts, ledger: currentLedgerState.data,
     statement: serverFinancialState.data, trial: trialState.result,
   };
-  const completeReport = !unauthorized && lastCompleteReport.current?.scope === reportScope &&
+  const cachedReportOutOfDate = Boolean(lastCompleteReport.current &&
+    lastCompleteReport.current.scope !== reportScope);
+  const completeReport = !unauthorized && lastCompleteReport.current?.month === month &&
     Date.now() - lastCompleteReport.current.at <= 300000 ? lastCompleteReport.current : null;
   const baseRows = completeReport?.baseRows || [];
   const availableAccounts = completeReport?.accounts || queryAccounts;
@@ -391,8 +393,9 @@ export default function FinancialsPage() {
     (entry.lines||[]).reduce((n,part)=>n+Number(part.debit||0),0),0));
   const ledgerVisibleCredit=moneyRound(displayedLedgerEntries.reduce((sum,entry)=>sum+
     (entry.lines||[]).reduce((n,part)=>n+Number(part.credit||0),0),0));
-  const cachedFinancialWarning = Boolean(liveError || backendBalanceRows.error ||
-    currentLedgerState.error || serverFinancialState.error || trialState.error);
+  const cachedFinancialWarning = Boolean(cachedReportOutOfDate || liveError ||
+    backendBalanceRows.error || currentLedgerState.error ||
+    serverFinancialState.error || trialState.error);
   const report = serverFinancial?.profit || {
     revenue: 0, disposalGain: 0, operating: 0, fees: 0,
     depreciation: 0, expenses: 0, profit: 0,
@@ -812,9 +815,10 @@ export default function FinancialsPage() {
     </p>}
     {cachedFinancialWarning && <p role="status"
       className="rounded-xl border border-amber-500/30 px-4 py-3 text-xs text-amber-200">
-      Showing the most recently verified in-session Financials data while
-      the backend refresh is unavailable. These amounts have not been
-      revalidated yet; saved accounting records were not modified.
+      Showing the last verified Financials snapshot while the latest changes
+      are recalculating or the backend is temporarily unavailable. Values may
+      not reflect your most recent edit until verification finishes; the
+      saved journal is not being overwritten.
     </p>}
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
