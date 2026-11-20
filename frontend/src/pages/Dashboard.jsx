@@ -719,8 +719,8 @@ export default function Dashboard() {
       "debts",
     ];
 
-  const homeBalance = category => category === "crypto"
-    ? financialAssets.value : breakdown[category];
+  const homeBalance = category => !hasVerifiedNetWorth ? null :
+    category === "crypto" ? financialAssets.value : breakdown[category];
   const maxAllocation = Math.max(
     ...allocationCategories.map(category => Math.abs(Number(homeBalance(category)) || 0)),
     1,
@@ -1101,7 +1101,7 @@ export default function Dashboard() {
                 <AllocationBar category={category}
                   value={homeBalance(category)}
                   label={category === "crypto" ? "Crypto Business" : undefined}
-                  unverified={category === "crypto" && financialAssets.incomplete}
+                  unverified={!hasVerifiedNetWorth || (category === "crypto" && financialAssets.incomplete)}
                   maxValue={maxAllocation} />
               </button>
             ))}
