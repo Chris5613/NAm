@@ -167,6 +167,49 @@ def persisted_historical_trial_inputs(request, settings, income_months,
     }
 
 
+
+def normalize_retired_pc_account(entries, devices):
+    """Route the old whole-PC subaccount to Equipment after its $500 split.
+
+    This is a display-only trial-balance projection. The saved two-sided
+    journal remains unchanged, and the exact $240 debit is not created again.
+    """
+    split_gpu = any(
+        isinstance(device, dict)
+        and re.sub(r"[^a-z0-9]", "", str(device.get("name") or "").lower()) == "rtx2080super"
+        and abs(number(device.get("cost")) - 240) < .005
+        for device in devices
+    )
+    split_base = any(
+        isinstance(device, dict)
+        and re.sub(r"[^a-z0-9]", "", str(device.get("name") or "").lower()).startswith("pcbase")
+        and abs(number(device.get("cost")) - 260) < .005
+        for device in devices
+    )
+    if not (split_gpu and split_base):
+        return entries, 0
+    retired = "equipment:hardware:rtx2080super-pc"
+    adjusted, count = [], 0
+    for entry in entries:
+        if not isinstance(entry, dict):
+            adjusted.append(entry)
+            continue
+        lines = sequence(entry.get("lines"))
+        if any(isinstance(line, dict) and line.get("account") == retired for line in lines):
+            adjusted.append({
+                **entry,
+                "lines": [
+                    {**line, "account": "equipment"} if isinstance(line, dict)
+                    and line.get("account") == retired else line
+                    for line in lines
+                ],
+            })
+            count += 1
+        else:
+            adjusted.append(entry)
+    return adjusted, count
+
+
 def historical_trial_balance(data):
     month = data.get("month")
     if not isinstance(month, str) or not MONTH.fullmatch(month):
@@ -229,5 +272,7 @@ def historical_trial_balance(data):
         all_entries.append(opening)
     if len(all_entries) > 20000:
         raise ValueError("Historical ledger too large")
+    all_entries, remapped = normalize_retired_pc_account(all_entries, devices)
     result = trial_balance(data.get("accounts"), all_entries)
-    return {**result, "month": month, "includedEntries": len(all_entries)}
+    return {**result, "month": month, "includedEntries": len(all_entries),
+            "retiredEquipmentAccountsRemapped": remapped}
