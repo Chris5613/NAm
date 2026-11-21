@@ -389,32 +389,6 @@ export default function MiningPowerCard() {
         </div>
       </section>
 
-      {/* Whole-rig wall power comes from Tapo meters, never from summing
-          Kryptex GPU telemetry. The 2080 and 4070 Ti share one physical PC. */}
-      <section aria-label="Whole PC power" className="space-y-2">
-        <h2 className="px-1 text-xs font-semibold uppercase tracking-wide text-[#aab9c6]">Whole-PC Power · Tapo wall meter</h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {deviceRows.map(device => {
-            const rigName = device.id === "rtx2080super"
-              ? "RTX 2080 Super + RTX 4070 Ti PC"
-              : device.id === "rtx5070" ? "RTX 5080 PC"
-              : settings.deviceLabels?.[device.id] || device.label || "Mining PC";
-            const watts = Number(device.watts);
-            const valid = live && device.watts != null && Number.isFinite(watts) && watts >= 0;
-            return <div key={device.id} className="rounded-xl border border-border/55 bg-[#0d1116] px-4 py-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold">{rigName}</span>
-                <span className={"text-[11px] " + (valid ? "text-emerald-400" : "text-muted-foreground")}>
-                  {valid ? "Live wall power" : "Meter not reporting"}
-                </span>
-              </div>
-              <p className="mt-2 text-2xl font-bold tabular-nums">{valid ? watts.toFixed(0) + "W" : "—"}</p>
-              <p className="mt-1 text-[11px] text-muted-foreground">Full rig: GPUs, CPU, motherboard, fans, PSU losses and other system draw</p>
-            </div>;
-          })}
-        </div>
-      </section>
-
       {Number(status?.gpuMonthlyUsage?.["rtx2080super:unallocated"]?.kwh) > 0 && <p className="px-1 text-xs text-muted-foreground" title="Metered energy during missing or inconsistent GPU telemetry is included in the total but cannot be attributed to an individual GPU.">{Number(status.gpuMonthlyUsage["rtx2080super:unallocated"].kwh).toFixed(2)} kWh unallocated</p>}
       <section aria-label="Tracked mining GPUs" className={"grid min-w-0 items-stretch gap-3 " + gpuGridClass}>
         {deviceRows.flatMap(device => {
