@@ -330,7 +330,19 @@ export default function MiningPowerCard() {
     ? powerCost?.projectedOutOfPocketMonthEndUsd ?? null : null;
 
   const monthlyDevices = currentMonth?.devices || {};
-  const deviceRows = useMemo(() => Array.isArray(latest?.devices) ? latest.devices : [], [latest]);
+  // Latest Tapo readings may omit a temporarily unplugged or offline rig.
+  // Keep its existing GPU cards visible from recorded monthly usage without
+  // presenting an old power observation as live wattage.
+  const deviceRows = useMemo(() => {
+    const current = Array.isArray(latest?.devices) ? latest.devices : [];
+    const byId = new Map(current.filter(device => device?.id).map(device => [device.id, device]));
+    for (const id of ["rtx5070", "rtx2080super"]) {
+      if (!byId.has(id) && monthlyDevices[id]) {
+        byId.set(id, { id, label: monthlyDevices[id].label || id, watts: null });
+      }
+    }
+    return [...byId.values()];
+  }, [latest, monthlyDevices]);
   // Preserve the earlier compact five-column GPU layout.
   const gpuGridClass = "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5";
 
@@ -392,7 +404,11 @@ export default function MiningPowerCard() {
       {Number(status?.gpuMonthlyUsage?.["rtx2080super:unallocated"]?.kwh) > 0 && <p className="px-1 text-xs text-muted-foreground" title="Metered energy during missing or inconsistent GPU telemetry is included in the total but cannot be attributed to an individual GPU.">{Number(status.gpuMonthlyUsage["rtx2080super:unallocated"].kwh).toFixed(2)} kWh unallocated</p>}
       <section aria-label="Tracked mining GPUs" className={"grid min-w-0 items-stretch gap-3 " + gpuGridClass}>
         {deviceRows.flatMap(device => {
-          const breakdown = status?.gpuBreakdown?.[device.id];
+          const breakdown = status?.gpuBreakdown?.[device.id] ||
+            (device.id === "rtx2080super" ? { gpus: [
+              { id: "2080", name: "RTX 2080 Super", gpuWatts: null, allocatedWatts: null },
+              { id: "4070-ti", name: "RTX 4070 Ti", gpuWatts: null, allocatedWatts: null },
+            ] } : null);
           const shared = (breakdown?.gpus?.length || 0) > 1;
           if (!breakdown?.gpus?.length) return [<DeviceCard key={device.id} device={device}
             label={settings.deviceLabels?.[device.id] || device.label}
