@@ -143,6 +143,52 @@ class HistoricalLedgerCutoverTests(unittest.TestCase):
         self.assertEqual(request, original_request)
         self.assertEqual(saved, original_saved)
 
+    def test_split_2080_retired_account_debit_is_included(self):
+        data = copy.deepcopy(self.data)
+        data["currentEntries"] = [{
+            "id": "pc-base", "date": "2026-11-05",
+            "lines": [
+                {"account": "equipment", "debit": 260, "credit": 0},
+                {"account": "cash", "debit": 0, "credit": 260},
+            ],
+        }, {
+            "id": "gpu", "date": "2026-11-05",
+            "lines": [
+                {"account": "equipment:hardware:rtx2080super-pc",
+                 "debit": 240, "credit": 0},
+                {"account": "cash", "debit": 0, "credit": 240},
+            ],
+        }]
+        data["incomeMonths"] = []
+        data["hardwareDevices"] = [
+            {"id": "base", "name": "PC Base", "cost": 260,
+             "startMonth": "2026-11"},
+            {"id": "gpu", "name": "RTX 2080 Super", "cost": 240,
+             "startMonth": "2026-11"},
+        ]
+        original = copy.deepcopy(data)
+        result = historical_trial_balance(data)
+        self.assertEqual(result["debitsUsd"], 500)
+        self.assertEqual(result["creditsUsd"], 500)
+        self.assertTrue(result["balanced"])
+        self.assertEqual(result["retiredEquipmentAccountsRemapped"], 1)
+        self.assertEqual(data, original)
+
+    def test_no_retired_account_remap_without_verified_split(self):
+        data = copy.deepcopy(self.data)
+        data["currentEntries"] = [{
+            "id": "old", "date": "2026-11-05",
+            "lines": [
+                {"account": "equipment:hardware:rtx2080super-pc",
+                 "debit": 240},
+                {"account": "cash", "credit": 240},
+            ],
+        }]
+        data["incomeMonths"] = []
+        result = historical_trial_balance(data)
+        self.assertEqual(result["retiredEquipmentAccountsRemapped"], 0)
+        self.assertEqual(result["differenceUsd"], -240)
+
     def test_source_inputs_not_changed_by_backend_trial(self):
         original = copy.deepcopy(self.data)
         historical_trial_balance(self.data)
