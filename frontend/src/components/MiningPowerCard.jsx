@@ -219,6 +219,43 @@ export default function MiningPowerCard() {
   const [settings, setSettings] = useState({});
   const [hardware, setHardware] = useState(readHardwarePaybackDevices);
   const [refreshing, setRefreshing] = useState(false);
+  const [bridgeToken, setBridgeToken] = useState(null);
+  const [tokenBusy, setTokenBusy] = useState(false);
+  const generateBridgeToken = async () => {
+    if (tokenBusy || !window.confirm(
+      "Generate a new Power Bridge token? This revokes the existing token. Your running Tapo bridge will need the new token."
+    )) return;
+    setTokenBusy(true);
+    setBridgeToken(null);
+    try {
+      const response = await api.post("/api/power/token", {});
+      if (typeof response?.token !== "string" || !response.token) throw new Error("No token returned");
+      setBridgeToken(response.token);
+      toast.success("New bridge token generated. Copy it now; it is shown only once.");
+    } catch (error) {
+      toast.error(error?.message || "Could not generate power bridge token.");
+    } finally {
+      setTokenBusy(false);
+    }
+  };
+  const tokenControls = <div className="flex flex-wrap items-center gap-2">
+    <button type="button" disabled={tokenBusy} onClick={generateBridgeToken}
+      title="Generate a new token (replaces the previous one)"
+      className="rounded-lg border border-border/50 px-2.5 py-1.5 text-[11px] font-semibold text-muted-foreground hover:bg-secondary hover:text-foreground disabled:opacity-50">
+      {tokenBusy ? "Generating…" : "Generate Token"}
+    </button>
+    {bridgeToken && <div className="flex max-w-full flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-[#111a21] px-3 py-2">
+      <span className="text-[11px] text-amber-300">New token (shown once):</span>
+      <code className="max-w-[260px] select-all overflow-x-auto text-xs text-white">{bridgeToken}</code>
+      <button type="button" className="rounded border border-border/60 px-2 py-1 text-xs"
+        onClick={async () => {
+          try { await navigator.clipboard.writeText(bridgeToken); toast.success("Bridge token copied"); }
+          catch { toast.error("Copy unavailable. Select the token and copy manually."); }
+        }}>Copy</button>
+      <button type="button" onClick={() => setBridgeToken(null)}
+        className="rounded px-2 py-1 text-xs text-muted-foreground" aria-label="Hide bridge token">Hide</button>
+    </div>}
+  </div>;
   useEffect(() => {
     const refreshHardware = () => setHardware(readHardwarePaybackDevices());
     const unsubscribe = subscribe(key => {
@@ -354,6 +391,7 @@ export default function MiningPowerCard() {
         <Activity className="mx-auto h-7 w-7 text-muted-foreground" />
         <p className="mt-3 text-sm font-medium">Waiting for Tapo power readings</p>
         <p className="mt-1 text-xs text-muted-foreground">Start the Windows bridge and this page will populate automatically.</p>
+        <div className="mt-3">{tokenControls}</div>
       </div>
     );
   }
@@ -365,7 +403,8 @@ export default function MiningPowerCard() {
           <span className="rounded-xl bg-emerald-500/10 p-2 text-emerald-400"><Zap className="h-5 w-5" /></span>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-[28px]">Mining Power</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {tokenControls}
           <span title={"Last updated: " + formatUpdated(latest?.observedAt)}
             className={"inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-medium " + (live ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400" : "border-border bg-secondary text-muted-foreground")}>
             <span className={"h-1.5 w-1.5 rounded-full " + (live ? "bg-emerald-400" : "bg-muted-foreground")} />
