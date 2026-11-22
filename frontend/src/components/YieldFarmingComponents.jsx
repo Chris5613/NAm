@@ -526,11 +526,47 @@ function formatCompactSyncAge(value) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function HoneygainBalanceEditor({ asset, onSave }) {
+  const [balance, setBalance] = useState(String(asset?.balance ?? 0));
+  const [earned, setEarned] = useState(String(asset?.earned ?? 0));
+  useEffect(() => {
+    setBalance(String(asset?.balance ?? 0));
+    setEarned(String(asset?.earned ?? 0));
+  }, [asset?.balance, asset?.earned]);
+  const valid = balance.trim() !== "" && earned.trim() !== "" &&
+    Number.isFinite(Number(balance)) && Number(balance) >= 0 &&
+    Number.isFinite(Number(earned)) && Number(earned) >= 0;
+  return (
+    <div className="border-t border-border/40 px-5 py-4 space-y-3">
+      <div className="text-xs font-semibold">Honeygain earnings · Manual tracking</div>
+      <p className="text-xs text-muted-foreground">Enter figures from your Honeygain account. No automatic account sync is connected.</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <label className="text-xs text-muted-foreground">
+          Unpaid balance (USD)
+          <Input type="number" min="0" step="0.0001" value={balance}
+            onChange={event => setBalance(event.target.value)} className="mt-1" />
+        </label>
+        <label className="text-xs text-muted-foreground">
+          Lifetime earned (USD)
+          <Input type="number" min="0" step="0.0001" value={earned}
+            onChange={event => setEarned(event.target.value)} className="mt-1" />
+        </label>
+      </div>
+      <Button type="button" size="sm" disabled={!valid || !onSave}
+        onClick={() => onSave(asset.id, { balance: Number(balance), earned: Number(earned) })}>
+        Save Honeygain balance
+      </Button>
+      <p className="text-[11px] text-muted-foreground">These are manually reported balances, not verified or booked financial income.</p>
+    </div>
+  );
+}
+
 function ProjectCard({
   project,
   collapsed,
   onToggle,
   onDeletePosition,
+  onManualEarningsChange,
   logo,
   onLogoChange,
   totalSpent,
@@ -585,7 +621,7 @@ function ProjectCard({
             <div className="flex items-center justify-between gap-1">
               <span className="min-w-0 truncate text-[12px] font-semibold">{project.platform}</span>
               <span className={`shrink-0 text-[9px] ${project.autoSynced ? "text-emerald-400" : "text-amber-300"}`}>
-                ● {project.autoSynced ? "Online" : "Offline"}
+                ● {project.autoSynced ? "Online" : normalizedPlatform === "honeygain" ? "Manual" : "Offline"}
               </span>
             </div>
             <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(project.totalBalance)}</div>
@@ -616,6 +652,9 @@ function ProjectCard({
             </div>
           )}
 
+          {normalizedPlatform === "honeygain" && project.assets?.[0] && (
+            <HoneygainBalanceEditor asset={project.assets[0]} onSave={onManualEarningsChange} />
+          )}
           <ProjectPositionsSection
             project={
               project
