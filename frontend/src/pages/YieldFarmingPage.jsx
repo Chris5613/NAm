@@ -312,25 +312,10 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     });
   }, []);
 
-  // Grass is a distinct point-based project, not a dollar-valued token wallet.
-  // Preserve all existing positions and create only once per account.
+  // Remove any legacy Grass positions left in persisted account state.
   useEffect(() => {
-    const key = "grass_project_seeded_v1";
-    if (remoteStorage.getItem(key) === "true") return;
-    remoteStorage.setItem(key,"true");
-    setManualPositions(current => {
-      if (current.some(p => String(p.platform || "").toLowerCase() === "grass")) return current;
-      return [...current,{
-        id:"grass-uptime-network",
-        platform:"Grass",
-        asset:"Uptime & Network Points",
-        strategy:"Chrome dashboard tracking",
-        balance:0,
-        earned:0,
-        apy:0,
-        startDate:new Date().toISOString().slice(0,10),
-      }];
-    });
+    setManualPositions(current => current.some(position => String(position.platform || "").toLowerCase() === "grass")
+      ? current.filter(position => String(position.platform || "").toLowerCase() !== "grass") : current);
   }, []);
 
   // Undo the mistaken default-inactive migration introduced in November.
@@ -699,7 +684,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
         const manualProjects =
           groupManualPositions(
             manualPositions.map(position =>
-              ["honeygain","grass"].includes(String(position.platform || "").toLowerCase())
+              String(position.platform || "").toLowerCase() === "honeygain"
                 ? { ...position, balance: 0, earned: 0, apy: 0 }
                 : position
             )
@@ -767,26 +752,6 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       window.removeEventListener("nam-honeygain-updated", refresh);
     };
   }, []);
-  // Sort Grass by the same historical-rate estimate shown on its card.
-  // This is display-only and never contributes to booked Financials income.
-  const [grassSortEstimate, setGrassSortEstimate] = useState(null);
-  useEffect(() => {
-    let active = true;
-    const refresh = () => api.get("/api/grass/status").then(value => {
-      if (active) setGrassSortEstimate(
-        value?.estimatedUsd != null && Number.isFinite(Number(value.estimatedUsd))
-          ? Number(value.estimatedUsd) : null
-      );
-    }).catch(() => {});
-    refresh();
-    const timer = window.setInterval(refresh, 60000);
-    window.addEventListener("nam-grass-updated", refresh);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      window.removeEventListener("nam-grass-updated", refresh);
-    };
-  }, []);
   const sortedProgramCards =
     useMemo(
       () => {
@@ -803,9 +768,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
                 project.id,
 
               amount:
-                String(project.platform || "").toLowerCase() === "grass"
-                  ? (grassSortEstimate ?? Number.NEGATIVE_INFINITY)
-                  : String(project.platform || "").toLowerCase() === "honeygain"
+                String(project.platform || "").toLowerCase() === "honeygain"
                     ? (honeygainSortBalance ?? Number.NEGATIVE_INFINITY)
                     : Number(project.totalBalance) || 0,
 
@@ -890,7 +853,6 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   kryptexStats,
   backendEarnings?.monthlySources?.Rentals,
   honeygainSortBalance,
-  grassSortEstimate,
 ]
     );
   // At 11:58 PM America/Los_Angeles, preserve a dated copy of every
@@ -1372,31 +1334,25 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const hasServerToday = backendEarnings?.todayKey === todayKey;
   const todayEarnings = hasServerToday ? backendEarnings.todayTotalUsd : null;
   const displayDailySourceTotals = hasServerToday ? (backendEarnings.todaySources || {}) : {};
-  // Honeygain/Grass are observed reward balances, not booked USD income.
-  // Display their readings with a UTC freshness check and preserve the
+  // Honeygain is an observed reward balance, not booked USD income.
+  // Display its reading with a date freshness check and preserve the
   // backend's audited daily earnings total.
   const [auxiliaryRewards, setAuxiliaryRewards] = useState({
     honeygain: null,
-    grass: null,
   });
   useEffect(() => {
     let active = true;
     const refresh = async () => {
-      const [honeygain, grass] = await Promise.all([
-        api.get("/api/honeygain/status").catch(() => null),
-        api.get("/api/grass/status").catch(() => null),
-      ]);
-      if (active) setAuxiliaryRewards({ honeygain, grass });
+      const honeygain = await api.get("/api/honeygain/status").catch(() => null);
+      if (active) setAuxiliaryRewards({ honeygain });
     };
     refresh();
     const interval = window.setInterval(refresh, 60000);
     window.addEventListener("nam-honeygain-updated", refresh);
-    window.addEventListener("nam-grass-updated", refresh);
     return () => {
       active = false;
       window.clearInterval(interval);
       window.removeEventListener("nam-honeygain-updated", refresh);
-      window.removeEventListener("nam-grass-updated", refresh);
     };
   }, []);
   // Render all provider observations on the same America/Los_Angeles
@@ -1411,31 +1367,23 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   };
   const honeygainObservedToday =
     pacificDay(auxiliaryRewards.honeygain?.latest?.observedAt) === todayKey;
-  const grassObservedToday =
-    pacificDay(auxiliaryRewards.grass?.latest?.observedAt) === todayKey;
   const honeygainDisplayUsd = honeygainObservedToday &&
     Number.isFinite(Number(auxiliaryRewards.honeygain?.balanceUsd))
     && auxiliaryRewards.honeygain?.balanceUsd != null
       ? Number(auxiliaryRewards.honeygain.balanceUsd) : null;
-  const grassDisplayUsd = grassObservedToday &&
-    Number.isFinite(Number(auxiliaryRewards.grass?.estimatedUsd))
-    && auxiliaryRewards.grass?.estimatedUsd != null
-      ? Number(auxiliaryRewards.grass.estimatedUsd) : null;
 
-  // The visible list includes both new projects and sorts them by displayed
+  // The visible list includes observed Honeygain and sorts by displayed
   // amount. The combined display total is not a booked-income calculation:
-  // Honeygain is a transferred balance and Grass is a historical-rate estimate.
+  // Honeygain is a transferred balance.
   const todayBreakdown = [
     ...Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
       .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
       .map(([name, amount]) => ({ name, amount: Number(amount) || 0 })),
     ...(honeygainDisplayUsd == null ? [] :
       [{ name: "Honeygain", amount: honeygainDisplayUsd, precision: 2 }]),
-    ...(grassDisplayUsd == null ? [] :
-      [{ name: "Grass", amount: grassDisplayUsd, precision: 6 }]),
   ].sort((a, b) => b.amount - a.amount);
   const visibleEarningsTotal = todayEarnings == null ? null :
-    Number(todayEarnings) + (honeygainDisplayUsd ?? 0) + (grassDisplayUsd ?? 0);
+    Number(todayEarnings) + (honeygainDisplayUsd ?? 0);
   const monthlyChartData = backendEarnings?.days || [];
   // The daily chart is dated receipts; month-end income is the separately
   // booked provider ledger. Do not silently count provisional Lulo/Loopscale
@@ -1475,29 +1423,16 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       return dates.length ? history[dates[dates.length - 1]] : null;
     };
     const honeyHistory = auxiliaryRewards.honeygain?.dailyHistory;
-    const grassHistory = auxiliaryRewards.grass?.dailyHistory;
     const honeyRecord = chooseObservation(honeyHistory);
-    const grassRecord = chooseObservation(grassHistory);
     // Before daily history existed, honor a latest persisted observation only
     // if its actual Pacific calendar date matches the selected date.
     const honeyLatest = auxiliaryRewards.honeygain?.latest;
-    const grassLatest = auxiliaryRewards.grass?.latest;
     const honeyCreditBalance = honeyRecord?.lastCredits ??
       (honeyLatest && (monthlySelection ? pacificDay(honeyLatest.observedAt)?.startsWith(key + "-") : pacificDay(honeyLatest.observedAt) === key) ? honeyLatest.jumpTaskBalanceCredits : null);
-    const grassSample = grassRecord?.latest ??
-      (grassLatest && (monthlySelection ? pacificDay(grassLatest.observedAt)?.startsWith(key + "-") : pacificDay(grassLatest.observedAt) === key) ? grassLatest : null);
     const numeric = value => value != null && Number.isFinite(Number(value)) ? Number(value) : null;
     const honeyCredits = numeric(honeyCreditBalance);
-    const uptime = numeric(grassSample?.uptimePoints);
-    const network = numeric(grassSample?.networkPoints);
-    // Rates are the documented historical Stage 2 estimate ONLY.
-    // These values are shown as tracked equivalents, not earned daily cash.
-    const grassEstimate = (uptime != null || network != null)
-      ? (uptime ?? 0) * 0.00000007 + (network ?? 0) * 0.0049
-      : null;
     const additions = [
       { name: "Honeygain", amount: honeyCredits == null ? null : honeyCredits / 1000 },
-      { name: "Grass", amount: grassEstimate },
     ];
     const entries = [...recordedBreakdown.entries, ...additions]
       .sort((a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity));
@@ -1506,7 +1441,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       ...recordedBreakdown,
       entries,
       total: recordedBreakdown.total + addedValue,
-      note: recordedBreakdown.note + " Tracked Honeygain balances and Grass point estimates are snapshots, not booked daily income.",
+      note: recordedBreakdown.note + " Tracked Honeygain balances are snapshots, not booked daily income.",
     };
   })();
 
@@ -2588,7 +2523,7 @@ if (
               {selectedBreakdown.entries.length ? selectedBreakdown.entries.map(item => (
                 <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
                   <span className="truncate text-muted-foreground">{item.name}</span>
-                  <span className="font-semibold tabular-nums">{item.amount == null ? "—" : item.name === "Grass" ? "$" + item.amount.toFixed(6) : formatCurrency(item.amount)}</span>
+                  <span className="font-semibold tabular-nums">{item.amount == null ? "—" : formatCurrency(item.amount)}</span>
                 </div>
               )) : <p className="text-sm text-muted-foreground">No recorded project earnings for this point.</p>}
               <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm font-semibold">
