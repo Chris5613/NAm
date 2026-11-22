@@ -70,7 +70,7 @@ import {
   ProjectIncomeSection
 } from "@/components/YieldFarmingComponents";
 
-function RentalsProjectCard({ todayUsd, monthUsd, logo, onLogoChange }) {
+function RentalsProjectCard({ todayUsd, monthUsd, logo, onLogoChange, onDeactivate }) {
   const [expanded, setExpanded] = useState(false);
   const format = value => value == null || !Number.isFinite(Number(value)) ? "—" : "$" + Number(value).toFixed(4);
   const hasEvidence = monthUsd != null || todayUsd != null;
@@ -91,7 +91,20 @@ function RentalsProjectCard({ todayUsd, monthUsd, logo, onLogoChange }) {
       </div>
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>Rentals</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <div className="flex items-center justify-between gap-3 pr-7">
+              <DialogTitle>Rentals</DialogTitle>
+              {onDeactivate && (
+                <button
+                  type="button"
+                  onClick={() => { setExpanded(false); onDeactivate(); }}
+                  className="rounded-md border border-border/60 px-2.5 py-1.5 text-xs font-medium text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                >
+                  Set inactive
+                </button>
+              )}
+            </div>
+          </DialogHeader>
           <div className="space-y-3">
             {[["Today's earnings", todayUsd], ["This month's earnings", monthUsd]].map(([label, value]) => (
               <div key={label} className="rounded-xl border border-border/50 px-4 py-3">
@@ -1814,7 +1827,7 @@ const summary =
                   {inactiveProgramCards.map(item => (
                     <div key={item.key} className="flex items-center justify-between gap-3 rounded-xl border border-border/50 bg-card/30 px-3 py-2.5">
                       <div className="min-w-0">
-                        <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : item.type === "bixberry" ? "Bixberry" : "Salad"}</div>
+                        <div className="truncate text-sm font-medium">{item.type === "project" ? item.project.platform : item.type === "rollercoin" ? "RollerCoin" : item.type === "unetwork" ? "Unetwork" : item.type === "kryptex" ? "Kryptex" : item.type === "bixberry" ? "Bixberry" : item.type === "rentals" ? "Rentals" : "Salad"}</div>
                         <div className="text-xs tabular-nums text-muted-foreground">{formatCurrency(item.amount)}</div>
                       </div>
                       <button type="button" onClick={() => reactivateProject(item.key)} className="shrink-0 rounded-md border border-border/60 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/10">Reactivate</button>
@@ -2055,6 +2068,7 @@ const summary =
 
 if (item.type === "rentals") return (
   <RentalsProjectCard key={item.key}
+    onDeactivate={() => deactivateProject(item.key)}
     todayUsd={backendEarnings?.todaySources?.Rentals}
     monthUsd={backendEarnings?.monthlySources?.Rentals}
     logo={projectLogos["rentals-project"] || ""}
