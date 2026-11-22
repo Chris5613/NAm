@@ -8,6 +8,12 @@ chrome.runtime.onMessage.addListener(message => { push(message); });
 chrome.runtime.sendMessage({type:"NAm_HONEYGAIN_READY"}).catch(() => {});
 window.addEventListener("message", event => {
   if (event.source === window && event.origin === location.origin &&
+      event.data?.source === "nam-honeygain-app" &&
+      event.data?.type === "SAVED" && typeof event.data.signature === "string") {
+    chrome.runtime.sendMessage({type:"NAm_HONEYGAIN_SAVED",signature:event.data.signature}).catch(()=>{});
+  }
+
+  if (event.source === window && event.origin === location.origin &&
       event.data?.source === "nam-honeygain-app" && event.data.type === "REQUEST_LATEST") {
     chrome.runtime.sendMessage({type:"NAm_HONEYGAIN_READY"}).catch(() => {});
   }
