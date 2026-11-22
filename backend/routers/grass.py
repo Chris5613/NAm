@@ -37,6 +37,13 @@ async def observe(payload: dict[str, Any], user: User = Depends(current_user),
         raise HTTPException(422, "Unrecognized Grass dashboard evidence")
     uptime = _num(payload, "uptimePoints")
     network = _num(payload, "networkPoints")
+    uptime_epoch = payload.get("uptimeEpoch")
+    network_epoch = payload.get("networkEpoch")
+    for epoch in (uptime_epoch, network_epoch):
+        if epoch is not None and (isinstance(epoch, bool) or not isinstance(epoch, int)
+                                  or epoch < 0 or epoch > 1000):
+            raise HTTPException(422, "Invalid Grass epoch")
+
     if uptime is None and network is None:
         raise HTTPException(422, "No labeled Grass points were found")
     db.scalar(select(User).where(User.id == user.id).with_for_update())
@@ -46,6 +53,8 @@ async def observe(payload: dict[str, Any], user: User = Depends(current_user),
     latest = {
         "uptimePoints": uptime if uptime is not None else previous.get("uptimePoints"),
         "networkPoints": network if network is not None else previous.get("networkPoints"),
+        "uptimeEpoch": uptime_epoch if uptime is not None else previous.get("uptimeEpoch"),
+        "networkEpoch": network_epoch if network is not None else previous.get("networkEpoch"),
         "observedAt": datetime.now(timezone.utc).isoformat(),
         "source": "grass-chrome-background-tab",
     }
@@ -64,6 +73,8 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
         "latest": latest,
         "uptimePoints": latest.get("uptimePoints") if latest else None,
         "networkPoints": latest.get("networkPoints") if latest else None,
+        "uptimeEpoch": latest.get("uptimeEpoch") if latest else None,
+        "networkEpoch": latest.get("networkEpoch") if latest else None,
         "balanceUsd": None,
         "grassTokens": None,
         "bookedFinancialIncome": False,
