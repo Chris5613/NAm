@@ -14,6 +14,7 @@ import { buildYearlyEarningsChart } from "../lib/monthlyEarningsChart";
 import { buildDailyEarningsChart } from "../lib/dailyEarningsChart";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { projectsApi } from "@/lib/api";
+import { remoteStorage } from "@/lib/serverStore";
 import { getLoopscaleOnycSnapshot } from "@/lib/loopscaleYieldSync";
 import { useRegisteredYieldWallets } from "@/hooks/useRegisteredYieldWallets";
 import { useBackendLoopscaleHistory } from "@/hooks/useBackendLoopscaleHistory";
