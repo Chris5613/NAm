@@ -1,8 +1,9 @@
-// Only inspect visible user-facing DOM labels. No fetch, cookies, or page JS.
+// Read ONLY explicitly labeled JumpTask balance/transfer credits from the
+// signed-in Honeygain dashboard DOM. Never count Honeygain-mode earnings.
+// We do not access Honeygain credentials, cookies or undocumented endpoints.
 const LABELS = [
-  {label: /^earned today\s*:?$/i, evidenceLabel:"earned-today"},
-  {label: /^today(?:'s)? earnings\s*:?$/i, evidenceLabel:"today-earnings"},
-  {label: /^earnings today\s*:?$/i, evidenceLabel:"today-earnings"},
+  {regex:/^transferred to jumptask\s*:?$/i,evidenceLabel:"transferred-to-jumptask"},
+  {regex:/^jumptask (?:balance|credits)\s*:?$/i,evidenceLabel:"jumptask-balance"},
 ];
 let lastSignature = "";
 const visible = el => {
@@ -10,31 +11,37 @@ const visible = el => {
   const style = getComputedStyle(el);
   return style.visibility !== "hidden" && style.display !== "none";
 };
+function parseCredits(text) {
+  // "8.88", "8.88 credits" or "8.88 🍯", not "$8.88" or "188 MB".
+  const clean = String(text || "").trim().replace(/\s+/g, " ");
+  const match = clean.match(/^(?:credits?\s*:?)?\s*([0-9][0-9,]*(?:\.[0-9]+)?)(?:\s*(?:credits?|🍯))?$/i);
+  if (!match) return null;
+  const value = Number(match[1].replace(/,/g,""));
+  return Number.isFinite(value) && value >= 0 && value <= 10000000 ? value : null;
+}
 function extract() {
-  // Ignore controls, scripts, hidden fields, and large enclosing containers.
-  const nodes = document.querySelectorAll("span,div,p,h1,h2,h3,h4,dt,td,strong,small,label");
+  const nodes = document.querySelectorAll("span,div,p,h1,h2,h3,h4,dt,dd,td,strong,small,label");
   for (const node of nodes) {
     if (!visible(node) || node.children.length > 1 || (node.textContent || "").length > 70) continue;
-    const text = (node.textContent || "").trim().replace(/\s+/g," ");
-    const matched = LABELS.find(rule => rule.label.test(text));
+    const label = (node.textContent || "").trim().replace(/\s+/g," ");
+    const matched = LABELS.find(rule => rule.regex.test(label));
     if (!matched) continue;
-    for (const parent of [node.parentElement, node.parentElement?.parentElement]) {
+    // The Honeygain desktop-like card can show value ABOVE its label.
+    // Restrict to a short, visible, compact card so we don't read other balances.
+    for (const parent of [node.parentElement,node.parentElement?.parentElement]) {
       if (!parent || !visible(parent)) continue;
-      const content = (parent.innerText || "").trim().replace(/\s+/g," ");
-      if (content.length > 220) continue;
-      const after = content.slice(content.toLowerCase().indexOf(text.toLowerCase()) + text.length).trim();
-      // Reject cards containing multiple independent balances / financial figures.
-      const numbers = [...after.matchAll(/(?:^|\s)([0-9][0-9,]*(?:\.[0-9]+)?)(?=\s|$|\s*credits?\b)/gi)];
-      if (!numbers.length) continue;
-      // The Honeygain card can also show traffic (MB) after credits.
-      // Only accept the first numeric field close to the labeled earnings text.
-      const firstOffset = numbers[0].index;
-      if (firstOffset > 24) continue;
-      const todayCredits = Number(numbers[0][1].replace(/,/g,""));
-      if (!Number.isFinite(todayCredits) || todayCredits < 0 || todayCredits > 10000000) continue;
-      const day = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Los_Angeles",year:"numeric",month:"2-digit",day:"2-digit"})
-        .format(new Date());
-      return {day,todayCredits,evidenceLabel:matched.evidenceLabel,observedAt:new Date().toISOString()};
+      const text = (parent.innerText || "").trim().replace(/\s+/g," ");
+      if (text.length > 135) continue;
+      const withoutLabel = text.replace(label," ").trim();
+      // Only one numeric value should remain after removing the label.
+      // A large unrelated card, USD conversion, or multiple values is ambiguous.
+      const value = parseCredits(withoutLabel);
+      if (value === null) continue;
+      return {
+        jumpTaskBalanceCredits:value,
+        evidenceLabel:matched.evidenceLabel,
+        observedAt:new Date().toISOString(),
+      };
     }
   }
   return null;
@@ -42,25 +49,25 @@ function extract() {
 function sample() {
   const reading = extract();
   if (!reading) {
-    chrome.runtime.sendMessage({type:"HONEYGAIN_PARSE_ERROR",error:"Daily earnings label not found in visible dashboard. Open the earnings overview."}).catch(()=>{});
+    chrome.runtime.sendMessage({
+      type:"HONEYGAIN_PARSE_ERROR",
+      error:"No labeled JumpTask balance / transferred credits found. Honeygain earnings are intentionally ignored.",
+    }).catch(()=>{});
     return;
   }
-  const signature = reading.day + ":" + reading.todayCredits;
-  if (signature === lastSignature) return;
-  lastSignature = signature;
-  chrome.runtime.sendMessage({type:"HONEYGAIN_READING",reading}).catch(()=>{lastSignature = "";});
+  const sig = reading.evidenceLabel + ":" + reading.jumpTaskBalanceCredits;
+  if (sig === lastSignature) return;
+  lastSignature = sig;
+  chrome.runtime.sendMessage({type:"HONEYGAIN_READING",reading})
+    .catch(()=>{lastSignature="";});
 }
-// Hidden tabs are deliberately sampled: this is a background-tab tracker.
 chrome.runtime.onMessage.addListener(message => {
   if (message?.type === "HONEYGAIN_SAMPLE_NOW") sample();
 });
 sample();
-// Honeygain dashboard can hydrate asynchronously; retry during the short-lived
-// background tab session. The five-minute cadence is owned by Chrome alarms.
 let attempts = 0;
 const retry = setInterval(() => {
   sample();
-  attempts++;
-  if (attempts >= 35) clearInterval(retry);
+  if (++attempts >= 35) clearInterval(retry);
 }, 1000);
-document.addEventListener("visibilitychange", sample);
+document.addEventListener("visibilitychange",sample);
