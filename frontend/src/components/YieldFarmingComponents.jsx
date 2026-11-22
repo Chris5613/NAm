@@ -528,37 +528,6 @@ function formatCompactSyncAge(value) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function GrassSyncPanel() {
-  const [data, setData] = useState(null);
-  useEffect(() => {
-    let active = true;
-    const refresh = () => api.get("/api/grass/status")
-      .then(value => { if (active) setData(value); })
-      .catch(()=>{});
-    refresh();
-    const timer = window.setInterval(refresh,60000);
-    window.addEventListener("nam-grass-updated",refresh);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      window.removeEventListener("nam-grass-updated",refresh);
-    };
-  },[]);
-  return (
-    <div className="border-t border-border/40 px-5 py-4 space-y-2">
-      <div className="text-xs font-semibold">Grass Chrome dashboard · {data?.latest ? "Tracked" : "Awaiting first reading"}</div>
-      <p className="text-xs text-muted-foreground">The Grass extension automatically opens an inactive dashboard tab every five minutes and reads labeled Uptime and Network Points. It never needs your Grass password or session token.</p>
-      <div className="grid grid-cols-2 gap-3 text-xs">
-        <div>Uptime {data?.uptimeEpoch != null ? `(Epoch ${data.uptimeEpoch})` : "Points"} <strong className="block text-white">{data?.uptimePoints == null ? "—" : Number(data.uptimePoints).toLocaleString()}</strong></div>
-        <div>Network Points <strong className="block text-white">{data?.networkPoints == null ? "—" : Number(data.networkPoints).toLocaleString()}</strong></div>
-      </div>
-      {data?.estimatedUsd != null && <p className="text-xs font-medium">Combined historical-rate estimate: <strong>${Number(data.estimatedUsd).toFixed(6)}</strong></p>}
-      {data?.latest?.observedAt && <p className="text-[11px] text-muted-foreground">Last synced: {data.latest.observedAt} (UTC)</p>}
-      <p className="text-[11px] text-muted-foreground">Uses Grass Stage 2 historical rates: 0.00000007 USDC per Uptime Point and 0.0049 USDC per Network Point. Future payouts may differ. Missing point types are excluded, not assumed to be zero. Estimates are not booked to Financials.</p>
-    </div>
-  );
-}
-
 function HoneygainSyncPanel() {
   const [snapshot, setSnapshot] = useState(null);
   useEffect(() => {
@@ -677,23 +646,6 @@ function ProjectCard({
     };
   }, [normalizedPlatform]);
   const honeygainLatest = honeygainLive?.latest;
-  const [grassLive, setGrassLive] = useState(null);
-  useEffect(() => {
-    if (normalizedPlatform !== "grass") return undefined;
-    let active = true;
-    const refresh = () => api.get("/api/grass/status")
-      .then(data => { if (active) setGrassLive(data); })
-      .catch(()=>{});
-    refresh();
-    const timer = window.setInterval(refresh,60000);
-    window.addEventListener("nam-grass-updated",refresh);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      window.removeEventListener("nam-grass-updated",refresh);
-    };
-  },[normalizedPlatform]);
-  const grassLatest = grassLive?.latest;
 
 
 
@@ -724,11 +676,11 @@ function ProjectCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-1">
               <span className="min-w-0 truncate text-[12px] font-semibold">{project.platform}</span>
-              <span className={`shrink-0 text-[9px] ${project.autoSynced || (normalizedPlatform === "honeygain" && honeygainLatest) || (normalizedPlatform === "grass" && grassLatest) ? "text-emerald-400" : "text-amber-300"}`}>
-                ● {project.autoSynced ? "Online" : normalizedPlatform === "grass" ? (grassLatest ? "Tracked" : "Pending") : normalizedPlatform === "honeygain" ? (honeygainLatest ? "Tracked" : "Pending") : "Offline"}
+              <span className={`shrink-0 text-[9px] ${project.autoSynced || (normalizedPlatform === "honeygain" && honeygainLatest) ? "text-emerald-400" : "text-amber-300"}`}>
+                ● {project.autoSynced ? "Online" : normalizedPlatform === "honeygain" ? (honeygainLatest ? "Tracked" : "Pending") : "Offline"}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "grass" ? (grassLive?.estimatedUsd != null ? ("$" + Number(grassLive.estimatedUsd).toFixed(6)) : "—") : normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
@@ -756,7 +708,6 @@ function ProjectCard({
             </div>
           )}
 
-          {normalizedPlatform === "grass" && <GrassSyncPanel />}
           {normalizedPlatform === "honeygain" && <HoneygainSyncPanel />}
           {/* Hide legacy manual Honeygain balance inputs: JumpTask-only
               observations are now the sole displayed balance source. */}
