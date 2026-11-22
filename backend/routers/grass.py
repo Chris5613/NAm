@@ -96,7 +96,8 @@ async def observe(payload: dict[str, Any], user: User = Depends(current_user),
 @router.get("/status")
 async def status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == KEY))
-    latest = dict(row.value or {}) if row else None
+    stored = dict(row.value or {}) if row else {}
+    latest = {key: value for key, value in stored.items() if key != "dailyHistory"} if stored else None
     uptime = latest.get("uptimePoints") if latest else None
     network = latest.get("networkPoints") if latest else None
     estimated_usd = (
@@ -115,7 +116,7 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
         "networkEpoch": latest.get("networkEpoch") if latest else None,
         "balanceUsd": None,
         "grassTokens": None,
-        "dailyHistory": (latest or {}).get("dailyHistory", {}),
+        "dailyHistory": stored.get("dailyHistory", {}),
         "historyTimezone": "UTC",
         "trackedBy": "NAm PostgreSQL backend; Chrome extension supplies observations",
         "bookedFinancialIncome": False,
