@@ -83,17 +83,28 @@ async def issue_token(user: User = Depends(current_user), db: Session = Depends(
     return {"token": token, "warning": "Keep this token private. Regenerating it disconnects the old bridge."}
 
 
-@router.post("/ingest")
-async def ingest(payload: dict[str, Any], authorization: str | None = Header(None),
-                 db: Session = Depends(get_db)) -> dict:
-    uid = _auth(db, authorization)
+@router.post("/browser-ingest")
+async def browser_ingest(payload: dict[str, Any],
+                         user: User = Depends(current_user),
+                         db: Session = Depends(get_db)) -> dict:
+    """Accept explicitly labeled earnings read from an opted-in dashboard tab.
+
+    Cookie-authenticated browser route; server.py enforces same-origin CSRF.
+    No Honeygain API credentials, browser session data, or raw DOM are accepted.
+    """
+    if payload.get("source") != "honeygain-dashboard-visible":
+        raise HTTPException(422, "Invalid browser observation source.")
+    if payload.get("evidenceLabel") not in ("earned-today", "today-earnings"):
+        raise HTTPException(422, "Expected a labeled today-earnings reading.")
+    return _store_reading(db, user.id, payload, "honeygain-chrome-dashboard")
+
+
+def _store_reading(db: Session, uid: int, payload: dict[str, Any], source: str) -> dict:
     db.scalar(select(User).where(User.id == uid).with_for_update())
     now = datetime.now(timezone.utc)
     day = now.astimezone(PACIFIC).strftime("%Y-%m-%d")
     if payload.get("day") != day:
         raise HTTPException(422, "Only current Pacific-day samples accepted.")
-    # A successful read of the daily credits counter is required. Never replace
-    # missing provider evidence with zeros or fabricate rewards from balances.
     today = _credits(payload, "todayCredits")
     if today is None:
         raise HTTPException(422, "todayCredits is required.")
@@ -110,12 +121,18 @@ async def ingest(payload: dict[str, Any], authorization: str | None = Header(Non
         "unpaidBalanceCredits": balance,
         "jumpTaskTransferredCredits": transferred,
         "observedAt": now.isoformat(),
-        "source": "local-honeygain-bridge",
+        "source": source,
     }
     _save(db, uid, DATA_KEY, {"latest": latest, "days": days})
     db.commit()
     return {"ok": True, "day": day, "todayCredits": days[day]}
 
+
+@router.post("/ingest")
+async def ingest(payload: dict[str, Any], authorization: str | None = Header(None),
+                 db: Session = Depends(get_db)) -> dict:
+    uid = _auth(db, authorization)
+    return _store_reading(db, uid, payload, "local-honeygain-bridge")
 
 @router.get("/status")
 async def status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
