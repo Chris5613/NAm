@@ -15,6 +15,9 @@ from ..models import Setting, User
 
 router = APIRouter(prefix="/api/grass", tags=["grass"])
 KEY = "grass_dashboard_observation_v1"
+# Historical Stage 2 payout rates in USDC per point, not a promised Stage 3 conversion.
+UPTIME_USDC_PER_POINT = 0.00000007
+NETWORK_USDC_PER_POINT = 0.0049
 
 def _num(payload: dict, name: str) -> float | None:
     raw = payload.get(name)
@@ -69,8 +72,18 @@ async def observe(payload: dict[str, Any], user: User = Depends(current_user),
 async def status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
     row = db.scalar(select(Setting).where(Setting.user_id == user.id, Setting.key == KEY))
     latest = dict(row.value or {}) if row else None
+    uptime = latest.get("uptimePoints") if latest else None
+    network = latest.get("networkPoints") if latest else None
+    estimated_usd = (
+        round((float(uptime or 0) * UPTIME_USDC_PER_POINT)
+              + (float(network or 0) * NETWORK_USDC_PER_POINT), 8)
+        if uptime is not None or network is not None else None
+    )
     return {
         "latest": latest,
+        "estimatedUsd": estimated_usd,
+        "estimateRateBasis": "Grass Stage 2 historical USDC per-point rates (not guaranteed)",
+        "estimatePartial": uptime is None or network is None,
         "uptimePoints": latest.get("uptimePoints") if latest else None,
         "networkPoints": latest.get("networkPoints") if latest else None,
         "uptimeEpoch": latest.get("uptimeEpoch") if latest else None,
