@@ -547,20 +547,18 @@ function HoneygainSyncPanel() {
   const latest = snapshot?.latest;
   return (
     <div className="border-t border-border/40 px-5 py-4 space-y-2">
-      <div className="text-xs font-semibold">Honeygain Chrome Dashboard · {latest ? "Last reading saved" : "Awaiting first reading"}</div>
+      <div className="text-xs font-semibold">JumpTask · {latest ? "Balance tracked" : "Awaiting first reading"}</div>
       <p className="text-xs text-muted-foreground">
-        Open Honeygain's earnings dashboard and this NAm page in Chrome with the NAm Honeygain Tracker extension installed.
-        No Honeygain passwords, API keys, or NAm bridge tokens are needed.
-        The extension reads only visible labeled daily earnings.
+        Chrome opens the Honeygain dashboard in an inactive tab every five minutes, reads the explicitly labeled JumpTask balance, and closes the tab. Honeygain-mode balances and earnings are excluded.
       </p>
       {latest && (
         <div className="grid grid-cols-2 gap-3 text-xs">
-          <div>Today <strong className="block text-white">{Number(latest.todayCredits / 1000).toFixed(5)} USD</strong></div>
-          <div>This month <strong className="block text-white">{Number(snapshot.monthUsd || 0).toFixed(5)} USD</strong></div>
-          <div className="col-span-2 text-muted-foreground">Last reading: {latest.observedAt || "—"} (UTC) · {latest.source}</div>
+          <div>JumpTask credits <strong className="block text-white">{Number(latest.jumpTaskBalanceCredits).toFixed(4)}</strong></div>
+          <div>Estimated USD equivalent <strong className="block text-white">{formatCurrency(snapshot?.balanceUsd)}</strong></div>
+          <div className="col-span-2 text-muted-foreground">Last reading: {latest.observedAt || "—"} (UTC) · {latest.evidenceLabel}</div>
         </div>
       )}
-      <p className="text-[11px] text-muted-foreground">Observations only: Honeygain credits are not posted to your Financials ledger or counted twice as JumpTask transfers.</p>
+      <p className="text-[11px] text-muted-foreground">Balance observation only, not verified income or a JumpTask wallet token valuation. This is not added to Financials or counted as separate Honeygain income.</p>
     </div>
   );
 }
@@ -678,10 +676,10 @@ function ProjectCard({
             <div className="flex items-center justify-between gap-1">
               <span className="min-w-0 truncate text-[12px] font-semibold">{project.platform}</span>
               <span className={`shrink-0 text-[9px] ${project.autoSynced ? "text-emerald-400" : "text-amber-300"}`}>
-                ● {project.autoSynced ? "Online" : normalizedPlatform === "honeygain" ? "Manual" : "Offline"}
+                ● {project.autoSynced ? "Online" : normalizedPlatform === "honeygain" ? (honeygainLatest ? "Tracked" : "Pending") : "Offline"}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "honeygain" && honeygainLatest ? formatCurrency(honeygainLive.monthUsd) : formatCurrency(project.totalBalance)}</div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
