@@ -549,7 +549,7 @@ function GrassSyncPanel() {
       <div className="text-xs font-semibold">Grass Chrome dashboard · {data?.latest ? "Tracked" : "Awaiting first reading"}</div>
       <p className="text-xs text-muted-foreground">The Grass extension automatically opens an inactive dashboard tab every five minutes and reads labeled Uptime and Network Points. It never needs your Grass password or session token.</p>
       <div className="grid grid-cols-2 gap-3 text-xs">
-        <div>Uptime Points <strong className="block text-white">{data?.uptimePoints == null ? "—" : Number(data.uptimePoints).toLocaleString()}</strong></div>
+        <div>Uptime {data?.uptimeEpoch != null ? `(Epoch ${data.uptimeEpoch})` : "Points"} <strong className="block text-white">{data?.uptimePoints == null ? "—" : Number(data.uptimePoints).toLocaleString()}</strong></div>
         <div>Network Points <strong className="block text-white">{data?.networkPoints == null ? "—" : Number(data.networkPoints).toLocaleString()}</strong></div>
       </div>
       {data?.latest?.observedAt && <p className="text-[11px] text-muted-foreground">Last synced: {data.latest.observedAt} (UTC)</p>}
@@ -727,7 +727,7 @@ function ProjectCard({
                 ● {project.autoSynced ? "Online" : normalizedPlatform === "grass" ? (grassLatest ? "Tracked" : "Pending") : normalizedPlatform === "honeygain" ? (honeygainLatest ? "Tracked" : "Pending") : "Offline"}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "grass" ? (grassLatest ? `${Number(grassLive.uptimePoints ?? 0).toLocaleString()} uptime · ${Number(grassLive.networkPoints ?? 0).toLocaleString()} network` : "—") : normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "grass" ? (grassLatest ? [grassLive.uptimePoints != null ? `${Number(grassLive.uptimePoints).toLocaleString()} uptime` : null, grassLive.networkPoints != null ? `${Number(grassLive.networkPoints).toLocaleString()} network` : null].filter(Boolean).join(" · ") : "—") : normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
