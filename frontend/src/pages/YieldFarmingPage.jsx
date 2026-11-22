@@ -1611,6 +1611,18 @@ const summary =
   // The backend owns project_income_portfolio_summary_v1. Never publish
   // browser-computed values into a shared setting or another page.
 
+  function updateHoneygainBalance(assetId, values) {
+    const balance = Number(values?.balance);
+    const earned = Number(values?.earned);
+    if (!Number.isFinite(balance) || balance < 0 || !Number.isFinite(earned) || earned < 0) return;
+    setManualPositions(current => current.map(position =>
+      position.id === assetId && String(position.platform || "").toLowerCase() === "honeygain"
+        ? { ...position, balance, earned }
+        : position
+    ));
+    toast.success("Honeygain balances saved");
+  }
+
   function deletePosition(
     id
   ) {
@@ -2088,6 +2100,7 @@ if (
                       onDeletePosition={
                         deletePosition
                       }
+      onManualEarningsChange={updateHoneygainBalance}
                       logo={
                         projectLogos[
                           project.id
