@@ -1430,7 +1430,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
       .map(([name, amount]) => ({ name, amount: Number(amount) || 0 })),
     ...(honeygainDisplayUsd == null ? [] :
-      [{ name: "Honeygain", amount: honeygainDisplayUsd, precision: 5 }]),
+      [{ name: "Honeygain", amount: honeygainDisplayUsd, precision: 2 }]),
     ...(grassDisplayUsd == null ? [] :
       [{ name: "Grass", amount: grassDisplayUsd, precision: 6 }]),
   ].sort((a, b) => b.amount - a.amount);
