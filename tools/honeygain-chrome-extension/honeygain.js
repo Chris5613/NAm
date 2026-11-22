@@ -25,7 +25,11 @@ function extract() {
       const after = content.slice(content.toLowerCase().indexOf(text.toLowerCase()) + text.length).trim();
       // Reject cards containing multiple independent balances / financial figures.
       const numbers = [...after.matchAll(/(?:^|\s)([0-9][0-9,]*(?:\.[0-9]+)?)(?=\s|$|\s*credits?\b)/gi)];
-      if (numbers.length !== 1) continue;
+      if (!numbers.length) continue;
+      // The Honeygain card can also show traffic (MB) after credits.
+      // Only accept the first numeric field close to the labeled earnings text.
+      const firstOffset = numbers[0].index;
+      if (firstOffset > 24) continue;
       const todayCredits = Number(numbers[0][1].replace(/,/g,""));
       if (!Number.isFinite(todayCredits) || todayCredits < 0 || todayCredits > 10000000) continue;
       const day = new Intl.DateTimeFormat("en-CA",{timeZone:"America/Los_Angeles",year:"numeric",month:"2-digit",day:"2-digit"})
