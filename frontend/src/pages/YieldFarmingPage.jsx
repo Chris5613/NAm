@@ -299,19 +299,21 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     });
   }, []);
 
-  // Place Honeygain in the existing Inactive projects drawer once, without
-  // deleting balances or disabling the opted-in dashboard observations.
-  // A separate marker preserves any later manual Reactivate choice.
+  // Undo the mistaken default-inactive migration introduced in November.
+  // The project belongs among active earners; the browser tab itself is
+  // background/inactive when the extension polls Honeygain.
   useEffect(() => {
     const marker = "honeygain_default_inactive_applied_v1";
-    if (remoteStorage.getItem(marker) === "true") return;
-    const key = "manual-project-honeygain";
+    const undoMarker = "honeygain_inactive_default_undo_v1";
+    if (remoteStorage.getItem(marker) !== "true" ||
+        remoteStorage.getItem(undoMarker) === "true") return;
     const stored = readObject(INACTIVE_PROJECTS_KEY);
     const ids = Array.isArray(stored.ids) ? stored.ids.map(String) : [];
-    if (!ids.includes(key)) {
-      saveObject(INACTIVE_PROJECTS_KEY, { ...stored, ids: [...ids, key] });
+    const next = ids.filter(id => id !== "manual-project-honeygain");
+    if (next.length !== ids.length) {
+      saveObject(INACTIVE_PROJECTS_KEY, { ...stored, ids: next });
     }
-    remoteStorage.setItem(marker, "true");
+    remoteStorage.setItem(undoMarker, "true");
   }, []);
 
   // Honeygain Chrome dashboard -> signed-in NAm session -> validated backend.
