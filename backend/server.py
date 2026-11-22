@@ -20,7 +20,7 @@ from .db import init_db  # noqa: E402  (imported after load_dotenv so DATABASE_U
 from .kryptex_historical_recovery import recover_verified_kryptex_november_rewards  # noqa: E402
 from .loop_watchdog import start_watchdog, stop_watchdog  # noqa: E402
 from .scheduler import scheduler_status, start_scheduler, stop_scheduler  # noqa: E402
-from .routers import auth_routes, market, resources, simplefin_routes, spending, project_tracking, yield_sources, power, honeygain, grass  # noqa: E402
+from .routers import auth_routes, market, resources, simplefin_routes, spending, project_tracking, yield_sources, power, honeygain  # noqa: E402
 
 app = FastAPI(title="Net Worth Tracker - Backend", version="1.0.0")
 
@@ -77,7 +77,6 @@ app.include_router(project_tracking.router)
 app.include_router(yield_sources.router)
 app.include_router(power.router)
 app.include_router(honeygain.router)
-app.include_router(grass.router)
 
 
 @app.on_event("startup")
