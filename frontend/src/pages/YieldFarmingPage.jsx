@@ -659,9 +659,16 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
             loopscaleSnapshot
           );
 
+        // Honeygain project data is retained for edit history, but regular
+        // Honeygain-mode balances never enter portfolio totals. The JumpTask
+        // balance shown on its card comes only from the isolated backend feed.
         const manualProjects =
           groupManualPositions(
-            manualPositions
+            manualPositions.map(position =>
+              String(position.platform || "").toLowerCase() === "honeygain"
+                ? { ...position, balance: 0, earned: 0, apy: 0 }
+                : position
+            )
           );
 
         return [
