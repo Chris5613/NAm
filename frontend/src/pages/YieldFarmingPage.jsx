@@ -1454,12 +1454,61 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const currentMonthSources = backendEarnings?.monthlySources || {};
   const chartSourceTotalsForDay = key =>
     backendEarnings?.days?.find(row => row.key === key)?.sources || {};
-  const selectedBreakdown = buildSelectedEarningsBreakdown({
+  const recordedBreakdown = buildSelectedEarningsBreakdown({
     selection: selectedEarningsPoint, earningsChartRange,
     projectIncome: chartProjectIncome, stockPayouts: {}, todayKey,
     luloUtcDay: currentLuloUtc.utcDay, hasLuloProjects: luloProjects.length > 0,
     sourceTotalsForDay: chartSourceTotalsForDay, currentMonthSources,
   });
+  // Attach backend-stored Pacific-day balance observations to the popup for
+  // the SELECTED chart date. Do not apply the current wallet balance to a past
+  // day; that would falsify the historical chart. A month selection uses the
+  // most recent observed balance in that month rather than a sum of balances.
+  const selectedBreakdown = (() => {
+    if (!recordedBreakdown || !selectedEarningsPoint) return recordedBreakdown;
+    const key = String(selectedEarningsPoint.key || "");
+    const monthlySelection = selectedEarningsPoint.range === "yearly";
+    const chooseObservation = history => {
+      if (!history || typeof history !== "object") return null;
+      if (!monthlySelection) return history[key] || null;
+      const dates = Object.keys(history).filter(day => day.startsWith(key + "-")).sort();
+      return dates.length ? history[dates[dates.length - 1]] : null;
+    };
+    const honeyHistory = auxiliaryRewards.honeygain?.dailyHistory;
+    const grassHistory = auxiliaryRewards.grass?.dailyHistory;
+    const honeyRecord = chooseObservation(honeyHistory);
+    const grassRecord = chooseObservation(grassHistory);
+    // Before daily history existed, honor a latest persisted observation only
+    // if its actual Pacific calendar date matches the selected date.
+    const honeyLatest = auxiliaryRewards.honeygain?.latest;
+    const grassLatest = auxiliaryRewards.grass?.latest;
+    const honeyCreditBalance = honeyRecord?.lastCredits ??
+      (honeyLatest && pacificDay(honeyLatest.observedAt) === key ? honeyLatest.jumpTaskBalanceCredits : null);
+    const grassSample = grassRecord?.latest ??
+      (grassLatest && pacificDay(grassLatest.observedAt) === key ? grassLatest : null);
+    const numeric = value => value != null && Number.isFinite(Number(value)) ? Number(value) : null;
+    const honeyCredits = numeric(honeyCreditBalance);
+    const uptime = numeric(grassSample?.uptimePoints);
+    const network = numeric(grassSample?.networkPoints);
+    // Rates are the documented historical Stage 2 estimate ONLY.
+    // These values are shown as tracked equivalents, not earned daily cash.
+    const grassEstimate = (uptime != null || network != null)
+      ? (uptime ?? 0) * 0.00000007 + (network ?? 0) * 0.0049
+      : null;
+    const additions = [
+      { name: "Honeygain", amount: honeyCredits == null ? null : honeyCredits / 1000 },
+      { name: "Grass", amount: grassEstimate },
+    ];
+    const entries = [...recordedBreakdown.entries, ...additions]
+      .sort((a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity));
+    const addedValue = additions.reduce((total, row) => total + (row.amount ?? 0), 0);
+    return {
+      ...recordedBreakdown,
+      entries,
+      total: recordedBreakdown.total + addedValue,
+      note: recordedBreakdown.note + " Tracked Honeygain balances and Grass point estimates are snapshots, not booked daily income.",
+    };
+  })();
 
   const dailyEarningsObservations =
     useDailyEarningsObservations(todayEarnings, earningsClock, todayKey);
@@ -2539,7 +2588,7 @@ if (
               {selectedBreakdown.entries.length ? selectedBreakdown.entries.map(item => (
                 <div key={item.name} className="flex items-center justify-between gap-3 text-sm">
                   <span className="truncate text-muted-foreground">{item.name}</span>
-                  <span className="font-semibold tabular-nums">{formatCurrency(item.amount)}</span>
+                  <span className="font-semibold tabular-nums">{item.amount == null ? "—" : item.name === "Grass" ? "$" + item.amount.toFixed(6) : formatCurrency(item.amount)}</span>
                 </div>
               )) : <p className="text-sm text-muted-foreground">No recorded project earnings for this point.</p>}
               <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm font-semibold">
