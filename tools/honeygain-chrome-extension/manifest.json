@@ -1,0 +1,40 @@
+{
+  "manifest_version": 3,
+  "name": "NAm Honeygain Dashboard Tracker",
+  "version": "1.0.0",
+  "description": "Reads visible daily Honeygain credits from an open dashboard tab and relays them to your signed-in NAm page. No Honeygain session tokens are accessed.",
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://dashboard.honeygain.com/*",
+    "https://nam-qyn8.onrender.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://dashboard.honeygain.com/*"
+      ],
+      "js": [
+        "honeygain.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://nam-qyn8.onrender.com/*"
+      ],
+      "js": [
+        "nam.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
