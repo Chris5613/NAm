@@ -1,7 +1,7 @@
 // Observe visible Grass points only. No fetch, cookie, token, or page bridge.
 const RULES=[
- {key:"uptimePoints",re:/^uptime\s+points?\s*:?$/i},
- {key:"networkPoints",re:/^network\s+points?\s*:?$/i},
+ {key:"uptimePoints",re:/^(?:(?:epoch\s+(\d+)\s+)?uptime\s+(?:earnings|points?))\s*:?$/i},
+ {key:"networkPoints",re:/^(?:(?:epoch\s+(\d+)\s+)?network\s+(?:earnings|points?))\s*:?$/i},
 ];
 const visible=el=>{
  if(!el||!el.getClientRects().length)return false;
@@ -39,20 +39,29 @@ function sample(){
  let count=0;
  for(const el of document.querySelectorAll("span,div,p,strong,b,h1,h2,h3,h4,dt,dd,small,label")){
   if(!visible(el)||(el.textContent||"").length>75)continue;
-  const t=(el.textContent||"").trim().replace(/\s+/g," ");
+  const t=(el.textContent||"").trim().replace(/\s+/g," ").replace(/:$/,"").trim();
   const rule=RULES.find(r=>r.re.test(t));if(!rule)continue;
   if([...el.children].some(c=>visible(c)&&(c.textContent||"").trim()===t))continue;
   if(readings[rule.key]!==undefined)continue;
   const val=read(el);
-  if(val!==null){readings[rule.key]=val;count++;}
+  if(val!==null){
+   readings[rule.key]=val;
+   const epoch=t.match(/^epoch\s+(\d+)\b/i);
+   if(epoch)readings[rule.key==="uptimePoints"?"uptimeEpoch":"networkEpoch"]=Number(epoch[1]);
+   count++;
+  }
  }
  if(!count){
   chrome.runtime.sendMessage({type:"GRASS_READ_ERROR",error:"No labeled Uptime or Network Points were recognized. Confirm you are signed in to the Grass rewards dashboard."}).catch(()=>{});
   return;
  }
- chrome.runtime.sendMessage({type:"GRASS_READING",reading:readings}).catch(()=>{});
+ const sig=[readings.uptimePoints??"",readings.networkPoints??"",readings.uptimeEpoch??"",readings.networkEpoch??""].join(":");
+ if(sig===previousSignature)return;
+ previousSignature=sig;
+ chrome.runtime.sendMessage({type:"GRASS_READING",reading:readings}).catch(()=>{previousSignature="";});
 }
 chrome.runtime.onMessage.addListener(m=>{if(m?.type==="GRASS_SAMPLE")sample();});
 sample();
 let attempts=0;
+let previousSignature="";
 const retry=setInterval(()=>{sample();if(++attempts>=40)clearInterval(retry);},1000);
