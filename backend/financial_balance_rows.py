@@ -70,10 +70,10 @@ def financial_balance_rows(month, records, live, devices, current_month):
         if key and key not in candidates:
             candidates[key] = name
     for key, name in candidates.items():
-        # Rate X is a tracked project, not a Financials Balance Sheet asset.
+        # Retired Grass and Rate X are not current Financials Balance Sheet assets.
         # Preserve previously locked historical months and the project feed;
         # exclude only current/open Balance Sheet projections, without writes.
-        if not current.get("locked") and key == "ratex":
+        if not current.get("locked") and key in ("ratex", "grass"):
             continue
         if key in excluded_names:
             continue
@@ -186,7 +186,7 @@ def financial_balance_rows(month, records, live, devices, current_month):
             alias(row.get("name")) in legacy_split_names
         ):
             continue
-        if not current.get("locked") and asset_key(row.get("name")) == "ratex":
+        if not current.get("locked") and asset_key(row.get("name")) in ("ratex", "grass"):
             continue
         if any(alias(x.get("name")) == alias(row.get("name")) and
                x.get("source") != "hardware-payback" for x in equipment):
