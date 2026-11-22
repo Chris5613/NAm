@@ -13,10 +13,8 @@ import time
 from datetime import datetime
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
-from zoneinfo import ZoneInfo
 
 BASE = "https://dashboard.honeygain.com/api/v1"
-PACIFIC = ZoneInfo("America/Los_Angeles")
 
 
 def positive(value, field):
@@ -86,7 +84,7 @@ def run():
         try:
             today = read_today(fetch(today_path, jwt))
             unpaid = read_balance(fetch("/users/balances", jwt))
-            day = datetime.now(PACIFIC).strftime("%Y-%m-%d")
+            day = datetime.now().astimezone().strftime("%Y-%m-%d")
             result = send_nam(url, token, {
                 "day": day,
                 "todayCredits": today,
