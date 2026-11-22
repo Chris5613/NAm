@@ -117,7 +117,7 @@ async def browser_ingest(payload: dict[str, Any],
     # and latest reported balance each day, plus high/low, without turning
     # transfers or differences into recognized daily income.
     history = dict(old.get("dailyHistory") or {})
-    day = now.date().isoformat()
+    day = now.astimezone(PACIFIC).date().isoformat()
     previous = dict(history.get(day) or {})
     samples = int(previous.get("samples") or 0) + 1
     history[day] = {
@@ -183,6 +183,6 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
         "bookedFinancialIncome": False,
         "monthlyIncomeRecorded": False,
         "dailyHistory": value.get("dailyHistory", {}),
-        "historyTimezone": "UTC",
+        "historyTimezone": "America/Los_Angeles",
         "trackedBy": "NAm PostgreSQL backend; Chrome extension supplies observations",
     }
