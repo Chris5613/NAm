@@ -5,6 +5,7 @@ Accept only explicitly labeled DOM values from the signed-in NAm client.
 """
 from datetime import datetime, timezone
 from math import isfinite
+from zoneinfo import ZoneInfo
 from typing import Any
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
@@ -15,6 +16,7 @@ from ..models import Setting, User
 
 router = APIRouter(prefix="/api/grass", tags=["grass"])
 KEY = "grass_dashboard_observation_v1"
+PACIFIC = ZoneInfo("America/Los_Angeles")
 # Historical Stage 2 payout rates in USDC per point, not a promised Stage 3 conversion.
 UPTIME_USDC_PER_POINT = 0.00000007
 NETWORK_USDC_PER_POINT = 0.0049
@@ -63,7 +65,7 @@ async def observe(payload: dict[str, Any], user: User = Depends(current_user),
     }
     # Persist UTC-date observations in Postgres. The epoch identifiers are
     # kept with each snapshot so resets are not misreported as negative income.
-    day = datetime.now(timezone.utc).date().isoformat()
+    day = datetime.now(timezone.utc).astimezone(PACIFIC).date().isoformat()
     history = dict(previous.get("dailyHistory") or {})
     earlier = dict(history.get(day) or {})
     samples = int(earlier.get("samples") or 0) + 1
@@ -117,7 +119,7 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
         "balanceUsd": None,
         "grassTokens": None,
         "dailyHistory": stored.get("dailyHistory", {}),
-        "historyTimezone": "UTC",
+        "historyTimezone": "America/Los_Angeles",
         "trackedBy": "NAm PostgreSQL backend; Chrome extension supplies observations",
         "bookedFinancialIncome": False,
         "note": "Points are not cash or GRASS tokens; no conversion is assumed.",
