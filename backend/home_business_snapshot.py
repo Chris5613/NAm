@@ -31,6 +31,8 @@ def current_live_assets(settings, bitcoin_usd):
         # Preserve all saved project holdings, including new providers.
         # Known dedicated trackers below override the general feed only when
         # they contain usable observations. Do not infer income from balances.
+        if name == "grass":
+            continue  # Removed provider must not reappear as a financial asset.
         if name and len(name) <= 100 and amount is not None and amount >= 0:
             latest[name] = amount
     quick = obj(settings.get("yield_project_quick_cache_v1"))
