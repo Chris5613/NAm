@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "NAm Honeygain Dashboard Tracker",
-  "version": "1.1.0",
-  "description": "Automatically opens an inactive Honeygain dashboard tab every 5 minutes, reads visible earnings, relays to NAm, and closes it.",
+  "version": "1.2.0",
+  "description": "Every five minutes, reads only JumpTask balance from inactive Honeygain dashboard tab and closes it; does not count Honeygain balance.",
   "permissions": [
     "tabs",
     "storage",
