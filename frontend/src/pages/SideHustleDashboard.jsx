@@ -104,6 +104,7 @@ const PROJECT_TABLE_META = {
   Lulo: { type: "Lending", typeClass: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300", icon: "L", iconClass: "border-rose-500/30 bg-rose-500/10 text-rose-300" },
   Loopscale: { type: "Lending", typeClass: "border-cyan-500/25 bg-cyan-500/10 text-cyan-300", icon: "∞", iconClass: "border-violet-500/30 bg-violet-500/10 text-violet-300" },
   Kryptex: { type: "Mining", typeClass: "border-amber-500/25 bg-amber-500/10 text-amber-300", icon: "◆", iconClass: "border-sky-500/30 bg-sky-500/10 text-sky-300" },
+  Honeygain: { type: "Bandwidth", typeClass: "border-sky-500/25 bg-sky-500/10 text-sky-300", icon: "H", iconClass: "border-orange-500/30 bg-orange-500/10 text-orange-300" },
   Salad: { type: "Compute", typeClass: "border-teal-500/25 bg-teal-500/10 text-teal-300", icon: "●", iconClass: "border-lime-500/30 bg-lime-500/10 text-lime-300" },
   Unetwork: { type: "Node", typeClass: "border-violet-500/25 bg-violet-500/10 text-violet-300", icon: "U", iconClass: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300" },
   RollerCoin: { type: "Gaming", typeClass: "border-fuchsia-500/25 bg-fuchsia-500/10 text-fuchsia-300", icon: "◉", iconClass: "border-amber-500/30 bg-amber-500/10 text-amber-300" },
