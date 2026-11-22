@@ -56,7 +56,8 @@ import {
   DAILY_BALANCE_SNAPSHOT_KEY,
   AUTO_RECOVERED_EARNINGS_KEY,
   PROJECT_QUICK_CACHE_KEY,
-  getPrivateAccountingProfile
+  getPrivateAccountingProfile,
+  INACTIVE_PROJECTS_KEY
 } from "@/lib/yieldFarmingAccounting";
 import {
   ProjectLogoButton,
@@ -296,6 +297,21 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
         startDate: new Date().toISOString().slice(0, 10),
       }];
     });
+  }, []);
+
+  // Place Honeygain in the existing Inactive projects drawer once, without
+  // deleting balances or disabling the opted-in dashboard observations.
+  // A separate marker preserves any later manual Reactivate choice.
+  useEffect(() => {
+    const marker = "honeygain_default_inactive_applied_v1";
+    if (remoteStorage.getItem(marker) === "true") return;
+    const key = "manual-project-honeygain";
+    const stored = readObject(INACTIVE_PROJECTS_KEY);
+    const ids = Array.isArray(stored.ids) ? stored.ids.map(String) : [];
+    if (!ids.includes(key)) {
+      saveObject(INACTIVE_PROJECTS_KEY, { ...stored, ids: [...ids, key] });
+    }
+    remoteStorage.setItem(marker, "true");
   }, []);
 
   // Honeygain Chrome dashboard -> signed-in NAm session -> validated backend.
