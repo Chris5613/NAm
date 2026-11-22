@@ -61,10 +61,35 @@ async def observe(payload: dict[str, Any], user: User = Depends(current_user),
         "observedAt": datetime.now(timezone.utc).isoformat(),
         "source": "grass-chrome-background-tab",
     }
+    # Persist UTC-date observations in Postgres. The epoch identifiers are
+    # kept with each snapshot so resets are not misreported as negative income.
+    day = datetime.now(timezone.utc).date().isoformat()
+    history = dict(previous.get("dailyHistory") or {})
+    earlier = dict(history.get(day) or {})
+    samples = int(earlier.get("samples") or 0) + 1
+    history[day] = {
+        "first": earlier.get("first", {
+            "uptimePoints": latest["uptimePoints"],
+            "networkPoints": latest["networkPoints"],
+            "uptimeEpoch": latest["uptimeEpoch"],
+            "networkEpoch": latest["networkEpoch"],
+        }),
+        "latest": {
+            "uptimePoints": latest["uptimePoints"],
+            "networkPoints": latest["networkPoints"],
+            "uptimeEpoch": latest["uptimeEpoch"],
+            "networkEpoch": latest["networkEpoch"],
+        },
+        "firstObservedAt": earlier.get("firstObservedAt", latest["observedAt"]),
+        "lastObservedAt": latest["observedAt"],
+        "samples": samples,
+    }
+    history = dict(sorted(history.items())[-120:])
+    stored = {**latest, "dailyHistory": history}
     if row:
-        row.value = latest
+        row.value = stored
     else:
-        db.add(Setting(user_id=user.id, key=KEY, value=latest))
+        db.add(Setting(user_id=user.id, key=KEY, value=stored))
     db.commit()
     return {"ok": True, "latest": latest}
 
@@ -90,6 +115,9 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
         "networkEpoch": latest.get("networkEpoch") if latest else None,
         "balanceUsd": None,
         "grassTokens": None,
+        "dailyHistory": (latest or {}).get("dailyHistory", {}),
+        "historyTimezone": "UTC",
+        "trackedBy": "NAm PostgreSQL backend; Chrome extension supplies observations",
         "bookedFinancialIncome": False,
         "note": "Points are not cash or GRASS tokens; no conversion is assumed.",
     }
