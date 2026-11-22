@@ -11,7 +11,7 @@ let waitingForSaved = false;
 
 const hgOrigin = url => /^https:\/\/dashboard\.honeygain\.com(?:\/|$)/.test(url || "");
 const namOrigin = url => /^https:\/\/nam-qyn8\.onrender\.com(?:\/|$)/.test(url || "");
-const signature = r => [r.day,r.todayCredits,r.evidenceLabel].join(":");
+const signature = r => [r.jumpTaskBalanceCredits,r.evidenceLabel].join(":");
 async function closeOwned(tabId) {
   if (typeof tabId === "number") {
     try { await chrome.tabs.remove(tabId); } catch {}
@@ -33,7 +33,7 @@ async function poll() {
     if (honeygainManagedTab === tab.id) {
       honeygainManagedTab = null;
       await closeOwned(tab.id);
-      chrome.storage.local.set({lastHoneygainError:"Honeygain dashboard did not expose today's earnings before the tab timeout."});
+      chrome.storage.local.set({lastHoneygainError:"Honeygain dashboard did not expose a labeled JumpTask balance before the tab timeout."});
     }
   }, MAX_HG_OPEN_MS);
 }
@@ -72,8 +72,8 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
   if (message?.type === "HONEYGAIN_READING") {
     if (!hgOrigin(sender.tab?.url)) return;
     const reading = message.reading;
-    if (!reading || !Number.isFinite(reading.todayCredits) || reading.todayCredits < 0 ||
-        !["earned-today","today-earnings"].includes(reading.evidenceLabel)) return;
+    if (!reading || !Number.isFinite(reading.jumpTaskBalanceCredits) || reading.jumpTaskBalanceCredits < 0 ||
+        !["jumptask-balance","transferred-to-jumptask"].includes(reading.evidenceLabel)) return;
     // An extension-managed tab can be closed once parsed; user tabs remain.
     if (sender.tab?.id === honeygainManagedTab) {
       const id = honeygainManagedTab;
