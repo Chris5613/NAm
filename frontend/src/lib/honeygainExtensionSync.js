@@ -1,13 +1,13 @@
 import { api } from "@/lib/apiClient";
 
 // Install once on the signed-in NAm shell, regardless of the visible page.
-// The extension delivers only labeled daily credits from Honeygain's DOM.
+// The extension delivers only labeled JumpTask balance from Honeygain's dashboard DOM.
 let installed = false;
 let inFlight = false;
 let latestAccepted = "";
 
 function signature(reading) {
-  return [reading.day, reading.todayCredits, reading.evidenceLabel].join(":");
+  return [reading.jumpTaskBalanceCredits, reading.evidenceLabel].join(":");
 }
 
 async function onReading(event) {
@@ -15,8 +15,8 @@ async function onReading(event) {
   const data = event.data;
   if (data?.source !== "nam-honeygain-extension" || data?.type !== "HONEYGAIN_READING") return;
   const reading = data.reading;
-  if (!reading || !Number.isFinite(reading.todayCredits) || reading.todayCredits < 0 ||
-      !["earned-today", "today-earnings"].includes(reading.evidenceLabel)) return;
+  if (!reading || !Number.isFinite(reading.jumpTaskBalanceCredits) || reading.jumpTaskBalanceCredits < 0 ||
+      !["jumptask-balance", "transferred-to-jumptask"].includes(reading.evidenceLabel)) return;
   const sig = signature(reading);
   if (inFlight || latestAccepted === sig) {
     if (latestAccepted === sig) acknowledge(sig);
@@ -27,8 +27,7 @@ async function onReading(event) {
     await api.post("/api/honeygain/browser-ingest", {
       source:"honeygain-dashboard-visible",
       evidenceLabel:reading.evidenceLabel,
-      day:reading.day,
-      todayCredits:reading.todayCredits,
+      jumpTaskBalanceCredits:reading.jumpTaskBalanceCredits,
     });
     latestAccepted = sig;
     window.dispatchEvent(new Event("nam-honeygain-updated"));
