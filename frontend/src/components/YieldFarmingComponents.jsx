@@ -539,7 +539,12 @@ function HoneygainSyncPanel() {
       .catch(() => {});
     refresh();
     const timer = window.setInterval(refresh, 60000);
-    return () => { active = false; window.clearInterval(timer); };
+    window.addEventListener("nam-honeygain-updated", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("nam-honeygain-updated", refresh);
+    };
   }, []);
   async function generate() {
     if (!window.confirm("Generate a Honeygain bridge token? This replaces any existing Honeygain bridge token.")) return;
@@ -661,7 +666,12 @@ function ProjectCard({
       .catch(() => {});
     refresh();
     const timer = window.setInterval(refresh, 60000);
-    return () => { active = false; window.clearInterval(timer); };
+    window.addEventListener("nam-honeygain-updated", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("nam-honeygain-updated", refresh);
+    };
   }, [normalizedPlatform]);
   const honeygainLatest = honeygainLive?.latest;
 
