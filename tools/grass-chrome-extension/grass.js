@@ -34,6 +34,7 @@ function read(label){
  }
  return null;
 }
+let previousSignature="";
 function sample(){
  const readings={source:"grass-visible-dashboard-v1",observedAt:new Date().toISOString()};
  let count=0;
@@ -63,5 +64,4 @@ function sample(){
 chrome.runtime.onMessage.addListener(m=>{if(m?.type==="GRASS_SAMPLE")sample();});
 sample();
 let attempts=0;
-let previousSignature="";
 const retry=setInterval(()=>{sample();if(++attempts>=40)clearInterval(retry);},1000);
