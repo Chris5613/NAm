@@ -708,9 +708,8 @@ function ProjectCard({
           )}
 
           {normalizedPlatform === "honeygain" && <HoneygainSyncPanel />}
-          {normalizedPlatform === "honeygain" && project.assets?.[0] && (
-            <HoneygainBalanceEditor asset={project.assets[0]} onSave={onManualEarningsChange} />
-          )}
+          {/* Hide legacy manual Honeygain balance inputs: JumpTask-only
+              observations are now the sole displayed balance source. */}
           <ProjectPositionsSection
             project={
               project
