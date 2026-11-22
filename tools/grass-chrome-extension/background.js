@@ -3,7 +3,7 @@ const GRASS="https://app.grass.io/dashboard";
 const NAM="https://nam-qyn8.onrender.com/";
 const ALARM="nam-grass-five-minutes";
 let ownedGrass=null,ownedNam=null,pending="";
-function sig(r){return [r.uptimePoints??"",r.networkPoints??""].join(":");}
+function sig(r){return [r.uptimePoints??"",r.networkPoints??"",r.uptimeEpoch??"",r.networkEpoch??""].join(":");}
 const grassUrl=url=>/^https:\/\/app\.grass\.io(?:\/|$)/.test(url||"");
 const namUrl=url=>/^https:\/\/nam-qyn8\.onrender\.com(?:\/|$)/.test(url||"");
 async function close(tab){if(Number.isInteger(tab)){try{await chrome.tabs.remove(tab);}catch{}}}
