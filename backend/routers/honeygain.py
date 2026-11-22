@@ -110,7 +110,27 @@ async def browser_ingest(payload: dict[str, Any],
     }
     # Separate namespace: legacy Honeygain-mode daily-credit observations
     # cannot contaminate JumpTask totals or reappear on the new card.
-    _save(db, user.id, "honeygain_jumptask_balance_v1", {"latest": latest})
+    key = "honeygain_jumptask_balance_v1"
+    stored = _get(db, user.id, key)
+    old = dict(stored.value or {}) if stored else {}
+    # Immutable UTC-date sample history is server-owned. We retain the first
+    # and latest reported balance each day, plus high/low, without turning
+    # transfers or differences into recognized daily income.
+    history = dict(old.get("dailyHistory") or {})
+    day = now.date().isoformat()
+    previous = dict(history.get(day) or {})
+    samples = int(previous.get("samples") or 0) + 1
+    history[day] = {
+        "firstCredits": previous.get("firstCredits", credits),
+        "lastCredits": credits,
+        "minCredits": min(float(previous.get("minCredits", credits)), credits),
+        "maxCredits": max(float(previous.get("maxCredits", credits)), credits),
+        "firstObservedAt": previous.get("firstObservedAt", latest["observedAt"]),
+        "lastObservedAt": latest["observedAt"],
+        "samples": samples,
+    }
+    history = dict(sorted(history.items())[-120:])
+    _save(db, user.id, key, {"latest": latest, "dailyHistory": history})
     db.commit()
     return {"ok": True, "jumpTaskBalanceCredits": credits}
 
@@ -162,4 +182,7 @@ async def status(user: User = Depends(current_user), db: Session = Depends(get_d
         "sourceOfCalculation": "backend-jumptask-observed-balance",
         "bookedFinancialIncome": False,
         "monthlyIncomeRecorded": False,
+        "dailyHistory": value.get("dailyHistory", {}),
+        "historyTimezone": "UTC",
+        "trackedBy": "NAm PostgreSQL backend; Chrome extension supplies observations",
     }
