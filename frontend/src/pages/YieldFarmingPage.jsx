@@ -276,6 +276,27 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     unetworkTracker,
   });
 
+  // One-time, zero-balance Honeygain project requested by the account owner.
+  // Manual by default: never manufacture earnings or infer provider payouts.
+  useEffect(() => {
+    const seedKey = "honeygain_project_seeded_v1";
+    if (remoteStorage.getItem(seedKey) === "true") return;
+    remoteStorage.setItem(seedKey, "true");
+    setManualPositions(current => {
+      if (current.some(position => String(position.platform || "").toLowerCase() === "honeygain")) return current;
+      return [...current, {
+        id: "honeygain-bandwidth-sharing",
+        platform: "Honeygain",
+        asset: "Bandwidth Sharing",
+        strategy: "Manual earnings",
+        balance: 0,
+        earned: 0,
+        apy: 0,
+        startDate: new Date().toISOString().slice(0, 10),
+      }];
+    });
+  }, []);
+
   // RollerCoin TRX price is supplied with each extension wallet sync.
 
   // All project refresh paths share one response-order gate. An older
