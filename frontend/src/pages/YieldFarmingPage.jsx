@@ -1399,24 +1399,43 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       window.removeEventListener("nam-grass-updated", refresh);
     };
   }, []);
-  const currentUtcDay = new Date().toISOString().slice(0, 10);
-  const isFreshUtc = observedAt => {
-    if (!observedAt) return false;
-    const date = new Date(observedAt);
-    return Number.isFinite(date.getTime()) &&
-      date.toISOString().slice(0, 10) === currentUtcDay;
+  // Render all provider observations on the same America/Los_Angeles
+  // calendar day as the rest of NAm. Their server timestamps remain UTC.
+  const pacificDay = value => {
+    if (!value) return null;
+    const date = new Date(value);
+    if (!Number.isFinite(date.getTime())) return null;
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(date);
   };
-  const honeygainObservedToday = isFreshUtc(auxiliaryRewards.honeygain?.latest?.observedAt);
-  const grassObservedToday = isFreshUtc(auxiliaryRewards.grass?.latest?.observedAt);
-  const grassPointsLabel = grassObservedToday &&
-    auxiliaryRewards.grass?.estimatedUsd != null
-      ? `$${Number(auxiliaryRewards.grass.estimatedUsd).toFixed(6)}`
-      : "";
+  const honeygainObservedToday =
+    pacificDay(auxiliaryRewards.honeygain?.latest?.observedAt) === todayKey;
+  const grassObservedToday =
+    pacificDay(auxiliaryRewards.grass?.latest?.observedAt) === todayKey;
+  const honeygainDisplayUsd = honeygainObservedToday &&
+    Number.isFinite(Number(auxiliaryRewards.honeygain?.balanceUsd))
+    && auxiliaryRewards.honeygain?.balanceUsd != null
+      ? Number(auxiliaryRewards.honeygain.balanceUsd) : null;
+  const grassDisplayUsd = grassObservedToday &&
+    Number.isFinite(Number(auxiliaryRewards.grass?.estimatedUsd))
+    && auxiliaryRewards.grass?.estimatedUsd != null
+      ? Number(auxiliaryRewards.grass.estimatedUsd) : null;
 
-  const todayBreakdown = Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
-    .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
-    .map(([name, amount]) => ({ name, amount: Number(amount) || 0 }))
-    .sort((a, b) => b.amount - a.amount);
+  // The visible list includes both new projects and sorts them by displayed
+  // amount. The combined display total is not a booked-income calculation:
+  // Honeygain is a transferred balance and Grass is a historical-rate estimate.
+  const todayBreakdown = [
+    ...Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
+      .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
+      .map(([name, amount]) => ({ name, amount: Number(amount) || 0 })),
+    ...(honeygainDisplayUsd == null ? [] :
+      [{ name: "Honeygain", amount: honeygainDisplayUsd, precision: 5 }]),
+    ...(grassDisplayUsd == null ? [] :
+      [{ name: "Grass", amount: grassDisplayUsd, precision: 6 }]),
+  ].sort((a, b) => b.amount - a.amount);
+  const visibleEarningsTotal = todayEarnings == null ? null :
+    Number(todayEarnings) + (honeygainDisplayUsd ?? 0) + (grassDisplayUsd ?? 0);
   const monthlyChartData = backendEarnings?.days || [];
   // The daily chart is dated receipts; month-end income is the separately
   // booked provider ledger. Do not silently count provisional Lulo/Loopscale
@@ -2092,7 +2111,7 @@ const summary =
                 {todayBreakdown.map(source => (
                   <div key={source.name} className="flex items-center justify-between gap-3 text-xs">
                     <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
-                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{formatCurrency(source.amount)}</span>
+                    <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{source.precision != null ? "$" + source.amount.toFixed(source.precision) : formatCurrency(source.amount)}</span>
                   </div>
                 ))}
 
@@ -2103,29 +2122,9 @@ const summary =
                   </div>
                 )}
 
-                <div className="border-t border-white/10 pt-2 space-y-2">
-                  <div className="text-[10px] font-medium text-muted-foreground">
-                    Other tracked rewards · UTC · excluded from USD total
-                  </div>
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="min-w-0 text-muted-foreground">Honeygain · JumpTask transferred balance</span>
-                    <span className="shrink-0 font-semibold tabular-nums text-sky-300">
-                      {honeygainObservedToday && auxiliaryRewards.honeygain?.balanceUsd != null
-                        ? formatCurrency(auxiliaryRewards.honeygain.balanceUsd)
-                        : "—"}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="min-w-0 text-muted-foreground">Grass · estimated USD</span>
-                    <span className="max-w-[58%] text-right font-semibold tabular-nums text-sky-300">
-                      {grassPointsLabel || "—"}
-                    </span>
-                  </div>
-                </div>
-
                 <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs">
                   <span className="font-medium">Total</span>
-                  <span className="font-semibold tabular-nums">{todayEarnings == null ? "—" : formatCurrency(todayEarnings)}</span>
+                  <span className="font-semibold tabular-nums">{visibleEarningsTotal == null ? "—" : formatCurrency(visibleEarningsTotal)}</span>
                 </div>
               </div>
             ) : (
@@ -2137,17 +2136,7 @@ const summary =
                 <p className="text-[11px] leading-relaxed text-muted-foreground">
                   No booked USD increases recorded yet.
                 </p>
-                <div className="border-t border-white/10 pt-2 space-y-2">
-                  <div className="text-[10px] font-medium text-muted-foreground">Other tracked rewards · UTC · excluded from USD total</div>
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-muted-foreground">Honeygain · JumpTask balance</span>
-                    <span className="font-semibold tabular-nums text-sky-300">{honeygainObservedToday && auxiliaryRewards.honeygain?.balanceUsd != null ? formatCurrency(auxiliaryRewards.honeygain.balanceUsd) : "—"}</span>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-muted-foreground">Grass · estimated USD</span>
-                    <span className="font-semibold tabular-nums text-sky-300">{grassPointsLabel || "—"}</span>
-                  </div>
-                </div>
+
               </div>
             )}
           </div>
