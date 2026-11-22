@@ -298,6 +298,52 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     });
   }, []);
 
+  // Honeygain Chrome dashboard -> signed-in NAm session -> validated backend.
+  // Reads only a labeled daily credit counter from an open dashboard tab.
+  useEffect(() => {
+    let active = true;
+    let lastAcceptedSignature = "";
+    let inflight = false;
+    const handleReading = async event => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      if (event.data?.source !== "nam-honeygain-extension" ||
+          event.data?.type !== "HONEYGAIN_READING") return;
+      const reading = event.data?.reading;
+      if (!reading || !Number.isFinite(reading.todayCredits) ||
+          reading.todayCredits < 0 ||
+          !["earned-today", "today-earnings"].includes(reading.evidenceLabel)) return;
+      const signature = [reading.day, reading.todayCredits, reading.evidenceLabel].join(":");
+      if (inflight || signature === lastAcceptedSignature) return;
+      inflight = true;
+      try {
+        await api.post("/api/honeygain/browser-ingest", {
+          source: "honeygain-dashboard-visible",
+          evidenceLabel: reading.evidenceLabel,
+          day: reading.day,
+          todayCredits: reading.todayCredits,
+        });
+        if (!active) return;
+        lastAcceptedSignature = signature;
+        window.dispatchEvent(new Event("nam-honeygain-updated"));
+      } catch (error) {
+        if (active) console.warn("Honeygain dashboard reading was not saved:", error?.message);
+      } finally {
+        inflight = false;
+      }
+    };
+    window.addEventListener("message", handleReading);
+    const request = () => window.postMessage({
+      source: "nam-honeygain-app", type: "REQUEST_LATEST",
+    }, window.location.origin);
+    request();
+    const timer = window.setTimeout(request, 1500);
+    return () => {
+      active = false;
+      window.removeEventListener("message", handleReading);
+      window.clearTimeout(timer);
+    };
+  }, []);
+
   // RollerCoin TRX price is supplied with each extension wallet sync.
 
   // All project refresh paths share one response-order gate. An older
