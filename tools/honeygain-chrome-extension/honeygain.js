@@ -52,5 +52,5 @@ function sample() {
   chrome.runtime.sendMessage({type:"HONEYGAIN_READING",reading}).catch(()=>{lastSignature = "";});
 }
 sample();
-setInterval(sample, 60000);
+setInterval(sample, 300000);
 document.addEventListener("visibilitychange",sample);
