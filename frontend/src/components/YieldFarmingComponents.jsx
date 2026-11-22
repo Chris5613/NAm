@@ -652,6 +652,19 @@ function ProjectCard({
     isLulo ||
     normalizedPlatform ===
       "loopscale";
+  const [honeygainLive, setHoneygainLive] = useState(null);
+  useEffect(() => {
+    if (normalizedPlatform !== "honeygain") return undefined;
+    let active = true;
+    const refresh = () => api.get("/api/honeygain/status")
+      .then(data => { if (active) setHoneygainLive(data); })
+      .catch(() => {});
+    refresh();
+    const timer = window.setInterval(refresh, 60000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [normalizedPlatform]);
+  const honeygainLatest = honeygainLive?.latest;
+
 
   return (
     <div
@@ -684,7 +697,7 @@ function ProjectCard({
                 ● {project.autoSynced ? "Online" : normalizedPlatform === "honeygain" ? "Manual" : "Offline"}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{formatCurrency(project.totalBalance)}</div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "honeygain" && honeygainLatest ? formatCurrency(honeygainLive.monthUsd) : formatCurrency(project.totalBalance)}</div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
