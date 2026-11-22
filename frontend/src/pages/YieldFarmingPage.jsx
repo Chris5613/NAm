@@ -683,7 +683,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
         // balance shown on its card comes only from the isolated backend feed.
         const manualProjects =
           groupManualPositions(
-            manualPositions.map(position =>
+            manualPositions.filter(position => String(position.platform || "").toLowerCase() !== "grass").map(position =>
               String(position.platform || "").toLowerCase() === "honeygain"
                 ? { ...position, balance: 0, earned: 0, apy: 0 }
                 : position
