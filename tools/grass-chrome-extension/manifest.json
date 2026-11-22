@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "NAm Grass Auto-Tab Tracker",
-  "version": "1.0.0",
-  "description": "Every five minutes, open official Grass dashboard in an inactive tab, read labeled Uptime and Network Points, send to NAm and close.",
+  "version": "1.1.0",
+  "description": "Auto-scan Grass dashboard every 5 min including Epoch Uptime Earnings and Network Points when visible",
   "permissions": [
     "tabs",
     "storage",
