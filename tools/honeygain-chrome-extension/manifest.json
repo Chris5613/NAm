@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "NAm Honeygain Dashboard Tracker",
-  "version": "1.0.0",
-  "description": "Reads visible daily Honeygain credits from an open dashboard tab and relays them to your signed-in NAm page. No Honeygain session tokens are accessed.",
+  "version": "1.1.0",
+  "description": "Automatically opens an inactive Honeygain dashboard tab every 5 minutes, reads visible earnings, relays to NAm, and closes it.",
   "permissions": [
     "tabs",
-    "storage"
+    "storage",
+    "alarms"
   ],
   "host_permissions": [
     "https://dashboard.honeygain.com/*",
