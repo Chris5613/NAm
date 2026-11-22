@@ -2,6 +2,8 @@
 // Preserves existing visuals and callbacks from the original page.
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/apiClient";
+import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, CalendarDays, Lock, X, Trash2 } from "lucide-react";
 import {
@@ -526,6 +528,64 @@ function formatCompactSyncAge(value) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
+function HoneygainSyncPanel() {
+  const [snapshot, setSnapshot] = useState(null);
+  const [token, setToken] = useState("");
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => api.get("/api/honeygain/status")
+      .then(data => { if (active) setSnapshot(data); })
+      .catch(() => {});
+    refresh();
+    const timer = window.setInterval(refresh, 60000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, []);
+  async function generate() {
+    if (!window.confirm("Generate a Honeygain bridge token? This replaces any existing Honeygain bridge token.")) return;
+    setLoading(true);
+    try {
+      const data = await api.post("/api/honeygain/token", {});
+      setToken(data.token || "");
+      const latest = await api.get("/api/honeygain/status");
+      setSnapshot(latest);
+      toast.success("Honeygain bridge token generated");
+    } catch {
+      toast.error("Could not generate Honeygain bridge token");
+    } finally {
+      setLoading(false);
+    }
+  }
+  const latest = snapshot?.latest;
+  return (
+    <div className="border-t border-border/40 px-5 py-4 space-y-2">
+      <div className="text-xs font-semibold">Desktop bridge · {latest ? "Last reading saved" : "Not connected"}</div>
+      <p className="text-xs text-muted-foreground">Optional read-only sync. Requires a local bridge and a user-authorized Honeygain data source. No account credentials are stored in NAm.</p>
+      {latest && (
+        <div className="grid grid-cols-2 gap-3 text-xs">
+          <div>Today <strong className="block text-white">{Number(latest.todayCredits / 1000).toFixed(5)} USD</strong></div>
+          <div>This month <strong className="block text-white">{Number(snapshot.monthUsd || 0).toFixed(5)} USD</strong></div>
+          <div className="col-span-2 text-muted-foreground">Last reading: {latest.observedAt || "—"} (UTC)</div>
+        </div>
+      )}
+      <Button type="button" variant="outline" size="sm" disabled={loading} onClick={generate}>
+        {snapshot?.configured ? "Rotate bridge token" : "Generate bridge token"}
+      </Button>
+      {token && (
+        <div className="space-y-1">
+          <p className="text-[11px] text-amber-300">Copy this private token now. It is shown only until you leave this page.</p>
+          <div className="flex gap-2">
+            <Input type="password" readOnly value={token} aria-label="Private Honeygain bridge token" />
+            <Button type="button" variant="outline" onClick={() => {
+              navigator.clipboard.writeText(token).then(() => toast.success("Token copied")).catch(() => toast.error("Could not copy token"));
+            }}>Copy</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HoneygainBalanceEditor({ asset, onSave }) {
   const [balance, setBalance] = useState(String(asset?.balance ?? 0));
   const [earned, setEarned] = useState(String(asset?.earned ?? 0));
@@ -652,6 +712,7 @@ function ProjectCard({
             </div>
           )}
 
+          {normalizedPlatform === "honeygain" && <HoneygainSyncPanel />}
           {normalizedPlatform === "honeygain" && project.assets?.[0] && (
             <HoneygainBalanceEditor asset={project.assets[0]} onSave={onManualEarningsChange} />
           )}
