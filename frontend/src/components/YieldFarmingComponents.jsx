@@ -675,7 +675,7 @@ function ProjectCard({
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-1">
               <span className="min-w-0 truncate text-[12px] font-semibold">{project.platform}</span>
-              <span className={`shrink-0 text-[9px] ${project.autoSynced ? "text-emerald-400" : "text-amber-300"}`}>
+              <span className={`shrink-0 text-[9px] ${project.autoSynced || (normalizedPlatform === "honeygain" && honeygainLatest) ? "text-emerald-400" : "text-amber-300"}`}>
                 ● {project.autoSynced ? "Online" : normalizedPlatform === "honeygain" ? (honeygainLatest ? "Tracked" : "Pending") : "Offline"}
               </span>
             </div>
