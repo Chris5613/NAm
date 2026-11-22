@@ -767,23 +767,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       window.removeEventListener("nam-honeygain-updated", refresh);
     };
   }, []);
-  // Grass points have no established cash value; keep their project visible
-  // but sort them after USD-denominated balances.
-  const [grassTracked, setGrassTracked] = useState(false);
-  useEffect(() => {
-    let active = true;
-    const refresh = () => api.get("/api/grass/status")
-      .then(data => { if (active) setGrassTracked(Boolean(data?.latest)); })
-      .catch(()=>{});
-    refresh();
-    const timer = window.setInterval(refresh, 60000);
-    window.addEventListener("nam-grass-updated", refresh);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      window.removeEventListener("nam-grass-updated", refresh);
-    };
-  }, []);
+  // Grass points have no dollar value; keep card last in USD sorting.
   const sortedProgramCards =
     useMemo(
       () => {
