@@ -312,6 +312,27 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     });
   }, []);
 
+  // Grass is a distinct point-based project, not a dollar-valued token wallet.
+  // Preserve all existing positions and create only once per account.
+  useEffect(() => {
+    const key = "grass_project_seeded_v1";
+    if (remoteStorage.getItem(key) === "true") return;
+    remoteStorage.setItem(key,"true");
+    setManualPositions(current => {
+      if (current.some(p => String(p.platform || "").toLowerCase() === "grass")) return current;
+      return [...current,{
+        id:"grass-uptime-network",
+        platform:"Grass",
+        asset:"Uptime & Network Points",
+        strategy:"Chrome dashboard tracking",
+        balance:0,
+        earned:0,
+        apy:0,
+        startDate:new Date().toISOString().slice(0,10),
+      }];
+    });
+  }, []);
+
   // Undo the mistaken default-inactive migration introduced in November.
   // The project belongs among active earners; the browser tab itself is
   // background/inactive when the extension polls Honeygain.
@@ -678,7 +699,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
         const manualProjects =
           groupManualPositions(
             manualPositions.map(position =>
-              String(position.platform || "").toLowerCase() === "honeygain"
+              ["honeygain","grass"].includes(String(position.platform || "").toLowerCase())
                 ? { ...position, balance: 0, earned: 0, apy: 0 }
                 : position
             )
@@ -746,6 +767,23 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       window.removeEventListener("nam-honeygain-updated", refresh);
     };
   }, []);
+  // Grass points have no established cash value; keep their project visible
+  // but sort them after USD-denominated balances.
+  const [grassTracked, setGrassTracked] = useState(false);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => api.get("/api/grass/status")
+      .then(data => { if (active) setGrassTracked(Boolean(data?.latest)); })
+      .catch(()=>{});
+    refresh();
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("nam-grass-updated", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("nam-grass-updated", refresh);
+    };
+  }, []);
   const sortedProgramCards =
     useMemo(
       () => {
@@ -762,9 +800,11 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
                 project.id,
 
               amount:
-                String(project.platform || "").toLowerCase() === "honeygain"
-                  ? (honeygainSortBalance ?? Number.NEGATIVE_INFINITY)
-                  : Number(project.totalBalance) || 0,
+                String(project.platform || "").toLowerCase() === "grass"
+                  ? Number.NEGATIVE_INFINITY
+                  : String(project.platform || "").toLowerCase() === "honeygain"
+                    ? (honeygainSortBalance ?? Number.NEGATIVE_INFINITY)
+                    : Number(project.totalBalance) || 0,
 
               project,
             })
