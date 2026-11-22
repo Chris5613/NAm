@@ -728,7 +728,7 @@ function ProjectCard({
                 ● {project.autoSynced ? "Online" : normalizedPlatform === "grass" ? (grassLatest ? "Tracked" : "Pending") : normalizedPlatform === "honeygain" ? (honeygainLatest ? "Tracked" : "Pending") : "Offline"}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "grass" ? (grassLive?.estimatedUsd != null ? `${Number(grassLive.estimatedUsd).toFixed(6)}` : "—") : normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "grass" ? (grassLive?.estimatedUsd != null ? ("$" + Number(grassLive.estimatedUsd).toFixed(6)) : "—") : normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
