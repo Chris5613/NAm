@@ -1483,9 +1483,9 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     const honeyLatest = auxiliaryRewards.honeygain?.latest;
     const grassLatest = auxiliaryRewards.grass?.latest;
     const honeyCreditBalance = honeyRecord?.lastCredits ??
-      (honeyLatest && pacificDay(honeyLatest.observedAt) === key ? honeyLatest.jumpTaskBalanceCredits : null);
+      (honeyLatest && (monthlySelection ? pacificDay(honeyLatest.observedAt)?.startsWith(key + "-") : pacificDay(honeyLatest.observedAt) === key) ? honeyLatest.jumpTaskBalanceCredits : null);
     const grassSample = grassRecord?.latest ??
-      (grassLatest && pacificDay(grassLatest.observedAt) === key ? grassLatest : null);
+      (grassLatest && (monthlySelection ? pacificDay(grassLatest.observedAt)?.startsWith(key + "-") : pacificDay(grassLatest.observedAt) === key) ? grassLatest : null);
     const numeric = value => value != null && Number.isFinite(Number(value)) ? Number(value) : null;
     const honeyCredits = numeric(honeyCreditBalance);
     const uptime = numeric(grassSample?.uptimePoints);
