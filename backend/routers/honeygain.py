@@ -94,9 +94,25 @@ async def browser_ingest(payload: dict[str, Any],
     """
     if payload.get("source") != "honeygain-dashboard-visible":
         raise HTTPException(422, "Invalid browser observation source.")
-    if payload.get("evidenceLabel") not in ("earned-today", "today-earnings"):
-        raise HTTPException(422, "Expected a labeled today-earnings reading.")
-    return _store_reading(db, user.id, payload, "honeygain-chrome-dashboard")
+    if payload.get("evidenceLabel") not in ("jumptask-balance", "transferred-to-jumptask"):
+        raise HTTPException(422, "Expected an explicitly labeled JumpTask reading.")
+    credits = _credits(payload, "jumpTaskBalanceCredits")
+    if credits is None:
+        raise HTTPException(422, "jumpTaskBalanceCredits is required.")
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    now = datetime.now(timezone.utc)
+    latest = {
+        "jumpTaskBalanceCredits": credits,
+        "balanceUsd": round(credits / 1000, 6),
+        "evidenceLabel": payload["evidenceLabel"],
+        "observedAt": now.isoformat(),
+        "source": "honeygain-chrome-jumptask",
+    }
+    # Separate namespace: legacy Honeygain-mode daily-credit observations
+    # cannot contaminate JumpTask totals or reappear on the new card.
+    _save(db, user.id, "honeygain_jumptask_balance_v1", {"latest": latest})
+    db.commit()
+    return {"ok": True, "jumpTaskBalanceCredits": credits}
 
 
 def _store_reading(db: Session, uid: int, payload: dict[str, Any], source: str) -> dict:
@@ -136,19 +152,14 @@ async def ingest(payload: dict[str, Any], authorization: str | None = Header(Non
 
 @router.get("/status")
 async def status(user: User = Depends(current_user), db: Session = Depends(get_db)) -> dict:
-    row = _get(db, user.id, DATA_KEY)
-    token_row = _get(db, user.id, TOKEN_KEY)
+    row = _get(db, user.id, "honeygain_jumptask_balance_v1")
     value = dict(row.value or {}) if row else {}
-    days = dict(value.get("days") or {})
-    now = datetime.now(timezone.utc)
-    month = now.astimezone(PACIFIC).strftime("%Y-%m")
-    month_credits = round(sum(float(v) for k, v in days.items() if k.startswith(month)), 6)
+    latest = value.get("latest")
     return {
-        "configured": token_row is not None,
-        "latest": value.get("latest"),
-        "monthCredits": month_credits,
-        "monthUsd": round(month_credits / 1000, 6),
-        "days": days,
-        "sourceOfCalculation": "backend-honeygain-readonly",
+        "latest": latest,
+        "balanceCredits": latest.get("jumpTaskBalanceCredits") if latest else None,
+        "balanceUsd": latest.get("balanceUsd") if latest else None,
+        "sourceOfCalculation": "backend-jumptask-observed-balance",
         "bookedFinancialIncome": False,
+        "monthlyIncomeRecorded": False,
     }
