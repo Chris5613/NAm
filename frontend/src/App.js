@@ -18,7 +18,6 @@ import FinancialsPage from "@/pages/FinancialsPage";
 import { Toaster } from "@/components/ui/sonner";
 import { installKryptexExtensionListener } from "@/lib/kryptexExtensionSync";
 import { installHoneygainExtensionListener } from "@/lib/honeygainExtensionSync";
-import { installGrassExtensionListener } from "@/lib/grassExtensionSync";
 import SpendingPage from "@/pages/SpendingPage";
 import DoorDashPage from "@/pages/DoorDashPage";
 import {
@@ -53,7 +52,6 @@ function App() {
     kryptexExtensionListenerStarted = true;
     installKryptexExtensionListener();
     installHoneygainExtensionListener();
-    installGrassExtensionListener();
   }, []);
 
   /*
