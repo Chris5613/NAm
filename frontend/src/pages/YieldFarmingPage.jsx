@@ -767,7 +767,26 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       window.removeEventListener("nam-honeygain-updated", refresh);
     };
   }, []);
-  // Grass points have no dollar value; keep card last in USD sorting.
+  // Sort Grass by the same historical-rate estimate shown on its card.
+  // This is display-only and never contributes to booked Financials income.
+  const [grassSortEstimate, setGrassSortEstimate] = useState(null);
+  useEffect(() => {
+    let active = true;
+    const refresh = () => api.get("/api/grass/status").then(value => {
+      if (active) setGrassSortEstimate(
+        value?.estimatedUsd != null && Number.isFinite(Number(value.estimatedUsd))
+          ? Number(value.estimatedUsd) : null
+      );
+    }).catch(() => {});
+    refresh();
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("nam-grass-updated", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("nam-grass-updated", refresh);
+    };
+  }, []);
   const sortedProgramCards =
     useMemo(
       () => {
@@ -785,7 +804,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
 
               amount:
                 String(project.platform || "").toLowerCase() === "grass"
-                  ? Number.NEGATIVE_INFINITY
+                  ? (grassSortEstimate ?? Number.NEGATIVE_INFINITY)
                   : String(project.platform || "").toLowerCase() === "honeygain"
                     ? (honeygainSortBalance ?? Number.NEGATIVE_INFINITY)
                     : Number(project.totalBalance) || 0,
@@ -871,6 +890,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   kryptexStats,
   backendEarnings?.monthlySources?.Rentals,
   honeygainSortBalance,
+  grassSortEstimate,
 ]
     );
   // At 11:58 PM America/Los_Angeles, preserve a dated copy of every
@@ -1388,16 +1408,10 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   };
   const honeygainObservedToday = isFreshUtc(auxiliaryRewards.honeygain?.latest?.observedAt);
   const grassObservedToday = isFreshUtc(auxiliaryRewards.grass?.latest?.observedAt);
-  const grassPointsLabel = grassObservedToday
-    ? [
-        auxiliaryRewards.grass?.uptimePoints != null
-          ? `${Number(auxiliaryRewards.grass.uptimePoints).toLocaleString("en-US", {maximumFractionDigits: 4})} uptime${auxiliaryRewards.grass?.uptimeEpoch != null ? ` (E${auxiliaryRewards.grass.uptimeEpoch})` : ""}`
-          : null,
-        auxiliaryRewards.grass?.networkPoints != null
-          ? `${Number(auxiliaryRewards.grass.networkPoints).toLocaleString("en-US", {maximumFractionDigits: 4})} network`
-          : null,
-      ].filter(Boolean).join(" · ")
-    : "";
+  const grassPointsLabel = grassObservedToday &&
+    auxiliaryRewards.grass?.estimatedUsd != null
+      ? `$${Number(auxiliaryRewards.grass.estimatedUsd).toFixed(6)}`
+      : "";
 
   const todayBreakdown = Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
     .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
@@ -2102,7 +2116,7 @@ const summary =
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="min-w-0 text-muted-foreground">Grass · Epoch reward points</span>
+                    <span className="min-w-0 text-muted-foreground">Grass · estimated USD</span>
                     <span className="max-w-[58%] text-right font-semibold tabular-nums text-sky-300">
                       {grassPointsLabel || "—"}
                     </span>
@@ -2130,7 +2144,7 @@ const summary =
                     <span className="font-semibold tabular-nums text-sky-300">{honeygainObservedToday && auxiliaryRewards.honeygain?.balanceUsd != null ? formatCurrency(auxiliaryRewards.honeygain.balanceUsd) : "—"}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 text-xs">
-                    <span className="text-muted-foreground">Grass · Epoch points</span>
+                    <span className="text-muted-foreground">Grass · estimated USD</span>
                     <span className="font-semibold tabular-nums text-sky-300">{grassPointsLabel || "—"}</span>
                   </div>
                 </div>
