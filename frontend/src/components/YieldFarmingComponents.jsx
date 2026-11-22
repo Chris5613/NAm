@@ -552,8 +552,9 @@ function GrassSyncPanel() {
         <div>Uptime {data?.uptimeEpoch != null ? `(Epoch ${data.uptimeEpoch})` : "Points"} <strong className="block text-white">{data?.uptimePoints == null ? "—" : Number(data.uptimePoints).toLocaleString()}</strong></div>
         <div>Network Points <strong className="block text-white">{data?.networkPoints == null ? "—" : Number(data.networkPoints).toLocaleString()}</strong></div>
       </div>
+      {data?.estimatedUsd != null && <p className="text-xs font-medium">Combined historical-rate estimate: <strong>${Number(data.estimatedUsd).toFixed(6)}</strong></p>}
       {data?.latest?.observedAt && <p className="text-[11px] text-muted-foreground">Last synced: {data.latest.observedAt} (UTC)</p>}
-      <p className="text-[11px] text-muted-foreground">Grass Points are not GRASS tokens or USD. No speculative conversion, portfolio valuation, or Financials journal entry is made.</p>
+      <p className="text-[11px] text-muted-foreground">Uses Grass Stage 2 historical rates: 0.00000007 USDC per Uptime Point and 0.0049 USDC per Network Point. Future payouts may differ. Missing point types are excluded, not assumed to be zero. Estimates are not booked to Financials.</p>
     </div>
   );
 }
@@ -727,7 +728,7 @@ function ProjectCard({
                 ● {project.autoSynced ? "Online" : normalizedPlatform === "grass" ? (grassLatest ? "Tracked" : "Pending") : normalizedPlatform === "honeygain" ? (honeygainLatest ? "Tracked" : "Pending") : "Offline"}
               </span>
             </div>
-            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "grass" ? (grassLatest ? [grassLive.uptimePoints != null ? `${Number(grassLive.uptimePoints).toLocaleString()} uptime` : null, grassLive.networkPoints != null ? `${Number(grassLive.networkPoints).toLocaleString()} network` : null].filter(Boolean).join(" · ") : "—") : normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
+            <div className="mt-0.5 truncate text-[14px] font-semibold tabular-nums">{normalizedPlatform === "grass" ? (grassLive?.estimatedUsd != null ? `${Number(grassLive.estimatedUsd).toFixed(6)}` : "—") : normalizedPlatform === "honeygain" ? (honeygainLatest ? formatCurrency(honeygainLive.balanceUsd) : "—") : formatCurrency(project.totalBalance)}</div>
           </div>
           <ChevronRight className={`mt-2 h-3.5 w-3.5 shrink-0 text-muted-foreground ${collapsed ? "rotate-90" : ""}`}/>
         </div>
