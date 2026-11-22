@@ -40,7 +40,6 @@ function extract() {
   return null;
 }
 function sample() {
-  if (document.visibilityState === "hidden") return;
   const reading = extract();
   if (!reading) {
     chrome.runtime.sendMessage({type:"HONEYGAIN_PARSE_ERROR",error:"Daily earnings label not found in visible dashboard. Open the earnings overview."}).catch(()=>{});
@@ -51,6 +50,17 @@ function sample() {
   lastSignature = signature;
   chrome.runtime.sendMessage({type:"HONEYGAIN_READING",reading}).catch(()=>{lastSignature = "";});
 }
+// Hidden tabs are deliberately sampled: this is a background-tab tracker.
+chrome.runtime.onMessage.addListener(message => {
+  if (message?.type === "HONEYGAIN_SAMPLE_NOW") sample();
+});
 sample();
-setInterval(sample, 300000);
-document.addEventListener("visibilitychange",sample);
+// Honeygain dashboard can hydrate asynchronously; retry during the short-lived
+// background tab session. The five-minute cadence is owned by Chrome alarms.
+let attempts = 0;
+const retry = setInterval(() => {
+  sample();
+  attempts++;
+  if (attempts >= 35) clearInterval(retry);
+}, 1000);
+document.addEventListener("visibilitychange", sample);
