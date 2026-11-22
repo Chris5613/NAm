@@ -3,7 +3,7 @@ import { api } from "@/lib/apiClient";
 // Signed-in NAm shell receives labeled Grass dashboard observations without
 // capturing passwords, session cookies or API responses.
 let installed=false,inflight=false,last="";
-const signature=r=>[r.uptimePoints??"",r.networkPoints??""].join(":");
+const signature=r=>[r.uptimePoints??"",r.networkPoints??"",r.uptimeEpoch??"",r.networkEpoch??""].join(":");
 function acknowledge(signature){
  window.postMessage({source:"nam-grass-app",type:"SAVED",signature},window.location.origin);
 }
@@ -23,6 +23,8 @@ async function onReading(event){
    source:"grass-visible-dashboard-v1",
    ...(r.uptimePoints===undefined?{}:{uptimePoints:r.uptimePoints}),
    ...(r.networkPoints===undefined?{}:{networkPoints:r.networkPoints}),
+   ...(r.uptimeEpoch===undefined?{}:{uptimeEpoch:r.uptimeEpoch}),
+   ...(r.networkEpoch===undefined?{}:{networkEpoch:r.networkEpoch}),
   });
   last=sig;
   window.dispatchEvent(new Event("nam-grass-updated"));
