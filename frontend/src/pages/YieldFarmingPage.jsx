@@ -704,6 +704,35 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     const timer = setInterval(refresh, 30000);
     return () => { active = false; clearInterval(timer); };
   }, []);
+  // The sorted project grid uses the same reported values displayed in each card.
+  // Rentals previously bypassed sorting entirely; Honeygain previously sorted
+  // by its retired manual balance instead of its JumpTask observation.
+  const { data: backendEarnings, error: backendEarningsError } =
+    useBackendEarningsDashboard(getTodayKey().slice(0, 7), true);
+  const [honeygainSortBalance, setHoneygainSortBalance] = useState(null);
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      try {
+        const value = await api.get("/api/honeygain/status");
+        if (!active) return;
+        const reported = value?.balanceUsd;
+        setHoneygainSortBalance(
+          reported !== null && reported !== undefined && Number.isFinite(Number(reported))
+            ? Number(reported)
+            : null
+        );
+      } catch { /* Unknown values sort after confirmed balances. */ }
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 60000);
+    window.addEventListener("nam-honeygain-updated", refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener("nam-honeygain-updated", refresh);
+    };
+  }, []);
   const sortedProgramCards =
     useMemo(
       () => {
@@ -720,9 +749,9 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
                 project.id,
 
               amount:
-                Number(
-                  project.totalBalance
-                ) || 0,
+                String(project.platform || "").toLowerCase() === "honeygain"
+                  ? (honeygainSortBalance ?? Number.NEGATIVE_INFINITY)
+                  : Number(project.totalBalance) || 0,
 
               project,
             })
@@ -778,6 +807,11 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       kryptexStats?.currentBalanceUsd
     ) || 0,
 },
+          {
+            type: "rentals",
+            key: "rentals-project",
+            amount: Number(backendEarnings?.monthlySources?.Rentals) || 0,
+          },
         ];
 
         
@@ -798,6 +832,8 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   saladStats,
   unetworkStats,
   kryptexStats,
+  backendEarnings?.monthlySources?.Rentals,
+  honeygainSortBalance,
 ]
     );
   // At 11:58 PM America/Los_Angeles, preserve a dated copy of every
@@ -986,7 +1022,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     };
   }, []);
 
-  const activeProgramCards = [...sortedProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key))), { type: "rentals", key: "rentals-project" }];
+  const activeProgramCards = sortedProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key)));
   const inactiveProgramCards = sortedProgramCards.filter(item => inactiveProjectIds.includes(String(item.key)));
 
   const allAssets =
@@ -1008,8 +1044,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // Monthly, Weekly, and Yearly all come from the same authenticated
   // earnings dashboard response. Other accounting screens may still request
   // the independent source-income-history endpoint.
-  const { data: backendEarnings, error: backendEarningsError } =
-    useBackendEarningsDashboard(getTodayKey().slice(0, 7), true);
+
   const sourceIncomeMonths = backendEarnings?.incomeHistory?.months;
   const projectIncome = useMemo(
     () => backendYieldIncomeRows(sourceIncomeMonths), [sourceIncomeMonths]
@@ -2012,7 +2047,7 @@ const summary =
             </CardContent>
           </Card>
         ) : (
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(190px,220px))] sm:justify-start">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[repeat(auto-fill,minmax(230px,255px))] sm:justify-start">
   {activeProgramCards.map(
               (
                 item
