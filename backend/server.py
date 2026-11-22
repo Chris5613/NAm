@@ -20,7 +20,7 @@ from .db import init_db  # noqa: E402  (imported after load_dotenv so DATABASE_U
 from .kryptex_historical_recovery import recover_verified_kryptex_november_rewards  # noqa: E402
 from .loop_watchdog import start_watchdog, stop_watchdog  # noqa: E402
 from .scheduler import scheduler_status, start_scheduler, stop_scheduler  # noqa: E402
-from .routers import auth_routes, market, resources, simplefin_routes, spending, project_tracking, yield_sources, power  # noqa: E402
+from .routers import auth_routes, market, resources, simplefin_routes, spending, project_tracking, yield_sources, power, honeygain  # noqa: E402
 
 app = FastAPI(title="Net Worth Tracker - Backend", version="1.0.0")
 
@@ -54,7 +54,7 @@ async def reject_cross_origin_mutations(request: Request, call_next):
     if request.method.upper() not in {"GET", "HEAD", "OPTIONS"}:
         # The local Tapo bridge authenticates these endpoints with a per-user
         # Bearer token and is not a browser, so it has no Origin/Referer header.
-        if request.url.path in {"/api/power/ingest", "/api/power/backfill"} or (
+        if request.url.path in {"/api/power/ingest", "/api/power/backfill", "/api/honeygain/ingest"} or (
             request.method.upper() == "POST" and
             request.url.path == "/api/project-tracking/bixberry/observe"
         ):
@@ -76,6 +76,7 @@ app.include_router(simplefin_routes.router)
 app.include_router(project_tracking.router)
 app.include_router(yield_sources.router)
 app.include_router(power.router)
+app.include_router(honeygain.router)
 
 
 @app.on_event("startup")
