@@ -35,7 +35,7 @@ const field = "w-full rounded-lg border border-[#3c5267] bg-[#101923] px-3 py-2 
 // Display-only asset groups. Preserve backend categories and all ledger totals.
 const isDigitalAssetHolding = row => {
   const key = String(row?.id || "") + " " + String(row?.name || "");
-  return /\\b(bitcoin|btc|ethereum|eth|cryptocurrency|crypto|token|wallet)\\b/i.test(key) ||
+  return /\b(bitcoin|btc|ethereum|eth|cryptocurrency|crypto|token|wallet)\b/i.test(key) ||
     /^(?:project:)?(?:btc|bitcoin|ethereum|eth|crypto|cryptocurrency)$/i.test(String(row?.id || ""));
 };
 const categories = [
