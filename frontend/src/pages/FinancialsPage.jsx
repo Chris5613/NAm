@@ -1,6 +1,6 @@
 import { useBackendIncomeHistory } from "@/hooks/useBackendIncomeHistory";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, Pencil, Plus, Trash2, TrendingUp, Wallet, X } from "lucide-react";
+import { BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardList, Coins, GripVertical, Pencil, Plus, Trash2, TrendingUp, Wallet, X } from "lucide-react";
 import { remoteStorage, subscribe, refreshSetting } from "@/lib/serverStore";
 import { preSeptemberLedgerEntries, LEGACY_LEDGER_CUTOFF } from "@/lib/legacyLedgerCleanup";
 import { useBackendFinancialLiveBalances } from "@/hooks/useBackendFinancialLiveBalances";
@@ -30,6 +30,7 @@ const HARDWARE_KEY = "hardware_payback_devices_v1";
 const POWER_ESTIMATE_KEY = "financials_power_estimates_v1";
 const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const FINANCIAL_LABELS_KEY = "financials_account_labels_v1";
+const BALANCE_LAYOUT_KEY = "financials_balance_sheet_layout_v1";
 const card = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const field = "w-full rounded-lg border border-[#3c5267] bg-[#101923] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400";
 // Display-only asset groups. Preserve backend categories and all ledger totals.
@@ -131,6 +132,10 @@ export default function FinancialsPage() {
   const [closedMonths, setClosedMonths] = useState(() => readJson(MONTH_CLOSE_KEY, {}));
   const [accountLabels, setAccountLabels] = useState(() =>
     cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
+  // Per-account display preferences only: never modify backend asset category or totals.
+  const [balanceLayout, setBalanceLayout] = useState(() => readJson(BALANCE_LAYOUT_KEY, {}));
+  const draggingBalanceId = useRef(null);
+  const [draggingBalance, setDraggingBalance] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [inlineRenameRowId, setInlineRenameRowId] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -149,6 +154,7 @@ export default function FinancialsPage() {
     setPowerEstimates(readJson(POWER_ESTIMATE_KEY, {}));
     setClosedMonths(readJson(MONTH_CLOSE_KEY, {}));
     setAccountLabels(cleanAccountLabels(readJson(FINANCIAL_LABELS_KEY, {})));
+    setBalanceLayout(readJson(BALANCE_LAYOUT_KEY, {}));
   }), []);
   // Server-owned source history is the sole income attribution input.
   const incomeMonths = useBackendIncomeHistory({
@@ -326,15 +332,44 @@ export default function FinancialsPage() {
   // Only presentation rows are filtered. Financial totals still use 'rows'.
   // Closed/past reporting months retain their Lulo historical reference.
   const reportingMonth = getCurrentMonthKey();
+  const defaultBalanceSection = row => categories.find(category =>
+    category.includes ? category.includes(row) : row.category === category.id)?.id;
   const sections = categories.map(category => ({
     ...category,
-    // Alphabetize account names only inside each section; keep section
-    // order and accounting totals unchanged. Use visible renamed labels.
-    rows: rows.filter(row => (category.includes ? category.includes(row) : row.category === category.id) && !row.retired &&
-      showBalanceSheetRow(row, month, reportingMonth, accountLabels))
-      .sort((a,b) => balanceDisplayName(a,accountLabels).localeCompare(
-        balanceDisplayName(b,accountLabels), undefined, {sensitivity:"base",numeric:true})),
+    // A user-chosen section and row order changes only the visible statement layout.
+    // Unplaced accounts retain their existing alphabetical order.
+    rows: rows.filter(row => !row.retired &&
+      showBalanceSheetRow(row, month, reportingMonth, accountLabels) &&
+      (balanceLayout?.[row.id]?.section || defaultBalanceSection(row)) === category.id)
+      .sort((a,b) => {
+        const aOrder = balanceLayout?.[a.id]?.order;
+        const bOrder = balanceLayout?.[b.id]?.order;
+        if (Number.isFinite(aOrder) && Number.isFinite(bOrder)) return aOrder - bOrder;
+        if (Number.isFinite(aOrder)) return -1;
+        if (Number.isFinite(bOrder)) return 1;
+        return balanceDisplayName(a,accountLabels).localeCompare(
+          balanceDisplayName(b,accountLabels), undefined, {sensitivity:"base",numeric:true});
+      }),
   }));
+  const moveBalanceRow = (destinationSection, beforeRowId = null) => {
+    const sourceId = draggingBalanceId.current;
+    if (!sourceId || !categories.some(category => category.id === destinationSection)) return;
+    const current = sections.map(section => ({
+      section: section.id, ids: section.rows.map(row => row.id).filter(id => id !== sourceId),
+    }));
+    if (!sections.some(section => section.rows.some(row => row.id === sourceId))) return;
+    const destination = current.find(section => section.section === destinationSection);
+    const index = beforeRowId === null ? -1 : destination.ids.indexOf(beforeRowId);
+    destination.ids.splice(index < 0 ? destination.ids.length : index, 0, sourceId);
+    const next = { ...balanceLayout };
+    current.forEach(group => group.ids.forEach((id, index) => {
+      next[id] = { section: group.section, order: index };
+    }));
+    setBalanceLayout(next);
+    remoteStorage.setItem(BALANCE_LAYOUT_KEY, JSON.stringify(next));
+    draggingBalanceId.current = null;
+    setDraggingBalance(null);
+  };
   // A single backend statement projection supplies all Balance Sheet sums,
   // including immutable archived closing rows; never recalculate them here.
   const balanceTotals = serverFinancial?.displayTotals?.sourceOfCalculation ===
@@ -677,13 +712,35 @@ export default function FinancialsPage() {
       <section className={card + " overflow-hidden p-4 sm:p-6"}>
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold">{monthTitle(month)} Balance Sheet</h2>
+          <span className="text-[11px] text-[#91a7b9]">Drag the grip to reorder or move an account into another section</span>
         </div>
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
           {tableHeader}<tbody>
             {sections.map(section => <Fragment key={section.id}>
-              <tr className="bg-[#142333]"><th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}</th></tr>
-              {section.rows.map(row => <tr key={row.id} className="border-b border-[#202f3c]">
+              <tr className={`bg-[#142333] ${draggingBalance ? "hover:bg-[#21415a]" : ""}`}
+                onDragOver={event => { if (draggingBalanceId.current) event.preventDefault(); }}
+                onDrop={event => { event.preventDefault(); moveBalanceRow(section.id); }}>
+                <th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}</th>
+              </tr>
+              {section.rows.map(row => <tr key={row.id}
+                className={`border-b border-[#202f3c] ${draggingBalance === row.id ? "opacity-40" : ""} ${draggingBalance ? "hover:bg-[#172e41]" : ""}`}
+                onDragOver={event => { if (draggingBalanceId.current) event.preventDefault(); }}
+                onDrop={event => { event.preventDefault(); event.stopPropagation(); moveBalanceRow(section.id, row.id); }}>
                 <td className="py-2.5 pl-2">
+                  <span draggable
+                    role="button" tabIndex={0}
+                    aria-label={"Drag to move " + balanceDisplayName(row,accountLabels)}
+                    title="Drag to reorder or move to another section"
+                    onDragStart={event => {
+                      draggingBalanceId.current = row.id;
+                      setDraggingBalance(row.id);
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", row.id);
+                    }}
+                    onDragEnd={() => { draggingBalanceId.current = null; setDraggingBalance(null); }}
+                    className="mr-2 inline-flex cursor-grab align-middle text-[#7891a6] hover:text-sky-300 active:cursor-grabbing">
+                    <GripVertical size={15}/>
+                  </span>
                   {inlineRenameRowId === row.id ? (
                     <form onSubmit={saveAccountName} className="inline-flex w-[min(520px,75vw)] flex-col gap-1">
                       <input
