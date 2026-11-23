@@ -601,7 +601,7 @@ export default function FinancialsPage() {
   const transactionTitle = entry => journalDisplayDescription(entry,rows,accountLabels);
   const metric = (title, value, note, color = "text-white") => <section className={card + " min-w-0 p-4"}>
     <p className="text-xs text-[#9db0c1]">{title}</p>
-    <strong className={"mt-2 block text-2xl font-bold tabular-nums " + color}>{money(value)}</strong>
+    <strong className={"mt-2 block text-2xl font-bold tabular-nums " + color}>{value == null ? "—" : money(value)}</strong>
     {note && <p className="mt-2 text-xs text-[#7f94a8]">{note}</p>}
   </section>;
   const tableHeader = <thead><tr className="border-b border-[#314454] text-left text-[11px] uppercase tracking-wider text-[#9bafc1]">
@@ -713,7 +713,11 @@ export default function FinancialsPage() {
       </details>}
     {tab === "balance" && <>
       <div className="grid gap-3 sm:grid-cols-3">
-        {metric("Business Assets", assetsEnd, assetsEnd===null?"Some account balances are unverified":null, "text-sky-300")}
+        {metric(assetsEnd === null && missingAssetCount > 0 ? "Business Assets (known subtotal)" : "Business Assets",
+          assetsEnd === null && missingAssetCount > 0 ? knownAssetsSubtotal : assetsEnd,
+          assetsEnd === null ? (missingAssetCount > 0
+            ? `${missingAssetCount} asset account(s) unverified; this is not the total asset value`
+            : "Total assets unavailable") : null, "text-sky-300")}
         {metric("Business Liabilities", debtEnd)}
         {metric("Business Net Worth", netEnd, netEnd===null?"Incomplete until missing balances are supplied":null, "text-emerald-400")}
       </div>
@@ -850,8 +854,8 @@ export default function FinancialsPage() {
                   <td colSpan={4} className="px-2 py-2 text-xs text-[#72889a]">No accounts</td>
                 </tr>}
             </Fragment>)}
-            <tr className="border-t-2 border-sky-500 font-bold"><td className="py-3">NET WORTH</td><td className="text-right">{money(netStart)}</td>
-              <td className="text-right">{signed(netChange)}</td><td className="text-right text-emerald-400">{money(netEnd)}</td></tr>
+            <tr className="border-t-2 border-sky-500 font-bold"><td className="py-3">NET WORTH</td><td className="text-right">{netStart == null ? "—" : money(netStart)}</td>
+              <td className="text-right">{netChange == null ? "—" : signed(netChange)}</td><td className="text-right text-emerald-400">{netEnd == null ? "—" : money(netEnd)}</td></tr>
           </tbody>
         </table></div>
       </section>
