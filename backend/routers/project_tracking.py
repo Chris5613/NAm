@@ -1059,6 +1059,12 @@ async def evaluate_financial_core(
         owned["displayRows"] = close["rows"]
     else:
         owned.pop("displayRows", None)
+    # Match the current open-month Balance Sheet's retired/withdrawn asset
+    # visibility. User-customized section order is not an accounting input.
+    pacific_month = datetime.now(timezone.utc).astimezone(
+        ZoneInfo("America/Los_Angeles")).strftime("%Y-%m")
+    owned["hideWithdrawnLulo"] = month == pacific_month and not (
+        isinstance(close, dict) and isinstance(close.get("rows"), list))
     try:
         return evaluate_statement(owned)
     except (ValueError, TypeError) as exc:
