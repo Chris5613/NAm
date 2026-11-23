@@ -411,8 +411,30 @@ def balance_sheet_totals(rows):
         assets_end - debts_end)
     net_change = None if net_start is None or net_end is None else cents(
         net_end - net_start)
+    # Informational known-row subtotals, never substituted for certified totals.
+    # Change includes only rows with both dates verified so missing openings
+    # cannot silently become zero or create fictitious movements.
+    def known_net(field):
+        return cents(
+            sum(number(row.get(field)) for row in assets
+                if row.get(field) is not None) -
+            sum(number(row.get(field)) for row in debts
+                if row.get(field) is not None)
+        )
+
+    verified_pairs = [row for row in rows
+                      if row.get("start") is not None and row.get("end") is not None]
+    known_change = cents(sum(
+        (number(row.get("end")) - number(row.get("start"))) *
+        (-1 if row.get("category") == "liabilities" else 1)
+        for row in verified_pairs
+    ))
     return {
         "sourceOfCalculation": "backend-financial-statement-totals-v1",
+        "knownNetStartSubtotal": known_net("start"),
+        "knownNetChangeSubtotal": known_change,
+        "missingStartCount": sum(row.get("start") is None for row in rows),
+        "missingChangeCount": len(rows) - len(verified_pairs),
         "assetsStart": assets_start, "assetsEnd": assets_end,
         "debtStart": debts_start, "debtEnd": debts_end,
         "netStart": net_start, "netEnd": net_end, "netChange": net_change,
