@@ -396,6 +396,7 @@ export default function FinancialsPage() {
   const missingAssetCount = balanceTotals?.missingAssetCount ?? 0;
   const knownAssetsSubtotal = balanceTotals?.knownAssetsSubtotal ?? 0;
   const knownNetStartSubtotal = balanceTotals?.knownNetStartSubtotal ?? null;
+  const knownNetEndSubtotal = balanceTotals?.knownNetEndSubtotal ?? null;
   const knownNetChangeSubtotal = balanceTotals?.knownNetChangeSubtotal ?? null;
   const missingStartCount = balanceTotals?.missingStartCount ?? 0;
   const missingChangeCount = balanceTotals?.missingChangeCount ?? 0;
@@ -858,22 +859,24 @@ export default function FinancialsPage() {
                   <td colSpan={4} className="px-2 py-2 text-xs text-[#72889a]">No accounts</td>
                 </tr>}
             </Fragment>)}
-            {(netStart == null || netChange == null || netEnd == null) && balanceTotals && (
-              <tr className="border-t border-sky-500/40 bg-sky-500/5 text-[#a9c5d7]">
-                <td className="py-3">
-                  <div className="font-semibold">KNOWN BALANCES (PARTIAL)</div>
-                  <div className="text-[10px] font-normal text-[#849dad]">
-                    Opening subtotal{missingStartCount ? ` (${missingStartCount} unknown)` : ""} ·
-                    verified-row change{missingChangeCount ? ` (${missingChangeCount} excluded)` : ""}
-                  </div>
-                </td>
-                <td className="text-right tabular-nums">{knownNetStartSubtotal == null ? "—" : money(knownNetStartSubtotal)}</td>
-                <td className="text-right tabular-nums">{knownNetChangeSubtotal == null ? "—" : signed(knownNetChangeSubtotal)}</td>
-                <td className="text-right tabular-nums">{money(knownAssetsSubtotal)}<div className="text-[10px] text-[#849dad]">known assets only</div></td>
-              </tr>
-            )}
-            <tr className="border-t-2 border-sky-500 font-bold"><td className="py-3">NET WORTH</td><td className="text-right">{netStart == null ? "—" : money(netStart)}</td>
-              <td className="text-right">{netChange == null ? "—" : signed(netChange)}</td><td className="text-right text-emerald-400">{netEnd == null ? "—" : money(netEnd)}</td></tr>
+            <tr className="border-t-2 border-sky-500 font-bold">
+              <td className="py-3">
+                NET WORTH
+                {(netStart == null || netChange == null || netEnd == null) && balanceTotals &&
+                  <div className="text-[10px] font-normal text-amber-300" title="Known-account subtotals only; missing account balances have not been assumed to equal zero">
+                    Partial — unverified balances excluded
+                  </div>}
+              </td>
+              <td className="text-right tabular-nums" title={netStart == null ? `${missingStartCount} opening balances unknown; showing known-account subtotal` : undefined}>
+                {netStart == null ? (knownNetStartSubtotal == null ? "—" : money(knownNetStartSubtotal)) : money(netStart)}
+              </td>
+              <td className="text-right tabular-nums" title={netChange == null ? `${missingChangeCount} account changes unverified; showing verified-row movement` : undefined}>
+                {netChange == null ? (knownNetChangeSubtotal == null ? "—" : signed(knownNetChangeSubtotal)) : signed(netChange)}
+              </td>
+              <td className="text-right text-emerald-400 tabular-nums" title={netEnd == null ? "Known end balances less known liabilities, not certified net worth" : undefined}>
+                {netEnd == null ? (knownNetEndSubtotal == null ? "—" : money(knownNetEndSubtotal)) : money(netEnd)}
+              </td>
+            </tr>
           </tbody>
         </table></div>
       </section>
