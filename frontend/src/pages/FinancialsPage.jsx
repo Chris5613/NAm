@@ -136,6 +136,8 @@ export default function FinancialsPage() {
   const [balanceLayout, setBalanceLayout] = useState(() => readJson(BALANCE_LAYOUT_KEY, {}));
   const draggingBalanceId = useRef(null);
   const [draggingBalance, setDraggingBalance] = useState(null);
+  // Live drop preview. beforeRowId=null means the end of a section.
+  const [balanceDropPreview, setBalanceDropPreview] = useState(null);
   const [renaming, setRenaming] = useState(null);
   const [inlineRenameRowId, setInlineRenameRowId] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -351,6 +353,16 @@ export default function FinancialsPage() {
           balanceDisplayName(b,accountLabels), undefined, {sensitivity:"base",numeric:true});
       }),
   }));
+  const previewBalanceDrop = (section, beforeRowId = null) => {
+    if (!draggingBalanceId.current) return;
+    setBalanceDropPreview(current => current?.section === section && current?.beforeRowId === beforeRowId
+      ? current : { section, beforeRowId });
+  };
+  const clearBalanceDrag = () => {
+    draggingBalanceId.current = null;
+    setDraggingBalance(null);
+    setBalanceDropPreview(null);
+  };
   const moveBalanceRow = (destinationSection, beforeRowId = null) => {
     const sourceId = draggingBalanceId.current;
     if (!sourceId || !categories.some(category => category.id === destinationSection)) return;
@@ -367,8 +379,7 @@ export default function FinancialsPage() {
     }));
     setBalanceLayout(next);
     remoteStorage.setItem(BALANCE_LAYOUT_KEY, JSON.stringify(next));
-    draggingBalanceId.current = null;
-    setDraggingBalance(null);
+    clearBalanceDrag();
   };
   // A single backend statement projection supplies all Balance Sheet sums,
   // including immutable archived closing rows; never recalculate them here.
@@ -717,15 +728,51 @@ export default function FinancialsPage() {
         <div className="overflow-x-auto"><table className="w-full min-w-[540px] border-collapse text-sm">
           {tableHeader}<tbody>
             {sections.map(section => <Fragment key={section.id}>
-              <tr className={`bg-[#142333] ${draggingBalance ? "hover:bg-[#21415a]" : ""}`}
-                onDragOver={event => { if (draggingBalanceId.current) event.preventDefault(); }}
-                onDrop={event => { event.preventDefault(); moveBalanceRow(section.id); }}>
-                <th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}</th>
+              <tr className={`bg-[#142333] transition-colors ${draggingBalance ? "hover:bg-[#21415a]" : ""}`}
+                onDragOver={event => {
+                  if (!draggingBalanceId.current) return;
+                  event.preventDefault();
+                  event.dataTransfer.dropEffect = "move";
+                  previewBalanceDrop(section.id, section.rows[0]?.id ?? null);
+                }}
+                onDrop={event => {
+                  event.preventDefault();
+                  moveBalanceRow(section.id, section.rows[0]?.id ?? null);
+                }}>
+                <th colSpan={4} className="px-2 py-2 text-left text-xs uppercase tracking-wider text-sky-300">{section.name}
+                  {draggingBalance && <span className="ml-3 normal-case font-normal text-sky-200/75">Drop to move into this section</span>}
+                </th>
               </tr>
-              {section.rows.map(row => <tr key={row.id}
-                className={`border-b border-[#202f3c] ${draggingBalance === row.id ? "opacity-40" : ""} ${draggingBalance ? "hover:bg-[#172e41]" : ""}`}
-                onDragOver={event => { if (draggingBalanceId.current) event.preventDefault(); }}
-                onDrop={event => { event.preventDefault(); event.stopPropagation(); moveBalanceRow(section.id, row.id); }}>
+              {section.rows.map((row, rowIndex) => <Fragment key={row.id}>
+                {balanceDropPreview?.section === section.id && balanceDropPreview.beforeRowId === row.id && draggingBalance && (
+                  <tr className="bg-sky-400/10" onDragOver={event => {
+                    event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move";
+                  }} onDrop={event => {
+                    event.preventDefault(); event.stopPropagation();
+                    moveBalanceRow(section.id, row.id);
+                  }}>
+                    <td colSpan={4} className="p-0">
+                      <div className="relative flex min-h-8 items-center gap-2 border-y-2 border-dashed border-sky-400 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold text-sky-200">
+                        <span className="rounded bg-sky-400 px-1.5 py-0.5 text-[#06151e]">DROP HERE</span>
+                        {balanceDisplayName(rows.find(item => item.id === draggingBalance),accountLabels)}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                <tr className={`border-b border-[#202f3c] transition-colors ${draggingBalance === row.id ? "opacity-35 bg-sky-400/10" : ""} ${draggingBalance && draggingBalance !== row.id ? "hover:bg-[#172e41]" : ""}`}
+                  onDragOver={event => {
+                    if (!draggingBalanceId.current) return;
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = "move";
+                    const below = event.clientY > event.currentTarget.getBoundingClientRect().top + event.currentTarget.getBoundingClientRect().height / 2;
+                    previewBalanceDrop(section.id, below ? (section.rows[rowIndex + 1]?.id ?? null) : row.id);
+                  }}
+                  onDrop={event => {
+                    if (!draggingBalanceId.current) return;
+                    event.preventDefault(); event.stopPropagation();
+                    const below = event.clientY > event.currentTarget.getBoundingClientRect().top + event.currentTarget.getBoundingClientRect().height / 2;
+                    moveBalanceRow(section.id, below ? (section.rows[rowIndex + 1]?.id ?? null) : row.id);
+                  }}>
                 <td className="py-2.5 pl-2">
                   <span draggable
                     role="button" tabIndex={0}
@@ -734,10 +781,11 @@ export default function FinancialsPage() {
                     onDragStart={event => {
                       draggingBalanceId.current = row.id;
                       setDraggingBalance(row.id);
+                      setBalanceDropPreview(null);
                       event.dataTransfer.effectAllowed = "move";
                       event.dataTransfer.setData("text/plain", row.id);
                     }}
-                    onDragEnd={() => { draggingBalanceId.current = null; setDraggingBalance(null); }}
+                    onDragEnd={clearBalanceDrag}
                     className="mr-2 inline-flex cursor-grab align-middle text-[#7891a6] hover:text-sky-300 active:cursor-grabbing">
                     <GripVertical size={15}/>
                   </span>
@@ -780,8 +828,27 @@ export default function FinancialsPage() {
                 <td className="py-2.5 text-right tabular-nums">{money(row.start)}</td>
                 <td className={`py-2.5 text-right tabular-nums ${row.start !== null && row.end !== null && row.end < row.start ? "text-rose-400" : "text-emerald-400"}`}>{row.start === null || row.end === null ? (row.journalChange != null ? signed(row.journalChange) : "$0.00") : signed(rounded(row.end-row.start))}</td>
                 <td className="py-2.5 text-right font-semibold tabular-nums">{money(row.end)}</td>
-              </tr>)}
-              {!section.rows.length && <tr><td colSpan={4} className="px-2 py-2 text-xs text-[#72889a]">No accounts</td></tr>}
+                </tr>
+              </Fragment>)}
+              {balanceDropPreview?.section === section.id && balanceDropPreview.beforeRowId === null && draggingBalance && (
+                <tr className="bg-sky-400/10"
+                  onDragOver={event => { event.preventDefault(); event.stopPropagation(); event.dataTransfer.dropEffect = "move"; }}
+                  onDrop={event => { event.preventDefault(); event.stopPropagation(); moveBalanceRow(section.id); }}>
+                  <td colSpan={4} className="p-0">
+                    <div className="flex min-h-8 items-center gap-2 border-y-2 border-dashed border-sky-400 bg-sky-400/10 px-3 py-1 text-[11px] font-semibold text-sky-200">
+                      <span className="rounded bg-sky-400 px-1.5 py-0.5 text-[#06151e]">DROP HERE</span>
+                      {balanceDisplayName(rows.find(item => item.id === draggingBalance),accountLabels)}
+                    </div>
+                  </td>
+                </tr>
+              )}
+              {!section.rows.length && !(draggingBalance && balanceDropPreview?.section === section.id) &&
+                <tr onDragOver={event => {
+                  if (!draggingBalanceId.current) return;
+                  event.preventDefault(); previewBalanceDrop(section.id);
+                }} onDrop={event => { event.preventDefault(); moveBalanceRow(section.id); }}>
+                  <td colSpan={4} className="px-2 py-2 text-xs text-[#72889a]">No accounts</td>
+                </tr>}
             </Fragment>)}
             <tr className="border-t-2 border-sky-500 font-bold"><td className="py-3">NET WORTH</td><td className="text-right">{money(netStart)}</td>
               <td className="text-right">{signed(netChange)}</td><td className="text-right text-emerald-400">{money(netEnd)}</td></tr>
