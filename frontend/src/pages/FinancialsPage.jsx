@@ -862,10 +862,7 @@ export default function FinancialsPage() {
             <tr className="border-t-2 border-sky-500 font-bold">
               <td className="py-3">
                 NET WORTH
-                {(netStart == null || netChange == null || netEnd == null) && balanceTotals &&
-                  <div className="text-[10px] font-normal text-amber-300" title="Known-account subtotals only; missing account balances have not been assumed to equal zero">
-                    Partial — unverified balances excluded
-                  </div>}
+
               </td>
               <td className="text-right tabular-nums" title={netStart == null ? `${missingStartCount} opening balances unknown; showing known-account subtotal` : undefined}>
                 {netStart == null ? (knownNetStartSubtotal == null ? "—" : money(knownNetStartSubtotal)) : money(netStart)}
