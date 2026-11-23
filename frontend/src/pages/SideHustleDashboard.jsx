@@ -251,9 +251,12 @@ export default function SideHustleDashboard() {
   // This includes Lulo earnings even when the quick dashboard cache lacks a Lulo row.
   // Match KPI, monthly chart, and Top Projects to the one backend ledger.
   const sourceRows = backendCryptoProviderIncomeRows(backendEarnings, backendPortfolio);
-  const sourceTableRows = sourceRows.map(row => ({
-    ...row, meta: projectTableMeta(row.platform),
-  }));
+  // Hide inactive providers in Top Projects without changing income ledgers or historical totals.
+  const sourceTableRows = sourceRows
+    .filter(row => row.inactive !== true)
+    .map(row => ({
+      ...row, meta: projectTableMeta(row.platform),
+    }));
 
   const addSourceOptions = [...new Set([
     ...backendBreakEvenRows.map(project => project.name),
