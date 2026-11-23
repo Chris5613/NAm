@@ -1037,8 +1037,14 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     };
   }, []);
 
-  const activeProgramCards = sortedProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key)));
-  const inactiveProgramCards = sortedProgramCards.filter(item => inactiveProjectIds.includes(String(item.key)));
+  // Keep Rentals earnings and snapshots intact, but omit it from both visible project lists.
+  const visibleProgramCards = sortedProgramCards.filter(item =>
+    item.type !== "rentals" &&
+    String(item.key).toLowerCase() !== "rentals-project" &&
+    String(item.project?.platform || "").toLowerCase() !== "rentals"
+  );
+  const activeProgramCards = visibleProgramCards.filter(item => !inactiveProjectIds.includes(String(item.key)));
+  const inactiveProgramCards = visibleProgramCards.filter(item => inactiveProjectIds.includes(String(item.key)));
 
   const allAssets =
     useMemo(
