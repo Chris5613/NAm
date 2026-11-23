@@ -478,9 +478,19 @@ def evaluate_statement(data):
         "statementRows": statement_rows,
         "business": sum_business_rows(statement_rows),
         "statementTotals": balance_sheet_totals(statement_rows),
+        # Current Balance Sheet totals must cover exactly the accounts shown,
+        # regardless of user-defined drag-and-drop section placement. The
+        # current UI intentionally hides withdrawn Lulo and retired assets;
+        # leaving invisible rows in totals can make the visible NET WORTH
+        # inexplicably blank. Never substitute zero for a visible unknown.
         "displayTotals": balance_sheet_totals(
             data.get("displayRows") if isinstance(data.get("displayRows"), list)
-            else statement_rows),
+            else [row for row in statement_rows
+                  if not row.get("retired") and not (
+                      data.get("hideWithdrawnLulo") and
+                      (str(row.get("name") or "").strip().lower().startswith("lulo")
+                       or str(row.get("id") or "").lower().startswith("project:lulo"))
+                  )]),
         "cashMovements": {
             "cashIn": cents(sum(max(0, row["delta"]) for rows in
                             classify_cash_flows(ledger)["sections"].values()
