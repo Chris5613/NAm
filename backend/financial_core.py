@@ -432,6 +432,7 @@ def balance_sheet_totals(rows):
     return {
         "sourceOfCalculation": "backend-financial-statement-totals-v1",
         "knownNetStartSubtotal": known_net("start"),
+        "knownNetEndSubtotal": known_net("end"),
         "knownNetChangeSubtotal": known_change,
         "missingStartCount": sum(row.get("start") is None for row in rows),
         "missingChangeCount": len(rows) - len(verified_pairs),
