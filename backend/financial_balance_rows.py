@@ -82,9 +82,13 @@ def financial_balance_rows(month, records, live, devices, current_month):
         start = maybe_number(row.get("start"))
         if start is None and not current.get("locked"):
             start = maybe_number(old.get("end"))
-        # User-confirmed inception balance: Bixberry began in November 2026.
-        # Preserve explicit openings, prior closes and locked historical rows.
-        if start is None and key == "bixberry" and month == "2026-11" and not current.get("locked"):
+        # November 2026 provider inceptions: Bixberry and Honeygain have
+        # their first recorded activity in November, with no prior-month
+        # balance. This is a display opening for the inception month only;
+        # never overwrite explicit starts, prior closes, or locked months.
+        if (start is None and key in ("bixberry", "honeygain")
+                and month == "2026-11" and not current.get("locked")
+                and not any(asset_key(prior_row.get("name")) == key for prior_row in prior)):
             start = 0.0
         end = (maybe_number(live.get(key)) if month == current_month and
                maybe_number(live.get(key)) is not None else
