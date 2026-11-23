@@ -35,8 +35,10 @@ const field = "w-full rounded-lg border border-[#3c5267] bg-[#101923] px-3 py-2 
 // Display-only asset groups. Preserve backend categories and all ledger totals.
 const isDigitalAssetHolding = row => {
   const key = String(row?.id || "") + " " + String(row?.name || "");
-  return /\b(bitcoin|btc|ethereum|eth|cryptocurrency|crypto|token|wallet)\b/i.test(key) ||
-    /^(?:project:)?(?:btc|bitcoin|ethereum|eth|crypto|cryptocurrency)$/i.test(String(row?.id || ""));
+  // Kryptex's held BTC belongs beside wallet crypto assets, not USD platform balances.
+  // Use the existing row and valuation unchanged; this is only a display grouping.
+  return /\b(bitcoin|btc|ethereum|eth|cryptocurrency|crypto|token|wallet|kryptex)\b/i.test(key) ||
+    /^(?:project:)?(?:btc|bitcoin|ethereum|eth|crypto|cryptocurrency|kryptex)$/i.test(String(row?.id || ""));
 };
 const categories = [
   { id: "digital", name: "Digital Assets", includes: row => row.category === "digital" && isDigitalAssetHolding(row) },
