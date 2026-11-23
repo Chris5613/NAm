@@ -32,8 +32,15 @@ const MONTH_CLOSE_KEY = "financials_month_closes_v1";
 const FINANCIAL_LABELS_KEY = "financials_account_labels_v1";
 const card = "rounded-2xl border border-[#263342] bg-[#0b1017]";
 const field = "w-full rounded-lg border border-[#3c5267] bg-[#101923] px-3 py-2 text-sm text-white outline-none focus:border-cyan-400";
+// Display-only asset groups. Preserve backend categories and all ledger totals.
+const isDigitalAssetHolding = row => {
+  const key = String(row?.id || "") + " " + String(row?.name || "");
+  return /\\b(bitcoin|btc|ethereum|eth|cryptocurrency|crypto|token|wallet)\\b/i.test(key) ||
+    /^(?:project:)?(?:btc|bitcoin|ethereum|eth|crypto|cryptocurrency)$/i.test(String(row?.id || ""));
+};
 const categories = [
-  { id: "digital", name: "Digital Assets & Platform Balances" },
+  { id: "digital", name: "Digital Assets", includes: row => row.category === "digital" && isDigitalAssetHolding(row) },
+  { id: "platform", name: "Platform Balances", includes: row => row.category === "digital" && !isDigitalAssetHolding(row) },
   { id: "defi", name: "DeFi & Investments" },
   { id: "cash", name: "Cash & Receivables" },
   { id: "equipment", name: "Equipment & Fixed Assets" },
@@ -321,7 +328,7 @@ export default function FinancialsPage() {
     ...category,
     // Alphabetize account names only inside each section; keep section
     // order and accounting totals unchanged. Use visible renamed labels.
-    rows: rows.filter(row => row.category === category.id && !row.retired &&
+    rows: rows.filter(row => (category.includes ? category.includes(row) : row.category === category.id) && !row.retired &&
       showBalanceSheetRow(row, month, reportingMonth, accountLabels))
       .sort((a,b) => balanceDisplayName(a,accountLabels).localeCompare(
         balanceDisplayName(b,accountLabels), undefined, {sensitivity:"base",numeric:true})),
