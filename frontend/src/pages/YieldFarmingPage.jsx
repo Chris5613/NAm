@@ -826,11 +826,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       kryptexStats?.currentBalanceUsd
     ) || 0,
 },
-          {
-            type: "rentals",
-            key: "rentals-project",
-            amount: Number(backendEarnings?.monthlySources?.Rentals) || 0,
-          },
+          // Rentals remains in the earnings ledger, but is not a displayed project.
         ];
 
         
