@@ -7,6 +7,23 @@ from backend.financial_core import phone_asset_rows
 
 
 class FinancialBalanceRowsTests(unittest.TestCase):
+    def test_honeygain_november_inception_reconciles_balance_change(self):
+        records = {"2026-10": {"items": []}, "2026-11": {"items": []}}
+        rows = financial_balance_rows("2026-11", records,
+                                      {"honeygain": 0.14468}, [], "2026-11")
+        honeygain = next(row for row in rows if row["id"] == "project:honeygain")
+        self.assertEqual(honeygain["start"], 0)
+        self.assertAlmostEqual(honeygain["end"], 0.14468)
+        self.assertEqual(round(honeygain["end"] - honeygain["start"], 2), 0.14)
+
+    def test_honeygain_explicit_or_prior_opening_is_never_overridden(self):
+        records = {"2026-10": {"items": [{"name": "Honeygain", "end": 2}]},
+                   "2026-11": {"items": []}}
+        rows = financial_balance_rows("2026-11", records,
+                                      {"honeygain": 2.14}, [], "2026-11")
+        honeygain = next(row for row in rows if row["id"] == "project:honeygain")
+        self.assertEqual(honeygain["start"], 2)
+
     def test_rate_x_is_excluded_from_current_balance_sheet_even_if_live_zero(self):
         records = {"2026-11": {"items": [{"name": "Rate X", "end": 600},
                                             {"name": "Kryptex", "end": 20}]}}
