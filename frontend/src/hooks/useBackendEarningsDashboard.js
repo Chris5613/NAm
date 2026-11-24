@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "@/lib/apiClient";
 import { useAuth } from "@/lib/AuthContext";
 import { getTodayKey } from "@/lib/yieldFarmingAccounting";
+import { subscribe } from "@/lib/serverStore";
 import {
   readBackendEarningsCache, writeBackendEarningsCache,
   validateBackendEarningsSnapshot,
@@ -88,12 +89,35 @@ export function useBackendEarningsDashboard(month, projectsOnly = false) {
     const interval = window.setInterval(() => {
       if (document.visibilityState === "visible") refresh();
     }, 30000);
+    // Extension imports are persisted with a short server-store debounce.
+    // Read the fresh backend projection as soon as a provider reading saves
+    // rather than waiting for the next 30-second timer. This does not use
+    // the browser's earnings estimate as an accounting total.
+    let sourceTimer = null;
+    const providerKeys = new Set([
+      "project_income_kryptex_tracker_v1",
+      "project_income_salad_tracker_v1",
+      "project_income_unetwork_tracker_v1",
+      "project_income_rollercoin_tracker_v2",
+      "yield_today_earnings_high_water_v1",
+      "yield_daily_earnings_by_source_v2",
+    ]);
+    const unsubscribe = subscribe(key => {
+      if (!active || document.hidden || !providerKeys.has(key)) return;
+      if (sourceTimer !== null) window.clearTimeout(sourceTimer);
+      sourceTimer = window.setTimeout(() => {
+        sourceTimer = null;
+        if (active) refresh();
+      }, 1500);
+    });
     const visible = () => { if (!document.hidden) refresh(); };
     window.addEventListener("focus", visible);
     document.addEventListener("visibilitychange", visible);
     return () => {
       active = false;
       window.clearInterval(interval);
+      if (sourceTimer !== null) window.clearTimeout(sourceTimer);
+      unsubscribe();
       window.removeEventListener("focus", visible);
       document.removeEventListener("visibilitychange", visible);
     };
