@@ -1335,7 +1335,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const todayBreakdownWithHoneygain = [
     ...todayBreakdown,
     ...(honeygainTodayUsd == null ? [] :
-      [{name:"Honeygain", amount:honeygainTodayUsd, precision:4}]),
+      [{name:"Honeygain", amount:honeygainTodayUsd, precision:2}]),
   ].sort((a,b) => b.amount - a.amount);
   // The daily chart is dated receipts; month-end income is the separately
   // booked provider ledger. Do not silently count provisional Lulo/Loopscale
