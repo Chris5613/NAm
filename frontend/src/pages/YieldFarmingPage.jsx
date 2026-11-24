@@ -1495,6 +1495,26 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     0.1,
     ...yearlyChartData.map(month => Number(month.value) || 0)
   ) * 1.15;
+  // All Years aggregates the exact same booked monthly history used by
+  // Yearly, with the same current-month adjustment. Never derive revenue
+  // from balances or recompute income from browser observations.
+  const allYearsChartData = [...availableEarningsYears].sort().map(year => {
+    const yearMonths = buildYearlyEarningsChart(chartProjectIncome, {}, year, todayKey)
+      .map(month => month.monthKey === todayKey.slice(0, 7)
+        ? { ...month, value: thisMonthBooked ?? thisMonthEarned }
+        : month);
+    return {
+      year, label: year,
+      value: yearMonths.some(month => month.value != null)
+        ? yearMonths.reduce((sum, month) => sum + (Number(month.value) || 0), 0)
+        : null,
+    };
+  });
+  const allYearsEarned = yearlyHistoryReady
+    ? allYearsChartData.reduce((sum, year) => sum + (Number(year.value) || 0), 0)
+    : null;
+  const allYearsChartMax = Math.max(0.1,
+    ...allYearsChartData.map(year => Number(year.value) || 0)) * 1.15;
 
 
 const summary =
@@ -1940,15 +1960,16 @@ const summary =
                   ? "Dated Earnings This Month"
                   : `Earnings ${earningsChartRange === "monthly" ? "This Month"
                     : earningsChartRange === "weekly" ? "This Week"
-                    : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}`}</h2>
+                    : earningsChartRange === "allYears" ? "All Years"
+                     : earningsChartYear === todayKey.slice(0, 4) ? "This Year" : earningsChartYear}`}</h2>
               <div className="mt-1 text-[22px] font-semibold tabular-nums text-emerald-400"
                 title={backendEarnings?.fullyVerified === false
                   ? "Includes legacy receipts awaiting provider reconciliation"
-                  : undefined}>{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) ? "—" : earningsChartRange === "yearly" && thisYearEarned == null ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthHeadline : earningsChartRange === "weekly" ? weekEarnings : thisYearEarned)}</div>
+                  : undefined}>{(earningsChartRange === "monthly" && thisMonthEarned == null) || (earningsChartRange === "weekly" && weekEarnings == null) || (earningsChartRange === "yearly" && thisYearEarned == null) || (earningsChartRange === "allYears" && allYearsEarned == null) ? "—" : formatCurrency(earningsChartRange === "monthly" ? thisMonthHeadline : earningsChartRange === "weekly" ? weekEarnings : earningsChartRange === "allYears" ? allYearsEarned : thisYearEarned)}</div>
             </div>
             <div className="flex items-center gap-2">
               <div className="flex rounded-lg border border-[#303842] bg-[#13181e] p-0.5" aria-label="Earnings chart period">
-                {["monthly", "weekly", "yearly"].map(period => (
+                {["monthly", "weekly", "yearly", "allYears"].map(period => (
                   <button
                     key={period}
                     type="button"
@@ -1956,7 +1977,7 @@ const summary =
                     aria-pressed={earningsChartRange === period}
                     className={`rounded-md px-2 py-1 text-[10px] font-medium transition-colors ${earningsChartRange === period ? "bg-[#283039] text-white" : "text-muted-foreground hover:text-white"}`}
                   >
-                    {period === "monthly" ? "Monthly" : period === "weekly" ? "Weekly" : "Yearly"}
+                    {period === "monthly" ? "Monthly" : period === "weekly" ? "Weekly" : period === "yearly" ? "Yearly" : "All Years"}
                   </button>
                 ))}
               </div>
@@ -1977,12 +1998,12 @@ const summary =
               )}
               <div className="rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-400">
                 <span className="mr-1 inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-                {earningsChartRange === "yearly" && earningsChartYear !== todayKey.slice(0, 4) ? "Historical" : "Live"}
+                {earningsChartRange === "yearly" && earningsChartYear !== todayKey.slice(0, 4) ? "Historical" : earningsChartRange === "allYears" ? "History" : "Live"}
               </div>
             </div>
           </div>
           <div className="mt-2 h-[265px] w-full min-h-0 lg:h-auto lg:min-h-[280px] lg:flex-1">
-            {earningsChartRange === "yearly" && !yearlyHistoryReady ? (
+            {(earningsChartRange === "yearly" || earningsChartRange === "allYears") && !yearlyHistoryReady ? (
               <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 {backendEarningsError ? "Reconnecting to recorded earnings…" : "Loading recorded yearly earnings…"}
               </div>
@@ -2048,6 +2069,38 @@ const summary =
                     }}
                     connectNulls={false} isAnimationActive={false}>
                     <LabelList dataKey="value" position="top" offset={12} formatter={value => value == null ? "" : formatCurrency(value)} style={{fill:"#c7f9e5",fontSize:10,fontWeight:600}} />
+                  </Area>
+                </AreaChart>
+              ) : earningsChartRange === "allYears" ? (
+                <AreaChart data={allYearsChartData} margin={{top:28,right:15,left:-8,bottom:3}}
+                  onClick={point => {
+                    const index = Number(point?.activeTooltipIndex);
+                    const year = point?.activePayload?.[0]?.payload?.year ||
+                      (Number.isInteger(index) ? allYearsChartData[index]?.year : null);
+                    if (year && allYearsChartData.some(item => item.year === year && item.value != null)) {
+                      setEarningsChartYear(year);
+                      setEarningsChartRange("yearly");
+                      setSelectedEarningsPoint(null);
+                    }
+                  }}>
+                  <defs>
+                    <linearGradient id="yieldAllYearsFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#30d991" stopOpacity={0.28}/>
+                      <stop offset="100%" stopColor="#30d991" stopOpacity={0.01}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
+                  <XAxis dataKey="label" axisLine={false} tickLine={false} interval={0} tick={{fontSize:10,fill:"#91a1b2"}} />
+                  <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,allYearsChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(0)}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} formatter={value=>[formatCurrency(value),"Annual earnings"]}/>
+                  <Area type="monotone" dataKey="value" name="Annual earnings" stroke="#30e69b" strokeWidth={2.75} fill="url(#yieldAllYearsFill)"
+                    dot={props => props?.payload?.value == null ? null :
+                      <circle cx={props.cx} cy={props.cy} r={5} fill="#30e69b" stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
+                        onClick={() => { setEarningsChartYear(props.payload.year); setEarningsChartRange("yearly"); setSelectedEarningsPoint(null); }}/>}
+                    activeDot={{r:8}} connectNulls={false} isAnimationActive={false}>
+                    <LabelList dataKey="value" position="top" offset={12}
+                      formatter={value => value == null ? "" : formatCurrency(value)}
+                      style={{fill:"#c7f9e5",fontSize:10,fontWeight:600}} />
                   </Area>
                 </AreaChart>
               ) : (
