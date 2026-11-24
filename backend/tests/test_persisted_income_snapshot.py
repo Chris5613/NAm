@@ -7,6 +7,17 @@ from types import SimpleNamespace
 
 
 class PersistedIncomeSnapshotTests(unittest.TestCase):
+    def test_annual_2025_income_is_preserved_without_inventing_a_month(self):
+        result = source_income_history(
+            {"2026-11": {"monthKey": "2026-11", "total": 5,
+                         "platforms": [{"platform": "Kryptex", "amount": 5}]}},
+            {}, [], {"monthly": {}, "annual2025": {"Legacy mining": 42.75}},
+            "2026-11")
+        self.assertEqual(result["annualUndated"], [{
+            "year": "2025", "sources": {"Legacy mining": 42.75}, "total": 42.75,
+        }])
+        self.assertEqual([row["monthKey"] for row in result["months"]], ["2026-11"])
+
     def test_booked_source_rows_without_dividend_setting_remain_exact(self):
         snapshots = {
             "2026-10": {
