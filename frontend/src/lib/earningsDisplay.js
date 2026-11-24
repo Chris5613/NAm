@@ -6,7 +6,7 @@ import { stockPayoutTotal } from "./stockDividendPayouts";
  * in that calendar year. Never assign undated revenue to an invented month.
  */
 export function buildAnnualEarningsBreakdown({
-  year, projectIncome = [], annualUndated = [], todayKey = "",
+  year, projectIncome = [], annualUndated = [], annualReconciliations = [], todayKey = "",
 }) {
   if (!/^\d{4}$/.test(String(year)) || String(year) > String(todayKey).slice(0, 4)) {
     return null;
@@ -43,19 +43,34 @@ export function buildAnnualEarningsBreakdown({
       includesAnnualOnly = true;
     }
   }
-  if (!hasRecorded && !includesAnnualOnly) return null;
+  // A reconciliation is an incremental, undated lifetime provider
+  // baseline. Add it to the SAME provider row (e.g. RollerCoin), not as a
+  // second project or a fabricated monthly earning.
+  let includesReconciliation = false;
+  for (const annual of annualReconciliations) {
+    if (String(annual?.year) !== year) continue;
+    for (const [name, raw] of Object.entries(annual.sources || {})) {
+      const amount = Number(raw);
+      if (!name || !Number.isFinite(amount) || amount <= 0) continue;
+      const label = displayName(name);
+      totals[label] = (totals[label] || 0) + amount;
+      includesReconciliation = true;
+    }
+  }
+  if (!hasRecorded && !includesAnnualOnly && !includesReconciliation) return null;
   const entries = Object.entries(totals)
     .filter(([, amount]) => amount !== 0)
     .map(([name, amount]) => ({ name, amount }))
     .sort((a, b) => b.amount - a.amount);
   return {
     label: year,
-    note: includesAnnualOnly
-      ? "Recorded earnings by project for this year, including annual-only history without assigned monthly dates."
+    note: includesAnnualOnly || includesReconciliation
+      ? "Recorded annual earnings by project, including separately confirmed historical rewards without assigned dates."
       : "Recorded earnings by project across this calendar year.",
     entries,
     total: entries.reduce((sum, row) => sum + row.amount, 0),
     includesAnnualOnly,
+    includesReconciliation,
   };
 }
 
@@ -70,6 +85,7 @@ export function buildSelectedEarningsBreakdown({
   sourceTotalsForDay,
   currentMonthSources,
   annualUndated = [],
+  annualReconciliations = [],
 }) {
   if (!selection || selection.range !== earningsChartRange) return null;
 
@@ -79,7 +95,8 @@ export function buildSelectedEarningsBreakdown({
 
   if (selection.range === "allYears") {
     return buildAnnualEarningsBreakdown({
-      year: String(selection.key), projectIncome, annualUndated, todayKey,
+      year: String(selection.key), projectIncome, annualUndated,
+      annualReconciliations, todayKey,
     });
   }
   if (selection.range === "yearly") {
