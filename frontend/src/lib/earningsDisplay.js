@@ -11,6 +11,10 @@ export function buildAnnualEarningsBreakdown({
   if (!/^\d{4}$/.test(String(year)) || String(year) > String(todayKey).slice(0, 4)) {
     return null;
   }
+  // All GoMining products are one business/platform for annual presentation:
+  // GoMining Mining, Bounty, Liquidity, Locking, and "GoMining" share a row.
+  // Historical transaction names remain unchanged in the accounting ledger.
+  const displayName = name => /^gomining(?:\b|[\s_-])/i.test(name) ? "GoMining" : name;
   const totals = {};
   const datedSources = new Set();
   let hasRecorded = false;
@@ -22,8 +26,9 @@ export function buildAnnualEarningsBreakdown({
       const name = String(item?.platform || "").trim();
       const amount = Number(item?.amount);
       if (!name || !Number.isFinite(amount)) continue;
-      totals[name] = (totals[name] || 0) + amount;
-      datedSources.add(name.toLowerCase());
+      const label = displayName(name);
+      totals[label] = (totals[label] || 0) + amount;
+      datedSources.add(label.toLowerCase());
     }
   }
   let includesAnnualOnly = false;
@@ -31,9 +36,10 @@ export function buildAnnualEarningsBreakdown({
     if (String(annual?.year) !== year) continue;
     for (const [name, raw] of Object.entries(annual.sources || {})) {
       const amount = Number(raw);
+      const label = displayName(name);
       if (!name || !Number.isFinite(amount) || amount <= 0 ||
-          datedSources.has(name.toLowerCase())) continue;
-      totals[name] = (totals[name] || 0) + amount;
+          datedSources.has(label.toLowerCase())) continue;
+      totals[label] = (totals[label] || 0) + amount;
       includesAnnualOnly = true;
     }
   }
