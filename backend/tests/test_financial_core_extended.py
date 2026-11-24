@@ -42,6 +42,25 @@ class BackendAccountingMigrationTests(unittest.TestCase):
         self.assertEqual(history["months"][1]["total"], 310)
         self.assertEqual(aligned["months"][-1]["sources"]["Unetwork"], 177.309143)
 
+    def test_booked_provider_reconciliation_keeps_distinct_legacy_earnings(self):
+        snapshots = {
+            "2026-09": {"total": 100, "platforms": [
+                {"platform": "Kryptex", "amount": 100}]},
+            "2026-10": {"total": 20, "platforms": [
+                {"platform": "Kryptex", "amount": 20}]},
+            "2026-11": {"total": 10, "platforms": [
+                {"platform": "Kryptex", "amount": 10}]},
+        }
+        history = {"months": [{"monthKey": "2026-09",
+                              "sources": {"Kryptex": 80, "Clore AI": 45, "Stocks": 3},
+                              "total": 128, "stocks": 3}]}
+        aligned = chart_history_with_booked_months(history, snapshots, "2026-11")
+        september = aligned["months"][0]
+        self.assertEqual(september["sources"]["Kryptex"], 100)
+        self.assertEqual(september["sources"]["Clore AI"], 45)
+        self.assertEqual(september["sources"]["Stocks"], 3)
+        self.assertEqual(september["total"], 148)
+
     def test_incomplete_booked_months_do_not_override_source_history(self):
         history = {"months": [{"monthKey": "2026-11", "total": 22,
                                "sources": {"Kryptex": 22}}]}
