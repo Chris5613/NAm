@@ -104,6 +104,37 @@ def chart_history_with_booked_months(history, snapshots, current_month):
             "bookedChartSource": "validated-monthly-provider-snapshots"}
 
 
+def reconcile_rollercoin_lifetime_display(history, lifetime_usd, year="2026"):
+    """Bridge dated RollerCoin USD with the same lifetime value as Break Even.
+
+    The lifetime statistic includes an older, undated TRX baseline valued
+    using tracked reward prices. It is a read-only annual reconciliation,
+    NOT a fabricated daily/monthly earning or a new accounting transaction.
+    Future audits must distinguish this historical baseline from duplicated
+    dated rewards. The 2026 bridge is limited to the 2026 reporting year.
+    """
+    if not isinstance(history, dict) or not isinstance(history.get("months"), list):
+        return history
+    lifetime = _amount(lifetime_usd)
+    if lifetime is None or lifetime < 0:
+        return history
+    dated = sum(
+        (_amount(row.get("sources", {}).get("RollerCoin")) or Decimal("0"))
+        for row in history["months"]
+        if isinstance(row, dict) and str(row.get("monthKey") or "").startswith(year + "-")
+        and isinstance(row.get("sources"), dict)
+    )
+    delta = lifetime - dated
+    if delta <= Decimal("0.005"):
+        return {**history, "annualReconciliations": []}
+    return {**history, "annualReconciliations": [{
+        "year": year,
+        "sources": {"RollerCoin": round(float(delta), 6)},
+        "total": round(float(delta), 6),
+        "basis": "project-break-even-lifetime-less-dated-rewards",
+    }]}
+
+
 def lifetime_earned_from_history(history, current_month, start_month="2025-01"):
     """Sum all recorded income from 2025 onward, not just booked recent months.
 
@@ -158,6 +189,20 @@ def lifetime_earned_from_history(history, current_month, start_month="2025-01"):
             seen.add(normalized_name)
             annual_first = year + "-01"
             first = min(first, annual_first) if first else annual_first
+    # Annual-only provider reconciliation adds an independently tracked
+    # historical reward baseline, not a second copy of any dated month.
+    for annual in history.get("annualReconciliations") or []:
+        if not isinstance(annual, dict) or not isinstance(annual.get("sources"), dict):
+            return None
+        year = str(annual.get("year") or "")
+        if not start_month[:4] <= year <= current_month[:4]:
+            continue
+        for name, raw in annual["sources"].items():
+            parsed = _amount(raw)
+            if not isinstance(name, str) or parsed is None or parsed < 0:
+                return None
+            total += parsed
+            first = min(first, year + "-01") if first else year + "-01"
     if first is None:
         return None
     return {
