@@ -36,6 +36,7 @@ function KryptexProjectCard({
   onTotalSpentChange,
   onDeactivate,
   todayUsd = 0,
+  honeygainSnapshot = null,
 }) {
   const isLive =
     Boolean(
@@ -528,24 +529,7 @@ function formatCompactSyncAge(value) {
   return `${Math.floor(hours / 24)}d ago`;
 }
 
-function HoneygainSyncPanel() {
-  const [snapshot, setSnapshot] = useState(null);
-  useEffect(() => {
-    let active = true;
-    const refresh = () => api.get("/api/honeygain/status")
-      .then(data => { if (active) setSnapshot(data); })
-      .catch(() => {});
-    refresh();
-    const timer = window.setInterval(refresh, 60000);
-    window.addEventListener("nam-honeygain-updated", refresh);
-    window.addEventListener("nam-passive-income-refresh", refresh);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      window.removeEventListener("nam-honeygain-updated", refresh);
-      window.removeEventListener("nam-passive-income-refresh", refresh);
-    };
-  }, []);
+function HoneygainSyncPanel({ snapshot }) {
   const latest = snapshot?.latest;
   return (
     <div className="border-t border-border/40 px-5 py-4 space-y-2">
@@ -631,24 +615,7 @@ function ProjectCard({
     isLulo ||
     normalizedPlatform ===
       "loopscale";
-  const [honeygainLive, setHoneygainLive] = useState(null);
-  useEffect(() => {
-    if (normalizedPlatform !== "honeygain") return undefined;
-    let active = true;
-    const refresh = () => api.get("/api/honeygain/status")
-      .then(data => { if (active) setHoneygainLive(data); })
-      .catch(() => {});
-    refresh();
-    const timer = window.setInterval(refresh, 60000);
-    window.addEventListener("nam-honeygain-updated", refresh);
-    window.addEventListener("nam-passive-income-refresh", refresh);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      window.removeEventListener("nam-honeygain-updated", refresh);
-      window.removeEventListener("nam-passive-income-refresh", refresh);
-    };
-  }, [normalizedPlatform]);
+  const honeygainLive = honeygainSnapshot;
   const honeygainLatest = honeygainLive?.latest;
 
 
@@ -712,7 +679,7 @@ function ProjectCard({
             </div>
           )}
 
-          {normalizedPlatform === "honeygain" && <HoneygainSyncPanel />}
+          {normalizedPlatform === "honeygain" && <HoneygainSyncPanel snapshot={honeygainLive} />}
           {/* Hide legacy manual Honeygain balance inputs: JumpTask-only
               observations are now the sole displayed balance source. */}
           <ProjectPositionsSection
