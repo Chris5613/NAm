@@ -489,6 +489,11 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     requestSaladLatest();
     requestUnetworkLatest();
     requestKryptexLatest();
+    // Trigger a fresh Honeygain reading on the SAME 60-second sync tick.
+    // The extension is optional; never claim a new external reading until saved.
+    window.postMessage({source: "nam-honeygain-app",
+      type: "REFRESH_WITH_PROJECTS"}, window.location.origin);
+    window.dispatchEvent(new Event("nam-passive-income-refresh"));
 
     const errors = [];
     const projectRequestSequence = beginProjectRequest();
@@ -746,10 +751,12 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     refresh();
     const timer = window.setInterval(refresh, 60000);
     window.addEventListener("nam-honeygain-updated", refresh);
+    window.addEventListener("nam-passive-income-refresh", refresh);
     return () => {
       active = false;
       window.clearInterval(timer);
       window.removeEventListener("nam-honeygain-updated", refresh);
+      window.removeEventListener("nam-passive-income-refresh", refresh);
     };
   }, []);
   const sortedProgramCards =
