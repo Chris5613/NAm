@@ -34,7 +34,7 @@ class PersistedIncomeSnapshotTests(unittest.TestCase):
         self.assertEqual(august["sources"], {"Unetwork": 2.543585})
         self.assertEqual(len(result["months"]), 1)
 
-    def test_unmatched_legacy_unity_allocation_is_retained_once(self):
+    def test_unmatched_legacy_unity_allocation_is_excluded_not_added(self):
         projects = [{
             "name": "Unity  Network", "transactions": [
                 {"date": "2026-08-01", "source": "unity-network-auto",
@@ -48,8 +48,10 @@ class PersistedIncomeSnapshotTests(unittest.TestCase):
                 "total": 1.15,
                 "platforms": [{"platform": "Unetwork", "amount": 1.15}]}])
         row = result["months"][0]
-        self.assertAlmostEqual(row["total"], 2.40)
-        self.assertEqual(row["sources"], {"Unetwork": 2.40})
+        # User confirms canonical Unetwork already includes Unity Network;
+        # never inflate the year by adding a second legacy project amount.
+        self.assertAlmostEqual(row["total"], 1.15)
+        self.assertEqual(row["sources"], {"Unetwork": 1.15})
 
     def test_provider_histories_before_first_booked_snapshot_are_preserved(self):
         result = source_income_history({
