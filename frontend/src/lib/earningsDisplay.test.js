@@ -2,6 +2,7 @@ import {
   buildSelectedEarningsBreakdown,
   buildAnnualEarningsBreakdown,
   buildTodayEarningsDisplay,
+  todayProjectsDisplayTotal,
 } from "./earningsDisplay";
 
 test("today display merges server and local high-water totals", () => {
@@ -205,9 +206,39 @@ test("Legacy Unity Network is excluded without changing canonical Unetwork", () 
   expect(result.entries).toHaveLength(1);
   expect(result.entries[0].name).toBe("Unetwork");
   expect(result.entries[0].amount).toBeCloseTo(310.66, 2);
-  expect(result.total).toBeCloseTo(466.43, 2);
+  expect(result.total).toBeCloseTo(310.66, 2);
   expect(buildAnnualEarningsBreakdown({
     year:"2025", todayKey:"2026-11-24", projectIncome:[],
     annualUndated:[{year:"2025",sources:{"Unity Network":25,"Unetwork":10}}],
   }).entries).toEqual([{name:"Unetwork",amount:10}]);
+});
+
+test("Overview and Passive Income use one identical total for today's earnings display", () => {
+  const todayKey = "2026-11-23";
+  const snapshot = {
+    todayKey,
+    todayTotalUsd: 11.15,
+    todaySources: {
+      Kryptex: 9.27, Loopscale: 0.98, Bixberry: 0.44,
+      RollerCoin: 0.43, Salad: 0.03, Stocks: 2.0,
+    },
+    projectObservations: {
+      honeygain: {
+        balanceUsd: 0.6203,
+        latest: {observedAt: "2026-11-24T06:30:00Z"},
+      },
+    },
+  };
+  const display = todayProjectsDisplayTotal(snapshot, todayKey);
+  expect(display).toBeCloseTo(11.7703, 4);
+  expect(display.toFixed(2)).toBe("11.77");
+  // Neither a stale observation nor a previous day's saved total can
+  // appear as current-day income.
+  expect(todayProjectsDisplayTotal(snapshot, "2026-11-22")).toBeNull();
+  expect(todayProjectsDisplayTotal({
+    ...snapshot, projectObservations: {
+      honeygain: {...snapshot.projectObservations.honeygain,
+        latest: {observedAt: "2026-11-22T20:00:00Z"}},
+    },
+  }, todayKey)).toBeCloseTo(11.15);
 });
