@@ -1510,11 +1510,13 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // The current-month earnings endpoint may finish before the full historical
   // ledger. Never show a fake Jan-Oct $0 chart or a partial yearly headline.
   const yearlyHistoryReady = Boolean(backendEarnings?.incomeHistory);
-  const thisYearEarned = yearlyHistoryReady &&
-    (selectedYearHasDatedIncome || selectedUndatedAnnual != null)
-    ? yearlyChartData.reduce((sum, month) => sum + (Number(month.value) || 0), 0) +
-      (selectedUndatedAnnual ?? 0)
-    : null;
+  const selectedAnnualBreakdown = buildAnnualEarningsBreakdown({
+    year: earningsChartYear, projectIncome: chartProjectIncome,
+    annualUndated, annualReconciliations, todayKey,
+  });
+  // Keep the Yearly header equal to the selected All Years point, including
+  // separately recorded annual-only income without inventing monthly dates.
+  const thisYearEarned = yearlyHistoryReady ? (selectedAnnualBreakdown?.total ?? null) : null;
   const yearlyChartMax = Math.max(
     0.1,
     ...yearlyChartData.map(month => Number(month.value) || 0)
