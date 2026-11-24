@@ -185,3 +185,29 @@ test("untrusted or cross-month source history cannot populate the yearly chart",
   expect(validateBackendEarningsSnapshot(data, "2026-11", "2026-11-14")
     .incomeHistory).toBeNull();
 });
+
+test("earnings load immediately from durable saved backend snapshot after tab session is lost", () => {
+  const session = store(), durable = store();
+  const previousWindow = global.window;
+  global.window = {sessionStorage: session, localStorage: durable};
+  try {
+    const data = backend();
+    const now = Date.parse("2026-11-15T04:00:00Z");
+    writeBackendEarningsCache(7, "2026-11", data, undefined, now);
+    expect(session.length).toBe(1);
+    expect(durable.length).toBe(1);
+    session.removeItem(earningsCacheKey(7, "2026-11"));
+    const saved = readBackendEarningsCache(7, "2026-11", "2026-11-14",
+      undefined, now + 5_000);
+    expect(saved.data.todayTotalUsd).toBe(5.81);
+    expect(readBackendEarningsCache(8, "2026-11", "2026-11-14",
+      undefined, now + 5_000)).toBeNull();
+    expect(readBackendEarningsCache(7, "2026-11", "2026-11-15",
+      undefined, now + 5_000)).toBeNull();
+    clearBackendEarningsCache(7);
+    expect(session.length).toBe(0);
+    expect(durable.length).toBe(0);
+  } finally {
+    global.window = previousWindow;
+  }
+});
