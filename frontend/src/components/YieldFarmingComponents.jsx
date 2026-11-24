@@ -538,10 +538,12 @@ function HoneygainSyncPanel() {
     refresh();
     const timer = window.setInterval(refresh, 60000);
     window.addEventListener("nam-honeygain-updated", refresh);
+    window.addEventListener("nam-passive-income-refresh", refresh);
     return () => {
       active = false;
       window.clearInterval(timer);
       window.removeEventListener("nam-honeygain-updated", refresh);
+      window.removeEventListener("nam-passive-income-refresh", refresh);
     };
   }, []);
   const latest = snapshot?.latest;
@@ -549,7 +551,7 @@ function HoneygainSyncPanel() {
     <div className="border-t border-border/40 px-5 py-4 space-y-2">
       <div className="text-xs font-semibold">JumpTask · {latest ? "Balance tracked" : "Awaiting first reading"}</div>
       <p className="text-xs text-muted-foreground">
-        Chrome opens the Honeygain dashboard in an inactive tab every five minutes, reads the explicitly labeled JumpTask balance, and closes the tab. Honeygain-mode balances and earnings are excluded.
+        Honeygain checks with the other projects during NAm's one-minute refresh when the updated Chrome extension is installed. A five-minute background check remains as backup. Only successful readings update the sync time; Honeygain-mode income remains excluded.
       </p>
       {latest && (
         <div className="grid grid-cols-2 gap-3 text-xs">
@@ -639,10 +641,12 @@ function ProjectCard({
     refresh();
     const timer = window.setInterval(refresh, 60000);
     window.addEventListener("nam-honeygain-updated", refresh);
+    window.addEventListener("nam-passive-income-refresh", refresh);
     return () => {
       active = false;
       window.clearInterval(timer);
       window.removeEventListener("nam-honeygain-updated", refresh);
+      window.removeEventListener("nam-passive-income-refresh", refresh);
     };
   }, [normalizedPlatform]);
   const honeygainLatest = honeygainLive?.latest;
