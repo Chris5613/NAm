@@ -1469,21 +1469,21 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   ) * 1.15;
 
   const availableEarningsYears = [...new Set([
-    "2025",
     todayKey.slice(0, 4),
     ...chartProjectIncome
       .map(month => String(month?.monthKey || "").slice(0, 4))
       .filter(year => /^\d{4}$/.test(year)),
   ])].sort((a, b) => b.localeCompare(a));
 
+  // Use the same backend-booked history for every monthly/yearly point.
+  // Replacing November with the separately dated daily estimate made the
+  // yearly sum disagree with the Lifetime Earned ledger.
   const yearlyChartData = buildYearlyEarningsChart(
     chartProjectIncome,
     {},
     earningsChartYear,
     todayKey
-  ).map(month => month.monthKey === todayKey.slice(0, 7)
-    ? { ...month, value: thisMonthBooked ?? thisMonthEarned }
-    : month);
+  );
   // The current-month earnings endpoint may finish before the full historical
   // ledger. Never show a fake Jan-Oct $0 chart or a partial yearly headline.
   const yearlyHistoryReady = Boolean(backendEarnings?.incomeHistory);
@@ -1499,10 +1499,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // Yearly, with the same current-month adjustment. Never derive revenue
   // from balances or recompute income from browser observations.
   const allYearsChartData = [...availableEarningsYears].sort().map(year => {
-    const yearMonths = buildYearlyEarningsChart(chartProjectIncome, {}, year, todayKey)
-      .map(month => month.monthKey === todayKey.slice(0, 7)
-        ? { ...month, value: thisMonthBooked ?? thisMonthEarned }
-        : month);
+    const yearMonths = buildYearlyEarningsChart(chartProjectIncome, {}, year, todayKey);
     return {
       year, label: year,
       value: yearMonths.some(month => month.value != null)
@@ -2093,7 +2090,7 @@ const summary =
                   <XAxis dataKey="label" axisLine={false} tickLine={false} interval={0} tick={{fontSize:10,fill:"#91a1b2"}} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,allYearsChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(0)}/>
                   <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} formatter={value=>[formatCurrency(value),"Annual earnings"]}/>
-                  <Area type="monotone" dataKey="value" name="Annual earnings" stroke="#30e69b" strokeWidth={2.75} fill="url(#yieldAllYearsFill)"
+                  <Area type="monotone" dataKey="value" name="Annual earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldAllYearsFill)"
                     dot={props => props?.payload?.value == null ? null :
                       <circle cx={props.cx} cy={props.cy} r={5} fill="#30e69b" stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
                         onClick={() => { setEarningsChartYear(props.payload.year); setEarningsChartRange("yearly"); setSelectedEarningsPoint(null); }}/>}
