@@ -157,6 +157,17 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
         Object.entries(row.sources).every(([name, value]) =>
           typeof name === "string" && name.length > 0 && name.length <= 80 &&
           typeof value === "number" && Number.isFinite(value)))) {
+    // An older annual-only 2025 record has no trustworthy month date.
+    // Keep it as year evidence rather than fabricating monthly chart points.
+    const annualUndated = Array.isArray(history.annualUndated)
+      ? history.annualUndated.filter(row => row && /^\d{4}$/.test(String(row.year)) &&
+          typeof row.total === "number" && Number.isFinite(row.total) && row.total >= 0 &&
+          row.sources && typeof row.sources === "object" && !Array.isArray(row.sources) &&
+          Object.entries(row.sources).every(([name, value]) =>
+            name.length > 0 && name.length <= 80 && typeof value === "number" &&
+            Number.isFinite(value) && value >= 0))
+          .map(row => ({ year: String(row.year), total: row.total, sources: {...row.sources} }))
+      : [];
     incomeHistory = {
       sourceOfCalculation: history.sourceOfCalculation,
       currentMonth: month,
@@ -164,6 +175,7 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
         monthKey: row.monthKey, total: row.total,
         sources: { ...row.sources },
       })),
+      annualUndated,
     };
   }
   return {
