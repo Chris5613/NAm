@@ -744,6 +744,21 @@ async def earnings_dashboard(
         }} for day, record in daily.items()}
     dashboard = build_backend_earnings_dashboard(
         month, today.isoformat(), daily, trackers)
+    # Include Honeygain's most recent JumpTask observation IN THE SAME
+    # authenticated response as all the daily earnings providers. This is
+    # a wallet/credits BALANCE, not income; it must never enter todaySources,
+    # todayTotalUsd, monthTotalUsd, or Lifetime Earned. The observedAt
+    # timestamp remains the actual external reading time (not request time).
+    honeygain_saved = setting(db, user.id, "honeygain_jumptask_balance_v1")
+    honeygain_latest = (honeygain_saved.get("latest")
+                        if isinstance(honeygain_saved, dict) else None)
+    dashboard["honeygainObservation"] = {
+        "balanceUsd": honeygain_latest.get("balanceUsd"),
+        "jumpTaskBalanceCredits": honeygain_latest.get("jumpTaskBalanceCredits"),
+        "observedAt": honeygain_latest.get("observedAt"),
+        "source": "honeygain-chrome-jumptask",
+        "kind": "observed-balance-not-income",
+    } if isinstance(honeygain_latest, dict) else None
     monthly_snapshots = setting(db, user.id, "yield_monthly_snapshots_v1")
     if isinstance(monthly_snapshots, dict):
         # The browser may have saved a partially hydrated current-month
