@@ -1179,6 +1179,7 @@ async def source_owned_income_history(
         manual_income_for_user(user.id), month,
         current_provider_months=monthly_provider_income(trackers, month),
         confirmed_legacy=confirmed_november_sources(dated, month, day),
+        provider_daily={"unetwork": trackers.get("unetwork", {}).get("daily", {})},
     )
     return {**result, "calculatedAt": datetime.now(timezone.utc).isoformat()}
 
