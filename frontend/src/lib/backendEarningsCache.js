@@ -198,9 +198,33 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
         : [],
     };
   }
+  // Saved provider balance observations arrive with the same backend
+  // snapshot as Kryptex/Salad/etc. Never classify them as earned income.
+  const observations = data.projectObservations || {};
+  const bixberry = observations.bixberry;
+  const honeygain = observations.honeygain;
+  const validStamp = stamp => typeof stamp === "string" &&
+    Number.isFinite(Date.parse(stamp));
+  const projectObservations = {
+    bixberry: bixberry && typeof bixberry.currentBalance === "number" &&
+      Number.isFinite(bixberry.currentBalance) && bixberry.currentBalance >= 0 &&
+      validStamp(bixberry.lastSyncedAt)
+      ? {currentBalance:bixberry.currentBalance, lastSyncedAt:bixberry.lastSyncedAt} : null,
+    honeygain: honeygain?.sourceOfCalculation === "backend-jumptask-observed-balance" &&
+      honeygain.bookedFinancialIncome === false &&
+      honeygain.latest && validStamp(honeygain.latest.observedAt) &&
+      typeof honeygain.balanceUsd === "number" &&
+      Number.isFinite(honeygain.balanceUsd) && honeygain.balanceUsd >= 0
+      ? {latest:{...honeygain.latest}, balanceUsd:honeygain.balanceUsd,
+          dailyHistory: honeygain.dailyHistory && typeof honeygain.dailyHistory === "object"
+            && !Array.isArray(honeygain.dailyHistory)
+            ? {...honeygain.dailyHistory} : {},
+          sourceOfCalculation:honeygain.sourceOfCalculation,
+          bookedFinancialIncome:false} : null,
+  };
   return {
     sourceOfCalculation: "backend-postgres",
-    month, todayKey, days, weekDays,
+    month, todayKey, days, weekDays, projectObservations,
     monthTotalUsd: data.monthTotalUsd, todayTotalUsd: data.todayTotalUsd,
     yesterdayTotalUsd: data.yesterdayTotalUsd,
     yesterdayDay: data.yesterdayDay,
