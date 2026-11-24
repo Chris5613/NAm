@@ -230,10 +230,10 @@ test("Overview and Passive Income use one identical total for today's earnings d
     },
   };
   const display = todayProjectsDisplayTotal(snapshot, todayKey);
-  expect(display).toBeCloseTo(11.7703, 4);
-  expect(display.toFixed(2)).toBe("11.77");
-  // Neither a stale observation nor a previous day's saved total can
-  // appear as current-day income.
+  expect(display).toBeCloseTo(11.15, 4);
+  expect(display.toFixed(2)).toBe("11.15");
+  // An accumulated Honeygain balance must never inflate income, regardless
+  // of observation date. A previous day's saved total cannot appear today.
   expect(todayProjectsDisplayTotal(snapshot, "2026-11-22")).toBeNull();
   expect(todayProjectsDisplayTotal({
     ...snapshot, projectObservations: {
