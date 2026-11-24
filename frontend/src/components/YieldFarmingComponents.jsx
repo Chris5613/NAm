@@ -596,6 +596,7 @@ function ProjectCard({
   onTotalSpentChange,
   onDeactivate,
   todayUsd = 0,
+  honeygainSnapshot = null,
 }) {
   const projections =
     getProjectProjections(
