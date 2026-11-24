@@ -135,7 +135,7 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
   // Never compute a secondary cumulative total in the browser.
   const lifetime = data.lifetimeEarned;
   const lifetimeEarned = lifetime &&
-    lifetime.source === "booked-provider-monthly-ledger" &&
+    lifetime.source === "recorded-income-history-v1" &&
     typeof lifetime.totalUsd === "number" && Number.isFinite(lifetime.totalUsd) &&
     typeof lifetime.fromMonth === "string" &&
     /^\d{4}-\d{2}$/.test(lifetime.fromMonth) &&
