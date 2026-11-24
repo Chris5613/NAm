@@ -188,7 +188,7 @@ test("RollerCoin lifetime reconciliation tops up same row without inventing a mo
   expect(breakdown.includesReconciliation).toBe(true);
 });
 
-test("Unity Network and Unetwork are one row in annual popup with unchanged total", () => {
+test("Legacy Unity Network is excluded without changing canonical Unetwork", () => {
   const projectIncome = [
     {monthKey:"2026-06", platforms:[
       {platform:"Unity Network", amount:141},
@@ -204,10 +204,10 @@ test("Unity Network and Unetwork are one row in annual popup with unchanged tota
   });
   expect(result.entries).toHaveLength(1);
   expect(result.entries[0].name).toBe("Unetwork");
-  expect(result.entries[0].amount).toBeCloseTo(466.43, 2);
+  expect(result.entries[0].amount).toBeCloseTo(310.66, 2);
   expect(result.total).toBeCloseTo(466.43, 2);
   expect(buildAnnualEarningsBreakdown({
     year:"2025", todayKey:"2026-11-24", projectIncome:[],
     annualUndated:[{year:"2025",sources:{"Unity Network":25,"Unetwork":10}}],
-  }).entries).toEqual([{name:"Unetwork",amount:35}]);
+  }).entries).toEqual([{name:"Unetwork",amount:10}]);
 });
