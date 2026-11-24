@@ -14,7 +14,16 @@ export function buildAnnualEarningsBreakdown({
   // All GoMining products are one business/platform for annual presentation:
   // GoMining Mining, Bounty, Liquidity, Locking, and "GoMining" share a row.
   // Historical transaction names remain unchanged in the accounting ledger.
-  const displayName = name => /^gomining(?:\b|[\s_-])/i.test(name) ? "GoMining" : name;
+  const displayName = name => {
+    const normalized = String(name).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (normalized.startsWith("gomining")) return "GoMining";
+    // "Unity Network", "Unity  Network", and "Unetwork" are the SAME
+    // provider. In both 2025 and 2026 annual popups, present one Unetwork
+    // line with their combined recorded income. The server independently
+    // removes matching duplicate dated transactions before summation.
+    if (normalized === "unitynetwork" || normalized === "unetwork") return "Unetwork";
+    return name;
+  };
   const totals = {};
   const datedSources = new Set();
   let hasRecorded = false;
