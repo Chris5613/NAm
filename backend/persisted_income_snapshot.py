@@ -54,7 +54,20 @@ def source_income_history(snapshots, payouts, projects, manual, current_month,
         months, known_payouts, current_month,
         legacy_months(known_projects), manual_values,
     )
+    # Some legacy 2025 earnings were supplied only as an annual amount.
+    # Keep those year-only observations separate from dated monthly income;
+    # assigning them to December (or any other month) would fabricate dates.
+    annual_2025 = manual.get("annual2025", {}) if isinstance(manual, dict) else {}
+    annual_2025 = {
+        name: value for name, value in annual_2025.items()
+        if isinstance(name, str) and isinstance(value, (int, float))
+        and not isinstance(value, bool) and value > 0
+    } if isinstance(annual_2025, dict) else {}
     return {
+        "annualUndated": ([{
+            "year": "2025", "sources": annual_2025,
+            "total": round(sum(annual_2025.values()), 6),
+        }] if annual_2025 else []),
         "sourceOfCalculation": "backend-persisted-income-history",
         "currentMonth": current_month,
         "months": result,
