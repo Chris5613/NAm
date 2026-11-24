@@ -17,11 +17,10 @@ export function buildAnnualEarningsBreakdown({
   const displayName = name => {
     const normalized = String(name).trim().toLowerCase().replace(/[^a-z0-9]/g, "");
     if (normalized.startsWith("gomining")) return "GoMining";
-    // "Unity Network", "Unity  Network", and "Unetwork" are the SAME
-    // provider. In both 2025 and 2026 annual popups, present one Unetwork
-    // line with their combined recorded income. The server independently
-    // removes matching duplicate dated transactions before summation.
-    if (normalized === "unitynetwork" || normalized === "unetwork") return "Unetwork";
+    // Unity Network is a legacy mirror, NOT additional Unetwork income.
+    // Owner confirmed the canonical Unetwork lifetime earnings were already
+    // correct (~$310.22 on 2026-11-23). Do not sum the legacy alias into it.
+    if (normalized === "unetwork") return "Unetwork";
     return name;
   };
   const totals = {};
@@ -34,7 +33,8 @@ export function buildAnnualEarningsBreakdown({
     for (const item of month.platforms || []) {
       const name = String(item?.platform || "").trim();
       const amount = Number(item?.amount);
-      if (!name || !Number.isFinite(amount)) continue;
+      if (!name || !Number.isFinite(amount) ||
+          name.toLowerCase().replace(/[^a-z0-9]/g, "") === "unitynetwork") continue;
       const label = displayName(name);
       totals[label] = (totals[label] || 0) + amount;
       datedSources.add(label.toLowerCase());
@@ -47,6 +47,7 @@ export function buildAnnualEarningsBreakdown({
       const amount = Number(raw);
       const label = displayName(name);
       if (!name || !Number.isFinite(amount) || amount <= 0 ||
+          name.toLowerCase().replace(/[^a-z0-9]/g, "") === "unitynetwork" ||
           datedSources.has(label.toLowerCase())) continue;
       totals[label] = (totals[label] || 0) + amount;
       includesAnnualOnly = true;
@@ -60,7 +61,8 @@ export function buildAnnualEarningsBreakdown({
     if (String(annual?.year) !== year) continue;
     for (const [name, raw] of Object.entries(annual.sources || {})) {
       const amount = Number(raw);
-      if (!name || !Number.isFinite(amount) || amount <= 0) continue;
+      if (!name || !Number.isFinite(amount) || amount <= 0 ||
+          name.toLowerCase().replace(/[^a-z0-9]/g, "") === "unitynetwork") continue;
       const label = displayName(name);
       totals[label] = (totals[label] || 0) + amount;
       includesReconciliation = true;
