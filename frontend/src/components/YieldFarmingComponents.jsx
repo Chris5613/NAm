@@ -36,7 +36,6 @@ function KryptexProjectCard({
   onTotalSpentChange,
   onDeactivate,
   todayUsd = 0,
-  honeygainSnapshot = null,
 }) {
   const isLive =
     Boolean(
