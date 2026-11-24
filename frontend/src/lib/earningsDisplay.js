@@ -216,16 +216,40 @@ export function buildTodayEarningsDisplay({
 }
 
 /**
- * The Overview and Passive Income daily totals use the same recorded
- * provider earnings. Wallet balances (notably Honeygain's JumpTask
- * accumulated credits) are never today's income, even when observed today.
+ * Extension reads the accumulated JumpTask-transferred balance, not daily
+ * earnings. The ONLY defensible current-day estimate available from this
+ * extension is growth between its first and latest same-Pacific-day samples.
+ * This measures observed positive change, not verified full-day income.
+ * If the balance decreases (e.g. a transfer/reset), do not report a loss.
+ * A single reading establishes a baseline of $0.00, never wallet=earnings.
+ */
+export function honeygainObservedDailyUsd(snapshot, dayKey) {
+  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(dayKey))) return null;
+  const observation = snapshot?.projectObservations?.honeygain;
+  const entry = observation?.dailyHistory?.[dayKey];
+  if (!entry || typeof entry !== "object") return null;
+  const first = entry.firstCredits;
+  const last = entry.lastCredits;
+  if (first == null || last == null ||
+      !Number.isFinite(Number(first)) || !Number.isFinite(Number(last)) ||
+      Number(first) < 0 || Number(last) < 0) return null;
+  // Preserve subcent values; no rounding until presentation.
+  return Math.max(0, (Number(last) - Number(first)) / 1000);
+}
+
+/**
+ * One shared DAILY DISPLAY total for both screens. It is not an accounting
+ * booking. The base is dated provider earnings, and Honeygain contributes
+ * only observed growth since today's first extension reading (never balance).
  */
 export function todayProjectsDisplayTotal(snapshot, todayKey) {
   if (!snapshot || snapshot.todayKey !== todayKey ||
       snapshot.todayTotalUsd == null) return null;
-  return Object.entries(snapshot.todaySources || {}).reduce((sum, [name, raw]) => {
-    const amount = Number(raw);
-    return name === "Stocks" || name === "Honeygain" ||
-      raw == null || !Number.isFinite(amount) ? sum : sum + amount;
-  }, 0);
+  const projectEarned = Object.entries(snapshot.todaySources || {})
+    .reduce((sum, [name, raw]) => {
+      const amount = Number(raw);
+      return name === "Stocks" || name === "Honeygain" ||
+        raw == null || !Number.isFinite(amount) ? sum : sum + amount;
+    }, 0);
+  return projectEarned + (honeygainObservedDailyUsd(snapshot, todayKey) ?? 0);
 }
