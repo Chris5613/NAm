@@ -47,7 +47,7 @@ from ..manual_income_history import manual_income_for_user
 from ..financial_balance_rows import financial_balance_rows, with_journal_equipment
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
-from ..lifetime_income import lifetime_earned_from_snapshots
+from ..lifetime_income import lifetime_earned_from_snapshots, chart_history_with_booked_months
 from ..integration_audit import audit_integration_settings
 from ..cross_page_integrity import cross_page_integrity
 from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
@@ -785,6 +785,12 @@ async def earnings_dashboard(
                                if name != "Stocks"},
              "total": row["projectTotal"], "stocks": 0}
             for row in history["months"]]}
+    # The Lifetime Earned card and historical charts must share the exact
+    # same internally reconciled booked month amounts. Do not drop recorded
+    # months or merge duplicate legacy earnings into an already booked month.
+    if isinstance(monthly_snapshots, dict):
+        history = chart_history_with_booked_months(
+            history, normalized, today.strftime("%Y-%m"))
     dashboard["incomeHistory"] = history
     return dashboard
 
