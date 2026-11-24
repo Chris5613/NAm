@@ -6,6 +6,7 @@ import { useBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
+import { todayProjectsDisplayTotal } from "@/lib/earningsDisplay";
 import { useSaladExtension } from "@/hooks/useSaladExtension";
 import { useUnetworkExtension } from "@/hooks/useUnetworkExtension";
 import { useRollerCoinExtension } from "@/hooks/useRollerCoinExtension";
@@ -268,8 +269,10 @@ export default function SideHustleDashboard() {
       ? "Includes legacy receipts awaiting provider reconciliation"
       : "Backend-recorded current month";
   const todayKey = pacificDayKey(clock);
-  const passiveIncomeToday = backendEarnings?.todayKey === todayKey
-    ? backendEarnings.todayTotalUsd ?? null : null;
+  // Exactly the same displayed figure as Passive Income → Today's Earnings.
+  // Includes a current-day Honeygain observation for UI parity only.
+  // Never post Honeygain's wallet balance into booked income or the ledger.
+  const passiveIncomeToday = todayProjectsDisplayTotal(backendEarnings, todayKey);
   const yesterdayIncome = backendEarnings?.yesterdayTotalUsd ?? null;
   const todayVsYesterday = passiveIncomeToday !== null && yesterdayIncome !== null && yesterdayIncome > 0
     ? (passiveIncomeToday - yesterdayIncome) / yesterdayIncome * 100
@@ -425,7 +428,7 @@ export default function SideHustleDashboard() {
         value={passiveIncomeToday == null ? "—" : money(passiveIncomeToday)}
         status={passiveIncomeToday != null && earningsCached
           ? "Last saved · refreshing live earnings" : null}
-        detail={todayVsYesterday == null ? "Actual earnings today" : `${todayVsYesterday >= 0 ? "▲" : "▼"} ${Math.abs(todayVsYesterday).toFixed(1)}% vs. yesterday`}
+        detail={todayVsYesterday == null ? "Displayed project earnings and Honeygain balance" : `${todayVsYesterday >= 0 ? "▲" : "▼"} ${Math.abs(todayVsYesterday).toFixed(1)}% vs. yesterday (display comparison)`}
         tone="emerald"
         valueClass="text-emerald-400"
       />
