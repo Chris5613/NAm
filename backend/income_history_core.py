@@ -115,28 +115,30 @@ def transaction_month(row):
 
 
 def legacy_months(projects, provider_daily=None):
-    """Project earnings not already represented by canonical provider days.
+    """Project earnings that are independent of tracked provider income.
 
-    The legacy "Unity  Network" project and the live "Unetwork" tracker are
-    the same provider. In the owner's Nov 2026 audit, all 17 Unity Network
-    transactions (USD 14.770724) matched existing Unetwork dated records by
-    date and exact USD amount. Keep the original transactions for provenance,
-    but never count them as a second earnings source in history or Lifetime.
-    Unmatched legacy rows are included once, under the Unetwork name.
+    OWNER-CONFIRMED NOV 2026: "Unity Network" / "Unity  Network" is a
+    legacy mirror of the canonical Unetwork tracker; it must not be ADDED
+    to Unetwork's already correct ~$310.22 lifetime total. An earlier audit
+    identified 17 identical dated Unity transactions ($14.770724), and the
+    owner separately rejected adding the remaining legacy Unity amount.
+    Keep historical records in storage for provenance, but exclude ALL Unity
+    Network aliases from income history and lifetime projections. Do not
+    repeatedly flag their exclusion in audits unless new contrary evidence
+    requires reviewing it. Other legacy projects remain unaffected.
     """
     months = defaultdict(lambda: defaultdict(float))
     undated = []
-    unetwork_days = ((provider_daily or {}).get("unetwork") or {})
     for project in projects or []:
         if not isinstance(project, dict):
             continue
         name = str(project.get("name") or "").strip()
-        unity_alias = re.sub(r"[^a-z0-9]", "", name.lower()) in (
-            "unitynetwork", "unetwork")
-        if not name or name.lower() in TRACKED_SOURCES or project.get("yield_tracking") in TRACKED_TYPES:
+        compact = re.sub(r"[^a-z0-9]", "", name.lower())
+        if compact == "unitynetwork":
             continue
-        if unity_alias:
-            name = "Unetwork"
+        if (not name or name.lower() in TRACKED_SOURCES or
+                project.get("yield_tracking") in TRACKED_TYPES):
+            continue
         earned_rows = []
         for row in project.get("transactions") or []:
             if not isinstance(row, dict):
@@ -151,13 +153,6 @@ def legacy_months(projects, provider_daily=None):
             continue
         for entry, n in earned_rows:
             month = transaction_month(entry)
-            if unity_alias and month and str(entry.get("source") or "") == "unity-network-auto":
-                day = str(entry.get("source_date") or entry.get("date") or "")[:10]
-                recorded = unetwork_days.get(day)
-                recorded_usd = amount(recorded.get("usd") if isinstance(recorded, dict) else recorded)
-                if recorded_usd is not None and abs(recorded_usd - n) < 0.000001:
-                    # Same underlying allocation. No second "Unity Network" income.
-                    continue
             if month:
                 months[month][name] += n
             else:
