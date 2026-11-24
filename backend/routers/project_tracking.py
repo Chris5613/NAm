@@ -744,6 +744,26 @@ async def earnings_dashboard(
         }} for day, record in daily.items()}
     dashboard = build_backend_earnings_dashboard(
         month, today.isoformat(), daily, trackers)
+    # The Bixberry and Honeygain cards use the SAME authenticated, cached
+    # dashboard response as other projects. These are saved BALANCE
+    # observations, never additional daily/monthly/lifetime earned income.
+    # Keep original provider timestamps; a page refresh is not a new reading.
+    bixberry_observation = setting(db, user.id, BIXBERRY_KEY) or {}
+    honeygain_saved = setting(db, user.id, "honeygain_jumptask_balance_v1") or {}
+    honeygain_latest = honeygain_saved.get("latest") if isinstance(honeygain_saved, dict) else None
+    dashboard["projectObservations"] = {
+        "bixberry": {
+            "currentBalance": bixberry_observation.get("currentBalance"),
+            "lastSyncedAt": bixberry_observation.get("lastSyncedAt"),
+        } if isinstance(bixberry_observation, dict) else None,
+        "honeygain": {
+            "latest": honeygain_latest,
+            "balanceUsd": honeygain_latest.get("balanceUsd"),
+            "dailyHistory": honeygain_saved.get("dailyHistory", {}),
+            "sourceOfCalculation": "backend-jumptask-observed-balance",
+            "bookedFinancialIncome": False,
+        } if isinstance(honeygain_latest, dict) else None,
+    }
     monthly_snapshots = setting(db, user.id, "yield_monthly_snapshots_v1")
     if isinstance(monthly_snapshots, dict):
         # The browser may have saved a partially hydrated current-month
