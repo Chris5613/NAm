@@ -1358,10 +1358,12 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     refresh();
     const interval = window.setInterval(refresh, 60000);
     window.addEventListener("nam-honeygain-updated", refresh);
+    window.addEventListener("nam-passive-income-refresh", refresh);
     return () => {
       active = false;
       window.clearInterval(interval);
       window.removeEventListener("nam-honeygain-updated", refresh);
+      window.removeEventListener("nam-passive-income-refresh", refresh);
     };
   }, []);
   // Render all provider observations on the same America/Los_Angeles
