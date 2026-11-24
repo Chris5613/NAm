@@ -83,9 +83,22 @@ def chart_history_with_booked_months(history, snapshots, current_month):
             name = item["platform"]
             sources[name] = float(_amount(item["amount"]))
         total = round(sum(sources.values()), 6)
+        # Keep independently dated stock payouts and other non-provider
+        # earnings. Only replace providers whose booked snapshot already
+        # represents those exact earnings; never erase earlier manual history.
+        previous = by_month.get(month, {})
+        other_sources = {
+            name: amount for name, amount in (previous.get("sources") or {}).items()
+            if name not in sources and
+            isinstance(amount, (int, float)) and not isinstance(amount, bool)
+        }
+        combined = {**other_sources, **sources}
+        stocks = float(other_sources.get("Stocks") or 0)
         by_month[month] = {
-            "monthKey": month, "sources": sources,
-            "projectTotal": total, "stocks": 0, "total": total,
+            **previous, "monthKey": month, "sources": combined,
+            "projectTotal": round(sum(combined.values()) - stocks, 6),
+            "stocks": stocks,
+            "total": round(sum(combined.values()), 6),
         }
     return {**result, "months": [by_month[key] for key in sorted(by_month)],
             "bookedChartSource": "validated-monthly-provider-snapshots"}
