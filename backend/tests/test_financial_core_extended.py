@@ -11,10 +11,40 @@ from backend.income_history_core import (
 )
 from backend.lifetime_income import (
     lifetime_earned_from_snapshots, chart_history_with_booked_months,
+    lifetime_earned_from_history,
 )
 
 
 class BackendAccountingMigrationTests(unittest.TestCase):
+    def test_lifetime_includes_2025_early_2026_and_recent_booked_earnings(self):
+        history = {"months": [
+            {"monthKey": "2025-06", "total": 20, "sources": {"Mining": 20}},
+            {"monthKey": "2026-05", "total": 12, "sources": {"Clore AI": 12}},
+            {"monthKey": "2026-09", "total": 330, "sources": {"Kryptex": 330}},
+            {"monthKey": "2026-10", "total": 202, "sources": {"Salad": 202}},
+            {"monthKey": "2026-11", "total": 178, "sources": {"Unetwork": 178}},
+        ], "annualUndated": []}
+        result = lifetime_earned_from_history(history, "2026-11")
+        self.assertEqual(result["totalUsd"], 742)
+        self.assertEqual(result["fromMonth"], "2025-06")
+        self.assertEqual(result["source"], "recorded-income-history-v1")
+
+    def test_2025_annual_only_is_counted_once_without_month_fabrication(self):
+        history = {"months": [
+            {"monthKey": "2025-03", "total": 10, "sources": {"Mining": 10}},
+            {"monthKey": "2026-11", "total": 5, "sources": {"Kryptex": 5}},
+        ], "annualUndated": [{"year": "2025", "sources": {
+            "Mining": 200, "Unrelated passive income": 40}, "total": 240}]}
+        result = lifetime_earned_from_history(history, "2026-11")
+        self.assertEqual(result["totalUsd"], 55)
+        self.assertEqual(result["fromMonth"], "2025-01")
+
+    def test_lifetime_fails_closed_on_inconsistent_source_subtotal(self):
+        history = {"months": [
+            {"monthKey": "2026-11", "total": 100, "sources": {"Kryptex": 50}},
+        ]}
+        self.assertIsNone(lifetime_earned_from_history(history, "2026-11"))
+
     def test_annual_chart_matches_booked_lifetime_without_double_counting_legacy(self):
         snapshots = {
             "2026-09": {"monthKey": "2026-09", "total": 330.062266,
