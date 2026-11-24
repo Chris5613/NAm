@@ -30,7 +30,8 @@ def project_history_rows(projects, relational_by_project):
 
 
 def source_income_history(snapshots, payouts, projects, manual, current_month,
-                          current_provider_months=None, confirmed_legacy=None):
+                          current_provider_months=None, confirmed_legacy=None,
+                          provider_daily=None):
     # The scheduler reconciles every five minutes. During that interval
     # today's provider earnings can change while the saved snapshot is old.
     # Compute an up-to-date read-only projection from durable trackers. Never
@@ -52,7 +53,7 @@ def source_income_history(snapshots, payouts, projects, manual, current_month,
     manual_values = manual.get("monthly", {}) if isinstance(manual, dict) else {}
     result = historical_income(
         months, known_payouts, current_month,
-        legacy_months(known_projects), manual_values,
+        legacy_months(known_projects, provider_daily=provider_daily), manual_values,
     )
     # Some legacy 2025 earnings were supplied only as an annual amount.
     # Keep those year-only observations separate from dated monthly income;
