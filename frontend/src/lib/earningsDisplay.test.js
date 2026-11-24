@@ -138,3 +138,52 @@ test("annual-only 2025 amount displays in popup without inventing a monthly date
     entries: [{name: "Historical earnings", amount: 95}],
   });
 });
+
+test("All Years merges every GoMining product into one annual project for 2025 and 2026", () => {
+  const months = [
+    {monthKey: "2025-04", platforms: [
+      {platform: "GoMining Mining", amount: 4},
+      {platform: "GoMining Bounty", amount: 1},
+    ]},
+    {monthKey: "2026-07", platforms: [
+      {platform: "GoMining Mining", amount: 30},
+      {platform: "GoMining Bounty", amount: 20},
+      {platform: "GoMining Liquidity", amount: 15},
+      {platform: "GoMining Locking", amount: 5},
+    ]},
+  ];
+  const annualUndated = [
+    {year: "2025", sources: {"GoMining Locking": 3, "Other": 2}},
+  ];
+  const y2025 = buildAnnualEarningsBreakdown({
+    year: "2025", projectIncome: months, annualUndated,
+    todayKey: "2026-11-24",
+  });
+  const y2026 = buildAnnualEarningsBreakdown({
+    year: "2026", projectIncome: months, annualUndated,
+    todayKey: "2026-11-24",
+  });
+  expect(y2025.entries).toEqual([
+    {name: "GoMining", amount: 5},
+    {name: "Other", amount: 2},
+  ]);
+  expect(y2026.entries).toEqual([{name: "GoMining", amount: 70}]);
+  expect(y2025.total).toBe(7);
+  expect(y2026.total).toBe(70);
+});
+
+test("RollerCoin lifetime reconciliation tops up same row without inventing a month", () => {
+  const breakdown = buildAnnualEarningsBreakdown({
+    year: "2026", todayKey: "2026-11-24",
+    projectIncome: [{monthKey:"2026-11", platforms:[
+      {platform:"RollerCoin", amount: 59.93},
+    ]}],
+    annualReconciliations: [{
+      year:"2026", basis:"project-break-even-lifetime-less-dated-rewards",
+      sources: {"RollerCoin": 112.47}, total:112.47,
+    }],
+  });
+  expect(breakdown.entries).toEqual([{name:"RollerCoin", amount:172.4}]);
+  expect(breakdown.total).toBeCloseTo(172.4);
+  expect(breakdown.includesReconciliation).toBe(true);
+});
