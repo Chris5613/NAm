@@ -7,6 +7,64 @@ from types import SimpleNamespace
 
 
 class PersistedIncomeSnapshotTests(unittest.TestCase):
+    def test_unity_network_mirror_does_not_duplicate_unetwork_provider(self):
+        # The user's 17 legacy Unity Network records match the Unetwork
+        # daily ledger exactly; this smaller fixture covers that contract.
+        projects = [{
+            "name": "Unity  Network", "earned": 0, "transactions": [
+                {"date": "2026-08-01", "source": "unity-network-auto",
+                 "type": "earning", "amount": 1.155289},
+                {"date": "2026-08-02", "source": "unity-network-auto",
+                 "type": "earning", "amount": 1.388296},
+            ],
+        }]
+        provider_days = {"unetwork": {
+            "2026-08-01": {"usd": 1.155289},
+            "2026-08-02": {"usd": 1.388296},
+        }}
+        result = source_income_history(
+            {}, {}, projects, {}, "2026-11",
+            provider_daily=provider_days,
+            current_provider_months=[{"monthKey": "2026-08",
+                "total": 2.543585,
+                "platforms": [{"platform": "Unetwork", "amount": 2.543585}]}])
+        august = next(row for row in result["months"]
+                      if row["monthKey"] == "2026-08")
+        self.assertAlmostEqual(august["total"], 2.543585)
+        self.assertEqual(august["sources"], {"Unetwork": 2.543585})
+        self.assertEqual(len(result["months"]), 1)
+
+    def test_unmatched_legacy_unity_allocation_is_retained_once(self):
+        projects = [{
+            "name": "Unity  Network", "transactions": [
+                {"date": "2026-08-01", "source": "unity-network-auto",
+                 "type": "earning", "amount": 1.25},
+            ],
+        }]
+        result = source_income_history(
+            {}, {}, projects, {}, "2026-11",
+            provider_daily={"unetwork": {"2026-08-01": {"usd": 1.15}}},
+            current_provider_months=[{"monthKey": "2026-08",
+                "total": 1.15,
+                "platforms": [{"platform": "Unetwork", "amount": 1.15}]}])
+        row = result["months"][0]
+        self.assertAlmostEqual(row["total"], 2.40)
+        self.assertEqual(row["sources"], {"Unetwork": 2.40})
+
+    def test_provider_histories_before_first_booked_snapshot_are_preserved(self):
+        result = source_income_history({
+            "2026-09": {"monthKey": "2026-09", "total": 7, "locked": True,
+                         "platforms": [{"platform": "Unetwork", "amount": 7}]},
+        }, {}, [], {}, "2026-11", current_provider_months=[
+            {"monthKey": "2026-05", "total": 5,
+             "platforms": [{"platform": "Unetwork", "amount": 5}]},
+            {"monthKey": "2026-09", "total": 100,
+             "platforms": [{"platform": "Unetwork", "amount": 100}]},
+        ])
+        self.assertEqual([row["monthKey"] for row in result["months"]],
+                         ["2026-05", "2026-09"])
+        self.assertEqual([row["total"] for row in result["months"]], [5, 7])
+
     def test_annual_2025_income_is_preserved_without_inventing_a_month(self):
         result = source_income_history(
             {"2026-11": {"monthKey": "2026-11", "total": 5,
