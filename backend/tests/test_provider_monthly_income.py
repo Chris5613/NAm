@@ -107,11 +107,19 @@ class MonthlyProviderTests(unittest.TestCase):
         self.assertEqual(rows["2026-09"]["Kryptex"], 12.5)
         self.assertEqual(rows["2026-10"]["Kryptex"], .47)
 
-    def test_empty_and_unsupported_months(self):
-        self.assertEqual(monthly_provider_income({
+    def test_early_dated_provider_months_are_preserved_for_annual_history(self):
+        result = monthly_sources(monthly_provider_income({
             "salad": {"monthlyEarnings": {"2026-08": 5, "2026-10": 0}},
+            "rollercoin": {"daily": {
+                "2026-06-16": {"usd": 1.25, "trx": 4},
+                "2026-07-01": {"usd": 2.75, "trx": 9},
+            }},
             "kryptex": {"monthlyEarnings": {}},
-        }, "2026-10"), [])
+        }, "2026-10"))
+        self.assertEqual(result["2026-08"]["Salad"], 5)
+        self.assertEqual(result["2026-06"]["RollerCoin"], 1.25)
+        self.assertEqual(result["2026-07"]["RollerCoin"], 2.75)
+        self.assertNotIn("2026-10", result)
 
 
 if __name__ == "__main__":
