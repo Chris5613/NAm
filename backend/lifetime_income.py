@@ -102,3 +102,67 @@ def chart_history_with_booked_months(history, snapshots, current_month):
         }
     return {**result, "months": [by_month[key] for key in sorted(by_month)],
             "bookedChartSource": "validated-monthly-provider-snapshots"}
+
+
+def lifetime_earned_from_history(history, current_month, start_month="2025-01"):
+    """Sum all recorded income from 2025 onward, not just booked recent months.
+
+    Source rows already reconcile provider snapshots with separately dated
+    historical earnings. Year-only imports are included once by provider/year,
+    without claiming a false transaction month or counting a provider twice.
+    """
+    if not isinstance(history, dict) or not isinstance(history.get("months"), list):
+        return None
+    total = Decimal("0")
+    covered = {}
+    first = None
+    for row in history["months"]:
+        if not isinstance(row, dict):
+            return None
+        month = row.get("monthKey")
+        if not isinstance(month, str) or len(month) != 7 or not (
+                start_month <= month <= current_month):
+            continue
+        recorded = _amount(row.get("total"))
+        sources = row.get("sources")
+        if recorded is None or recorded < 0 or not isinstance(sources, dict):
+            return None
+        source_sum = Decimal("0")
+        for name, value in sources.items():
+            parsed = _amount(value)
+            if not isinstance(name, str) or not name.strip() or parsed is None:
+                return None
+            source_sum += parsed
+            covered.setdefault(month[:4], set()).add(name.strip().casefold())
+        if abs(source_sum - recorded) > Decimal("0.02"):
+            return None
+        total += recorded
+        first = min(first, month) if first else month
+    for annual in history.get("annualUndated") or []:
+        if not isinstance(annual, dict):
+            return None
+        year, sources = str(annual.get("year") or ""), annual.get("sources")
+        if len(year) != 4 or not year.isdigit() or not isinstance(sources, dict):
+            return None
+        if not start_month[:4] <= year <= current_month[:4]:
+            continue
+        seen = covered.setdefault(year, set())
+        for name, value in sources.items():
+            parsed = _amount(value)
+            if not isinstance(name, str) or not name.strip() or parsed is None or parsed < 0:
+                return None
+            normalized_name = name.strip().casefold()
+            if normalized_name in seen:
+                continue
+            total += parsed
+            seen.add(normalized_name)
+            annual_first = year + "-01"
+            first = min(first, annual_first) if first else annual_first
+    if first is None:
+        return None
+    return {
+        "totalUsd": round(float(total), 6),
+        "fromMonth": first,
+        "throughMonth": current_month,
+        "source": "recorded-income-history-v1",
+    }
