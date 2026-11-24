@@ -9,9 +9,45 @@ from backend.financial_core import (
 from backend.income_history_core import (
     reconcile_lulo_months, historical_income, legacy_months,
 )
+from backend.lifetime_income import (
+    lifetime_earned_from_snapshots, chart_history_with_booked_months,
+)
 
 
 class BackendAccountingMigrationTests(unittest.TestCase):
+    def test_annual_chart_matches_booked_lifetime_without_double_counting_legacy(self):
+        snapshots = {
+            "2026-09": {"monthKey": "2026-09", "total": 330.062266,
+                        "platforms": [{"platform": "Kryptex", "amount": 330.062266}]},
+            "2026-10": {"monthKey": "2026-10", "total": 202.769111,
+                        "platforms": [{"platform": "Salad", "amount": 202.769111}]},
+            "2026-11": {"monthKey": "2026-11", "total": 177.309143,
+                        "platforms": [{"platform": "Unetwork", "amount": 177.309143}]},
+        }
+        history = {"sourceOfCalculation": "backend-persisted-income-history",
+                   "months": [
+                       {"monthKey": "2025-12", "total": 8, "sources": {"Legacy": 8}},
+                       {"monthKey": "2026-09", "total": 310,
+                        "sources": {"Kryptex": 310}},
+                       {"monthKey": "2026-10", "total": 220,
+                        "sources": {"Salad": 220}},
+                       {"monthKey": "2026-11", "total": 130,
+                        "sources": {"Unetwork": 130}},
+                   ]}
+        aligned = chart_history_with_booked_months(history, snapshots, "2026-11")
+        current = [row for row in aligned["months"] if row["monthKey"].startswith("2026-")]
+        self.assertAlmostEqual(sum(row["total"] for row in current),
+                               lifetime_earned_from_snapshots(snapshots, "2026-11")["totalUsd"], 5)
+        self.assertEqual(aligned["months"][0]["total"], 8)
+        self.assertEqual(history["months"][1]["total"], 310)
+        self.assertEqual(aligned["months"][-1]["sources"]["Unetwork"], 177.309143)
+
+    def test_incomplete_booked_months_do_not_override_source_history(self):
+        history = {"months": [{"monthKey": "2026-11", "total": 22,
+                               "sources": {"Kryptex": 22}}]}
+        self.assertIs(chart_history_with_booked_months(
+            history, {"2026-11": {"total": 10, "platforms": []}}, "2026-11"), history)
+
     def test_auto_income_subtracts_manually_posted_credit_not_withdrawal(self):
         month = "2026-11"
         income = {"total": 9, "sources": {"Kryptex": 6, "Salad": 3}}
