@@ -6,6 +6,11 @@ import { useBackendBitcoinValuation } from "@/hooks/useBackendBitcoinValuation";
 import { hardwareImageFor, prepareHardwarePhoto } from "@/lib/hardwarePhotos";
 
 import YieldFarmingPage from "@/pages/YieldFarmingPage";
+import { useSaladExtension } from "@/hooks/useSaladExtension";
+import { useUnetworkExtension } from "@/hooks/useUnetworkExtension";
+import { useRollerCoinExtension } from "@/hooks/useRollerCoinExtension";
+import { useKryptexExtension } from "@/hooks/useKryptexExtension";
+import { saveSaladTracker, saveUnetworkTracker, saveRollerCoinTracker } from "@/lib/yieldFarmingAccounting";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { useCryptoDashboardSnapshot } from "@/hooks/useCryptoDashboardSnapshot";
 import { backendCryptoProviderIncomeRows } from "@/lib/cryptoDashboardIncomeRows";
@@ -117,6 +122,49 @@ function projectTableMeta(name) {
     icon: String(name || "?").slice(0, 1).toUpperCase(),
     iconClass: "border-slate-500/30 bg-slate-500/10 text-slate-300",
   };
+}
+
+// The Overview card is backend-owned, but its sources need to keep syncing
+// while the user stays on Overview. Previously only the Passive Income view
+// mounted the extension hooks; Overview repeatedly fetched unchanged ledgers.
+// Mount this headless sync owner ONLY on Overview; Passive Income owns them
+// when its page is visible. No browser-side totals are calculated here.
+function OverviewProviderSync() {
+  const { saladTracker, requestSaladLatest, syncSaladBalance } = useSaladExtension();
+  const { unetworkTracker, requestUnetworkLatest, syncUnetworkBalance } = useUnetworkExtension();
+  const { rollerCoinTracker, requestRollerCoinLatest } = useRollerCoinExtension();
+  const { requestKryptexLatest } = useKryptexExtension();
+
+  useEffect(() => { if (saladTracker) saveSaladTracker(saladTracker); }, [saladTracker]);
+  useEffect(() => { if (unetworkTracker) saveUnetworkTracker(unetworkTracker); }, [unetworkTracker]);
+  useEffect(() => { if (rollerCoinTracker) saveRollerCoinTracker(rollerCoinTracker); }, [rollerCoinTracker]);
+
+  useEffect(() => {
+    const sync = () => {
+      if (document.hidden) return;
+      requestSaladLatest();
+      requestUnetworkLatest();
+      requestRollerCoinLatest();
+      requestKryptexLatest();
+    };
+    // Ask the extensions for a fresh reading, not just a cached balance.
+    const full = () => {
+      if (document.hidden) return;
+      syncSaladBalance();
+      syncUnetworkBalance();
+      sync();
+    };
+    full();
+    const timer = window.setInterval(full, 60000);
+    const onVisible = () => { if (!document.hidden) full(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [requestSaladLatest, syncSaladBalance, requestUnetworkLatest,
+      syncUnetworkBalance, requestRollerCoinLatest, requestKryptexLatest]);
+  return null;
 }
 
 export default function SideHustleDashboard() {
@@ -368,6 +416,7 @@ export default function SideHustleDashboard() {
     </nav>
 
     {activeView === "overview" ? <>
+    <OverviewProviderSync />
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
        <KpiCard
         icon={Coins}
