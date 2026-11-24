@@ -47,7 +47,8 @@ from ..manual_income_history import manual_income_for_user
 from ..financial_balance_rows import financial_balance_rows, with_journal_equipment
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
-from ..lifetime_income import lifetime_earned_from_snapshots, chart_history_with_booked_months
+from ..lifetime_income import (lifetime_earned_from_snapshots, chart_history_with_booked_months,
+                               lifetime_earned_from_history)
 from ..integration_audit import audit_integration_settings
 from ..cross_page_integrity import cross_page_integrity
 from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
@@ -769,11 +770,6 @@ async def earnings_dashboard(
             comparison["snapshotNeedsReconciliation"] = (
                 normalized.get(month) != monthly_snapshots.get(month))
             dashboard["monthAccountingComparison"] = comparison
-        # The same normalized current-month booking used by Monthly Income
-        # also feeds Lifetime Earned. Older months are read once as booked,
-        # not reconstructed from daily receipts or project balances.
-        dashboard["lifetimeEarned"] = lifetime_earned_from_snapshots(
-            normalized, today.strftime("%Y-%m"))
     # The Passive Income page consumes one coherent backend response for
     # Monthly, Weekly, and Yearly. Booked historical income is calculated by
     # the same source-owned function used by Financials; it is not reconstructed
@@ -792,6 +788,11 @@ async def earnings_dashboard(
         history = chart_history_with_booked_months(
             history, normalized, today.strftime("%Y-%m"))
     dashboard["incomeHistory"] = history
+    # Lifetime Earned represents every dated earning from 2025 onward, plus
+    # independently recorded annual-only history. Derive it from the exact
+    # same audited months as Yearly and All Years, not a Sept-2026 cutoff.
+    dashboard["lifetimeEarned"] = lifetime_earned_from_history(
+        history, today.strftime("%Y-%m"))
     return dashboard
 
 
