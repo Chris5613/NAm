@@ -269,9 +269,8 @@ export default function SideHustleDashboard() {
       ? "Includes legacy receipts awaiting provider reconciliation"
       : "Backend-recorded current month";
   const todayKey = pacificDayKey(clock);
-  // Exactly the same displayed figure as Passive Income → Today's Earnings.
-  // Includes a current-day Honeygain observation for UI parity only.
-  // Never post Honeygain's wallet balance into booked income or the ledger.
+  // Same recorded daily provider earnings as Passive Income. Honeygain's
+  // accumulated JumpTask wallet balance is displayed only on its own card.
   const passiveIncomeToday = todayProjectsDisplayTotal(backendEarnings, todayKey);
   const yesterdayIncome = backendEarnings?.yesterdayTotalUsd ?? null;
   const todayVsYesterday = passiveIncomeToday !== null && yesterdayIncome !== null && yesterdayIncome > 0
@@ -428,7 +427,7 @@ export default function SideHustleDashboard() {
         value={passiveIncomeToday == null ? "—" : money(passiveIncomeToday)}
         status={passiveIncomeToday != null && earningsCached
           ? "Last saved · refreshing live earnings" : null}
-        detail={todayVsYesterday == null ? "Displayed project earnings and Honeygain balance" : `${todayVsYesterday >= 0 ? "▲" : "▼"} ${Math.abs(todayVsYesterday).toFixed(1)}% vs. yesterday (display comparison)`}
+        detail={todayVsYesterday == null ? "Recorded project earnings today" : `${todayVsYesterday >= 0 ? "▲" : "▼"} ${Math.abs(todayVsYesterday).toFixed(1)}% vs. yesterday`}
         tone="emerald"
         valueClass="text-emerald-400"
       />
