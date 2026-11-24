@@ -17,4 +17,12 @@ window.addEventListener("message", event => {
       event.data?.source === "nam-honeygain-app" && event.data.type === "REQUEST_LATEST") {
     chrome.runtime.sendMessage({type:"NAm_HONEYGAIN_READY"}).catch(() => {});
   }
+
+  // NAm's main Passive Income refresh requests a NEW Honeygain observation
+  // alongside Salad, Kryptex, Unetwork, etc. This is not a cached resend.
+  if (event.source === window && event.origin === location.origin &&
+      event.data?.source === "nam-honeygain-app" &&
+      event.data.type === "REFRESH_WITH_PROJECTS") {
+    chrome.runtime.sendMessage({type:"HONEYGAIN_POLL_NOW"}).catch(() => {});
+  }
 });
