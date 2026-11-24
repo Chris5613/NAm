@@ -1306,65 +1306,23 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const hasServerToday = backendEarnings?.todayKey === todayKey;
   const todayEarnings = hasServerToday ? backendEarnings.todayTotalUsd : null;
   const displayDailySourceTotals = hasServerToday ? (backendEarnings.todaySources || {}) : {};
-  // Honeygain is an observed reward balance, not booked USD income.
-  // Display its reading with a date freshness check and preserve the
-  // backend's audited daily earnings total.
-  const auxiliaryRewards = { honeygain: honeygainLive };
-  // Render all provider observations on the same America/Los_Angeles
-  // calendar day as the rest of NAm. Their server timestamps remain UTC.
-  const pacificDay = value => {
-    if (!value) return null;
-    const date = new Date(value);
-    if (!Number.isFinite(date.getTime())) return null;
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
-    }).format(date);
-  };
-  const honeygainObservedToday =
-    pacificDay(auxiliaryRewards.honeygain?.latest?.observedAt) === todayKey;
-  const honeygainDisplayUsd = honeygainObservedToday &&
-    Number.isFinite(Number(auxiliaryRewards.honeygain?.balanceUsd))
-    && auxiliaryRewards.honeygain?.balanceUsd != null
-      ? Number(auxiliaryRewards.honeygain.balanceUsd) : null;
-
-  // A Honeygain balance is a dated *display observation*, not booked income.
-  // Use the same exact observation for a graph point and its detail popup.
-  const honeygainBalanceForDay = key => {
-    const record = auxiliaryRewards.honeygain?.dailyHistory?.[key];
-    const latest = auxiliaryRewards.honeygain?.latest;
-    const credits = record?.lastCredits ??
-      (latest && pacificDay(latest.observedAt) === key
-        ? latest.jumpTaskBalanceCredits : null);
-    return credits != null && Number.isFinite(Number(credits)) && Number(credits) >= 0
-      ? Number(credits) / 1000 : null;
-  };
-  // The monthly graph is a display breakdown, not an accounting journal.
-  // Derive its values from the same per-provider rows shown in the popup.
-  // This prevents the tooltip from excluding a historical Honeygain balance
-  // when the corresponding breakdown includes one.
+  // Honeygain's JumpTask credits are accumulated wallet balance, NOT
+  // earnings in the minutes since midnight. The separate project card
+  // displays the balance, but all earnings panels use only dated receipts.
   const monthlyChartData = (backendEarnings?.days || []).map(day => {
     if (day.value == null || day.future) return day;
     const entries = Object.entries(day.sources || {})
-      .filter(([, amount]) => amount != null && Number.isFinite(Number(amount)));
-    const recorded = entries.length
+      .filter(([name, amount]) => name !== "Honeygain" && name !== "Stocks" &&
+        amount != null && Number.isFinite(Number(amount)));
+    return { ...day, value: entries.length
       ? entries.reduce((sum, [, amount]) => sum + Number(amount), 0)
-      : Number(day.value) || 0;
-    const honeygain = honeygainBalanceForDay(day.key);
-    return { ...day, value: recorded + (honeygain ?? 0) };
+      : Number(day.value) || 0 };
   });
-
-  // The visible list includes observed Honeygain and sorts by displayed
-  // amount. The combined display total is not a booked-income calculation:
-  // Honeygain is a transferred balance.
-  const todayBreakdown = [
-    ...Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
-      .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
-      .map(([name, amount]) => ({ name, amount: Number(amount) || 0 })),
-    ...(honeygainDisplayUsd == null ? [] :
-      [{ name: "Honeygain", amount: honeygainDisplayUsd, precision: 2 }]),
-  ].sort((a, b) => b.amount - a.amount);
-  // Same display-only total as Crypto Overview; source amounts and
-  // Honeygain observation are read from one authenticated backend response.
+  const todayBreakdown = Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
+    .filter(([name, amount]) => name !== "Honeygain" && name !== "Stocks" &&
+      (name === "Kryptex" || Number(amount) !== 0))
+    .map(([name, amount]) => ({ name, amount: Number(amount) || 0 }))
+    .sort((a, b) => b.amount - a.amount);
   const visibleEarningsTotal = todayProjectsDisplayTotal(backendEarnings, todayKey);
   // The daily chart is dated receipts; month-end income is the separately
   // booked provider ledger. Do not silently count provisional Lulo/Loopscale
@@ -1391,48 +1349,17 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     annualUndated: backendEarnings?.incomeHistory?.annualUndated || [],
     annualReconciliations: backendEarnings?.incomeHistory?.annualReconciliations || [],
   });
-  // Attach backend-stored Pacific-day balance observations to the popup for
-  // the SELECTED chart date. Do not apply the current wallet balance to a past
-  // day; that would falsify the historical chart. A month selection uses the
-  // most recent observed balance in that month rather than a sum of balances.
-  const selectedBreakdown = (() => {
-    if (!recordedBreakdown || !selectedEarningsPoint ||
-        selectedEarningsPoint.range === "allYears") return recordedBreakdown;
-    const key = String(selectedEarningsPoint.key || "");
-    const monthlySelection = selectedEarningsPoint.range === "yearly";
-    const chooseObservation = history => {
-      if (!history || typeof history !== "object") return null;
-      if (!monthlySelection) return history[key] || null;
-      const dates = Object.keys(history).filter(day => day.startsWith(key + "-")).sort();
-      return dates.length ? history[dates[dates.length - 1]] : null;
-    };
-    const honeyHistory = auxiliaryRewards.honeygain?.dailyHistory;
-    const honeyRecord = chooseObservation(honeyHistory);
-    // For a selected DAY, use the exact observation used by the chart.
-    // For a selected MONTH, show its last observation without summing balances.
-    const honeyLatest = auxiliaryRewards.honeygain?.latest;
-    const honeyCreditBalance = monthlySelection
-      ? (honeyRecord?.lastCredits ??
-          (honeyLatest && pacificDay(honeyLatest.observedAt)?.startsWith(key + "-")
-            ? honeyLatest.jumpTaskBalanceCredits : null))
-      : null;
-    const monthlyHoney = honeyCreditBalance != null &&
-      Number.isFinite(Number(honeyCreditBalance)) && Number(honeyCreditBalance) >= 0
-        ? Number(honeyCreditBalance) / 1000 : null;
-    const additions = [
-      { name: "Honeygain",
-        amount: monthlySelection ? monthlyHoney : honeygainBalanceForDay(key) },
-    ];
-    const entries = [...recordedBreakdown.entries, ...additions]
-      .sort((a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity));
-    const addedValue = additions.reduce((total, row) => total + (row.amount ?? 0), 0);
-    return {
-      ...recordedBreakdown,
-      entries,
-      total: recordedBreakdown.total + addedValue,
-      note: recordedBreakdown.note + " Tracked Honeygain balances are snapshots, not booked daily income.",
-    };
-  })();
+  // The popup must report exactly the dated provider earnings plotted on
+  // the chart. Never append Honeygain's accumulated wallet balance.
+  const selectedBreakdown = recordedBreakdown
+    ? {
+        ...recordedBreakdown,
+        entries: recordedBreakdown.entries.filter(item => item.name !== "Honeygain"),
+        total: recordedBreakdown.entries
+          .filter(item => item.name !== "Honeygain")
+          .reduce((sum, item) => sum + Number(item.amount || 0), 0),
+      }
+    : null;
 
   const dailyEarningsObservations =
     useDailyEarningsObservations(todayEarnings, earningsClock, todayKey);
@@ -2037,7 +1964,7 @@ const summary =
                   <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize:9,fill:"#91a1b2"}} interval={2} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)}/>
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Earnings + observed Honeygain balance"]}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings"]}/>
                   <Area type="monotone" dataKey="value" name="Daily earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)"
                     dot={props => {
                       const day = props?.payload?.key;
