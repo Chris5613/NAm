@@ -224,7 +224,7 @@ export function buildTodayEarningsDisplay({
  * A single reading establishes a baseline of $0.00, never wallet=earnings.
  */
 export function honeygainObservedDailyUsd(snapshot, dayKey) {
-  if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(String(dayKey))) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dayKey))) return null;
   const observation = snapshot?.projectObservations?.honeygain;
   const entry = observation?.dailyHistory?.[dayKey];
   if (!entry || typeof entry !== "object") return null;
