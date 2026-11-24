@@ -3,6 +3,7 @@ import {
   buildAnnualEarningsBreakdown,
   buildTodayEarningsDisplay,
   todayProjectsDisplayTotal,
+  honeygainObservedDailyUsd,
 } from "./earningsDisplay";
 
 test("today display merges server and local high-water totals", () => {
@@ -241,4 +242,36 @@ test("Overview and Passive Income use one identical total for today's earnings d
         latest: {observedAt: "2026-11-22T20:00:00Z"}},
     },
   }, todayKey)).toBeCloseTo(11.15);
+});
+
+test("Honeygain today only reflects change since the first Pacific-day reading", () => {
+  const todayKey = "2026-11-24";
+  const snapshot = {
+    todayKey, todayTotalUsd: 0.10,
+    todaySources: {Kryptex:0.10},
+    projectObservations: {honeygain: {
+      balanceUsd:0.6400,
+      latest:{observedAt:"2026-11-24T18:00:00Z"},
+      dailyHistory:{
+        "2026-11-23":{firstCredits:600,lastCredits:625,samples:6},
+        "2026-11-24":{firstCredits:630,lastCredits:640,samples:2},
+      },
+    }},
+  };
+  expect(honeygainObservedDailyUsd(snapshot,todayKey)).toBeCloseTo(0.01,6);
+  expect(todayProjectsDisplayTotal(snapshot,todayKey)).toBeCloseTo(0.11,6);
+  expect(honeygainObservedDailyUsd(snapshot,"2026-11-23")).toBeCloseTo(0.025,6);
+  // A single balance sample is a baseline, not today's income.
+  snapshot.projectObservations.honeygain.dailyHistory[todayKey] = {
+    firstCredits:640,lastCredits:640,samples:1,
+  };
+  expect(honeygainObservedDailyUsd(snapshot,todayKey)).toBe(0);
+  expect(todayProjectsDisplayTotal(snapshot,todayKey)).toBeCloseTo(0.10,6);
+  // A payout/reset must not be treated as negative earnings.
+  snapshot.projectObservations.honeygain.dailyHistory[todayKey].lastCredits = 10;
+  expect(honeygainObservedDailyUsd(snapshot,todayKey)).toBe(0);
+  // Missing baseline remains unknown, not the wallet balance.
+  delete snapshot.projectObservations.honeygain.dailyHistory[todayKey];
+  expect(honeygainObservedDailyUsd(snapshot,todayKey)).toBeNull();
+  expect(todayProjectsDisplayTotal(snapshot,todayKey)).toBeCloseTo(0.10,6);
 });
