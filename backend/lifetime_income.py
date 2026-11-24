@@ -164,7 +164,10 @@ def lifetime_earned_from_history(history, current_month, start_month="2025-01"):
             if not isinstance(name, str) or not name.strip() or parsed is None:
                 return None
             source_sum += parsed
-            covered.setdefault(month[:4], set()).add(name.strip().casefold())
+            canonical = name.strip().casefold()
+            if canonical.startswith("gomining"):
+                canonical = "gomining"
+            covered.setdefault(month[:4], set()).add(canonical)
         if abs(source_sum - recorded) > Decimal("0.02"):
             return None
         total += recorded
@@ -177,16 +180,22 @@ def lifetime_earned_from_history(history, current_month, start_month="2025-01"):
             return None
         if not start_month[:4] <= year <= current_month[:4]:
             continue
-        seen = covered.setdefault(year, set())
+        dated_sources = covered.get(year, set())
+        annual_names = set()
         for name, value in sources.items():
             parsed = _amount(value)
             if not isinstance(name, str) or not name.strip() or parsed is None or parsed < 0:
                 return None
             normalized_name = name.strip().casefold()
-            if normalized_name in seen:
+            canonical = "gomining" if normalized_name.startswith("gomining") else normalized_name
+            # If any GoMining sub-project has dated history, annual-only
+            # GoMining entries cannot safely be added again. Otherwise,
+            # separately named annual GoMining products are all legitimate
+            # components and combine into one platform in the popup.
+            if canonical in dated_sources or normalized_name in annual_names:
                 continue
             total += parsed
-            seen.add(normalized_name)
+            annual_names.add(normalized_name)
             annual_first = year + "-01"
             first = min(first, annual_first) if first else annual_first
     # Annual-only provider reconciliation adds an independently tracked
