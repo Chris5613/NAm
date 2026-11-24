@@ -48,6 +48,20 @@ def source_income_history(snapshots, payouts, projects, manual, current_month,
         if not isinstance(raw.get("platforms"), list):
             continue
         months.append({**raw, "monthKey": month})
+    # Dated provider histories can predate the first booked monthly snapshot
+    # (Unetwork's allocation records begin in April 2026, while the booked
+    # ledger begins September). Add only missing historical MONTHS from the
+    # canonical provider tracker. Never replace a locked or recorded month,
+    # and never create a second project source for matching Unity Network rows.
+    existing_months = {row["monthKey"] for row in months}
+    for row in current_provider_months or []:
+        key = row.get("monthKey") if isinstance(row, dict) else None
+        if (isinstance(key, str) and key < current_month and
+                key not in existing_months and
+                isinstance(row.get("platforms"), list)):
+            months.append({**row})
+            existing_months.add(key)
+    months.sort(key=lambda row: row["monthKey"])
     known_payouts = payouts if isinstance(payouts, dict) else {}
     known_projects = projects if isinstance(projects, list) else []
     manual_values = manual.get("monthly", {}) if isinstance(manual, dict) else {}
