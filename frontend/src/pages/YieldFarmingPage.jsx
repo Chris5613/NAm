@@ -1324,6 +1324,25 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     .map(([name, amount]) => ({ name, amount: Number(amount) || 0 }))
     .sort((a, b) => b.amount - a.amount);
   const visibleEarningsTotal = todayProjectsDisplayTotal(backendEarnings, todayKey);
+  // Display Honeygain's accumulated JumpTask balance separately from earned
+  // income, including when there are no daily provider earnings yet.
+  const honeygainCurrentBalance = honeygainLive?.balanceUsd != null &&
+    Number.isFinite(Number(honeygainLive.balanceUsd)) &&
+    Number(honeygainLive.balanceUsd) >= 0
+      ? Number(honeygainLive.balanceUsd) : null;
+  const honeygainBalanceAtSelection = (() => {
+    if (!selectedEarningsPoint || selectedEarningsPoint.range === "allYears") return null;
+    const key = String(selectedEarningsPoint.key || "");
+    const history = honeygainLive?.dailyHistory || {};
+    const dates = selectedEarningsPoint.range === "yearly"
+      ? Object.keys(history).filter(day => day.startsWith(key + "-")).sort()
+      : [key];
+    const record = history[dates[dates.length - 1]];
+    const credits = record?.lastCredits;
+    if (credits != null && Number.isFinite(Number(credits)) && Number(credits) >= 0)
+      return Number(credits) / 1000;
+    return null;
+  })();
   // The daily chart is dated receipts; month-end income is the separately
   // booked provider ledger. Do not silently count provisional Lulo/Loopscale
   // receipts in the yearly accounting total.
@@ -2120,6 +2139,12 @@ const summary =
 
               </div>
             )}
+            {honeygainCurrentBalance != null && (
+              <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-xs">
+                <span className="text-muted-foreground">Honeygain · Wallet balance (not today's earnings)</span>
+                <span className="shrink-0 font-semibold tabular-nums text-sky-300">{formatCurrency(honeygainCurrentBalance)}</span>
+              </div>
+            )}
           </div>
         </section>
       </div>
@@ -2525,8 +2550,14 @@ if (
                 </div>
               )) : <p className="text-sm text-muted-foreground">No recorded project earnings for this point.</p>}
               <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm font-semibold">
-                <span>Total</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
+                <span>Total earned</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
               </div>
+              {honeygainBalanceAtSelection != null && (
+                <div className="flex items-center justify-between gap-3 border-t border-[#303842] pt-3 text-xs">
+                  <span className="text-muted-foreground">Honeygain · Balance snapshot (not earnings)</span>
+                  <span className="font-semibold tabular-nums text-sky-300">{formatCurrency(honeygainBalanceAtSelection)}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
