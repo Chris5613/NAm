@@ -56,3 +56,36 @@ def lifetime_earned_from_snapshots(snapshots, current_month):
             "fromMonth": START_MONTH,
             "throughMonth": current_month,
             "source": "booked-provider-monthly-ledger"}
+
+
+def chart_history_with_booked_months(history, snapshots, current_month):
+    """Display the same validated booked months in history and Lifetime Earned.
+
+    Historical source projections can include overlapping legacy estimates and
+    differ from the booked provider ledger. For months covered by a complete,
+    internally reconciled booked ledger, use the exact snapshot amounts once.
+    Months outside that ledger retain independently recorded history.
+    Read-only: does not mutate either input.
+    """
+    if lifetime_earned_from_snapshots(snapshots, current_month) is None:
+        return history
+    result = dict(history) if isinstance(history, dict) else {}
+    original = result.get("months")
+    if not isinstance(original, list):
+        return history
+    by_month = {row["monthKey"]: dict(row) for row in original
+                if isinstance(row, dict) and isinstance(row.get("monthKey"), str)}
+    for month, raw in sorted(snapshots.items()):
+        if not START_MONTH <= month <= current_month or not isinstance(raw, dict):
+            continue
+        sources = {}
+        for item in raw["platforms"]:
+            name = item["platform"]
+            sources[name] = float(_amount(item["amount"]))
+        total = round(sum(sources.values()), 6)
+        by_month[month] = {
+            "monthKey": month, "sources": sources,
+            "projectTotal": total, "stocks": 0, "total": total,
+        }
+    return {**result, "months": [by_month[key] for key in sorted(by_month)],
+            "bookedChartSource": "validated-monthly-provider-snapshots"}
