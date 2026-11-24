@@ -118,21 +118,18 @@ def unetwork_month_totals(tracker: dict) -> dict[str, float]:
 
 def unetwork_stats(tracker: dict, today: str, month: str) -> dict:
     month_totals = unetwork_month_totals(tracker)
-    # OWNER-CONFIRMED LIFETIME REFERENCE (2026-11-23): Unetwork's on-site
-    # "Total Earned" was $310.22. The persisted dated ledger summed to
-    # $310.215227 at confirmation, which rounds to the SAME $310.22.
-    # Future audits: this known sub-cent rounding difference is already
-    # reconciled; do not reopen it as a missing-earnings finding. Continue to
-    # flag any NEW material discrepancies, and never silence unrelated issues.
-    # Treat $310.22 as a lifetime display floor, not extra booked income:
-    # do not post a transaction, alter the dated ledger, or add $310.22
-    # to monthly earnings. New genuine daily earnings grow the lifetime total.
-    confirmed_lifetime_floor = 310.22
-    lifetime = max(
-        confirmed_lifetime_floor,
+    # OWNER-CONFIRMED LIFETIME REFERENCE (2026-11-23): Unetwork showed
+    # $310.22 "Total Earned" in the user's screenshot. Their persisted daily
+    # USD entries totaled $310.215227, or $310.22 at 2 decimal places.
+    # Future audits: this particular <1-cent presentation rounding gap is
+    # already reconciled; don't flag it again as missing earnings. Do verify
+    # any NEW material variance. Never add an adjustment to booked income.
+    # Round the actual ledger for display, not a global hard-coded floor,
+    # so other accounts and all future Unetwork earnings work normally.
+    lifetime = round(max(
         sum(month_totals.values()),
         numeric(tracker.get("openingEarnedUsd")),
-    )
+    ), 2)
     month_usd = numeric(month_totals.get(month))
     if tracker.get("baselineInitialized") and tracker.get("openingMonth") == month:
         month_usd = numeric(tracker.get("openingEarnedUsd")) + max(
