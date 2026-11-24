@@ -10,7 +10,8 @@ from typing import Any
 from .provider_stats import obj, numeric, unetwork_month_totals
 from .private_accounting import private_accounting_profile
 
-FIRST_MONTH = "2026-09"
+FIRST_MONTH = "2026-09"  # Existing first booked month / baseline month
+HISTORY_START_MONTH = "2025-01"  # Preserve older dated provider earnings in charts
 ROLLERCOIN_SEPT_14 = "2026-09-14"
 
 
@@ -30,7 +31,7 @@ def monthly_provider_income(trackers: dict, current_month: str) -> list[dict]:
     amounts: dict[str, dict[str, float]] = {}
 
     def add(month: str | None, source: str, amount: float) -> None:
-        if not month or month < FIRST_MONTH or not isfinite(amount) or amount <= 0:
+        if not month or month < HISTORY_START_MONTH or not isfinite(amount) or amount <= 0:
             return
         row = amounts.setdefault(month, {})
         row[source] = row.get(source, 0.0) + amount
