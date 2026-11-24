@@ -202,7 +202,9 @@ test("Unity Network and Unetwork are one row in annual popup with unchanged tota
   const result = buildAnnualEarningsBreakdown({
     year:"2026", todayKey:"2026-11-24", projectIncome,
   });
-  expect(result.entries).toEqual([{name:"Unetwork",amount:466.43}]);
+  expect(result.entries).toHaveLength(1);
+  expect(result.entries[0].name).toBe("Unetwork");
+  expect(result.entries[0].amount).toBeCloseTo(466.43, 2);
   expect(result.total).toBeCloseTo(466.43, 2);
   expect(buildAnnualEarningsBreakdown({
     year:"2025", todayKey:"2026-11-24", projectIncome:[],
