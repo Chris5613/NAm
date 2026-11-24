@@ -1442,17 +1442,12 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       (honeyLatest && (monthlySelection ? pacificDay(honeyLatest.observedAt)?.startsWith(key + "-") : pacificDay(honeyLatest.observedAt) === key) ? honeyLatest.jumpTaskBalanceCredits : null);
     const numeric = value => value != null && Number.isFinite(Number(value)) ? Number(value) : null;
     const honeyCredits = numeric(honeyCreditBalance);
-    const additions = [
-      { name: "Honeygain", amount: honeyCredits == null ? null : honeyCredits / 1000 },
-    ];
-    const entries = [...recordedBreakdown.entries, ...additions]
-      .sort((a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity));
-    const addedValue = additions.reduce((total, row) => total + (row.amount ?? 0), 0);
+    // Do not add a JumpTask wallet balance to an income total in historical
+    // popups either. Attach it as a distinct observation for the selected day.
     return {
       ...recordedBreakdown,
-      entries,
-      total: recordedBreakdown.total + addedValue,
-      note: recordedBreakdown.note + " Tracked Honeygain balances are snapshots, not booked daily income.",
+      honeygainBalanceUsd: honeyCredits == null ? null : honeyCredits / 1000,
+      note: recordedBreakdown.note,
     };
   })();
 
@@ -2624,8 +2619,14 @@ if (
                   <span className="font-semibold tabular-nums">{item.amount == null ? "—" : formatCurrency(item.amount)}</span>
                 </div>
               )) : <p className="text-sm text-muted-foreground">No recorded project earnings for this point.</p>}
+              {selectedBreakdown.honeygainBalanceUsd != null && (
+                <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm">
+                  <span className="text-muted-foreground">Honeygain · observed balance (not income)</span>
+                  <span className="font-semibold tabular-nums text-sky-300">{formatCurrency(selectedBreakdown.honeygainBalanceUsd)}</span>
+                </div>
+              )}
               <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm font-semibold">
-                <span>Total</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
+                <span>Total earned</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
               </div>
             </div>
           </div>
