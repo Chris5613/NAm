@@ -1,5 +1,6 @@
 import {
   buildSelectedEarningsBreakdown,
+  buildAnnualEarningsBreakdown,
   buildTodayEarningsDisplay,
 } from "./earningsDisplay";
 
@@ -91,4 +92,49 @@ test("current month popup uses chart daily sources rather than stale monthly sna
   expect(result.total).toBeCloseTo(80.86);
   expect(result.entries.find(row => row.name === "Kryptex").amount).toBe(43.19);
   expect(result.note).toMatch(/daily earnings/);
+});
+
+test("clicking All Years shows a yearly per-project popup matching the plotted total", () => {
+  const projectIncome = [
+    {monthKey: "2025-12", platforms: [{platform: "Older project", amount: 4}]},
+    {monthKey: "2026-01", platforms: [
+      {platform: "Kryptex", amount: 5}, {platform: "Salad", amount: 2},
+    ]},
+    {monthKey: "2026-11", platforms: [
+      {platform: "Kryptex", amount: 3}, {platform: "Bixberry", amount: 1},
+    ]},
+  ];
+  const annualUndated = [{year: "2026", sources: {
+    "Kryptex": 30, "Prior-year-only mining": 7,
+  }}];
+  const props = {
+    year: "2026", projectIncome, annualUndated, todayKey: "2026-11-23",
+  };
+  const chartBreakdown = buildAnnualEarningsBreakdown(props);
+  const popup = buildSelectedEarningsBreakdown({
+    selection: {range: "allYears", key: "2026"},
+    earningsChartRange: "allYears",
+    ...props, stockPayouts: {}, sourceTotalsForDay: () => ({}),
+  });
+  expect(chartBreakdown.total).toBe(18);
+  expect(popup).toEqual(chartBreakdown);
+  expect(popup.label).toBe("2026");
+  expect(popup.entries).toEqual([
+    {name: "Kryptex", amount: 8},
+    {name: "Prior-year-only mining", amount: 7},
+    {name: "Salad", amount: 2},
+    {name: "Bixberry", amount: 1},
+  ]);
+  expect(buildAnnualEarningsBreakdown({...props, year: "2027"})).toBeNull();
+});
+
+test("annual-only 2025 amount displays in popup without inventing a monthly date", () => {
+  const result = buildAnnualEarningsBreakdown({
+    year: "2025", todayKey: "2026-11-23", projectIncome: [],
+    annualUndated: [{year: "2025", sources: {"Historical earnings": 95}}],
+  });
+  expect(result).toMatchObject({
+    label: "2025", total: 95, includesAnnualOnly: true,
+    entries: [{name: "Historical earnings", amount: 95}],
+  });
 });
