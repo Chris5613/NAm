@@ -715,50 +715,13 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     );
 
 
-  const [bixberryTracker, setBixberryTracker] = useState(null);
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const value = await api.get("/api/project-tracking/bixberry");
-        if (active) setBixberryTracker(value);
-      } catch { /* retain last known balance */ }
-    };
-    refresh();
-    const timer = setInterval(refresh, 30000);
-    return () => { active = false; clearInterval(timer); };
-  }, []);
-  // The sorted project grid uses the same reported values displayed in each card.
-  // Rentals previously bypassed sorting entirely; Honeygain previously sorted
-  // by its retired manual balance instead of its JumpTask observation.
+  // Same authenticated backend response and persistent display cache used by
+  // the other Passive Income cards. Both remain balance observations only.
   const { data: backendEarnings, error: backendEarningsError } =
     useBackendEarningsDashboard(getTodayKey().slice(0, 7), true);
-  const [honeygainSortBalance, setHoneygainSortBalance] = useState(null);
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      try {
-        const value = await api.get("/api/honeygain/status");
-        if (!active) return;
-        const reported = value?.balanceUsd;
-        setHoneygainSortBalance(
-          reported !== null && reported !== undefined && Number.isFinite(Number(reported))
-            ? Number(reported)
-            : null
-        );
-      } catch { /* Unknown values sort after confirmed balances. */ }
-    };
-    refresh();
-    const timer = window.setInterval(refresh, 60000);
-    window.addEventListener("nam-honeygain-updated", refresh);
-    window.addEventListener("nam-passive-income-refresh", refresh);
-    return () => {
-      active = false;
-      window.clearInterval(timer);
-      window.removeEventListener("nam-honeygain-updated", refresh);
-      window.removeEventListener("nam-passive-income-refresh", refresh);
-    };
-  }, []);
+  const bixberryTracker = backendEarnings?.projectObservations?.bixberry || null;
+  const honeygainLive = backendEarnings?.projectObservations?.honeygain || null;
+  const honeygainSortBalance = honeygainLive?.balanceUsd ?? null;
   const sortedProgramCards =
     useMemo(
       () => {
@@ -1346,26 +1309,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // Honeygain is an observed reward balance, not booked USD income.
   // Display its reading with a date freshness check and preserve the
   // backend's audited daily earnings total.
-  const [auxiliaryRewards, setAuxiliaryRewards] = useState({
-    honeygain: null,
-  });
-  useEffect(() => {
-    let active = true;
-    const refresh = async () => {
-      const honeygain = await api.get("/api/honeygain/status").catch(() => null);
-      if (active) setAuxiliaryRewards({ honeygain });
-    };
-    refresh();
-    const interval = window.setInterval(refresh, 60000);
-    window.addEventListener("nam-honeygain-updated", refresh);
-    window.addEventListener("nam-passive-income-refresh", refresh);
-    return () => {
-      active = false;
-      window.clearInterval(interval);
-      window.removeEventListener("nam-honeygain-updated", refresh);
-      window.removeEventListener("nam-passive-income-refresh", refresh);
-    };
-  }, []);
+  const auxiliaryRewards = { honeygain: honeygainLive };
   // Render all provider observations on the same America/Los_Angeles
   // calendar day as the rest of NAm. Their server timestamps remain UTC.
   const pacificDay = value => {
@@ -2359,6 +2303,7 @@ if (
                         deletePosition
                       }
       onManualEarningsChange={updateHoneygainBalance}
+      honeygainSnapshot={honeygainLive}
                       logo={
                         projectLogos[
                           project.id
