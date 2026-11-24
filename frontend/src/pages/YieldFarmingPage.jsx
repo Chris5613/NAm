@@ -1410,6 +1410,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     luloUtcDay: currentLuloUtc.utcDay, hasLuloProjects: luloProjects.length > 0,
     sourceTotalsForDay: chartSourceTotalsForDay, currentMonthSources,
     annualUndated: backendEarnings?.incomeHistory?.annualUndated || [],
+    annualReconciliations: backendEarnings?.incomeHistory?.annualReconciliations || [],
   });
   // Attach backend-stored Pacific-day balance observations to the popup for
   // the SELECTED chart date. Do not apply the current wallet balance to a past
@@ -1471,6 +1472,7 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   ) * 1.15;
 
   const annualUndated = backendEarnings?.incomeHistory?.annualUndated || [];
+  const annualReconciliations = backendEarnings?.incomeHistory?.annualReconciliations || [];
   // 2025 may have a year-only manual record without any dated monthly rows.
   // Keep its year selectable, but never assign that annual total to a fake month.
   const availableEarningsYears = [...new Set([
@@ -1523,7 +1525,8 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   const allYearsChartData = [...availableEarningsYears].sort().map(year => {
     // Use the exact same aggregation for the plotted year and its popup.
     const breakdown = buildAnnualEarningsBreakdown({
-      year, projectIncome: chartProjectIncome, annualUndated, todayKey,
+      year, projectIncome: chartProjectIncome, annualUndated,
+      annualReconciliations, todayKey,
     });
     return {
       year, label: year,
