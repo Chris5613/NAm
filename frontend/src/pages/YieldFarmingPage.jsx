@@ -1468,12 +1468,31 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     ...monthlyChartData.map(day => Number(day.value) || 0)
   ) * 1.15;
 
+  const annualUndated = backendEarnings?.incomeHistory?.annualUndated || [];
+  // 2025 may have a year-only manual record without any dated monthly rows.
+  // Keep its year selectable, but never assign that annual total to a fake month.
   const availableEarningsYears = [...new Set([
+    "2025",
     todayKey.slice(0, 4),
+    ...annualUndated.map(row => String(row.year)).filter(year => /^\d{4}$/.test(year)),
     ...chartProjectIncome
       .map(month => String(month?.monthKey || "").slice(0, 4))
       .filter(year => /^\d{4}$/.test(year)),
   ])].sort((a, b) => b.localeCompare(a));
+  const undatedAnnualTotal = year => {
+    const datedNames = new Set(chartProjectIncome
+      .filter(month => String(month.monthKey).startsWith(year + "-"))
+      .flatMap(month => (month.platforms || []).map(row => row.platform.toLowerCase())));
+    // Avoid adding an annual summary twice if that provider already has
+    // dated amounts recorded for the same year.
+    const annual = annualUndated.filter(row => row.year === year);
+    return annual.length ? annual.reduce((sum, row) => sum +
+      Object.entries(row.sources || {}).reduce((subtotal, [name, amount]) =>
+        subtotal + (datedNames.has(name.toLowerCase()) ? 0 : Number(amount) || 0), 0), 0) : null;
+  };
+  const selectedYearHasDatedIncome = chartProjectIncome.some(month =>
+    String(month.monthKey).startsWith(earningsChartYear + "-"));
+  const selectedUndatedAnnual = undatedAnnualTotal(earningsChartYear);
 
   // Use the same backend-booked history for every monthly/yearly point.
   // Replacing November with the separately dated daily estimate made the
@@ -1487,10 +1506,11 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // The current-month earnings endpoint may finish before the full historical
   // ledger. Never show a fake Jan-Oct $0 chart or a partial yearly headline.
   const yearlyHistoryReady = Boolean(backendEarnings?.incomeHistory);
-  const thisYearEarned = yearlyHistoryReady ? yearlyChartData.reduce(
-    (sum, month) => sum + (Number(month.value) || 0),
-    0
-  ) : null;
+  const thisYearEarned = yearlyHistoryReady &&
+    (selectedYearHasDatedIncome || selectedUndatedAnnual != null)
+    ? yearlyChartData.reduce((sum, month) => sum + (Number(month.value) || 0), 0) +
+      (selectedUndatedAnnual ?? 0)
+    : null;
   const yearlyChartMax = Math.max(
     0.1,
     ...yearlyChartData.map(month => Number(month.value) || 0)
@@ -1500,11 +1520,16 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // from balances or recompute income from browser observations.
   const allYearsChartData = [...availableEarningsYears].sort().map(year => {
     const yearMonths = buildYearlyEarningsChart(chartProjectIncome, {}, year, todayKey);
+    const hasDatedIncome = chartProjectIncome.some(month =>
+      String(month.monthKey).startsWith(year + "-"));
+    const yearOnlyIncome = undatedAnnualTotal(year);
     return {
       year, label: year,
-      value: yearMonths.some(month => month.value != null)
-        ? yearMonths.reduce((sum, month) => sum + (Number(month.value) || 0), 0)
+      value: hasDatedIncome || yearOnlyIncome != null
+        ? yearMonths.reduce((sum, month) => sum + (Number(month.value) || 0), 0) +
+          (yearOnlyIncome ?? 0)
         : null,
+      annualOnlyUsd: yearOnlyIncome ?? 0,
     };
   });
   const allYearsEarned = yearlyHistoryReady
@@ -2003,6 +2028,13 @@ const summary =
             {(earningsChartRange === "yearly" || earningsChartRange === "allYears") && !yearlyHistoryReady ? (
               <div role="status" className="flex h-full items-center justify-center text-sm text-muted-foreground">
                 {backendEarningsError ? "Reconnecting to recorded earnings…" : "Loading recorded yearly earnings…"}
+              </div>
+            ) : earningsChartRange === "yearly" && !selectedYearHasDatedIncome ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+                <p>No dated monthly earnings recorded for {earningsChartYear}.</p>
+                {selectedUndatedAnnual != null && selectedUndatedAnnual > 0 && (
+                  <p className="text-xs">An annual-only amount of {formatCurrency(selectedUndatedAnnual)} is included in the annual total, but cannot be placed in a specific month without dated records.</p>
+                )}
               </div>
             ) : (
             <ResponsiveContainer width="100%" height="100%">
