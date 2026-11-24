@@ -214,3 +214,36 @@ export function buildTodayEarningsDisplay({
     todayEarnings,
   };
 }
+
+/**
+ * Display-only "Today's Earnings" value shared by Crypto Overview and Passive
+ * Income. The owner explicitly wants both cards to show the SAME figure.
+ * Honeygain is a JumpTask BALANCE observation (not booked daily revenue);
+ * include it only in this combined UI number, never in ledger accounting.
+ * Exclude Stocks because Passive Income is projects-only.
+ */
+export function todayProjectsDisplayTotal(snapshot, todayKey) {
+  if (!snapshot || snapshot.todayKey !== todayKey ||
+      snapshot.todayTotalUsd == null) return null;
+  const sources = snapshot.todaySources || {};
+  const projectEarned = Object.entries(sources).reduce((sum, [name, raw]) => {
+    const n = Number(raw);
+    return name === "Stocks" || !Number.isFinite(n) ? sum : sum + n;
+  }, 0);
+  const honey = snapshot.projectObservations?.honeygain;
+  const timestamp = honey?.latest?.observedAt;
+  let honeyBalance = 0;
+  if (timestamp && honey?.balanceUsd != null &&
+      Number.isFinite(Number(honey.balanceUsd)) && Number(honey.balanceUsd) >= 0) {
+    const date = new Date(timestamp);
+    if (!Number.isNaN(date.getTime())) {
+      const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
+        timeZone: "America/Los_Angeles",
+        year: "numeric", month: "2-digit", day: "2-digit",
+      }).formatToParts(date).map(part => [part.type, part.value]));
+      if (`${parts.year}-${parts.month}-${parts.day}` === todayKey)
+        honeyBalance = Number(honey.balanceUsd);
+    }
+  }
+  return projectEarned + honeyBalance;
+}
