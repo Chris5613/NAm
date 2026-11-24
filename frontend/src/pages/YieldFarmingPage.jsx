@@ -3,7 +3,7 @@ import { useRollerCoinExtension } from "../hooks/useRollerCoinExtension";
 import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
-import { buildSelectedEarningsBreakdown, buildAnnualEarningsBreakdown, todayProjectsDisplayTotal } from "../lib/earningsDisplay";
+import { buildSelectedEarningsBreakdown, buildAnnualEarningsBreakdown, todayProjectsDisplayTotal, honeygainObservedDailyUsd } from "../lib/earningsDisplay";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { backendYieldIncomeRows } from "@/lib/backendYieldIncomeRows";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
@@ -1314,9 +1314,11 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     const entries = Object.entries(day.sources || {})
       .filter(([name, amount]) => name !== "Honeygain" && name !== "Stocks" &&
         amount != null && Number.isFinite(Number(amount)));
-    return { ...day, value: entries.length
+    const earnings = entries.length
       ? entries.reduce((sum, [, amount]) => sum + Number(amount), 0)
-      : Number(day.value) || 0 };
+      : Number(day.value) || 0;
+    return { ...day, value: earnings +
+      (honeygainObservedDailyUsd(backendEarnings, day.key) ?? 0) };
   });
   const todayBreakdown = Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
     .filter(([name, amount]) => name !== "Honeygain" && name !== "Stocks" &&
@@ -1324,25 +1326,17 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     .map(([name, amount]) => ({ name, amount: Number(amount) || 0 }))
     .sort((a, b) => b.amount - a.amount);
   const visibleEarningsTotal = todayProjectsDisplayTotal(backendEarnings, todayKey);
-  // Display Honeygain's accumulated JumpTask balance separately from earned
-  // income, including when there are no daily provider earnings yet.
-  const honeygainCurrentBalance = honeygainLive?.balanceUsd != null &&
-    Number.isFinite(Number(honeygainLive.balanceUsd)) &&
-    Number(honeygainLive.balanceUsd) >= 0
-      ? Number(honeygainLive.balanceUsd) : null;
-  const honeygainBalanceAtSelection = (() => {
-    if (!selectedEarningsPoint || selectedEarningsPoint.range === "allYears") return null;
-    const key = String(selectedEarningsPoint.key || "");
-    const history = honeygainLive?.dailyHistory || {};
-    const dates = selectedEarningsPoint.range === "yearly"
-      ? Object.keys(history).filter(day => day.startsWith(key + "-")).sort()
-      : [key];
-    const record = history[dates[dates.length - 1]];
-    const credits = record?.lastCredits;
-    if (credits != null && Number.isFinite(Number(credits)) && Number(credits) >= 0)
-      return Number(credits) / 1000;
-    return null;
-  })();
+  // Today's Honeygain amount is growth observed since the first extension
+  // reading today, NOT the accumulated JumpTask wallet balance.
+  const honeygainTodayUsd = honeygainObservedDailyUsd(backendEarnings, todayKey);
+  const honeygainSelectedDayUsd = selectedEarningsPoint?.range === "monthly"
+    ? honeygainObservedDailyUsd(backendEarnings, selectedEarningsPoint.key)
+    : null;
+  const todayBreakdownWithHoneygain = [
+    ...todayBreakdown,
+    ...(honeygainTodayUsd == null ? [] :
+      [{name:"Honeygain", amount:honeygainTodayUsd, precision:4}]),
+  ].sort((a,b) => b.amount - a.amount);
   // The daily chart is dated receipts; month-end income is the separately
   // booked provider ledger. Do not silently count provisional Lulo/Loopscale
   // receipts in the yearly accounting total.
@@ -1368,16 +1362,20 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     annualUndated: backendEarnings?.incomeHistory?.annualUndated || [],
     annualReconciliations: backendEarnings?.incomeHistory?.annualReconciliations || [],
   });
-  // The popup must report exactly the dated provider earnings plotted on
-  // the chart. Never append Honeygain's accumulated wallet balance.
+  // Chart and popup use the identical observed daily Honeygain increment.
+  // Historical monthly/yearly accounting stays booked-only; no wallet
+  // snapshots and no inference of earnings from cumulative balances.
   const selectedBreakdown = recordedBreakdown
-    ? {
-        ...recordedBreakdown,
-        entries: recordedBreakdown.entries.filter(item => item.name !== "Honeygain"),
-        total: recordedBreakdown.entries
-          .filter(item => item.name !== "Honeygain")
-          .reduce((sum, item) => sum + Number(item.amount || 0), 0),
-      }
+    ? (() => {
+        const earned = recordedBreakdown.entries.filter(item => item.name !== "Honeygain");
+        const observed = honeygainSelectedDayUsd;
+        const entries = observed == null ? earned :
+          [...earned, {name:"Honeygain", amount:observed}].sort((a,b) => b.amount - a.amount);
+        return {...recordedBreakdown, entries,
+          total: entries.reduce((sum, item) => sum + Number(item.amount || 0), 0),
+          note: observed == null ? recordedBreakdown.note :
+            recordedBreakdown.note + " Honeygain is observed growth since its first reading that day; not yet booked income."};
+      })()
     : null;
 
   const dailyEarningsObservations =
@@ -1983,7 +1981,7 @@ const summary =
                   <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize:9,fill:"#91a1b2"}} interval={2} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)}/>
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings"]}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings + observed Honeygain increase"]}/>
                   <Area type="monotone" dataKey="value" name="Daily earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)"
                     dot={props => {
                       const day = props?.payload?.key;
@@ -2104,18 +2102,21 @@ const summary =
         <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
           <h2 className="text-[14px] font-semibold">Today's Earnings</h2>
           {backendEarningsError && <p className="mt-1 text-[11px] text-amber-400">{backendEarningsError} — saved backend totals shown if available</p>}
+          {honeygainTodayUsd != null && (
+            <p className="mt-1 text-[10px] text-muted-foreground">Honeygain: observed earnings since first reading today (not total wallet balance).</p>
+          )}
 
           <div className="mt-3 flex flex-1 flex-col px-1">
-            {todayBreakdown.length ? (
+            {todayBreakdownWithHoneygain.length ? (
               <div className="flex flex-1 flex-col justify-evenly gap-1">
-                {todayBreakdown.map(source => (
+                {todayBreakdownWithHoneygain.map(source => (
                   <div key={source.name} className="flex items-center justify-between gap-3 text-xs">
                     <span className="min-w-0 truncate text-muted-foreground">{source.name}</span>
                     <span className={`shrink-0 font-semibold tabular-nums ${source.amount < 0 ? "text-rose-400" : "text-emerald-400"}`}>{source.precision != null ? "$" + source.amount.toFixed(source.precision) : formatCurrency(source.amount)}</span>
                   </div>
                 ))}
 
-                {!todayBreakdown.some(source => source.name === "Loopscale") && (
+                {!todayBreakdownWithHoneygain.some(source => source.name === "Loopscale") && (
                   <div className="flex items-center justify-between gap-3 text-xs">
                     <span className="min-w-0 text-muted-foreground">Loopscale</span>
                     <span className="shrink-0 font-semibold tabular-nums text-emerald-400">{formatCurrency(0)}</span>
@@ -2137,12 +2138,6 @@ const summary =
                   No booked USD increases recorded yet.
                 </p>
 
-              </div>
-            )}
-            {honeygainCurrentBalance != null && (
-              <div className="mt-3 flex items-center justify-between gap-3 border-t border-white/10 pt-3 text-xs">
-                <span className="text-muted-foreground">Honeygain · Wallet balance (not today's earnings)</span>
-                <span className="shrink-0 font-semibold tabular-nums text-sky-300">{formatCurrency(honeygainCurrentBalance)}</span>
               </div>
             )}
           </div>
@@ -2552,12 +2547,6 @@ if (
               <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm font-semibold">
                 <span>Total earned</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
               </div>
-              {honeygainBalanceAtSelection != null && (
-                <div className="flex items-center justify-between gap-3 border-t border-[#303842] pt-3 text-xs">
-                  <span className="text-muted-foreground">Honeygain · Balance snapshot (not earnings)</span>
-                  <span className="font-semibold tabular-nums text-sky-300">{formatCurrency(honeygainBalanceAtSelection)}</span>
-                </div>
-              )}
             </div>
           </div>
         </div>
