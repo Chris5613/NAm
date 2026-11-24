@@ -34,7 +34,7 @@ from ..project_freshness import is_project_stale
 from ..project_feed_sources import PROVIDER_TRACKERS, from_tracker
 from ..crypto_dashboard_snapshot import crypto_dashboard_snapshot
 from ..bitcoin_valuation import wallet_evidence, combine_crypto_valuation
-from ..provider_stats import current_keys, provider_stats
+from ..provider_stats import current_keys, provider_stats, rollercoin_stats
 from ..provider_monthly_income import monthly_provider_income
 from ..financial_current_journal import current_financial_ledger
 from ..financial_close_readiness import financial_close_readiness
@@ -48,7 +48,8 @@ from ..financial_balance_rows import financial_balance_rows, with_journal_equipm
 from ..monthly_snapshot_guard import guard_monthly_snapshots
 from ..legacy_income_reconciliation import confirmed_november_sources
 from ..lifetime_income import (lifetime_earned_from_snapshots, chart_history_with_booked_months,
-                               lifetime_earned_from_history)
+                               lifetime_earned_from_history,
+                               reconcile_rollercoin_lifetime_display)
 from ..integration_audit import audit_integration_settings
 from ..cross_page_integrity import cross_page_integrity
 from ..kryptex_earnings_audit import reconcile_kryptex_rewards, audit_kryptex_days
@@ -787,6 +788,15 @@ async def earnings_dashboard(
     if isinstance(monthly_snapshots, dict):
         history = chart_history_with_booked_months(
             history, normalized, today.strftime("%Y-%m"))
+    # Match RollerCoin's lifetime-earned number on Project Break Even. The
+    # difference is the old undated TRX rewards baseline, NOT another monthly
+    # earning or a new ledger entry. All Years displays it as one RollerCoin
+    # total, while Jan-Dec continues to show only dated/booked months.
+    if today.year == 2026:
+        lifetime_rollercoin = rollercoin_stats(
+            trackers.get("RollerCoin") or {},
+            today.isoformat(), today.strftime("%Y-%m")).get("lifetimeUsd")
+        history = reconcile_rollercoin_lifetime_display(history, lifetime_rollercoin)
     dashboard["incomeHistory"] = history
     # Lifetime Earned represents every dated earning from 2025 onward, plus
     # independently recorded annual-only history. Derive it from the exact
