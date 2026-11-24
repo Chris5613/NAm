@@ -11,11 +11,28 @@ from backend.income_history_core import (
 )
 from backend.lifetime_income import (
     lifetime_earned_from_snapshots, chart_history_with_booked_months,
-    lifetime_earned_from_history,
+    lifetime_earned_from_history, reconcile_rollercoin_lifetime_display,
 )
 
 
 class BackendAccountingMigrationTests(unittest.TestCase):
+    def test_rollercoin_historical_lifetime_bridge_matches_break_even(self):
+        history = {"months": [
+            {"monthKey": "2026-06", "total": 40,
+             "sources": {"RollerCoin": 40}},
+            {"monthKey": "2026-11", "total": 60,
+             "sources": {"RollerCoin": 60}},
+        ], "annualUndated": []}
+        bridged = reconcile_rollercoin_lifetime_display(history, 172.40)
+        self.assertAlmostEqual(
+            bridged["annualReconciliations"][0]["sources"]["RollerCoin"], 72.40)
+        self.assertAlmostEqual(lifetime_earned_from_history(
+            bridged, "2026-11")["totalUsd"], 172.40)
+        self.assertNotIn("annualReconciliations", history)
+        self.assertEqual(history["months"][0]["total"], 40)
+        self.assertEqual(reconcile_rollercoin_lifetime_display(
+            history, 90)["annualReconciliations"], [])
+
     def test_lifetime_includes_2025_early_2026_and_recent_booked_earnings(self):
         history = {"months": [
             {"monthKey": "2025-06", "total": 20, "sources": {"Mining": 20}},
