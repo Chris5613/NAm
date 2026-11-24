@@ -176,6 +176,20 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
         sources: { ...row.sources },
       })),
       annualUndated,
+      // Explicit year-level historical rewards reconciliation (no fake date).
+      annualReconciliations: Array.isArray(history.annualReconciliations)
+        ? history.annualReconciliations.filter(row =>
+            row && /^\d{4}$/.test(String(row.year)) &&
+            row.basis === "project-break-even-lifetime-less-dated-rewards" &&
+            typeof row.total === "number" && Number.isFinite(row.total) &&
+            row.total >= 0 && row.sources &&
+            typeof row.sources === "object" && !Array.isArray(row.sources) &&
+            Object.entries(row.sources).every(([name, value]) =>
+              name.length > 0 && name.length <= 80 &&
+              typeof value === "number" && Number.isFinite(value) && value >= 0))
+          .map(row => ({year: String(row.year), total: row.total,
+            sources: {...row.sources}, basis: row.basis}))
+        : [],
     };
   }
   return {
