@@ -3,7 +3,7 @@ import { useRollerCoinExtension } from "../hooks/useRollerCoinExtension";
 import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
-import { buildSelectedEarningsBreakdown, buildAnnualEarningsBreakdown } from "../lib/earningsDisplay";
+import { buildSelectedEarningsBreakdown, buildAnnualEarningsBreakdown, todayProjectsDisplayTotal } from "../lib/earningsDisplay";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { backendYieldIncomeRows } from "@/lib/backendYieldIncomeRows";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
@@ -1337,8 +1337,9 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     ...(honeygainDisplayUsd == null ? [] :
       [{ name: "Honeygain", amount: honeygainDisplayUsd, precision: 2 }]),
   ].sort((a, b) => b.amount - a.amount);
-  const visibleEarningsTotal = todayEarnings == null ? null :
-    Number(todayEarnings) + (honeygainDisplayUsd ?? 0);
+  // Same display-only total as Crypto Overview; source amounts and
+  // Honeygain observation are read from one authenticated backend response.
+  const visibleEarningsTotal = todayProjectsDisplayTotal(backendEarnings, todayKey);
   const monthlyChartData = backendEarnings?.days || [];
   // The daily chart is dated receipts; month-end income is the separately
   // booked provider ledger. Do not silently count provisional Lulo/Loopscale
