@@ -127,7 +127,7 @@ test("server lifetime income is preserved but never recalculated from daily rows
   const data = backend();
   data.lifetimeEarned = {
     totalUsd: 615.693122, fromMonth: "2026-09",
-    throughMonth: "2026-11", source: "booked-provider-monthly-ledger",
+    throughMonth: "2026-11", source: "recorded-income-history-v1",
   };
   const cached = writeBackendEarningsCache(7, "2026-11", data, store());
   expect(cached.data.lifetimeEarned.totalUsd).toBe(615.693122);
