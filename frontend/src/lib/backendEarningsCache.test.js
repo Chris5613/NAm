@@ -185,3 +185,27 @@ test("untrusted or cross-month source history cannot populate the yearly chart",
   expect(validateBackendEarningsSnapshot(data, "2026-11", "2026-11-14")
     .incomeHistory).toBeNull();
 });
+
+test("Honeygain observed balance loads with earnings but cannot inflate income", () => {
+  const data = backend();
+  data.honeygainObservation = {
+    kind: "observed-balance-not-income",
+    source: "honeygain-chrome-jumptask",
+    balanceUsd: 0.6184,
+    jumpTaskBalanceCredits: 618.4,
+    observedAt: "2026-11-14T22:00:00Z",
+  };
+  const result = validateBackendEarningsSnapshot(data, "2026-11", "2026-11-14");
+  expect(result.todayTotalUsd).toBe(5.81);
+  expect(result.todaySources.Honeygain).toBeUndefined();
+  expect(result.honeygainObservation.balanceUsd).toBe(0.6184);
+  expect(result.honeygainObservation.observedAt).toBe("2026-11-14T22:00:00Z");
+  const saved = writeBackendEarningsCache(7, "2026-11", data, store());
+  expect(saved.data.honeygainObservation.balanceUsd).toBe(0.6184);
+
+  const invalid = {...data, honeygainObservation: {
+    ...data.honeygainObservation, balanceUsd: -100,
+  }};
+  expect(validateBackendEarningsSnapshot(invalid, "2026-11", "2026-11-14")
+    .honeygainObservation).toBeNull();
+});
