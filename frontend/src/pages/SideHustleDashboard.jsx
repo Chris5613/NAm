@@ -389,7 +389,7 @@ export default function SideHustleDashboard() {
         title="Lifetime Earned"
         value={backendEarnings?.lifetimeEarned == null ? "—" : money(backendEarnings.lifetimeEarned.totalUsd)}
         detail={backendEarnings?.lifetimeEarned
-          ? `Booked earnings since ${backendEarnings.lifetimeEarned.fromMonth} · excludes principal`
+          ? `Recorded earnings since ${backendEarnings.lifetimeEarned.fromMonth} · excludes principal`
           : "Waiting for complete backend income history"}
         tone="violet"
       />
