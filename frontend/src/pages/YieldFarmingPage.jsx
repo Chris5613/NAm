@@ -1376,22 +1376,25 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
     }).format(date);
   };
-  // Honeygain is returned in the SAME backend earnings payload as today's
-  // projects. It is an observed JumpTask wallet balance, not daily earnings.
-  // Keep it separately labeled instead of adding the wallet amount to income.
-  const honeygainObservation = hasServerToday
-    ? backendEarnings.honeygainObservation : null;
   const honeygainObservedToday =
-    pacificDay(honeygainObservation?.observedAt) === todayKey;
+    pacificDay(auxiliaryRewards.honeygain?.latest?.observedAt) === todayKey;
   const honeygainDisplayUsd = honeygainObservedToday &&
-    honeygainObservation?.balanceUsd != null &&
-    Number.isFinite(Number(honeygainObservation.balanceUsd))
-      ? Number(honeygainObservation.balanceUsd) : null;
-  const todayBreakdown = Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
-    .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
-    .map(([name, amount]) => ({ name, amount: Number(amount) || 0 }))
-    .sort((a, b) => b.amount - a.amount);
-  const visibleEarningsTotal = todayEarnings;
+    Number.isFinite(Number(auxiliaryRewards.honeygain?.balanceUsd))
+    && auxiliaryRewards.honeygain?.balanceUsd != null
+      ? Number(auxiliaryRewards.honeygain.balanceUsd) : null;
+
+  // The visible list includes observed Honeygain and sorts by displayed
+  // amount. The combined display total is not a booked-income calculation:
+  // Honeygain is a transferred balance.
+  const todayBreakdown = [
+    ...Object.entries({ Kryptex: 0, ...displayDailySourceTotals })
+      .filter(([name, amount]) => name === "Kryptex" || Number(amount) !== 0)
+      .map(([name, amount]) => ({ name, amount: Number(amount) || 0 })),
+    ...(honeygainDisplayUsd == null ? [] :
+      [{ name: "Honeygain", amount: honeygainDisplayUsd, precision: 2 }]),
+  ].sort((a, b) => b.amount - a.amount);
+  const visibleEarningsTotal = todayEarnings == null ? null :
+    Number(todayEarnings) + (honeygainDisplayUsd ?? 0);
   const monthlyChartData = backendEarnings?.days || [];
   // The daily chart is dated receipts; month-end income is the separately
   // booked provider ledger. Do not silently count provisional Lulo/Loopscale
@@ -1442,12 +1445,17 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
       (honeyLatest && (monthlySelection ? pacificDay(honeyLatest.observedAt)?.startsWith(key + "-") : pacificDay(honeyLatest.observedAt) === key) ? honeyLatest.jumpTaskBalanceCredits : null);
     const numeric = value => value != null && Number.isFinite(Number(value)) ? Number(value) : null;
     const honeyCredits = numeric(honeyCreditBalance);
-    // Do not add a JumpTask wallet balance to an income total in historical
-    // popups either. Attach it as a distinct observation for the selected day.
+    const additions = [
+      { name: "Honeygain", amount: honeyCredits == null ? null : honeyCredits / 1000 },
+    ];
+    const entries = [...recordedBreakdown.entries, ...additions]
+      .sort((a, b) => (b.amount ?? -Infinity) - (a.amount ?? -Infinity));
+    const addedValue = additions.reduce((total, row) => total + (row.amount ?? 0), 0);
     return {
       ...recordedBreakdown,
-      honeygainBalanceUsd: honeyCredits == null ? null : honeyCredits / 1000,
-      note: recordedBreakdown.note,
+      entries,
+      total: recordedBreakdown.total + addedValue,
+      note: recordedBreakdown.note + " Tracked Honeygain balances are snapshots, not booked daily income.",
     };
   })();
 
@@ -2193,14 +2201,8 @@ const summary =
                   </div>
                 )}
 
-                {honeygainDisplayUsd != null && (
-                  <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2 text-xs">
-                    <span className="min-w-0 text-muted-foreground">Honeygain · observed JumpTask balance</span>
-                    <span className="shrink-0 font-semibold tabular-nums text-sky-300">{formatCurrency(honeygainDisplayUsd)}</span>
-                  </div>
-                )}
                 <div className="flex items-center justify-between border-t border-white/10 pt-2 text-xs">
-                  <span className="font-medium">Total earned today</span>
+                  <span className="font-medium">Total</span>
                   <span className="font-semibold tabular-nums">{visibleEarningsTotal == null ? "—" : formatCurrency(visibleEarningsTotal)}</span>
                 </div>
               </div>
@@ -2619,14 +2621,8 @@ if (
                   <span className="font-semibold tabular-nums">{item.amount == null ? "—" : formatCurrency(item.amount)}</span>
                 </div>
               )) : <p className="text-sm text-muted-foreground">No recorded project earnings for this point.</p>}
-              {selectedBreakdown.honeygainBalanceUsd != null && (
-                <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm">
-                  <span className="text-muted-foreground">Honeygain · observed balance (not income)</span>
-                  <span className="font-semibold tabular-nums text-sky-300">{formatCurrency(selectedBreakdown.honeygainBalanceUsd)}</span>
-                </div>
-              )}
               <div className="flex items-center justify-between border-t border-[#303842] pt-3 text-sm font-semibold">
-                <span>Total earned</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
+                <span>Total</span><span className="tabular-nums text-emerald-400">{formatCurrency(selectedBreakdown.total)}</span>
               </div>
             </div>
           </div>
