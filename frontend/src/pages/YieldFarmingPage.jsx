@@ -3,7 +3,7 @@ import { useRollerCoinExtension } from "../hooks/useRollerCoinExtension";
 import { useKryptexExtension } from "../hooks/useKryptexExtension";
 import { useUnetworkExtension } from "../hooks/useUnetworkExtension";
 import { useSaladExtension } from "../hooks/useSaladExtension";
-import { buildSelectedEarningsBreakdown } from "../lib/earningsDisplay";
+import { buildSelectedEarningsBreakdown, buildAnnualEarningsBreakdown } from "../lib/earningsDisplay";
 import { useBackendEarningsDashboard } from "@/hooks/useBackendEarningsDashboard";
 import { backendYieldIncomeRows } from "@/lib/backendYieldIncomeRows";
 import { useServerDailyIncome } from "../hooks/useServerDailyIncome";
@@ -1409,13 +1409,15 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
     projectIncome: chartProjectIncome, stockPayouts: {}, todayKey,
     luloUtcDay: currentLuloUtc.utcDay, hasLuloProjects: luloProjects.length > 0,
     sourceTotalsForDay: chartSourceTotalsForDay, currentMonthSources,
+    annualUndated: backendEarnings?.incomeHistory?.annualUndated || [],
   });
   // Attach backend-stored Pacific-day balance observations to the popup for
   // the SELECTED chart date. Do not apply the current wallet balance to a past
   // day; that would falsify the historical chart. A month selection uses the
   // most recent observed balance in that month rather than a sum of balances.
   const selectedBreakdown = (() => {
-    if (!recordedBreakdown || !selectedEarningsPoint) return recordedBreakdown;
+    if (!recordedBreakdown || !selectedEarningsPoint ||
+        selectedEarningsPoint.range === "allYears") return recordedBreakdown;
     const key = String(selectedEarningsPoint.key || "");
     const monthlySelection = selectedEarningsPoint.range === "yearly";
     const chooseObservation = history => {
@@ -1519,17 +1521,14 @@ export default function YieldFarmingPage({ onMonthlyEarningsChange } = {}) {
   // Yearly, with the same current-month adjustment. Never derive revenue
   // from balances or recompute income from browser observations.
   const allYearsChartData = [...availableEarningsYears].sort().map(year => {
-    const yearMonths = buildYearlyEarningsChart(chartProjectIncome, {}, year, todayKey);
-    const hasDatedIncome = chartProjectIncome.some(month =>
-      String(month.monthKey).startsWith(year + "-"));
-    const yearOnlyIncome = undatedAnnualTotal(year);
+    // Use the exact same aggregation for the plotted year and its popup.
+    const breakdown = buildAnnualEarningsBreakdown({
+      year, projectIncome: chartProjectIncome, annualUndated, todayKey,
+    });
     return {
       year, label: year,
-      value: hasDatedIncome || yearOnlyIncome != null
-        ? yearMonths.reduce((sum, month) => sum + (Number(month.value) || 0), 0) +
-          (yearOnlyIncome ?? 0)
-        : null,
-      annualOnlyUsd: yearOnlyIncome ?? 0,
+      value: breakdown?.total ?? null,
+      annualOnlyUsd: breakdown?.includesAnnualOnly ? undatedAnnualTotal(year) : 0,
     };
   });
   const allYearsEarned = yearlyHistoryReady
@@ -2107,9 +2106,7 @@ const summary =
                     const year = point?.activePayload?.[0]?.payload?.year ||
                       (Number.isInteger(index) ? allYearsChartData[index]?.year : null);
                     if (year && allYearsChartData.some(item => item.year === year && item.value != null)) {
-                      setEarningsChartYear(year);
-                      setEarningsChartRange("yearly");
-                      setSelectedEarningsPoint(null);
+                      setSelectedEarningsPoint({range:"allYears",key:year});
                     }
                   }}>
                   <defs>
@@ -2125,7 +2122,7 @@ const summary =
                   <Area type="monotone" dataKey="value" name="Annual earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldAllYearsFill)"
                     dot={props => props?.payload?.value == null ? null :
                       <circle cx={props.cx} cy={props.cy} r={5} fill="#30e69b" stroke="#0d1014" strokeWidth={2} style={{cursor:"pointer"}}
-                        onClick={() => { setEarningsChartYear(props.payload.year); setEarningsChartRange("yearly"); setSelectedEarningsPoint(null); }}/>}
+                        onClick={() => setSelectedEarningsPoint({range:"allYears",key:props.payload.year})}/>}
                     activeDot={{r:8}} connectNulls={false} isAnimationActive={false}>
                     <LabelList dataKey="value" position="top" offset={12}
                       formatter={value => value == null ? "" : formatCurrency(value)}
