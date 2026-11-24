@@ -192,9 +192,22 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
         : [],
     };
   }
+  // Honeygain is an externally observed JumpTask balance, never earned USD.
+  // Load its dated observation with the same backend response as other sources.
+  const hg = data.honeygainObservation;
+  const honeygainObservation = hg?.kind === "observed-balance-not-income" &&
+    hg.source === "honeygain-chrome-jumptask" &&
+    typeof hg.balanceUsd === "number" && Number.isFinite(hg.balanceUsd) &&
+    hg.balanceUsd >= 0 && typeof hg.observedAt === "string" &&
+    Number.isFinite(Date.parse(hg.observedAt))
+      ? {balanceUsd: hg.balanceUsd, observedAt: hg.observedAt,
+          jumpTaskBalanceCredits: Number.isFinite(hg.jumpTaskBalanceCredits)
+            ? hg.jumpTaskBalanceCredits : null,
+          kind: hg.kind, source: hg.source}
+      : null;
   return {
     sourceOfCalculation: "backend-postgres",
-    month, todayKey, days, weekDays,
+    month, todayKey, days, weekDays, honeygainObservation,
     monthTotalUsd: data.monthTotalUsd, todayTotalUsd: data.todayTotalUsd,
     yesterdayTotalUsd: data.yesterdayTotalUsd,
     yesterdayDay: data.yesterdayDay,
