@@ -64,7 +64,7 @@ function pacificDayKey(time) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
-function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClass = "text-white" }) {
+function KpiCard({ icon: Icon, title, value, detail, status, tone = "emerald", valueClass = "text-white" }) {
   const tones = {
     emerald: {
       border: "border-emerald-500/20",
@@ -100,6 +100,7 @@ function KpiCard({ icon: Icon, title, value, detail, tone = "emerald", valueClas
       </div>
       <div className="mt-3 min-w-0">
         <strong className={`block truncate text-[27px] font-semibold leading-none tracking-tight tabular-nums ${valueClass}`}>{value}</strong>
+        {status && <p className="mt-1.5 text-[10px] text-[#a2b2b5]">{status}</p>}
       </div>
     </div>
   </section>;
@@ -422,6 +423,8 @@ export default function SideHustleDashboard() {
         icon={Coins}
         title="Income Today"
         value={passiveIncomeToday == null ? "—" : money(passiveIncomeToday)}
+        status={passiveIncomeToday != null && earningsCached
+          ? "Last saved · refreshing live earnings" : null}
         detail={todayVsYesterday == null ? "Actual earnings today" : `${todayVsYesterday >= 0 ? "▲" : "▼"} ${Math.abs(todayVsYesterday).toFixed(1)}% vs. yesterday`}
         tone="emerald"
         valueClass="text-emerald-400"
