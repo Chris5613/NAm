@@ -187,3 +187,25 @@ test("RollerCoin lifetime reconciliation tops up same row without inventing a mo
   expect(breakdown.total).toBeCloseTo(172.4);
   expect(breakdown.includesReconciliation).toBe(true);
 });
+
+test("Unity Network and Unetwork are one row in annual popup with unchanged total", () => {
+  const projectIncome = [
+    {monthKey:"2026-06", platforms:[
+      {platform:"Unity Network", amount:141},
+      {platform:"Unetwork", amount:53.31},
+    ]},
+    {monthKey:"2026-08", platforms:[
+      {platform:"Unity  Network", amount:14.77},
+      {platform:"Unetwork", amount:257.35},
+    ]},
+  ];
+  const result = buildAnnualEarningsBreakdown({
+    year:"2026", todayKey:"2026-11-24", projectIncome,
+  });
+  expect(result.entries).toEqual([{name:"Unetwork",amount:466.43}]);
+  expect(result.total).toBeCloseTo(466.43, 2);
+  expect(buildAnnualEarningsBreakdown({
+    year:"2025", todayKey:"2026-11-24", projectIncome:[],
+    annualUndated:[{year:"2025",sources:{"Unity Network":25,"Unetwork":10}}],
+  }).entries).toEqual([{name:"Unetwork",amount:35}]);
+});
