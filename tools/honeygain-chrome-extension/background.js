@@ -8,6 +8,8 @@ let honeygainManagedTab = null;
 let namManagedTab = null;
 let pendingSignature = "";
 let waitingForSaved = false;
+let lastPollStartedAt = 0;
+const MIN_REQUEST_GAP_MS = 55_000; // One per main 60s refresh; 5-minute alarm is backup.
 
 const hgOrigin = url => /^https:\/\/dashboard\.honeygain\.com(?:\/|$)/.test(url || "");
 const namOrigin = url => /^https:\/\/nam-qyn8\.onrender\.com(?:\/|$)/.test(url || "");
@@ -18,8 +20,12 @@ async function closeOwned(tabId) {
   }
 }
 async function poll() {
+  // Coalesce NAm refresh, visibility refresh, and the fallback alarm.
+  // Never launch duplicate tabs or hammer Honeygain at 15s quick-refresh rates.
+  if (honeygainManagedTab !== null ||
+      Date.now() - lastPollStartedAt < MIN_REQUEST_GAP_MS) return;
+  lastPollStartedAt = Date.now();
   // Never create duplicate dashboard tabs or close a user's own tab.
-  if (honeygainManagedTab !== null) return;
   const tabs = await chrome.tabs.query({url:HG_URL+"*"});
   if (tabs.length) {
     for (const tab of tabs) {
@@ -94,6 +100,9 @@ chrome.runtime.onMessage.addListener((message, sender, respond) => {
     return;
   }
   if (message?.type === "HONEYGAIN_POLL_NOW") {
+    // Only NAm itself or the extension popup can request an on-demand poll.
+    // A message relayed from an unrelated website is not an authorized sync.
+    if (sender.tab && !namOrigin(sender.tab.url)) return;
     poll().catch(()=>{});
     respond({ok:true});
     return;
