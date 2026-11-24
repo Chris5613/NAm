@@ -11,6 +11,12 @@ function storeOrNull(storage) {
   try { return typeof window === "undefined" ? null : window.sessionStorage; }
   catch { return null; }
 }
+// A same-user last successful backend snapshot survives tab/browser closure.
+// This is only an instant DISPLAY preview, never an accounting source.
+function durableStoreOrNull() {
+  try { return typeof window === "undefined" ? null : window.localStorage; }
+  catch { return null; }
+}
 export function earningsCacheKey(userId, month) {
   if (userId == null || !/^\d{4}-\d{2}$/.test(String(month))) return null;
   return EARNINGS_DASHBOARD_CACHE_PREFIX +
@@ -206,9 +212,8 @@ export function validateBackendEarningsSnapshot(data, month, todayKey) {
     calculatedAt: data.calculatedAt,
   };
 }
-export function readBackendEarningsCache(userId, month, todayKey, storage, now = Date.now()) {
-  const key = earningsCacheKey(userId, month), store = storeOrNull(storage);
-  if (!key || !store) return null;
+function readOneEarningsStore(store, key, month, todayKey, now) {
+  if (!store) return null;
   try {
     const value = JSON.parse(store.getItem(key) || "null");
     if (!value || !Number.isFinite(value.cachedAt) ||
@@ -220,31 +225,43 @@ export function readBackendEarningsCache(userId, month, todayKey, storage, now =
     return { data, cachedAt: value.cachedAt };
   } catch { try { store.removeItem(key); } catch {} return null; }
 }
+export function readBackendEarningsCache(userId, month, todayKey, storage, now = Date.now()) {
+  const key = earningsCacheKey(userId, month);
+  if (!key) return null;
+  // Explicit stores remain isolated in tests. Otherwise reuse whichever
+  // backend-validated, Pacific-day-scoped preview was saved most recently.
+  const stores = storage ? [storage] : [storeOrNull(), durableStoreOrNull()].filter(Boolean);
+  const readings = stores.map(store =>
+    readOneEarningsStore(store, key, month, todayKey, now)).filter(Boolean);
+  return readings.sort((a, b) =>
+    Date.parse(b.data.calculatedAt) - Date.parse(a.data.calculatedAt))[0] || null;
+}
 export function writeBackendEarningsCache(userId, month, data, storage, now = Date.now()) {
-  const key = earningsCacheKey(userId, month), store = storeOrNull(storage);
+  const key = earningsCacheKey(userId, month);
   const validated = validateBackendEarningsSnapshot(data, month, data?.todayKey);
-  if (!key || !store || !validated) return null;
-  try {
-    const previous = readBackendEarningsCache(userId, month, validated.todayKey, store, now);
-    if (previous && Date.parse(previous.data.calculatedAt) >
-        Date.parse(validated.calculatedAt)) return previous;
-    const value = { data: validated, cachedAt: now };
-    store.setItem(key, JSON.stringify(value));
-    return value;
-  } catch { return { data: validated, cachedAt: now }; }
+  if (!key || !validated) return null;
+  const previous = readBackendEarningsCache(userId, month, validated.todayKey, storage, now);
+  if (previous && Date.parse(previous.data.calculatedAt) >
+      Date.parse(validated.calculatedAt)) return previous;
+  const value = { data: validated, cachedAt: now };
+  const stores = storage ? [storage] : [storeOrNull(), durableStoreOrNull()].filter(Boolean);
+  for (const store of stores) {
+    try { store.setItem(key, JSON.stringify(value)); } catch { /* Cache optional. */ }
+  }
+  return value;
 }
 export function clearBackendEarningsCache(userId, storage) {
   if (userId == null) return;
-  const store = storeOrNull(storage);
-  if (!store) return;
-  // Remove only this account's monthly display previews, never other user IDs.
+  const stores = storage ? [storage] : [storeOrNull(), durableStoreOrNull()].filter(Boolean);
   const prefix = EARNINGS_DASHBOARD_CACHE_PREFIX + encodeURIComponent(String(userId)) + ":";
-  try {
-    const keys = [];
-    for (let i = 0; i < store.length; i++) {
-      const key = store.key(i);
-      if (key && key.startsWith(prefix)) keys.push(key);
-    }
-    keys.forEach(key => store.removeItem(key));
-  } catch {}
+  for (const store of stores) {
+    try {
+      const keys = [];
+      for (let i = 0; i < store.length; i++) {
+        const key = store.key(i);
+        if (key && key.startsWith(prefix)) keys.push(key);
+      }
+      keys.forEach(key => store.removeItem(key));
+    } catch { /* Keep clearing remaining stores. */ }
+  }
 }
