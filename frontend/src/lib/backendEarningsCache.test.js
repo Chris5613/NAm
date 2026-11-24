@@ -211,3 +211,31 @@ test("earnings load immediately from durable saved backend snapshot after tab se
     global.window = previousWindow;
   }
 });
+
+test("Bixberry and Honeygain share authenticated cached load without inflating earnings", () => {
+  const storage = store();
+  const data = backend();
+  data.projectObservations = {
+    bixberry: {currentBalance:0.3912,lastSyncedAt:"2026-11-14T15:42:00Z"},
+    honeygain: {
+      latest:{jumpTaskBalanceCredits:620.3,balanceUsd:0.6203,
+        evidenceLabel:"JumpTask",observedAt:"2026-11-14T15:41:00Z"},
+      balanceUsd:0.6203,
+      dailyHistory:{"2026-11-14":{lastCredits:620.3}},
+      sourceOfCalculation:"backend-jumptask-observed-balance",
+      bookedFinancialIncome:false,
+    },
+  };
+  const saved = writeBackendEarningsCache(7,"2026-11",data,storage);
+  expect(saved.data.projectObservations.bixberry.currentBalance).toBe(0.3912);
+  expect(saved.data.projectObservations.honeygain.balanceUsd).toBe(0.6203);
+  expect(saved.data.todayTotalUsd).toBe(5.81);
+  expect(saved.data.todaySources.Honeygain).toBeUndefined();
+  const preview = readBackendEarningsCache(7,"2026-11","2026-11-14",storage);
+  expect(preview.data.projectObservations).toEqual(saved.data.projectObservations);
+  const invalid = validateBackendEarningsSnapshot({...data,
+    projectObservations:{...data.projectObservations,
+      honeygain:{...data.projectObservations.honeygain,
+        bookedFinancialIncome:true}}},"2026-11","2026-11-14");
+  expect(invalid.projectObservations.honeygain).toBeNull();
+});
