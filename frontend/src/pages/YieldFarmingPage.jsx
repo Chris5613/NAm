@@ -2100,11 +2100,8 @@ const summary =
           </div>
         </section>
         <section className="flex h-full min-w-0 flex-col rounded-2xl border border-[#242b33] bg-[#0d1014] p-3">
-          <h2 className="text-[14px] font-semibold">Today's Earnings</h2>
+          <h2 className="text-[14px] font-semibold">Daily Earnings</h2>
           {backendEarningsError && <p className="mt-1 text-[11px] text-amber-400">{backendEarningsError} — saved backend totals shown if available</p>}
-          {honeygainTodayUsd != null && (
-            <p className="mt-1 text-[10px] text-muted-foreground">Honeygain: observed earnings since first reading today (not total wallet balance).</p>
-          )}
 
           <div className="mt-3 flex flex-1 flex-col px-1">
             {todayBreakdownWithHoneygain.length ? (
