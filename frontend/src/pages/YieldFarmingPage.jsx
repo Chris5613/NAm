@@ -1981,7 +1981,7 @@ const summary =
                   <CartesianGrid vertical={false} stroke="#26313b" opacity={0.35} strokeDasharray="3 4"/>
                   <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{fontSize:9,fill:"#91a1b2"}} interval={2} />
                   <YAxis axisLine={false} tickLine={false} width={51} tick={{fontSize:10,fill:"#91a1b2"}} domain={[0,monthlyChartMax]} tickFormatter={v=>"$"+Number(v).toFixed(2)}/>
-                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily earnings + observed Honeygain increase"]}/>
+                  <Tooltip cursor={{stroke:"#30d991",strokeDasharray:"3 4"}} contentStyle={{background:"#13181e",border:"1px solid #303842",borderRadius:10,fontSize:12}} labelFormatter={(label,items)=>items?.[0]?.payload?.label || label} formatter={value=>[formatCurrency(value),"Daily Earnings"]}/>
                   <Area type="monotone" dataKey="value" name="Daily earnings" stroke="#30e69b" strokeWidth={2.75} strokeLinecap="round" strokeLinejoin="round" fill="url(#yieldMonthlyFill)"
                     dot={props => {
                       const day = props?.payload?.key;
