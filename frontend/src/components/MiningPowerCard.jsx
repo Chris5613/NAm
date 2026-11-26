@@ -217,7 +217,7 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, illustrativeCost,
  * Presentation-only grouping: the RTX 2080 Super and RTX 4070 Ti are on ONE
  * physical machine. GPU IDs, individual source data, cost allocations, power
  * telemetry, history and photos remain completely separate in the backend.
- * Expanding reveals both original editable cards.
+ * The shared rig title is the only name editable on this card.
  */
 function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardware,
   settings, onRename, tapoLive }) {
