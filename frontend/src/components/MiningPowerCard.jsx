@@ -222,6 +222,29 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, illustrativeCost,
 function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardware,
   settings, onRename, onPhoto, tapoLive }) {
   const [expanded, setExpanded] = useState(false);
+  const [editingGpu, setEditingGpu] = useState(null);
+  const [draftGpuName, setDraftGpuName] = useState("");
+  const [renameError, setRenameError] = useState("");
+  const [renameBusy, setRenameBusy] = useState(false);
+  const saveGpuName = async event => {
+    event.preventDefault();
+    if (editingGpu == null || renameBusy) return;
+    const name = draftGpuName.trim();
+    if (!name || name.length > 80) {
+      setRenameError("Enter a name up to 80 characters.");
+      return;
+    }
+    setRenameBusy(true);
+    setRenameError("");
+    try {
+      await onRename(members[editingGpu].id, name);
+      setEditingGpu(null);
+    } catch (error) {
+      setRenameError(error?.message || "Unable to rename GPU.");
+    } finally {
+      setRenameBusy(false);
+    }
+  };
   // The one Tapo plug measures the ENTIRE shared machine. Never sum
   // Kryptex GPU readings or split a wall meter reading between GPUs.
   const watts = tapoLive && device.watts != null &&
@@ -246,9 +269,22 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="rounded-lg bg-sky-400/10 p-1.5 text-sky-300"><Cpu className="h-3.5 w-3.5" /></span>
-          <h2 className="min-w-0 truncate text-[15px] font-semibold" title={gpuNames.join(" + ")}>
-            {gpuNames.join(" + ")}
-          </h2>
+          <div className="min-w-0">
+            <h2 className="truncate text-[15px] font-semibold" title={gpuNames.join(" + ")}>
+              {gpuNames.join(" + ")}
+            </h2>
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
+              {members.map((member, index) => (
+                <button key={member.id} type="button"
+                  onClick={() => { setEditingGpu(index); setDraftGpuName(gpuNames[index]); setRenameError(""); }}
+                  aria-label={"Rename " + gpuNames[index]}
+                  title={"Rename " + gpuNames[index]}
+                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-sky-300">
+                  <Pencil size={11} /> {gpuNames[index]}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
         <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium " +
           (anyReporting ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
@@ -257,6 +293,21 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
           {anyReporting ? "Tapo plug" : "Not reporting"}
         </span>
       </div>
+      {editingGpu != null && (
+        <form onSubmit={saveGpuName} className="mt-3 flex flex-wrap items-center gap-2">
+          <input autoFocus aria-label={"New name for " + gpuNames[editingGpu]}
+            maxLength={80} value={draftGpuName}
+            onChange={event => setDraftGpuName(event.target.value)}
+            onKeyDown={event => { if (event.key === "Escape") { setEditingGpu(null); setRenameError(""); } }}
+            className="min-w-0 flex-1 rounded-md border border-sky-400/50 bg-background px-2 py-1.5 text-xs text-foreground outline-none" />
+          <button type="submit" disabled={renameBusy} aria-label="Save GPU name"
+            className="rounded-md p-1.5 text-emerald-400 hover:bg-secondary disabled:opacity-50"><Check size={16}/></button>
+          <button type="button" aria-label="Cancel GPU rename"
+            onClick={() => { setEditingGpu(null); setRenameError(""); }}
+            className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary"><X size={16}/></button>
+          {renameError && <p role="alert" className="w-full text-xs text-rose-400">{renameError}</p>}
+        </form>
+      )}
       <p className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums">
         {watts == null ? "—" : watts.toFixed(0) + "W"}
       </p>
