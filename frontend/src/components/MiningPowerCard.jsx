@@ -130,7 +130,9 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, illustrativeCost,
       setRenameError(error?.message || "Couldn't save this name.");
     }
   };
-  const watts = Number.isFinite(Number(device?.watts)) && device?.watts != null
+  // Stale plug values are historical snapshots, not live power. Never
+  // show an offline PC's last measured watts as its present consumption.
+  const watts = live && Number.isFinite(Number(device?.watts)) && device?.watts != null
     ? Number(device.watts) : null;
   const monthlyKwh = monthlyUsage?.kwh == null ? null : Number(monthlyUsage.kwh);
   const monthlyCost = illustrativeCost ?? null;
@@ -446,10 +448,13 @@ export default function MiningPowerCard() {
   }, [refresh]);
 
   const latest = status?.latest;
-  const totalWatts = latest?.totalWatts != null && Number.isFinite(Number(latest.totalWatts))
-    ? Number(latest.totalWatts) : null;
   const staleMs = latest?.observedAt ? Date.now() - new Date(latest.observedAt).getTime() : Infinity;
-  const live = staleMs < 90000;
+  const live = staleMs >= 0 && staleMs < 90000;
+  // A cached Tapo sample may be retained for usage history, but does not
+  // certify current wattage after the bridge stops reporting.
+  const totalWatts = live && latest?.totalWatts != null &&
+    Number.isFinite(Number(latest.totalWatts))
+    ? Number(latest.totalWatts) : null;
   const powerCost = status?.powerCost?.sourceOfCalculation === "backend-power-meter-tariffs"
     ? status.powerCost : null;
   const rateInfo = powerCost?.currentRate || null;
