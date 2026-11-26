@@ -244,7 +244,7 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
   });
   const anyReporting = members.some(member => member.watts != null);
   return (
-    <section className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]"
+    <section className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)] xl:col-span-2"
       data-testid="mining-rig-group-card">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
