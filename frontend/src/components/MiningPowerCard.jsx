@@ -266,7 +266,7 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
   });
   const anyReporting = watts != null;
   return (
-    <section className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)] xl:col-span-2"
+    <section className="flex h-[390px] min-h-[390px] min-w-0 flex-col rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)] xl:col-span-2"
       data-testid="mining-rig-group-card">
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -304,7 +304,7 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
       <p className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums">
         {watts == null ? "—" : watts.toFixed(0) + "W"}
       </p>
-      <div className="mt-2 flex h-[190px] min-w-0 items-center justify-center gap-1 overflow-hidden rounded-md">
+      <div className="mt-3 flex min-h-0 min-w-0 flex-1 items-center justify-center gap-1 overflow-hidden rounded-md">
         {gpuImages.map((src, index) => (
           <div key={members[index].id} className="relative flex h-full min-w-0 flex-1 items-center justify-center">
             {src ? <img src={src} alt={gpuNames[index]} loading="lazy" referrerPolicy="no-referrer"
@@ -313,7 +313,7 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
           </div>
         ))}
       </div>
-      <div className="grid grid-cols-2 gap-2 border-t border-border/40 pt-3">
+      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-border/40 pt-4">
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-cyan-300">
             <CalendarDays className="h-3 w-3 shrink-0" />{kwh == null ? "—" : kwh.toFixed(2) + " kWh"}
