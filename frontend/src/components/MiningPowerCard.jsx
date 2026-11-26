@@ -220,27 +220,29 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, illustrativeCost,
  * Expanding reveals both original editable cards.
  */
 function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardware,
-  settings, onRename, onPhoto, tapoLive }) {
-  const [expanded, setExpanded] = useState(false);
-  const [editingGpu, setEditingGpu] = useState(null);
-  const [draftGpuName, setDraftGpuName] = useState("");
+  settings, onRename, tapoLive }) {
+  // One title for the physical rig, separate from both historical GPU IDs.
+  const rigLabelId = "rig:" + device.id;
+  const rigTitle = settings.deviceLabels?.[rigLabelId] || "RTX 2080 Super + RTX 4070 Ti";
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
   const [renameError, setRenameError] = useState("");
   const [renameBusy, setRenameBusy] = useState(false);
-  const saveGpuName = async event => {
+  const saveRigTitle = async event => {
     event.preventDefault();
-    if (editingGpu == null || renameBusy) return;
-    const name = draftGpuName.trim();
+    if (renameBusy) return;
+    const name = draftTitle.trim();
     if (!name || name.length > 80) {
-      setRenameError("Enter a name up to 80 characters.");
+      setRenameError("Enter a title up to 80 characters.");
       return;
     }
     setRenameBusy(true);
     setRenameError("");
     try {
-      await onRename(members[editingGpu].id, name);
-      setEditingGpu(null);
+      await onRename(rigLabelId, name);
+      setEditingTitle(false);
     } catch (error) {
-      setRenameError(error?.message || "Unable to rename GPU.");
+      setRenameError(error?.message || "Unable to rename rig.");
     } finally {
       setRenameBusy(false);
     }
@@ -269,21 +271,13 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
       <div className="flex min-w-0 items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           <span className="rounded-lg bg-sky-400/10 p-1.5 text-sky-300"><Cpu className="h-3.5 w-3.5" /></span>
-          <div className="min-w-0">
-            <h2 className="truncate text-[15px] font-semibold" title={gpuNames.join(" + ")}>
-              {gpuNames.join(" + ")}
-            </h2>
-            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1">
-              {members.map((member, index) => (
-                <button key={member.id} type="button"
-                  onClick={() => { setEditingGpu(index); setDraftGpuName(gpuNames[index]); setRenameError(""); }}
-                  aria-label={"Rename " + gpuNames[index]}
-                  title={"Rename " + gpuNames[index]}
-                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-sky-300">
-                  <Pencil size={11} /> {gpuNames[index]}
-                </button>
-              ))}
-            </div>
+          <div className="flex min-w-0 items-center gap-1">
+            <h2 className="truncate text-[15px] font-semibold" title={rigTitle}>{rigTitle}</h2>
+            <button type="button" aria-label={"Rename rig " + rigTitle}
+              title="Rename rig" onClick={() => { setDraftTitle(rigTitle); setRenameError(""); setEditingTitle(true); }}
+              className="shrink-0 rounded p-1 text-muted-foreground hover:bg-secondary hover:text-sky-300">
+              <Pencil size={12}/>
+            </button>
           </div>
         </div>
         <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium " +
@@ -293,17 +287,16 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
           {anyReporting ? "Tapo plug" : "Not reporting"}
         </span>
       </div>
-      {editingGpu != null && (
-        <form onSubmit={saveGpuName} className="mt-3 flex flex-wrap items-center gap-2">
-          <input autoFocus aria-label={"New name for " + gpuNames[editingGpu]}
-            maxLength={80} value={draftGpuName}
-            onChange={event => setDraftGpuName(event.target.value)}
-            onKeyDown={event => { if (event.key === "Escape") { setEditingGpu(null); setRenameError(""); } }}
-            className="min-w-0 flex-1 rounded-md border border-sky-400/50 bg-background px-2 py-1.5 text-xs text-foreground outline-none" />
-          <button type="submit" disabled={renameBusy} aria-label="Save GPU name"
+      {editingTitle && (
+        <form onSubmit={saveRigTitle} className="mt-3 flex flex-wrap items-center gap-2">
+          <input autoFocus aria-label="New rig title" maxLength={80} value={draftTitle}
+            onChange={event => setDraftTitle(event.target.value)}
+            onKeyDown={event => { if (event.key === "Escape") { setEditingTitle(false); setRenameError(""); } }}
+            className="min-w-0 flex-1 rounded-md border border-sky-400/50 bg-background px-2 py-1.5 text-xs text-foreground outline-none"/>
+          <button type="submit" disabled={renameBusy} aria-label="Save rig title"
             className="rounded-md p-1.5 text-emerald-400 hover:bg-secondary disabled:opacity-50"><Check size={16}/></button>
-          <button type="button" aria-label="Cancel GPU rename"
-            onClick={() => { setEditingGpu(null); setRenameError(""); }}
+          <button type="button" aria-label="Cancel rig rename"
+            onClick={() => { setEditingTitle(false); setRenameError(""); }}
             className="rounded-md p-1.5 text-muted-foreground hover:bg-secondary"><X size={16}/></button>
           {renameError && <p role="alert" className="w-full text-xs text-rose-400">{renameError}</p>}
         </form>
@@ -334,24 +327,6 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
           <p className="mt-1 text-[11px] text-muted-foreground">Monthly cost</p>
         </div>
       </div>
-      <button type="button" onClick={() => setExpanded(value => !value)}
-        aria-expanded={expanded}
-        className="mt-3 w-full rounded-lg border border-border/50 px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-white">
-        {expanded ? "Hide individual GPU details" : "View / edit individual GPUs"}
-      </button>
-      {expanded && <>
-        <p className="mb-2 mt-3 text-xs text-muted-foreground">Tapo reports total rig power only. Individual GPU watts and cost allocations are not measured separately.</p>
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
-        {members.map((member, index) => <DeviceCard key={member.id}
-          device={member} label={gpuNames[index]} hardware={hardware}
-          gpu={member.gpu} onRename={onRename}
-          photo={settings.devicePhotos?.[member.id]} onPhoto={onPhoto}
-          monthlyUsage={null}
-          illustrativeCost={null}
-          live={false}
-        />)}
-        </div>
-      </>}
     </section>
   );
 }
@@ -598,7 +573,7 @@ export default function MiningPowerCard() {
             monthlyUsage={monthlyDevices[device.id]}
             illustrativeCost={illustrative?.deviceUsd?.[device.id]}
             hardware={hardware} settings={settings} tapoLive={live}
-            onRename={renameDevice} onPhoto={savePhoto}/>;
+            onRename={renameDevice}/>;
         })}
 
       </section>
