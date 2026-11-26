@@ -295,7 +295,7 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
           device={member} label={gpuNames[index]} hardware={hardware}
           gpu={member.gpu} onRename={onRename}
           photo={settings.devicePhotos?.[member.id]} onPhoto={onPhoto}
-          monthlyUsage={monthlyUsage[index]}
+          monthlyUsage={null}
           illustrativeCost={null}
           live={false}
         />)}
