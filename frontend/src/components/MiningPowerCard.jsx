@@ -212,6 +212,99 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, illustrativeCost,
   );
 }
 
+
+/**
+ * Presentation-only grouping: the RTX 2080 Super and RTX 4070 Ti are on ONE
+ * physical machine. GPU IDs, individual source data, cost allocations, power
+ * telemetry, history and photos remain completely separate in the backend.
+ * Expanding reveals both original editable cards.
+ */
+function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardware,
+  settings, onRename, onPhoto }) {
+  const [expanded, setExpanded] = useState(false);
+  const watts = members.every(member => member.watts != null &&
+    Number.isFinite(Number(member.watts)))
+    ? members.reduce((sum, member) => sum + Number(member.watts), 0) : null;
+  const kwh = monthlyUsage.every(value => value?.kwh != null &&
+    Number.isFinite(Number(value.kwh)))
+    ? monthlyUsage.reduce((sum, value) => sum + Number(value.kwh), 0) : null;
+  const cost = illustrativeCost.every(value => value != null &&
+    Number.isFinite(Number(value)))
+    ? illustrativeCost.reduce((sum, value) => sum + Number(value), 0) : null;
+  const gpuNames = members.map(member => settings.deviceLabels?.[member.id] || member.label);
+  const gpuImages = members.map((member, index) => {
+    const saved = settings.devicePhotos?.[member.id];
+    if (saved) return saved;
+    const pattern = index === 0 ? /2080\\s*super/i : /4070\\s*ti/i;
+    const fromHardware = hardware.find(row => pattern.test(String(row?.name || "")));
+    return fromHardware
+      ? hardwareImageFor(fromHardware)
+      : index === 0 ? DEVICE_META.rtx2080super.image
+        : hardwareImageFor({ name: "RTX 4070 Ti" });
+  });
+  const anyReporting = members.some(member => member.watts != null);
+  return (
+    <section className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)]"
+      data-testid="mining-rig-group-card">
+      <div className="flex min-w-0 items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="rounded-lg bg-sky-400/10 p-1.5 text-sky-300"><Cpu className="h-3.5 w-3.5" /></span>
+          <h2 className="min-w-0 truncate text-[15px] font-semibold" title={gpuNames.join(" + ")}>
+            {gpuNames.join(" + ")}
+          </h2>
+        </div>
+        <span className={"inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] font-medium " +
+          (anyReporting ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
+            : "border-border bg-secondary text-muted-foreground")}>
+          <span className={"h-1 w-1 rounded-full " + (anyReporting ? "bg-emerald-400" : "bg-muted-foreground")} />
+          {anyReporting ? "GPU only" : "Not reporting"}
+        </span>
+      </div>
+      <p className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums">
+        {watts == null ? "—" : watts.toFixed(0) + "W"}
+      </p>
+      <div className="mt-2 flex h-[190px] min-w-0 items-center justify-center gap-1 overflow-hidden rounded-md">
+        {gpuImages.map((src, index) => (
+          <div key={members[index].id} className="relative flex h-full min-w-0 flex-1 items-center justify-center">
+            {src ? <img src={src} alt={gpuNames[index]} loading="lazy" referrerPolicy="no-referrer"
+              className="max-h-[175px] max-w-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.55)]" />
+              : <Cpu className="h-10 w-10 text-sky-400/25" />}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-2 gap-2 border-t border-border/40 pt-3">
+        <div className="min-w-0">
+          <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-cyan-300">
+            <CalendarDays className="h-3 w-3 shrink-0" />{kwh == null ? "—" : kwh.toFixed(2) + " kWh"}
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">This month</p>
+        </div>
+        <div className="min-w-0">
+          <p className="flex items-center gap-1 text-[15px] font-semibold tabular-nums text-amber-400">
+            <Coins className="h-3 w-3 shrink-0" />{cost == null ? "—" : money(cost)}
+          </p>
+          <p className="mt-1 text-[11px] text-muted-foreground">Monthly cost</p>
+        </div>
+      </div>
+      <button type="button" onClick={() => setExpanded(value => !value)}
+        aria-expanded={expanded}
+        className="mt-3 w-full rounded-lg border border-border/50 px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-white">
+        {expanded ? "Hide individual GPU details" : "View / edit individual GPUs"}
+      </button>
+      {expanded && <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
+        {members.map((member, index) => <DeviceCard key={member.id}
+          device={member} label={gpuNames[index]} hardware={hardware}
+          gpu={member.gpu} onRename={onRename}
+          photo={settings.devicePhotos?.[member.id]} onPhoto={onPhoto}
+          monthlyUsage={monthlyUsage[index]}
+          illustrativeCost={illustrativeCost[index]}
+          live={member.gpu?.gpuWatts != null}
+        />)}
+      </div>}
+    </section>
+  );
+}
+
 export default function MiningPowerCard() {
   const [status, setStatus] = useState(null);
   const [kryptexDailyRevenue, setKryptexDailyRevenue] = useState(null);
@@ -441,35 +534,42 @@ export default function MiningPowerCard() {
       </section>
 
       {Number(status?.gpuMonthlyUsage?.["rtx2080super:unallocated"]?.kwh) > 0 && <p className="px-1 text-xs text-muted-foreground" title="Metered energy during missing or inconsistent GPU telemetry is included in the total but cannot be attributed to an individual GPU.">{Number(status.gpuMonthlyUsage["rtx2080super:unallocated"].kwh).toFixed(2)} kWh unallocated</p>}
-      <section aria-label="Tracked mining GPUs" className={"grid min-w-0 items-stretch gap-3 " + gpuGridClass}>
-        {deviceRows.flatMap(device => {
+      <section aria-label="Tracked mining rigs" className={"grid min-w-0 items-start gap-3 " + gpuGridClass}>
+        {deviceRows.map(device => {
           const breakdown = status?.gpuBreakdown?.[device.id] ||
             (device.id === "rtx2080super" ? { gpus: [
               { id: "2080", name: "RTX 2080 Super", gpuWatts: null, allocatedWatts: null },
               { id: "4070-ti", name: "RTX 4070 Ti", gpuWatts: null, allocatedWatts: null },
             ] } : null);
           const shared = (breakdown?.gpus?.length || 0) > 1;
-          if (!breakdown?.gpus?.length) return [<DeviceCard key={device.id} device={device}
-            label={settings.deviceLabels?.[device.id] || device.label}
-            hardware={hardware} onRename={renameDevice} photo={settings.devicePhotos?.[device.id]} onPhoto={savePhoto}
-            monthlyUsage={monthlyDevices[device.id]}
-            illustrativeCost={illustrative?.deviceUsd?.[device.id]}
-            backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
-            live={live}/>];
-          return breakdown.gpus.map((gpu, index) => {
+          if (!shared) {
+            return <DeviceCard key={device.id} device={device}
+              label={settings.deviceLabels?.[device.id] || device.label}
+              hardware={hardware} onRename={renameDevice}
+              photo={settings.devicePhotos?.[device.id]} onPhoto={savePhoto}
+              monthlyUsage={monthlyDevices[device.id]}
+              illustrativeCost={illustrative?.deviceUsd?.[device.id]}
+              backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
+              live={live}/>;
+          }
+          // Preserve each original GPU's key for backend telemetry and editing.
+          // Only combine numbers that have per-GPU allocation; never add the
+          // entire rig's meter reading a second time.
+          const members = breakdown.gpus.map((gpu, index) => {
             const id = index === 0 ? device.id : device.id + ":" + gpu.id;
-            const display = {...device, id, watts: gpu.allocatedWatts ?? gpu.gpuWatts ?? null};
-            const cost = powerCost?.deviceCosts?.[device.id];
-            return <DeviceCard key={id} device={display}
-              label={settings.deviceLabels?.[id] || gpu.name}
-              hardware={hardware} onRename={renameDevice} gpu={gpu} photo={settings.devicePhotos?.[id]} onPhoto={savePhoto}
-              sharedRig={shared && index === 0}
-              monthlyUsage={shared ? (status?.gpuMonthlyUsage?.[id] ?? (index === 0 ? monthlyDevices[device.id] : null)) : monthlyDevices[device.id]}
-              illustrativeCost={illustrative?.deviceUsd?.[id]}
-              backendDeviceCost={shared ? (status?.gpuMonthlyCosts?.[id] ?? (index === 0 ? cost : null)) : cost}
-              live={gpu.gpuWatts != null}/>;
+            return { ...device, id, label: gpu.name,
+              watts: gpu.allocatedWatts ?? gpu.gpuWatts ?? null, gpu };
           });
+          const usages = members.map((member, index) =>
+            status?.gpuMonthlyUsage?.[member.id] ??
+            (index === 0 ? monthlyDevices[device.id] : null));
+          const costs = members.map(member => illustrative?.deviceUsd?.[member.id] ?? null);
+          return <DualGpuRigCard key={device.id} device={device} members={members}
+            monthlyUsage={usages} illustrativeCost={costs}
+            hardware={hardware} settings={settings}
+            onRename={renameDevice} onPhoto={savePhoto}/>;
         })}
+
       </section>
     </div>
   );
