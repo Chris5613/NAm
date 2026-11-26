@@ -220,29 +220,26 @@ function DeviceCard({ device, monthlyUsage, backendDeviceCost, illustrativeCost,
  * Expanding reveals both original editable cards.
  */
 function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardware,
-  settings, onRename, onPhoto }) {
+  settings, onRename, onPhoto, tapoLive }) {
   const [expanded, setExpanded] = useState(false);
-  const watts = members.every(member => member.watts != null &&
-    Number.isFinite(Number(member.watts)))
-    ? members.reduce((sum, member) => sum + Number(member.watts), 0) : null;
-  const kwh = monthlyUsage.every(value => value?.kwh != null &&
-    Number.isFinite(Number(value.kwh)))
-    ? monthlyUsage.reduce((sum, value) => sum + Number(value.kwh), 0) : null;
-  const cost = illustrativeCost.every(value => value != null &&
-    Number.isFinite(Number(value)))
-    ? illustrativeCost.reduce((sum, value) => sum + Number(value), 0) : null;
+  // The one Tapo plug measures the ENTIRE shared machine. Never sum
+  // Kryptex GPU readings or split a wall meter reading between GPUs.
+  const watts = tapoLive && device.watts != null &&
+    Number.isFinite(Number(device.watts)) ? Number(device.watts) : null;
+  const kwh = monthlyUsage?.kwh == null ? null : Number(monthlyUsage.kwh);
+  const cost = illustrativeCost == null ? null : Number(illustrativeCost);
   const gpuNames = members.map(member => settings.deviceLabels?.[member.id] || member.label);
   const gpuImages = members.map((member, index) => {
     const saved = settings.devicePhotos?.[member.id];
     if (saved) return saved;
-    const pattern = index === 0 ? /2080\\s*super/i : /4070\\s*ti/i;
+    const pattern = index === 0 ? /2080\s*super/i : /4070\s*ti/i;
     const fromHardware = hardware.find(row => pattern.test(String(row?.name || "")));
     return fromHardware
       ? hardwareImageFor(fromHardware)
       : index === 0 ? DEVICE_META.rtx2080super.image
         : hardwareImageFor({ name: "RTX 4070 Ti" });
   });
-  const anyReporting = members.some(member => member.watts != null);
+  const anyReporting = watts != null;
   return (
     <section className="min-w-0 rounded-xl border border-border/55 bg-[#0d1116] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.13)] xl:col-span-2"
       data-testid="mining-rig-group-card">
@@ -257,7 +254,7 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
           (anyReporting ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-400"
             : "border-border bg-secondary text-muted-foreground")}>
           <span className={"h-1 w-1 rounded-full " + (anyReporting ? "bg-emerald-400" : "bg-muted-foreground")} />
-          {anyReporting ? "GPU only" : "Not reporting"}
+          {anyReporting ? "Tapo plug" : "Not reporting"}
         </span>
       </div>
       <p className="mt-3 text-[34px] font-semibold leading-none tracking-tight tabular-nums">
@@ -291,23 +288,25 @@ function DualGpuRigCard({ device, members, monthlyUsage, illustrativeCost, hardw
         className="mt-3 w-full rounded-lg border border-border/50 px-3 py-2 text-xs text-muted-foreground hover:bg-secondary hover:text-white">
         {expanded ? "Hide individual GPU details" : "View / edit individual GPUs"}
       </button>
-      {expanded && <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-2">
+      {expanded && <>
+        <p className="mb-2 mt-3 text-xs text-muted-foreground">Tapo reports total rig power only. Individual GPU watts and cost allocations are not measured separately.</p>
+        <div className="grid min-w-0 gap-3 sm:grid-cols-2">
         {members.map((member, index) => <DeviceCard key={member.id}
           device={member} label={gpuNames[index]} hardware={hardware}
           gpu={member.gpu} onRename={onRename}
           photo={settings.devicePhotos?.[member.id]} onPhoto={onPhoto}
           monthlyUsage={monthlyUsage[index]}
-          illustrativeCost={illustrativeCost[index]}
-          live={member.gpu?.gpuWatts != null}
+          illustrativeCost={null}
+          live={false}
         />)}
-      </div>}
+        </div>
+      </>}
     </section>
   );
 }
 
 export default function MiningPowerCard() {
   const [status, setStatus] = useState(null);
-  const [kryptexDailyRevenue, setKryptexDailyRevenue] = useState(null);
   // Device labels are persisted backend settings; no browser tariff defaults.
   const [settings, setSettings] = useState({});
   const [hardware, setHardware] = useState(readHardwarePaybackDevices);
@@ -399,21 +398,16 @@ export default function MiningPowerCard() {
   const refresh = useCallback(async (manual = false) => {
     if (manual) setRefreshing(true);
     try {
-      const [power, saved, kryptex] = await Promise.all([
+      const [power, saved] = await Promise.all([
         api.get("/api/power/status"),
         settingsApi.get(SETTINGS_KEY).catch(() => null),
-        api.get("/api/project-tracking/kryptex/aggregate").catch(() => null),
       ]);
       setStatus(power);
-      const reportedDaily = kryptex?.status?.profitability_usd_day;
-      const value = reportedDaily == null ? NaN : Number(reportedDaily);
-      setKryptexDailyRevenue(Number.isFinite(value) && value >= 0 && Number(kryptex?.machine_count) > 0 ? value : null);
       if (saved && typeof saved === "object") {
         setSettings(current => ({ ...current, ...saved }));
       }
     } catch {
       setStatus(null);
-      setKryptexDailyRevenue(null);
     } finally {
       if (manual) setRefreshing(false);
     }
@@ -436,12 +430,6 @@ export default function MiningPowerCard() {
   const freePower = powerCost?.freeMiningPower === true;
   const hourlyCost = powerCost?.hourlyOutOfPocketUsd ?? null;
   const dailyCost = powerCost?.dailyOutOfPocketUsd ?? null;
-  // The observed two-PC Kryptex machine estimate is separate from real
-  // credited earnings. The meter expense is computed by the backend only.
-  const dailyRevenue = kryptexDailyRevenue;
-  const dailyNet = dailyRevenue == null || dailyCost == null
-    ? null : dailyRevenue - dailyCost;
-
   const currentMonth = status?.currentMonth || null;
   const monthTiers = currentMonth?.tiers || {};
   const offPeakKwh = Number(monthTiers.offPeak) || 0;
@@ -452,9 +440,6 @@ export default function MiningPowerCard() {
   const monthTrackedDays = trackedDays(monthTrackedSeconds);
   const monthCost = powerCost?.complete ? powerCost.outOfPocketUsd : null;
   const illustrative = status?.illustrativeMonthlyCost;
-  const monthEstimatedRevenue = dailyRevenue == null ? null : dailyRevenue * monthTrackedDays;
-  const monthEstimatedNet = monthEstimatedRevenue == null || monthCost == null
-    ? null : monthEstimatedRevenue - monthCost;
   const projectionReady = monthTrackedSeconds >= 900;
   const projectedMonthCost = projectionReady
     ? powerCost?.projectedOutOfPocketMonthEndUsd ?? null : null;
@@ -552,21 +537,16 @@ export default function MiningPowerCard() {
               backendDeviceCost={powerCost?.deviceCosts?.[device.id] || null}
               live={live}/>;
           }
-          // Preserve each original GPU's key for backend telemetry and editing.
-          // Only combine numbers that have per-GPU allocation; never add the
-          // entire rig's meter reading a second time.
+          // Tapo's single plug reading belongs to the physical shared rig.
+          // Keep original per-GPU IDs solely for labels, photos and history.
           const members = breakdown.gpus.map((gpu, index) => {
             const id = index === 0 ? device.id : device.id + ":" + gpu.id;
-            return { ...device, id, label: gpu.name,
-              watts: gpu.allocatedWatts ?? gpu.gpuWatts ?? null, gpu };
+            return { ...device, id, label: gpu.name, watts: null, gpu };
           });
-          const usages = members.map((member, index) =>
-            status?.gpuMonthlyUsage?.[member.id] ??
-            (index === 0 ? monthlyDevices[device.id] : null));
-          const costs = members.map(member => illustrative?.deviceUsd?.[member.id] ?? null);
           return <DualGpuRigCard key={device.id} device={device} members={members}
-            monthlyUsage={usages} illustrativeCost={costs}
-            hardware={hardware} settings={settings}
+            monthlyUsage={monthlyDevices[device.id]}
+            illustrativeCost={illustrative?.deviceUsd?.[device.id]}
+            hardware={hardware} settings={settings} tapoLive={live}
             onRename={renameDevice} onPhoto={savePhoto}/>;
         })}
 
