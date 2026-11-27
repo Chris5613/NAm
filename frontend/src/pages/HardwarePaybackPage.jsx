@@ -30,24 +30,41 @@ const canonicalSourceName = source => {
   if (normalized === "loopscale") return "Loopscale";
   return value;
 };
-const deviceSources = device => Array.from(new Set(
-  (Array.isArray(device?.sources) ? device.sources : [device?.source])
-    .map(canonicalSourceName).filter(Boolean)
-));
+// Display only one entry for names that differ solely by case. Prefer the
+// capitalized/provider-formatted name rather than the lowercase duplicate.
+const distinctSourceNames = names => {
+  const byKey = new Map();
+  for (const raw of names) {
+    const name = canonicalSourceName(raw);
+    if (!name) continue;
+    const key = name.toLocaleLowerCase("en-US");
+    const current = byKey.get(key);
+    const uppercaseScore = value => /^[^a-z]*[A-Z]/.test(value) ? 1 : 0;
+    if (!current || uppercaseScore(name) > uppercaseScore(current)) byKey.set(key, name);
+  }
+  return [...byKey.values()];
+};
+const deviceSources = device => distinctSourceNames(
+  Array.isArray(device?.sources) ? device.sources : [device?.source]
+);
 const sourceOptionsFor = (history, months) => {
-  const activeNames = new Set((history.activeProjectNames || []).map(canonicalSourceName));
+  const activeNames = distinctSourceNames(history.activeProjectNames || []);
+  const activeKeys = new Set(activeNames.map(name => name.toLocaleLowerCase("en-US")));
   const hasTrackerData = tracker => tracker && Object.keys(tracker).some(key =>
     ["initialized", "lastSyncedAt", "balanceSyncedAt", "daily", "monthlyEarnings", "positions", "kryptexMiningDaily"].includes(key) &&
     tracker[key] && (typeof tracker[key] !== "object" || Object.keys(tracker[key]).length > 0));
-  INTEGRATED_SOURCES.forEach(source => {
+  const integrated = INTEGRATED_SOURCES.filter(source => {
     const tracker = source === "Kryptex" ? history.kryptex : source === "Salad" ? history.salad : source === "RollerCoin" ? history.rollercoin : source === "Unetwork" ? history.unetwork : source === "Loopscale" ? history.loopscale : history.luloProjects?.length ? history.luloProjects : null;
-    if (hasTrackerData(tracker) || (source === "Lulo" && history.luloProjects?.length)) activeNames.add(source);
+    return hasTrackerData(tracker) || (source === "Lulo" && history.luloProjects?.length);
   });
-  const recorded = (months || []).flatMap(row => Object.keys(row?.sources || {})).map(canonicalSourceName);
-  return Array.from(new Set([...activeNames, ...recorded.filter(source => activeNames.has(source))]))
-    .filter(Boolean)
+  const names = distinctSourceNames([...activeNames, ...integrated]);
+  for (const source of integrated) activeKeys.add(source.toLocaleLowerCase("en-US"));
+  const recorded = (months || []).flatMap(row => Object.keys(row?.sources || {}));
+  return distinctSourceNames([...names, ...recorded.filter(source =>
+    activeKeys.has(canonicalSourceName(source).toLocaleLowerCase("en-US")))])
     .sort((a, b) => a.localeCompare(b));
 };
+
 function readHistory() {
   let legacyProjects = [];
   try { const saved = JSON.parse(remoteStorage.getItem("networth_projects") || "[]"); if (Array.isArray(saved)) legacyProjects = saved; } catch {}
@@ -202,6 +219,6 @@ finally{setPhotoLoading(false);e.target.value="";}}}
 className="block w-full text-xs text-[#aab9c6] file:mr-2 file:rounded-md file:border-0 file:bg-[#243a4e] file:px-2 file:py-1.5 file:text-white"/>
 {draft.photo && <button type="button" className="text-xs text-rose-300 hover:underline" onClick={()=>setDraft(current=>({...current,photo:""}))}>Remove photo</button>}
 <p className="text-[11px] text-[#91a4b8]">Optional JPG, PNG or WebP. RTX 5080 has a default illustration.</p>
-</div></div></div><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><fieldset className="space-y-2"><legend className="text-sm">Income sources (select multiple)</legend><div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#3c5267] bg-[#111b25] p-2">{Array.from(new Set([...sourceOptions,...deviceSources(draft)])).map(source=><label key={source} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"><input type="checkbox" checked={deviceSources(draft).includes(source)} onChange={event=>{ const current=deviceSources(draft); const sources=event.target.checked ? [...current,source] : current.filter(item=>item!==source); setDraft({...draft,sources,source:sources[0] || ""}); }} className="h-4 w-4 accent-emerald-400"/>{source}</label>)}</div></fieldset><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Earnings start date<input type="date" max={currentDay} value={draft.earningsStartDay || ""} onChange={e => setDraft({ ...draft, earningsStartDay: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/><span className="mt-1 block text-xs text-[#91a4b8]">Backend recovery uses this Pacific start date for every selected source. Income source changes take effect the next Pacific day; previous days keep their original provider credits. A blank start date cannot be certified.</span></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" disabled={saving} onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" disabled={saving || photoLoading} className="disabled:opacity-50 flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">{saving ? "Verifying…" : "Save"}</button></div></form></div>}
+</div></div></div><div className="grid grid-cols-2 gap-3"><label className="block text-sm">Purchase cost<input required type="number" min="0.01" step="0.01" value={draft.cost} onChange={e => setDraft({ ...draft, cost: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Power cost / month<input type="number" min="0" step="0.01" value={draft.power} onChange={e => setDraft({ ...draft, power: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label></div><fieldset className="space-y-2"><legend className="text-sm">Income sources (select multiple)</legend><div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#3c5267] bg-[#111b25] p-2">{distinctSourceNames([...sourceOptions,...deviceSources(draft)]).map(source=><label key={source} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5"><input type="checkbox" checked={deviceSources(draft).some(name=>name.toLocaleLowerCase("en-US")===source.toLocaleLowerCase("en-US"))} onChange={event=>{ const current=deviceSources(draft); const sources=event.target.checked ? distinctSourceNames([...current,source]) : current.filter(item=>item.toLocaleLowerCase("en-US")!==source.toLocaleLowerCase("en-US")); setDraft({...draft,sources,source:sources[0] || ""}); }} className="h-4 w-4 accent-emerald-400"/>{source}</label>)}</div></fieldset><label className="block text-sm">Purchase month<input required type="month" max={currentMonth} value={draft.startMonth} onChange={e => setDraft({ ...draft, startMonth: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/></label><label className="block text-sm">Earnings start date<input type="date" max={currentDay} value={draft.earningsStartDay || ""} onChange={e => setDraft({ ...draft, earningsStartDay: e.target.value })} className="mt-1 w-full rounded-lg border border-[#3c5267] bg-[#111b25] p-3"/><span className="mt-1 block text-xs text-[#91a4b8]">Backend recovery uses this Pacific start date for every selected source. Income source changes take effect the next Pacific day; previous days keep their original provider credits. A blank start date cannot be certified.</span></label>{error && <p role="alert" className="text-sm text-rose-400">{error}</p>}<div className="flex gap-2">{draft.id && <button type="button" disabled={saving} onClick={() => remove(draft.id)} aria-label="Delete hardware" className="rounded-lg border border-rose-500/40 p-3 text-rose-400"><Trash2 className="h-4 w-4"/></button>}<button type="submit" disabled={saving || photoLoading} className="disabled:opacity-50 flex-1 rounded-lg bg-emerald-400 px-4 py-3 font-semibold text-[#061810]">{saving ? "Verifying…" : "Save"}</button></div></form></div>}
   </div>;
 }
