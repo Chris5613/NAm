@@ -50,14 +50,25 @@ function canonicalSourceName(source) {
   const value = String(source || "").trim().replace(/\s+/g, " ");
   const normalized = value.toLowerCase();
   if (["unity network", "unitynetwork", "unetwork"].includes(normalized)) return "Unetwork";
-  if (normalized === "roller coin") return "RollerCoin";
-  return value;
+  if (["roller coin", "rollercoin"].includes(normalized)) return "RollerCoin";
+  const known = ["Kryptex", "Salad", "Loopscale", "Lulo", "Bixberry"];
+  return known.find(name => name.toLowerCase() === normalized) || value;
 }
-
-const hardwareSources = device => [...new Set(
-  (Array.isArray(device?.sources) ? device.sources : [device?.source])
-    .map(canonicalSourceName).filter(Boolean)
-)];
+function distinctSourceNames(names) {
+  const byKey = new Map();
+  for (const raw of names) {
+    const name = canonicalSourceName(raw);
+    if (!name) continue;
+    const key = name.toLocaleLowerCase("en-US");
+    const current = byKey.get(key);
+    const score = value => /^[^a-z]*[A-Z]/.test(value) ? 1 : 0;
+    if (!current || score(name) > score(current)) byKey.set(key, name);
+  }
+  return [...byKey.values()];
+}
+const hardwareSources = device => distinctSourceNames(
+  Array.isArray(device?.sources) ? device.sources : [device?.source]
+);
 function pacificDayKey(time) {
   const parts = Object.fromEntries(new Intl.DateTimeFormat("en-US", {
     timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit",
@@ -310,11 +321,11 @@ export default function SideHustleDashboard() {
       ...row, meta: projectTableMeta(row.platform),
     }));
 
-  const addSourceOptions = [...new Set([
+  const addSourceOptions = distinctSourceNames([
     ...backendBreakEvenRows.map(project => project.name),
     ...(backendPortfolio?.projects || []).map(project => project.name),
     ...Object.keys(backendEarnings?.monthlySources || {}),
-  ].map(canonicalSourceName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  ]).sort((a, b) => a.localeCompare(b));
   const projectAddOptions = [...backendBreakEvenRows]
     .filter(project => project.id && project.name)
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -757,12 +768,12 @@ export default function SideHustleDashboard() {
               <fieldset className="space-y-2">
                 <legend className="text-sm">Income sources (select multiple)</legend>
                 <div className="max-h-40 space-y-1 overflow-y-auto rounded-lg border border-[#3c5267] bg-[#111b25] p-2">
-                  {[...new Set([...addSourceOptions,...hardwareSources(hardwareDraft)])].map(source=>
+                  {distinctSourceNames([...addSourceOptions,...hardwareSources(hardwareDraft)]).map(source=>
                     <label key={source} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-white/5">
-                      <input type="checkbox" checked={hardwareSources(hardwareDraft).includes(source)}
+                      <input type="checkbox" checked={hardwareSources(hardwareDraft).some(name=>name.toLocaleLowerCase("en-US")===source.toLocaleLowerCase("en-US"))}
                         onChange={event=>setHardwareDraft(current=>{
                           const selected=hardwareSources(current);
-                          const sources=event.target.checked ? [...selected,source] : selected.filter(name=>name!==source);
+                          const sources=event.target.checked ? distinctSourceNames([...selected,source]) : selected.filter(name=>name.toLocaleLowerCase("en-US")!==source.toLocaleLowerCase("en-US"));
                           return {...current,sources,source:sources[0] || ""};
                         })}
                         className="h-4 w-4 accent-emerald-400"/>
